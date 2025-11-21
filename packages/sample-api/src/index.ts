@@ -1,7 +1,7 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 
-const app = express();
+const app: Express = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
