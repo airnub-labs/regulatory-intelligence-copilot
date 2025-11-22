@@ -254,10 +254,14 @@ app.listen(3001, () => {
 });
 `;
 
-  await sandbox.runCode(sampleApiCode);
+  // Write the server code to a file and run it with Node.js
+  await sandbox.files.write('/tmp/sample-api.js', sampleApiCode);
+
+  // Start the server in background
+  await sandbox.commands.run('node /tmp/sample-api.js &', { background: true });
 
   // Wait for server to start
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, 2000));
 }
 
 /**

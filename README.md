@@ -203,32 +203,50 @@ This repo includes a `.devcontainer/devcontainer.json` that wires everything tog
 5. Open the forwarded port (default: `http://localhost:3000`).
 6. You should now see the chat UI.
 
-### 6.3 Option 2 – Local machine
+### 6.3 Option 2 – Local machine (Docker)
 
 1. Clone the repo:
    ```bash
    git clone <this-repo-url>
    cd <repo-root>
    ```
-2. Start the Docker services:
+2. Copy environment variables:
    ```bash
-   docker compose -f docker/docker-compose.yml up -d
+   cp .env.example .env.local
+   # Edit .env.local with your API keys
    ```
-3. Install dependencies:
+3. Start Docker services (this runs the app automatically):
    ```bash
+   docker compose -f docker/docker-compose.yml up
+   ```
+4. Open `http://localhost:3000` in your browser.
+
+> **Note:** Docker Compose installs dependencies and starts the Next.js dev server automatically.
+
+### 6.4 Option 3 – Local machine (without Docker)
+
+1. Clone the repo and install dependencies:
+   ```bash
+   git clone <this-repo-url>
+   cd <repo-root>
    pnpm install
    ```
-4. Start the Next.js app:
+2. Copy environment variables:
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your API keys
+   ```
+3. Start the Next.js app:
    ```bash
    pnpm dev:web
    ```
-5. Open `http://localhost:3000` in your browser.
+4. Open `http://localhost:3000` in your browser.
 
-> **Note:** you must provide valid environment variables as described below.
+> **Note:** You'll need Memgraph running separately for graph features.
 
-### 6.4 Required Environment Variables
+### 6.5 Required Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env.local` file in the project root with the following variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
