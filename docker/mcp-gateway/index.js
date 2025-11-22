@@ -25,7 +25,7 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // MCP server URLs
-const MEMGRAPH_MCP_URL = process.env.MEMGRAPH_MCP_URL || 'http://memgraph-mcp:3000';
+const MEMGRAPH_MCP_URL = process.env.MEMGRAPH_MCP_URL || 'http://memgraph-mcp:8000/mcp/';
 const PERPLEXITY_MCP_URL = process.env.PERPLEXITY_MCP_URL || 'http://perplexity-mcp:3000';
 
 // Request size limit
