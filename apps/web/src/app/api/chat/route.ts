@@ -8,6 +8,7 @@ import {
   getMemgraphSchema,
   extractAndUpsertSpecsFromText,
   ensureMcpGatewayConfiguredFromEnv,
+  isMcpGatewayConfigured,
   type ComplianceReport,
   type GraphContext,
 } from '@e2b-auditor/core';
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
 
     // Ensure MCP gateway is configured before any graph operations triggered by chat
     ensureMcpGatewayConfiguredFromEnv();
+    const hasMcpGateway = isMcpGatewayConfigured();
 
     // Get the last user message
     const lastMessage = messages[messages.length - 1];

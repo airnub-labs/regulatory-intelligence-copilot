@@ -7,17 +7,45 @@ import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from './aspects/applyAspects.js';
 import { sanitizeObjectForEgress } from './aspects/egressGuard.js';
 
+interface McpGatewayConfig {
+  url: string;
+  token: string;
+}
+
+// Persist gateway configuration globally so it can be reused across route handlers
+// and hot reloads without re-reading environment variables or reconfiguring.
+const globalWithMcp = globalThis as typeof globalThis & {
+  __e2bMcpGatewayConfig?: McpGatewayConfig;
+};
+
 // MCP Gateway configuration - must be set via configureMcpGateway() from E2B sandbox
-let mcpGatewayUrl = '';
-let mcpGatewayToken = '';
+let mcpGatewayUrl = globalWithMcp.__e2bMcpGatewayConfig?.url || '';
+let mcpGatewayToken = globalWithMcp.__e2bMcpGatewayConfig?.token || '';
+
+function persistMcpGatewayConfig(url: string, token: string): void {
+  mcpGatewayUrl = url;
+  mcpGatewayToken = token;
+  globalWithMcp.__e2bMcpGatewayConfig = { url, token };
+}
 
 /**
  * Configure MCP client with gateway credentials from E2B sandbox
  */
 export function configureMcpGateway(url: string, token: string): void {
-  mcpGatewayUrl = url;
-  mcpGatewayToken = token;
+  // Avoid reconfiguring if the gateway is already initialized with the same values
+  if (mcpGatewayUrl === url && mcpGatewayToken === token) {
+    return;
+  }
+
+  persistMcpGatewayConfig(url, token);
   console.log('[MCP] Gateway configured - Perplexity and Memgraph tools available');
+}
+
+/**
+ * Check whether the MCP gateway is currently configured.
+ */
+export function isMcpGatewayConfigured(): boolean {
+  return Boolean(mcpGatewayUrl);
 }
 
 /**
@@ -26,7 +54,7 @@ export function configureMcpGateway(url: string, token: string): void {
  * Next.js runtimes.
  */
 export function ensureMcpGatewayConfiguredFromEnv(): boolean {
-  if (mcpGatewayUrl) {
+  if (isMcpGatewayConfigured()) {
     return true;
   }
 
@@ -44,7 +72,7 @@ export function ensureMcpGatewayConfiguredFromEnv(): boolean {
 
   if (envUrl) {
     console.log('[MCP] Configuring gateway from environment variables...');
-    configureMcpGateway(envUrl, envToken);
+    persistMcpGatewayConfig(envUrl, envToken);
     return true;
   }
 

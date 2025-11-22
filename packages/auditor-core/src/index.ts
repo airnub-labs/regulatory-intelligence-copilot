@@ -81,6 +81,7 @@ export {
   callMemgraphMcp,
   getMemgraphSchema,
   configureMcpGateway,
+  isMcpGatewayConfigured,
   getMcpGatewayUrl,
   ensureMcpGatewayConfiguredFromEnv,
 } from './mcpClient.js';
