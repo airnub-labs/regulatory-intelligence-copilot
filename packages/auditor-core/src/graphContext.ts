@@ -16,8 +16,7 @@ import type {
 import {
   callPerplexityMcp,
   callMemgraphMcp,
-  configureMcpGateway,
-  getMcpGatewayUrl,
+  ensureMcpGatewayConfiguredFromEnv,
 } from './mcpClient.js';
 import {
   getOwaspCategories,
@@ -186,36 +185,13 @@ function isValidSpecId(id: string): boolean {
 }
 
 /**
- * Ensure MCP gateway is configured before Memgraph operations.
- * Attempts to configure from environment variables when not already set.
- */
-function ensureMcpGatewayConfigured(): boolean {
-  if (getMcpGatewayUrl()) {
-    return true;
-  }
-
-  const envUrl =
-    process.env.MCP_GATEWAY_URL || process.env.E2B_MCP_GATEWAY_URL || '';
-  const envToken =
-    process.env.MCP_GATEWAY_TOKEN || process.env.E2B_MCP_GATEWAY_TOKEN || '';
-
-  if (envUrl) {
-    console.log('[Graph] Configuring MCP gateway from environment...');
-    configureMcpGateway(envUrl, envToken);
-    return true;
-  }
-
-  console.warn(
-    '[Graph] MCP gateway not configured; skipping Memgraph operations.'
-  );
-  return false;
-}
-
-/**
  * Upsert specs into Memgraph
  */
 async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
-  if (!ensureMcpGatewayConfigured()) {
+  if (!ensureMcpGatewayConfiguredFromEnv()) {
+    console.warn(
+      '[Graph] MCP gateway not configured; skipping Memgraph operations.'
+    );
     return;
   }
 
@@ -327,7 +303,10 @@ export async function fetchGraphContextForFindings(
   const nodes: GraphContext['nodes'] = [];
   const edges: GraphContext['edges'] = [];
 
-  if (!ensureMcpGatewayConfigured()) {
+  if (!ensureMcpGatewayConfiguredFromEnv()) {
+    console.warn(
+      '[Graph] MCP gateway not configured; skipping Memgraph operations.'
+    );
     return { nodes, edges };
   }
 

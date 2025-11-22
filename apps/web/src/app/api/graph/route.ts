@@ -1,7 +1,14 @@
-import { callMemgraphMcp, getMcpGatewayUrl } from '@e2b-auditor/core';
+import {
+  callMemgraphMcp,
+  ensureMcpGatewayConfiguredFromEnv,
+  getMcpGatewayUrl,
+} from '@e2b-auditor/core';
 
 export async function GET() {
   try {
+    // Attempt to configure MCP gateway from environment for chat-driven graph updates
+    ensureMcpGatewayConfiguredFromEnv();
+
     // Check if MCP gateway is configured (only available after running an audit)
     if (!getMcpGatewayUrl()) {
       // Return empty graph - this is normal before first audit
