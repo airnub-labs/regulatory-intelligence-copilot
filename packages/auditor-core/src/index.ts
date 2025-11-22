@@ -88,6 +88,7 @@ export {
 export {
   discoverAndUpsertSpecs,
   fetchGraphContextForFindings,
+  extractAndUpsertSpecsFromText,
 } from './graphContext.js';
 
 // Groq Client

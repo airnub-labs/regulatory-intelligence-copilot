@@ -6,6 +6,7 @@ import {
   AUDIT_TRIGGER,
   callMemgraphMcp,
   getMemgraphSchema,
+  extractAndUpsertSpecsFromText,
   type ComplianceReport,
   type GraphContext,
 } from '@e2b-auditor/core';
@@ -213,6 +214,14 @@ export async function POST(request: Request) {
       systemPrompt += `\n\nRelevant standards from the last audit (use these to inform your answers):\n${graphSummary}`;
     }
 
+    // Extract specs from user message to populate graph
+    const userContent = lastMessage.content;
+    try {
+      await extractAndUpsertSpecsFromText(userContent);
+    } catch (err) {
+      console.log('[API] Graph population from user message failed:', err);
+    }
+
     // For normal chat, use AI SDK with Groq for streaming
     const result = await streamText({
       model: groq('compound-beta'),
@@ -220,6 +229,14 @@ export async function POST(request: Request) {
       messages,
       temperature: 0.3,
       maxTokens: 2048,
+      onFinish: async ({ text }) => {
+        // Extract specs from assistant response to populate graph
+        try {
+          await extractAndUpsertSpecsFromText(text);
+        } catch (err) {
+          console.log('[API] Graph population from response failed:', err);
+        }
+      },
     });
 
     // Return the stream response

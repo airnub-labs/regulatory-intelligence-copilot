@@ -160,22 +160,52 @@ function extractOwaspSpecs(text: string): EnrichedSpec[] {
 }
 
 /**
+ * Escape string for Cypher query to prevent injection
+ */
+function escapeCypher(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t');
+}
+
+/**
+ * Validate spec ID to ensure it's safe for use in queries
+ */
+function isValidSpecId(id: string): boolean {
+  // Only allow alphanumeric characters, hyphens, and underscores
+  return /^[A-Za-z0-9_-]+$/.test(id);
+}
+
+/**
  * Upsert specs into Memgraph
  */
 async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
   for (const spec of specs) {
+    // Validate spec ID to prevent injection
+    if (!isValidSpecId(spec.id)) {
+      console.warn(`[GraphContext] Skipping invalid spec ID: ${spec.id}`);
+      continue;
+    }
+
     if (spec.type === 'rfc') {
+      const safeTitle = escapeCypher(spec.title);
       const query = `
         MERGE (r:RFC {id: '${spec.id}'})
-        SET r.title = '${spec.title.replace(/'/g, "\\'")}'
+        SET r.title = '${safeTitle}'
         RETURN r
       `;
       await callMemgraphMcp(query);
     } else if (spec.type === 'owasp') {
+      const safeTitle = escapeCypher(spec.title);
+      const safeVersion = escapeCypher(spec.version || '2021');
       const query = `
         MERGE (o:OWASP {id: '${spec.id}'})
-        SET o.title = '${spec.title.replace(/'/g, "\\'")}',
-            o.version = '${spec.version || '2021'}'
+        SET o.title = '${safeTitle}',
+            o.version = '${safeVersion}'
         RETURN o
       `;
       await callMemgraphMcp(query);
@@ -186,6 +216,16 @@ async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
   for (const spec of specs) {
     if (spec.relationships) {
       for (const rel of spec.relationships) {
+        // Validate target ID
+        if (!isValidSpecId(rel.targetId)) {
+          console.warn(`[GraphContext] Skipping invalid target ID: ${rel.targetId}`);
+          continue;
+        }
+        // Validate relationship type (should be alphanumeric with underscores)
+        if (!/^[A-Z_]+$/.test(rel.type)) {
+          console.warn(`[GraphContext] Skipping invalid relationship type: ${rel.type}`);
+          continue;
+        }
         const query = `
           MATCH (a {id: '${spec.id}'}), (b {id: '${rel.targetId}'})
           MERGE (a)-[:${rel.type}]->(b)
@@ -210,6 +250,31 @@ export async function discoverAndUpsertSpecs(
 
   // Upsert to Memgraph
   await upsertSpecsToMemgraph(specs);
+
+  return specs;
+}
+
+/**
+ * Extract and upsert specs from chat text
+ * Used for populating the graph during normal chat conversations
+ */
+export async function extractAndUpsertSpecsFromText(
+  text: string
+): Promise<EnrichedSpec[]> {
+  const specs: EnrichedSpec[] = [];
+
+  // Extract RFC mentions
+  const rfcSpecs = extractRfcSpecs(text);
+  specs.push(...rfcSpecs);
+
+  // Extract OWASP categories
+  const owaspSpecs = extractOwaspSpecs(text);
+  specs.push(...owaspSpecs);
+
+  // Upsert to Memgraph if we found any specs
+  if (specs.length > 0) {
+    await upsertSpecsToMemgraph(specs);
+  }
 
   return specs;
 }
