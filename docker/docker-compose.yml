@@ -38,11 +38,11 @@ services:
       - memgraph_log:/var/log/memgraph
     command: ["--schema-info-enabled=True"]
     healthcheck:
-      test: ["CMD", "mgconsole", "-c", "RETURN 1;"]
+      test: ["CMD-SHELL", "echo 'RETURN 1;' | mgconsole --host 127.0.0.1 --port 7687"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
 
   # Memgraph MCP Server - built from official ai-toolkit repo
   # https://github.com/memgraph/ai-toolkit/tree/main/integrations/mcp-memgraph
