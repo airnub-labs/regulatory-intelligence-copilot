@@ -1,7 +1,17 @@
-import { callMemgraphMcp } from '@e2b-auditor/core';
+import { callMemgraphMcp, getMcpGatewayUrl } from '@e2b-auditor/core';
 
 export async function GET() {
   try {
+    // Check if MCP gateway is configured (only available after running an audit)
+    if (!getMcpGatewayUrl()) {
+      // Return empty graph - this is normal before first audit
+      return Response.json({
+        nodes: [],
+        links: [],
+        message: 'Graph is empty. Run an audit to populate the knowledge graph.',
+      });
+    }
+
     // Fetch all nodes and relationships from the graph
     const result = await callMemgraphMcp(`
       MATCH (n)
