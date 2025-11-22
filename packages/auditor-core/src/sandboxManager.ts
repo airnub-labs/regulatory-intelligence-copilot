@@ -18,6 +18,15 @@ async function configureGatewayFromSandbox(sandbox: SandboxHandle): Promise<void
   }
 }
 
+export async function ensureMcpGatewayConfigured(): Promise<void> {
+  if (isMcpGatewayConfigured()) {
+    return;
+  }
+
+  const sandbox = await getOrCreateActiveSandbox();
+  configureMcpGateway(sandbox.mcpUrl, sandbox.mcpToken);
+}
+
 /**
  * Lazily create a sandbox and configure the MCP gateway once per process.
  */

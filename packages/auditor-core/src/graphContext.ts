@@ -18,6 +18,7 @@ import {
   callMemgraphMcp,
   isMcpGatewayConfigured,
 } from './mcpClient.js';
+import { ensureMcpGatewayConfigured } from './sandboxManager.js';
 import {
   getOwaspCategories,
   getOwaspVersion,
@@ -188,11 +189,10 @@ function isValidSpecId(id: string): boolean {
  * Upsert specs into Memgraph
  */
 async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
+  await ensureMcpGatewayConfigured();
+
   if (!isMcpGatewayConfigured()) {
-    console.warn(
-      '[Graph] MCP gateway not configured; skipping Memgraph operations.'
-    );
-    return;
+    throw new Error('MCP gateway is not configured; cannot persist specs to Memgraph.');
   }
 
   console.log(`[Graph] Upserting ${specs.length} specs to Memgraph knowledge graph...`);
@@ -303,11 +303,10 @@ export async function fetchGraphContextForFindings(
   const nodes: GraphContext['nodes'] = [];
   const edges: GraphContext['edges'] = [];
 
+  await ensureMcpGatewayConfigured();
+
   if (!isMcpGatewayConfigured()) {
-    console.warn(
-      '[Graph] MCP gateway not configured; skipping Memgraph operations.'
-    );
-    return { nodes, edges };
+    throw new Error('MCP gateway is not configured; cannot fetch graph context.');
   }
 
   // Query for each spec and its relationships
