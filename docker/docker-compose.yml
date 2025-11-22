@@ -29,7 +29,7 @@ services:
       - MCP_READ_ONLY=false
     depends_on:
       - memgraph
-    command: sleep infinity
+    command: pnpm dev
 
   # Memgraph database with schema info enabled (required for MCP)
   memgraph:
