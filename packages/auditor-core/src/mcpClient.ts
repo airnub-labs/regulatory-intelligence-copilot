@@ -21,6 +21,44 @@ export function configureMcpGateway(url: string, token: string): void {
 }
 
 /**
+ * Ensure MCP gateway credentials are configured, preferring runtime values
+ * and falling back to environment variables used across both server and
+ * Next.js runtimes.
+ */
+export function ensureMcpGatewayConfiguredFromEnv(): boolean {
+  if (mcpGatewayUrl) {
+    return true;
+  }
+
+  const envUrl =
+    process.env.MCP_GATEWAY_URL ||
+    process.env.E2B_MCP_GATEWAY_URL ||
+    process.env.NEXT_PUBLIC_MCP_GATEWAY_URL ||
+    '';
+
+  const envToken =
+    process.env.MCP_GATEWAY_TOKEN ||
+    process.env.E2B_MCP_GATEWAY_TOKEN ||
+    process.env.NEXT_PUBLIC_MCP_GATEWAY_TOKEN ||
+    '';
+
+  if (envUrl) {
+    console.log('[MCP] Configuring gateway from environment variables...');
+    configureMcpGateway(envUrl, envToken);
+    return true;
+  }
+
+  // As a convenience for local development, fall back to the default MCP
+  // gateway port if no env var is provided. This mirrors the docker-compose
+  // setup and avoids silent graph skips when the gateway is running on
+  // localhost without explicit configuration.
+  const fallbackUrl = 'http://localhost:8080';
+  console.log('[MCP] No gateway env vars found; trying localhost fallback...');
+  configureMcpGateway(fallbackUrl, '');
+  return true;
+}
+
+/**
  * Get current MCP gateway URL
  */
 export function getMcpGatewayUrl(): string {

@@ -82,6 +82,7 @@ export {
   getMemgraphSchema,
   configureMcpGateway,
   getMcpGatewayUrl,
+  ensureMcpGatewayConfiguredFromEnv,
 } from './mcpClient.js';
 
 // Graph Context
