@@ -89,7 +89,7 @@ export async function POST(request: Request) {
 
     // For normal chat, use AI SDK with Groq for streaming
     const result = await streamText({
-      model: groq('llama-3.3-70b-versatile'),
+      model: groq('compound-beta'),
       system: systemPrompt,
       messages,
       temperature: 0.3,

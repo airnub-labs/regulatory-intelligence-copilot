@@ -9,7 +9,7 @@ import { sanitizeTextForEgress } from './aspects/egressGuard.js';
 // Groq configuration
 const GROQ_API_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'compound-beta';
 
 // System prompt for the RFC/OWASP auditor
 const AUDITOR_SYSTEM_PROMPT = `You are an expert RFC and OWASP Top 10 compliance auditor for HTTP APIs.
