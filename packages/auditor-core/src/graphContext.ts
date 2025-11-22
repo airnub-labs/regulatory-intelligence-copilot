@@ -58,15 +58,43 @@ Return a structured list of spec IDs and their relevance to the observed issues.
  *
  * Extracts RFC numbers and OWASP categories mentioned in the Perplexity response.
  */
-function parseSpecsFromPerplexityResult(result: string): EnrichedSpec[] {
+function parseSpecsFromPerplexityResult(result: unknown): EnrichedSpec[] {
+  // Convert result to string - handle various MCP response formats
+  let text: string;
+  if (typeof result === 'string') {
+    text = result;
+  } else if (result && typeof result === 'object') {
+    // Handle object formats like { content: [...] } or { text: "..." }
+    const obj = result as Record<string, unknown>;
+    if (Array.isArray(obj.content)) {
+      text = obj.content
+        .map((item: unknown) => {
+          if (typeof item === 'string') return item;
+          if (item && typeof item === 'object' && 'text' in item) {
+            return (item as { text: string }).text;
+          }
+          return JSON.stringify(item);
+        })
+        .join('\n');
+    } else if (typeof obj.text === 'string') {
+      text = obj.text;
+    } else if (typeof obj.content === 'string') {
+      text = obj.content;
+    } else {
+      text = JSON.stringify(result);
+    }
+  } else {
+    text = String(result || '');
+  }
+
   const specs: EnrichedSpec[] = [];
 
   // Extract RFC mentions using regex
-  const rfcSpecs = extractRfcSpecs(result);
+  const rfcSpecs = extractRfcSpecs(text);
   specs.push(...rfcSpecs);
 
   // Extract OWASP categories using centralized config
-  const owaspSpecs = extractOwaspSpecs(result);
+  const owaspSpecs = extractOwaspSpecs(text);
   specs.push(...owaspSpecs);
 
   return specs;
