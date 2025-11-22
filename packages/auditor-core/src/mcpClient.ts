@@ -17,6 +17,7 @@ let mcpGatewayToken = '';
 export function configureMcpGateway(url: string, token: string): void {
   mcpGatewayUrl = url;
   mcpGatewayToken = token;
+  console.log('[MCP] Gateway configured - Perplexity and Memgraph tools available');
 }
 
 /**
@@ -132,14 +133,23 @@ const mcpSanitizationAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req
 const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, next) => {
   const start = Date.now();
 
+  // Friendly names for demo visibility
+  const toolDisplayName = req.toolName.includes('perplexity')
+    ? 'Perplexity (spec discovery)'
+    : req.toolName.includes('memgraph')
+      ? 'Memgraph (knowledge graph)'
+      : req.toolName;
+
+  console.log(`[MCP] Calling ${toolDisplayName}...`);
+
   try {
     const result = await next(req);
     const duration = Date.now() - start;
-    console.log(`[MCP] ${req.toolName} completed in ${duration}ms`);
+    console.log(`[MCP] ${toolDisplayName} completed in ${duration}ms`);
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`[MCP] ${req.toolName} failed after ${duration}ms`);
+    console.error(`[MCP] ${toolDisplayName} failed after ${duration}ms`);
     throw error;
   }
 };

@@ -19,6 +19,8 @@ const ENDPOINTS = [
  * Probe sample API endpoints inside the sandbox
  */
 export async function probeSampleApi(handle: SandboxHandle): Promise<RawHttpExchange[]> {
+  console.log(`[Probe] Testing ${ENDPOINTS.length} endpoints inside sandbox...`);
+  ENDPOINTS.forEach(ep => console.log(`[Probe]   → ${ep.method} ${ep.path}`));
   const probeCode = `
     const results = [];
     const baseUrl = 'http://localhost:3001';

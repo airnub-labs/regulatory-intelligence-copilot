@@ -184,6 +184,7 @@ function isValidSpecId(id: string): boolean {
  * Upsert specs into Memgraph
  */
 async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
+  console.log(`[Graph] Upserting ${specs.length} specs to Memgraph knowledge graph...`);
   for (const spec of specs) {
     // Validate spec ID to prevent injection
     if (!isValidSpecId(spec.id)) {
@@ -198,6 +199,7 @@ async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
         SET r.title = '${safeTitle}'
         RETURN r
       `;
+      console.log(`[Graph]   → Upserting RFC node: ${spec.id}`);
       await callMemgraphMcp(query);
     } else if (spec.type === 'owasp') {
       const safeTitle = escapeCypher(spec.title);
@@ -208,6 +210,7 @@ async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
             o.version = '${safeVersion}'
         RETURN o
       `;
+      console.log(`[Graph]   → Upserting OWASP node: ${spec.id}`);
       await callMemgraphMcp(query);
     }
   }
@@ -285,6 +288,7 @@ export async function extractAndUpsertSpecsFromText(
 export async function fetchGraphContextForFindings(
   specs: EnrichedSpec[]
 ): Promise<GraphContext> {
+  console.log('[Graph] Querying Memgraph for related specs and relationships...');
   const nodes: GraphContext['nodes'] = [];
   const edges: GraphContext['edges'] = [];
 

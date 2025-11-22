@@ -185,11 +185,16 @@ Provide a detailed compliance report in this exact JSON format:
   "owaspCited": ["A03:2021"]
 }`;
 
+  console.log('[Groq] Sending sanitized data to LLM for compliance analysis...');
+  console.log(`[Groq] Model: ${GROQ_MODEL} | Endpoints: ${probes.length} | Specs: ${specs.length}`);
+
   const response = await groqChat({
     messages: [
       { role: 'user', content: analysisPrompt },
     ],
   });
+
+  console.log('[Groq] Analysis complete - parsing compliance report...');
 
   // Parse the JSON response
   try {

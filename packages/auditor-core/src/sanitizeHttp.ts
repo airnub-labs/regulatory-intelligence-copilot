@@ -124,5 +124,9 @@ export function sanitizeHttpExchange(raw: RawHttpExchange): SanitizedHttpExchang
  * Sanitize multiple HTTP exchanges
  */
 export function sanitizeHttpExchanges(raw: RawHttpExchange[]): SanitizedHttpExchange[] {
-  return raw.map(sanitizeHttpExchange);
+  console.log(`[Sanitize] Processing ${raw.length} exchanges through egress guard...`);
+  console.log('[Sanitize] Redacting PII: SSNs, credit cards, API keys, passwords, emails...');
+  const result = raw.map(sanitizeHttpExchange);
+  console.log(`[Sanitize] ${result.length} exchanges sanitized - safe for external APIs`);
+  return result;
 }
