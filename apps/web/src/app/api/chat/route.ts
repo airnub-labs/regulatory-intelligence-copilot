@@ -214,14 +214,6 @@ export async function POST(request: Request) {
       systemPrompt += `\n\nRelevant standards from the last audit (use these to inform your answers):\n${graphSummary}`;
     }
 
-    // Extract specs from user message to populate graph
-    const userContent = lastMessage.content;
-    try {
-      await extractAndUpsertSpecsFromText(userContent);
-    } catch (err) {
-      console.log('[API] Graph population from user message failed:', err);
-    }
-
     // For normal chat, use AI SDK with Groq for streaming
     const result = await streamText({
       model: groq('compound-beta'),
