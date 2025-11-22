@@ -1,14 +1,13 @@
 /**
- * MCP Client - communicates with MCP Gateway for Perplexity and Memgraph tools
- * Supports both E2B built-in gateway and external Docker gateway
+ * MCP Client - communicates with E2B's built-in MCP Gateway for Perplexity and Memgraph tools
  */
 
 import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from './aspects/applyAspects.js';
 import { sanitizeObjectForEgress } from './aspects/egressGuard.js';
 
-// MCP Gateway configuration - can be overridden by sandbox handle
-let mcpGatewayUrl = process.env.MCP_GATEWAY_URL || 'http://localhost:8080';
+// MCP Gateway configuration - must be set via configureMcpGateway() from E2B sandbox
+let mcpGatewayUrl = '';
 let mcpGatewayToken = '';
 
 /**
@@ -98,37 +97,33 @@ export const mcpCall = applyAspects(baseMcpCall, [
 
 /**
  * Call Perplexity MCP for spec discovery
- * Uses perplexity_ask tool from official MCP server
+ * Uses perplexity_ask tool from E2B's built-in MCP gateway
  */
 export async function callPerplexityMcp(query: string): Promise<string> {
-  // Try E2B gateway perplexity tool first, then fallback to external
-  const toolNames = [
-    'perplexity.perplexity_ask',  // E2B gateway format
-    'perplexity_mcp.search',       // External gateway format
-  ];
-
-  let lastError: string | undefined;
-
-  for (const toolName of toolNames) {
-    const response = await mcpCall({
-      toolName,
-      params: { query },
-    });
-
-    if (!response.error) {
-      return response.result as string;
-    }
-
-    lastError = response.error;
+  if (!mcpGatewayUrl) {
+    throw new Error('MCP gateway not configured. Call configureMcpGateway() with E2B sandbox credentials first.');
   }
 
-  throw new Error(lastError || 'Failed to call Perplexity MCP');
+  const response = await mcpCall({
+    toolName: 'perplexity.perplexity_ask',
+    params: { query },
+  });
+
+  if (response.error) {
+    throw new Error(response.error);
+  }
+
+  return response.result as string;
 }
 
 /**
  * Call Memgraph MCP to run a Cypher query
  */
 export async function callMemgraphMcp(cypherQuery: string): Promise<unknown> {
+  if (!mcpGatewayUrl) {
+    throw new Error('MCP gateway not configured. Call configureMcpGateway() with E2B sandbox credentials first.');
+  }
+
   const response = await mcpCall({
     toolName: 'memgraph_mcp.run_query',
     params: { query: cypherQuery },
@@ -145,6 +140,10 @@ export async function callMemgraphMcp(cypherQuery: string): Promise<unknown> {
  * Get Memgraph schema
  */
 export async function getMemgraphSchema(): Promise<unknown> {
+  if (!mcpGatewayUrl) {
+    throw new Error('MCP gateway not configured. Call configureMcpGateway() with E2B sandbox credentials first.');
+  }
+
   const response = await mcpCall({
     toolName: 'memgraph_mcp.get_schema',
     params: {},

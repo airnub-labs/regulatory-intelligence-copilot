@@ -16,7 +16,6 @@ services:
       - sample_node_modules:/workspace/packages/sample-api/node_modules
     environment:
       - NODE_ENV=development
-      - MCP_GATEWAY_URL=http://mcp-gateway:8080
       - GROQ_API_URL=https://api.groq.com/openai/v1/chat/completions
       - MEMGRAPH_HOST=memgraph
       - MEMGRAPH_PORT=7687
@@ -24,7 +23,6 @@ services:
       - MEMGRAPH_PASSWORD=memgraph
     depends_on:
       - memgraph
-      - mcp-gateway
     command: pnpm dev
 
   # Memgraph database with schema info enabled (required for MCP)
@@ -61,38 +59,6 @@ services:
     depends_on:
       memgraph:
         condition: service_healthy
-
-  # Perplexity MCP Server - using official Docker Hub image with HTTP adapter
-  # The official mcp/perplexity-ask uses stdio, so we wrap it with an HTTP adapter
-  perplexity-mcp:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./perplexity-mcp:/app
-    env_file:
-      - ../.env.local
-    command: sh -c "pnpm install && pnpm start"
-    # Note: For production, consider using the official mcp/perplexity-ask image
-    # with an MCP-to-HTTP adapter:
-    # image: mcp/perplexity-ask
-    # environment:
-    #   - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
-
-  # MCP Gateway - routes tool calls to appropriate MCP servers
-  mcp-gateway:
-    image: node:20-alpine
-    working_dir: /app
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./mcp-gateway:/app
-    environment:
-      - MEMGRAPH_MCP_URL=http://memgraph-mcp:8000/mcp/
-      - PERPLEXITY_MCP_URL=http://perplexity-mcp:3000
-    depends_on:
-      - memgraph-mcp
-      - perplexity-mcp
-    command: sh -c "pnpm install && pnpm start"
 
 volumes:
   memgraph_data:

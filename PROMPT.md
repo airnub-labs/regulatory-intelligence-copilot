@@ -50,7 +50,7 @@ You are working in a monorepo with this intended structure:
 │  ├─ auditor-core/        # E2B, HTTP probes, aspects, MCP & LLM clients, audit engine
 │  └─ sample-api/          # Express REST API with intentional flaws + one golden endpoint
 └─ docker/
-   ├─ docker-compose.yml   # memgraph, memgraph-mcp, perplexity-mcp, mcp-gateway, app
+   ├─ docker-compose.yml   # memgraph, memgraph-mcp, app (Perplexity via E2B)
    ├─ Dockerfile.app       # dev runtime for app
    └─ memgraph-init/       # optional tiny scripts (if needed later)
 ```

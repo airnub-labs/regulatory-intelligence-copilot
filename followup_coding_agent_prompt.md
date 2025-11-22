@@ -127,7 +127,7 @@ Ensure MCP usage matches the design:
 
 1. **Inspect MCP client code**
    - Open `packages/auditor-core/mcpClient.ts` (or equivalent module).
-   - Confirm that all MCP calls use a single gateway endpoint (e.g. `MCP_GATEWAY_URL`) and specify tools like `perplexity_mcp` and `memgraph_mcp`.
+   - Confirm that all MCP calls use E2B's built-in gateway (configured via `configureMcpGateway()`) and specify tools like `perplexity.perplexity_ask` and `memgraph_mcp.run_query`.
 
 2. **Remove any direct external API calls**
    - If you find direct HTTP requests to Perplexity, Memgraph, or similar external services **outside** of the MCP client:
@@ -135,10 +135,10 @@ Ensure MCP usage matches the design:
 
 3. **Align environment variables**
    - Ensure there are clear env vars such as:
-     - `MCP_GATEWAY_URL`
-     - `MCP_PERPLEXITY_TOOL_NAME`
-     - `MCP_MEMGRAPH_TOOL_NAME`
-   - The names can vary, but they should be:
+     - `E2B_API_KEY` (required - E2B provides the MCP gateway)
+     - `PERPLEXITY_API_KEY` (for E2B's Docker Hub MCP)
+     - `MEMGRAPH_HOST`, `MEMGRAPH_PORT` (for Memgraph connection)
+   - The names should be:
      - Consistent across code and docker/devcontainer configuration.
      - Documented in `.env.example` or similar.
 

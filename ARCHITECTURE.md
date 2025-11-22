@@ -287,10 +287,8 @@ A `.devcontainer/devcontainer.json` and `docker/docker-compose.yml` provide:
   - `app` – dev runtime for `apps/web` + local Node tooling.
   - `memgraph` – Memgraph DB with a persistent volume.
   - `memgraph-mcp` – Memgraph MCP Server container.
-  - `perplexity-mcp` – Perplexity MCP container pulled from Docker Hub.
-  - `mcp-gateway` – Docker MCP Toolkit gateway exposing the MCP tools.
 
-The dev container attaches to the `app` service and forwards relevant ports (Next.js, MCP Gateway, etc.) so the whole demo runs with minimal setup.
+The dev container attaches to the `app` service and forwards relevant ports (Next.js, etc.) so the whole demo runs with minimal setup. Perplexity MCP is provided through E2B's built-in Docker Hub MCP support.
 
 ---
 

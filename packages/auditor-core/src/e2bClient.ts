@@ -51,36 +51,30 @@ type MCPConfig = {
 /**
  * Get MCP gateway credentials from sandbox
  *
- * Tries standard API first, then beta API, then falls back to external gateway.
+ * Tries standard API first, then beta API. Throws if E2B MCP gateway is not available.
  */
 async function getMcpCredentials(sandbox: Sandbox): Promise<{ mcpUrl: string; mcpToken: string }> {
-  const fallbackUrl = process.env.MCP_GATEWAY_URL || 'http://localhost:8080';
   // Cast to access potential MCP methods (may be in beta or standard API)
   const sbx = sandbox as unknown as Record<string, unknown>;
 
-  try {
-    // Try standard API first
-    if (typeof sbx.getMcpUrl === 'function' && typeof sbx.getMcpToken === 'function') {
-      const url = (sbx.getMcpUrl as () => string)();
-      const token = await (sbx.getMcpToken as () => Promise<string>)();
-      return { mcpUrl: url, mcpToken: token };
-    }
-
-    // Fall back to beta API
-    if (typeof sbx.betaGetMcpUrl === 'function' && typeof sbx.betaGetMcpToken === 'function') {
-      const url = (sbx.betaGetMcpUrl as () => string)();
-      const token = await (sbx.betaGetMcpToken as () => Promise<string>)();
-      return { mcpUrl: url, mcpToken: token };
-    }
-
-    // Fallback to external MCP gateway for local development
-    console.log(`${LOG_PREFIX.e2b} MCP gateway methods not available, using external gateway`);
-    return { mcpUrl: fallbackUrl, mcpToken: '' };
-  } catch (error) {
-    // Fallback to external MCP gateway
-    console.log(`${LOG_PREFIX.e2b} Failed to get MCP gateway credentials, using external gateway:`, error);
-    return { mcpUrl: fallbackUrl, mcpToken: '' };
+  // Try standard API first
+  if (typeof sbx.getMcpUrl === 'function' && typeof sbx.getMcpToken === 'function') {
+    const url = (sbx.getMcpUrl as () => string)();
+    const token = await (sbx.getMcpToken as () => Promise<string>)();
+    return { mcpUrl: url, mcpToken: token };
   }
+
+  // Fall back to beta API
+  if (typeof sbx.betaGetMcpUrl === 'function' && typeof sbx.betaGetMcpToken === 'function') {
+    const url = (sbx.betaGetMcpUrl as () => string)();
+    const token = await (sbx.betaGetMcpToken as () => Promise<string>)();
+    return { mcpUrl: url, mcpToken: token };
+  }
+
+  throw new SandboxError(
+    'E2B MCP gateway methods not available. Ensure you are using an E2B sandbox with MCP support enabled.',
+    'MCP_GATEWAY_UNAVAILABLE'
+  );
 }
 
 /**

@@ -213,8 +213,7 @@ This document captures the **frozen decisions** for the hackathon implementation
      - `app` service.
      - `memgraph` service with persistent volume.
      - `memgraph-mcp` service.
-     - `perplexity-mcp` service.
-     - `mcp-gateway` service.
+   - Perplexity MCP is provided through E2B's built-in Docker Hub MCP support (no local fallback).
 
 32. **Dependencies**
    - Use:

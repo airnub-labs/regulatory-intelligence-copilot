@@ -194,9 +194,7 @@ This repo includes a `.devcontainer/devcontainer.json` that wires everything tog
 3. Docker Compose will bring up:
    - `app` (Next.js dev server),
    - `memgraph`,
-   - `memgraph-mcp`,
-   - `perplexity-mcp`,
-   - `mcp-gateway`.
+   - `memgraph-mcp`.
 4. In the `app` service, run:
    ```bash
    pnpm install
@@ -239,7 +237,6 @@ Create a `.env` file in the project root with the following variables:
 | `PERPLEXITY_API_KEY` | **Yes** | API key for Perplexity MCP spec discovery |
 | `MEMGRAPH_HOST` | No | Memgraph hostname (default: `localhost`) |
 | `MEMGRAPH_PORT` | No | Memgraph port (default: `7687`) |
-| `MCP_GATEWAY_URL` | No | MCP Gateway URL (default: `http://localhost:8080`) |
 
 **Important**: If these variables are not set, the system will fail:
 - Missing `GROQ_API_KEY` → LLM calls will error
