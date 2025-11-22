@@ -78,12 +78,6 @@ export {
   getMcpGatewayUrl,
 } from './mcpClient.js';
 
-// Local Memgraph Client (direct queries without E2B)
-export {
-  queryMemgraphLocal,
-  getMemgraphSchemaLocal,
-} from './localMemgraphClient.js';
-
 // Graph Context
 export {
   discoverAndUpsertSpecs,
