@@ -5,10 +5,13 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
-const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
-  ssr: false,
-  loading: () => <div className="flex items-center justify-center h-48 bg-gray-800 rounded">Loading graph...</div>,
-});
+const ForceGraph2D = dynamic(
+  () => import('react-force-graph-2d').then(mod => mod.default),
+  {
+    ssr: false,
+    loading: () => <div className="flex items-center justify-center h-48 bg-gray-800 rounded">Loading graph...</div>,
+  }
+);
 
 interface GraphNode {
   id: string;
