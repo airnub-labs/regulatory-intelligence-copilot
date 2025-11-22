@@ -115,11 +115,19 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col bg-gray-900 text-white">
       {/* Header */}
-      <header className="border-b border-gray-800 p-4">
-        <h1 className="text-2xl font-bold">E2B RFC/OWASP Auditor</h1>
-        <p className="text-sm text-gray-400">
-          Audit HTTP APIs for RFC compliance and security issues
-        </p>
+      <header className="border-b border-gray-800 p-4 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold">E2B RFC/OWASP Auditor</h1>
+          <p className="text-sm text-gray-400">
+            Audit HTTP APIs for RFC compliance and security issues
+          </p>
+        </div>
+        <a
+          href="/graph"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
+        >
+          View Graph
+        </a>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
