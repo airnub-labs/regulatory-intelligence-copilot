@@ -63,7 +63,10 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
     };
   }
 
-  const jsonRpcResponse = await response.json();
+  const jsonRpcResponse = await response.json() as {
+    result?: unknown;
+    error?: { message?: string; code?: number };
+  };
 
   if (jsonRpcResponse.error) {
     return {
