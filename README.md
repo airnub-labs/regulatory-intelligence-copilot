@@ -189,19 +189,35 @@ Additional docs in the repo:
 
 This repo includes a `.devcontainer/devcontainer.json` that wires everything together.
 
-1. Open the repo in **GitHub Codespaces** or VS Code’s **“Reopen in Container”**.
-2. Wait for the dev container to build.
-3. Docker Compose will bring up:
-   - `app` (Next.js dev server),
-   - `memgraph`,
-   - `memgraph-mcp`.
-4. In the `app` service, run:
-   ```bash
-   pnpm install
-   pnpm dev:web
-   ```
-5. Open the forwarded port (default: `http://localhost:3000`).
-6. You should now see the chat UI.
+#### Setting up Codespaces Secrets (Required)
+
+Before launching Codespaces, add these secrets to your GitHub account:
+
+1. Go to **GitHub Settings** → **Codespaces** → **Secrets**
+2. Click **New secret** and add each of the following:
+
+| Secret Name | Description |
+|-------------|-------------|
+| `E2B_API_KEY` | API key for E2B sandbox execution |
+| `GROQ_API_KEY` | API key for Groq LLM calls |
+| `PERPLEXITY_API_KEY` | API key for Perplexity MCP spec discovery |
+
+3. For each secret, set repository access to include this repo (or select "All repositories")
+
+> **Important**: Without these secrets, the application will not function. The secrets are securely passed to the devcontainer environment.
+
+#### Launching Codespaces
+
+1. Click the green **Code** button → **Codespaces** → **Create codespace on main**
+2. Wait for the dev container to build (this may take a few minutes on first launch)
+3. Docker Compose will automatically bring up:
+   - `app` (Next.js dev server)
+   - `memgraph` (graph database)
+   - `memgraph-mcp` (MCP server)
+4. The app starts automatically and the browser preview opens at port 3000
+5. You should now see the chat UI
+
+> **Note**: Dependencies install automatically via `postCreateCommand` and the dev server starts via `postStartCommand`.
 
 ### 6.3 Option 2 – Local machine (Docker)
 
