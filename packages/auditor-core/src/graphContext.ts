@@ -15,7 +15,8 @@ import type {
 } from './types.js';
 import { callPerplexityMcp, callMemgraphMcp } from './mcpClient.js';
 import {
-  OWASP_CATEGORIES,
+  getOwaspCategories,
+  getOwaspVersion,
   findOwaspCategoriesByKeyword,
 } from './config/owaspCategories.js';
 
@@ -120,20 +121,22 @@ function extractRfcSpecs(text: string): EnrichedSpec[] {
 }
 
 /**
- * Extract OWASP categories from text using centralized config
+ * Extract OWASP categories from text using dynamic categories
  */
 function extractOwaspSpecs(text: string): EnrichedSpec[] {
   const specs: EnrichedSpec[] = [];
   const addedIds = new Set<string>();
+  const categories = getOwaspCategories();
+  const version = getOwaspVersion();
 
   // Check for explicit OWASP pattern matches
-  for (const category of OWASP_CATEGORIES) {
+  for (const category of categories) {
     if (category.pattern.test(text) && !addedIds.has(category.id)) {
       specs.push({
         type: 'owasp',
         id: category.id,
         title: category.title,
-        version: '2021',
+        version,
       });
       addedIds.add(category.id);
     }
@@ -147,7 +150,7 @@ function extractOwaspSpecs(text: string): EnrichedSpec[] {
         type: 'owasp',
         id: category.id,
         title: category.title,
-        version: '2021',
+        version,
       });
       addedIds.add(category.id);
     }

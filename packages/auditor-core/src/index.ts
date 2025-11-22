@@ -38,6 +38,12 @@ export {
 // OWASP Configuration
 export {
   OWASP_CATEGORIES,
+  getOwaspCategories,
+  getOwaspVersion,
+  initializeOwaspCategories,
+  refreshOwaspCategories,
+  configureOwaspCacheTtl,
+  clearOwaspCache,
   findOwaspCategoryById,
   findOwaspCategoriesByKeyword,
   matchOwaspCategories,

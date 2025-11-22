@@ -1,11 +1,19 @@
 /**
- * OWASP Top 10:2021 category definitions
+ * OWASP Top 10 category definitions
  *
- * This configuration file defines all OWASP Top 10:2021 categories
- * with their IDs, titles, and detection patterns.
+ * This module provides both static defaults and dynamic fetching of OWASP categories.
+ * The dynamic fetcher uses Perplexity + Groq to always get the latest OWASP Top 10.
  *
  * @see https://owasp.org/Top10/
  */
+
+import {
+  fetchDynamicOwaspCategories,
+  getCurrentOwaspCategories,
+  getCurrentOwaspVersion,
+  clearOwaspCache,
+  setOwaspCacheTtl,
+} from './dynamicOwaspFetcher.js';
 
 export interface OwaspCategory {
   /** OWASP category ID (e.g., 'A01:2021') */
@@ -19,9 +27,9 @@ export interface OwaspCategory {
 }
 
 /**
- * All OWASP Top 10:2021 categories
+ * Default OWASP Top 10:2021 categories (fallback)
  */
-export const OWASP_CATEGORIES: OwaspCategory[] = [
+const DEFAULT_OWASP_CATEGORIES: OwaspCategory[] = [
   {
     id: 'A01:2021',
     title: 'Broken Access Control',
@@ -85,10 +93,69 @@ export const OWASP_CATEGORIES: OwaspCategory[] = [
 ];
 
 /**
+ * Get OWASP categories (uses cached dynamic data or defaults)
+ *
+ * This is a synchronous getter that returns currently loaded categories.
+ * For initial load or refresh, use initializeOwaspCategories() or refreshOwaspCategories().
+ */
+export function getOwaspCategories(): OwaspCategory[] {
+  return getCurrentOwaspCategories();
+}
+
+/**
+ * Legacy export for backward compatibility
+ * @deprecated Use getOwaspCategories() for dynamic categories
+ */
+export const OWASP_CATEGORIES: OwaspCategory[] = DEFAULT_OWASP_CATEGORIES;
+
+/**
+ * Initialize OWASP categories by fetching the latest from external sources
+ *
+ * Should be called once at application startup or when MCP gateway is configured.
+ * Returns the fetched categories and their version.
+ */
+export async function initializeOwaspCategories(): Promise<{
+  categories: OwaspCategory[];
+  version: string;
+  source: 'cache' | 'dynamic' | 'fallback';
+}> {
+  return fetchDynamicOwaspCategories();
+}
+
+/**
+ * Refresh OWASP categories (clears cache and fetches fresh data)
+ */
+export async function refreshOwaspCategories(): Promise<{
+  categories: OwaspCategory[];
+  version: string;
+  source: 'cache' | 'dynamic' | 'fallback';
+}> {
+  clearOwaspCache();
+  return fetchDynamicOwaspCategories();
+}
+
+/**
+ * Get current OWASP version
+ */
+export function getOwaspVersion(): string {
+  return getCurrentOwaspVersion();
+}
+
+/**
+ * Configure OWASP cache TTL
+ */
+export function configureOwaspCacheTtl(ttlMs: number): void {
+  setOwaspCacheTtl(ttlMs);
+}
+
+// Re-export cache utilities
+export { clearOwaspCache };
+
+/**
  * Find OWASP category by ID
  */
 export function findOwaspCategoryById(id: string): OwaspCategory | undefined {
-  return OWASP_CATEGORIES.find(cat => cat.id === id);
+  return getOwaspCategories().find(cat => cat.id === id);
 }
 
 /**
@@ -96,7 +163,7 @@ export function findOwaspCategoryById(id: string): OwaspCategory | undefined {
  */
 export function findOwaspCategoriesByKeyword(text: string): OwaspCategory[] {
   const lowerText = text.toLowerCase();
-  return OWASP_CATEGORIES.filter(cat =>
+  return getOwaspCategories().filter(cat =>
     cat.keywords.some(keyword => lowerText.includes(keyword))
   );
 }
@@ -105,5 +172,5 @@ export function findOwaspCategoriesByKeyword(text: string): OwaspCategory[] {
  * Check if text matches any OWASP category pattern
  */
 export function matchOwaspCategories(text: string): OwaspCategory[] {
-  return OWASP_CATEGORIES.filter(cat => cat.pattern.test(text));
+  return getOwaspCategories().filter(cat => cat.pattern.test(text));
 }
