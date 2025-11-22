@@ -31,7 +31,7 @@ export function getMcpGatewayUrl(): string {
 async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    'Accept': 'application/json, text/event-stream',
   };
 
   // Add bearer token if available (for E2B gateway)
@@ -64,6 +64,37 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
     };
   }
 
+  const contentType = response.headers.get('content-type') || '';
+
+  // Handle SSE response
+  if (contentType.includes('text/event-stream')) {
+    const text = await response.text();
+    // Parse SSE events - look for data: lines
+    const lines = text.split('\n');
+    let result: unknown = null;
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          // Look for the result in the SSE data
+          if (data.result !== undefined) {
+            result = data.result;
+          } else if (data.content) {
+            result = data.content;
+          } else {
+            result = data;
+          }
+        } catch {
+          // Skip non-JSON lines
+        }
+      }
+    }
+
+    return { result };
+  }
+
+  // Handle JSON response
   const jsonRpcResponse = await response.json() as {
     result?: unknown;
     error?: { message?: string; code?: number };
