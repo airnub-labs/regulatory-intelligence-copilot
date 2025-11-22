@@ -13,7 +13,12 @@ import type {
   GraphContext,
   SanitizedHttpExchange,
 } from './types.js';
-import { callPerplexityMcp, callMemgraphMcp } from './mcpClient.js';
+import {
+  callPerplexityMcp,
+  callMemgraphMcp,
+  configureMcpGateway,
+  getMcpGatewayUrl,
+} from './mcpClient.js';
 import {
   getOwaspCategories,
   getOwaspVersion,
@@ -181,9 +186,39 @@ function isValidSpecId(id: string): boolean {
 }
 
 /**
+ * Ensure MCP gateway is configured before Memgraph operations.
+ * Attempts to configure from environment variables when not already set.
+ */
+function ensureMcpGatewayConfigured(): boolean {
+  if (getMcpGatewayUrl()) {
+    return true;
+  }
+
+  const envUrl =
+    process.env.MCP_GATEWAY_URL || process.env.E2B_MCP_GATEWAY_URL || '';
+  const envToken =
+    process.env.MCP_GATEWAY_TOKEN || process.env.E2B_MCP_GATEWAY_TOKEN || '';
+
+  if (envUrl) {
+    console.log('[Graph] Configuring MCP gateway from environment...');
+    configureMcpGateway(envUrl, envToken);
+    return true;
+  }
+
+  console.warn(
+    '[Graph] MCP gateway not configured; skipping Memgraph operations.'
+  );
+  return false;
+}
+
+/**
  * Upsert specs into Memgraph
  */
 async function upsertSpecsToMemgraph(specs: EnrichedSpec[]): Promise<void> {
+  if (!ensureMcpGatewayConfigured()) {
+    return;
+  }
+
   console.log(`[Graph] Upserting ${specs.length} specs to Memgraph knowledge graph...`);
   for (const spec of specs) {
     // Validate spec ID to prevent injection
@@ -291,6 +326,10 @@ export async function fetchGraphContextForFindings(
   console.log('[Graph] Querying Memgraph for related specs and relationships...');
   const nodes: GraphContext['nodes'] = [];
   const edges: GraphContext['edges'] = [];
+
+  if (!ensureMcpGatewayConfigured()) {
+    return { nodes, edges };
+  }
 
   // Query for each spec and its relationships
   const specIds = specs.map(s => `'${s.id}'`).join(', ');
