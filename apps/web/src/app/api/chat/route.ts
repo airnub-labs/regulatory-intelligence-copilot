@@ -4,6 +4,8 @@ import {
   runAuditOnSampleApi,
   reportToSummary,
   AUDIT_TRIGGER,
+  queryMemgraphLocal,
+  getMemgraphSchemaLocal,
   type ComplianceReport,
   type GraphContext,
 } from '@e2b-auditor/core';
@@ -84,6 +86,63 @@ export async function POST(request: Request) {
             'Content-Type': 'text/plain',
           },
         });
+      }
+    }
+
+    // Check if user wants to query the knowledge graph
+    const graphQueryKeywords = ['query graph', 'show graph', 'what rfcs', 'which rfcs', 'list rfcs', 'graph schema', 'show schema', 'cypher'];
+    const lastContent = lastMessage.content.toLowerCase();
+    const isGraphQuery = graphQueryKeywords.some(kw => lastContent.includes(kw));
+
+    if (isGraphQuery) {
+      console.log('[API] Detected graph query request');
+
+      try {
+        let graphResult;
+
+        if (lastContent.includes('schema')) {
+          graphResult = await getMemgraphSchemaLocal();
+        } else {
+          // Default query to get all RFCs and their relationships
+          const cypherQuery = lastContent.includes('cypher:')
+            ? lastContent.split('cypher:')[1].trim()
+            : 'MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 50';
+
+          graphResult = await queryMemgraphLocal(cypherQuery);
+        }
+
+        if (graphResult.error) {
+          const errorResponse = `Error querying graph: ${graphResult.error}`;
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(`0:${JSON.stringify(errorResponse)}\n`));
+              controller.close();
+            },
+          });
+          return new Response(stream, {
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
+        }
+
+        // Format results for display
+        const resultSummary = JSON.stringify(graphResult.records, null, 2);
+        const graphResponseText = `Here are the results from the knowledge graph:\n\n\`\`\`json\n${resultSummary}\n\`\`\``;
+
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`0:${JSON.stringify(graphResponseText)}\n`));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      } catch (error) {
+        console.error('[API] Graph query error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return new Response(`Error querying graph: ${errorMessage}`, { status: 500 });
       }
     }
 
