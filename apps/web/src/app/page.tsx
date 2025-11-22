@@ -168,8 +168,14 @@ export default function Home() {
           graphData={data}
           width={400}
           height={256}
-          nodeLabel={(node: { label?: string; type?: string }) => `${node.label || ''}\n(${node.type || ''})`}
-          nodeColor={(node: { type?: string }) => nodeColors[node.type || 'unknown'] || nodeColors.unknown}
+          nodeLabel={(node) => {
+            const n = node as { label?: string; type?: string };
+            return `${n.label || ''}\n(${n.type || ''})`;
+          }}
+          nodeColor={(node) => {
+            const n = node as { type?: string };
+            return nodeColors[n.type || 'unknown'] || nodeColors.unknown;
+          }}
           nodeRelSize={5}
           linkColor={() => '#4b5563'}
           linkWidth={1}
