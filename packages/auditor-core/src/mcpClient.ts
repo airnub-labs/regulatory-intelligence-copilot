@@ -26,7 +26,7 @@ export function getMcpGatewayUrl(): string {
 }
 
 /**
- * Base MCP call function
+ * Base MCP call function using JSON-RPC format
  */
 async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
   const headers: Record<string, string> = {
@@ -38,10 +38,21 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
     headers['Authorization'] = `Bearer ${mcpGatewayToken}`;
   }
 
-  const response = await fetch(`${mcpGatewayUrl}/tools/${params.toolName}`, {
+  // MCP uses JSON-RPC 2.0 format
+  const jsonRpcRequest = {
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      name: params.toolName,
+      arguments: params.params,
+    },
+    id: Date.now(),
+  };
+
+  const response = await fetch(mcpGatewayUrl, {
     method: 'POST',
     headers,
-    body: JSON.stringify(params.params),
+    body: JSON.stringify(jsonRpcRequest),
   });
 
   if (!response.ok) {
@@ -52,8 +63,16 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
     };
   }
 
-  const result = await response.json();
-  return { result };
+  const jsonRpcResponse = await response.json();
+
+  if (jsonRpcResponse.error) {
+    return {
+      result: null,
+      error: `MCP error: ${jsonRpcResponse.error.message || JSON.stringify(jsonRpcResponse.error)}`,
+    };
+  }
+
+  return { result: jsonRpcResponse.result };
 }
 
 /**
