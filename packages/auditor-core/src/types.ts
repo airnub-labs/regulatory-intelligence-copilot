@@ -81,6 +81,12 @@ export interface EndpointFinding {
     owaspReferences: string[];
   }>;
   suggestions: string[];
+  sourceLocation?: {
+    file: string;
+    startLine: number;
+    endLine: number;
+    repoUrl?: string;
+  };
 }
 
 // Full compliance report

@@ -53,6 +53,12 @@ interface Report {
       owaspReferences: string[];
     }>;
     suggestions: string[];
+    sourceLocation?: {
+      file: string;
+      startLine: number;
+      endLine: number;
+      repoUrl?: string;
+    };
   }>;
   rfcsCited: string[];
   owaspCited: string[];
@@ -318,8 +324,21 @@ export default function Home() {
                   </span>
                   <span className="text-sm font-mono">{endpoint.endpoint}</span>
                 </div>
-                <div className={`text-sm ${getStatusColor(endpoint.status)}`}>
-                  {endpoint.status}
+                <div className="flex items-center gap-2">
+                  <span className={`text-sm ${getStatusColor(endpoint.status)}`}>
+                    {endpoint.status}
+                  </span>
+                  {endpoint.sourceLocation && (
+                    <a
+                      href={`${endpoint.sourceLocation.repoUrl}/blob/main/${endpoint.sourceLocation.file}#L${endpoint.sourceLocation.startLine}-L${endpoint.sourceLocation.endLine}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-400 hover:text-blue-300 underline"
+                      title="View source code"
+                    >
+                      View Source
+                    </a>
+                  )}
                 </div>
 
                 {endpoint.issues.length > 0 && (

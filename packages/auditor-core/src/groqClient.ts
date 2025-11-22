@@ -11,6 +11,19 @@ const GROQ_API_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'compound-beta';
 
+// Source location mapping for sample API endpoints
+// Maps endpoint paths to their implementation in e2bClient.ts
+const ENDPOINT_SOURCE_LOCATIONS: Record<string, { startLine: number; endLine: number }> = {
+  '/health-perfect': { startLine: 158, endLine: 169 },
+  '/user-leaky': { startLine: 171, endLine: 186 },
+  '/debug-error': { startLine: 188, endLine: 209 },
+  '/items-injection': { startLine: 211, endLine: 231 },
+  '/cors-wildcard': { startLine: 233, endLine: 255 },
+};
+
+const SOURCE_FILE = 'packages/auditor-core/src/e2bClient.ts';
+const REPO_URL = 'https://github.com/airnub-labs/rfc-refactor';
+
 // System prompt for the RFC/OWASP auditor
 const AUDITOR_SYSTEM_PROMPT = `You are an expert RFC and OWASP Top 10 compliance auditor for HTTP APIs.
 
@@ -188,6 +201,25 @@ Provide a detailed compliance report in this exact JSON format:
     }
 
     const report = JSON.parse(jsonStr.trim());
+
+    // Add source locations to each endpoint
+    if (report.endpoints && Array.isArray(report.endpoints)) {
+      report.endpoints = report.endpoints.map((endpoint: import('./types.js').EndpointFinding) => {
+        const location = ENDPOINT_SOURCE_LOCATIONS[endpoint.endpoint];
+        if (location) {
+          return {
+            ...endpoint,
+            sourceLocation: {
+              file: SOURCE_FILE,
+              startLine: location.startLine,
+              endLine: location.endLine,
+              repoUrl: REPO_URL,
+            },
+          };
+        }
+        return endpoint;
+      });
+    }
 
     return {
       ...report,

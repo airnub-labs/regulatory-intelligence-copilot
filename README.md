@@ -1,341 +1,256 @@
-# E2B RFC/OWASP Auditor (rfc-refactor)
+# E2B RFC/OWASP Auditor
 
-> **Chat‑driven API auditor running inside an E2B sandbox, using MCP tools, Groq, and a self‑growing Memgraph spec graph to check HTTP APIs against RFCs + OWASP Top 10.**
-
-This project is built for the **“Build MCP Agents – with Docker, Groq, and E2B”** hackathon.
-
-It demonstrates how to:
-
-- Run an HTTP API **inside an E2B sandbox**.
-- Probe it from within the sandbox and capture real HTTP traffic.
-- **Sanitize** all data that leaves the sandbox (no raw secrets or PII leak).
-- Use **MCP tools** (Perplexity MCP via E2B's Docker Hub MCP + Memgraph MCP) to discover and store relevant **RFCs & OWASP Top 10** entries.
-- Use **Groq** to analyse compliance and suggest fixes.
-- Grow a **Memgraph knowledge graph** of standards over time (GraphRAG‑lite).
-- Interact with everything through a **single chat interface**.
+> **Chat-driven API auditor that uses E2B sandboxes and MCP servers to audit HTTP APIs against RFCs and OWASP Top 10 - without baking any of this complexity into the application itself.**
 
 ---
 
-## 1. What this project does
+## For Hackathon Judges
 
-From the judge’s perspective, this is what you see:
+### The Problem We Solve
 
-1. Open the web app.
-2. You land on a **chat view** with a button: **“Run audit on sample API”**.
-3. Clicking the button sends a chat message that triggers an audit inside an **E2B sandbox**:
-   - A sample **Express REST API** is started inside the sandbox.
-   - The app probes several endpoints (some compliant, some intentionally flawed).
-   - The sandbox captures HTTP requests & responses and sanitizes them.
-   - Using MCP + Groq, it analyses the behaviour against **RFC HTTP specs** and **OWASP Top 10:2021**.
-   - It builds/updates a **Memgraph graph** of the RFCs and OWASP categories it touched.
-4. The chat responds with:
-   - A human‑readable summary of each endpoint:
-     - **What’s wrong** (e.g. PII leak, insecure CORS, stack traces in responses).
-     - **Which RFC sections / OWASP categories** apply.
-   - Optionally, a table + simple graph visualisation of the consulted specs.
-5. You can then ask follow‑up questions like:
-   - “Why is `/cors-wildcard` flagged?”
-   - “Which RFCs are involved in error handling here?”
-   - “How would you refactor this endpoint to be compliant?”
+Building an API security auditor typically requires:
+- **Hardcoding security rules** that quickly become outdated
+- **Managing complex infrastructure** for safe code execution
+- **Building custom integrations** for knowledge bases and graph databases
+- **Handling PII/secret sanitization** to prevent data leaks
 
-Everything happens **via chat**. There’s no separate “API vs agent” UX – it’s one coherent agent experience.
+### How E2B + MCP Eliminates This Complexity
 
----
+| Traditional Approach | Our Approach with E2B + MCP |
+|---------------------|----------------------------|
+| Hardcode OWASP rules → maintain forever | **MCP Perplexity** fetches latest OWASP/RFC specs on demand |
+| Build custom sandboxing → months of work | **E2B Sandbox** provides secure execution in one API call |
+| Write Memgraph driver code → handle connections, queries | **MCP Memgraph** exposes Cypher via standard MCP protocol |
+| Build egress filtering → complex middleware | **E2B's MCP Gateway** centralizes all external calls |
 
-## 2. Why it matters (hackathon alignment)
+**Result:** Our entire codebase focuses on the audit logic, not infrastructure.
 
-This project is intentionally designed to showcase the hackathon themes:
+### Verify It's Real (Not Faked)
 
-- ✅ **E2B sandbox** is the execution environment – the API only runs inside it.
-- ✅ **MCP tools via Docker MCP Toolkit**:
-  - **Perplexity MCP** for live RFC/OWASP discovery and explanations.
-  - **Memgraph MCP** to store and query a graph of standards.
-- ✅ **Groq** is the LLM engine:
-  - Analyses HTTP behaviour + standards context.
-  - Produces structured compliance reports and refactor suggestions.
-- ✅ **Real‑world utility**:
-  - Runtime behaviour, not just static code.
-  - Growing knowledge graph that gets smarter with usage.
-- ✅ **Security aware**:
-  - E2B sandbox as an enclave.
-  - All outbound data passes through a **PII‑scrubbing egress guard**.
+Every audit finding includes a **"View Source"** link that takes you directly to the vulnerable code in GitHub:
 
----
-
-## 3. High‑level architecture
-
-At a glance:
-
-```txt
-User Browser
-   |
-   v
-Next.js app (apps/web)
-   - Chat UI + "Run audit" button
-   - POST /api/chat (single backend endpoint)
-   |
-   v
-Chat Orchestrator (/api/chat)
-   - If latest user message = "run audit":
-       -> runAuditOnSampleApi() from auditor-core
-   - Else:
-       -> groqChat() for general questions
-   |
-   v
-packages/auditor-core
-   - e2bClient: spins up an E2B sandbox
-   - sample-api (inside sandbox): Express REST API
-   - probeHttp: fetches endpoints, captures RawHttpExchange[]
-   - sanitizeHttp: Raw -> SanitizedHttpExchange[] (@redactpii/node)
-   - mcpClient: calls MCP Gateway (Perplexity + Memgraph MCP)
-   - graphContext: builds/queries Memgraph spec graph
-   - groqClient: calls Groq (wrapped in aspect/egress guard)
-   - auditEngine: orchestrates full audit -> ComplianceReport
-   |
-   v
-E2B Built-in MCP Gateway
-   - Perplexity MCP (via Docker Hub MCP - live RFC/OWASP discovery)
-   - Memgraph MCP (Cypher access to Memgraph)
-   |
-   v
-Memgraph DB
-   - Growing graph of RFC, Section, OWASP, Concept nodes
+```
+/user-leaky → View Source → e2bClient.ts#L171-L186
 ```
 
-More detail is in **`ARCHITECTURE.md`**.
+Click any finding to see the actual code being audited. This proves the LLM is analyzing real endpoints, not hallucinating issues.
 
 ---
 
-## 4. Key concepts
+## Architecture Overview
 
-### 4.1 E2B sandbox as a secure enclave
-
-Inside E2B we run:
-
-- The **sample API** (Express server bound to `localhost`).
-- The **HTTP probe** (using `fetch`).
-- The **aspect‑wrapped MCP + Groq clients**.
-
-Only **sanitized summaries** of HTTP exchanges are allowed to leave the sandbox.
-
-### 4.2 Aspect‑based egress guard
-
-All outbound network calls from the sandbox go through an **aspect layer** that:
-
-- Wraps the MCP client and Groq client.
-- Uses `@redactpii/node` to strip PII and secrets.
-- Injects a system prompt so Groq always acts as an RFC/OWASP‑aware auditor.
-
-This makes the sandbox a **safe boundary** between potentially sensitive APIs and external tools.
-
-### 4.3 Self‑growing spec graph (GraphRAG‑lite)
-
-Memgraph starts essentially empty.
-
-For each audit / question:
-
-1. The system asks **Perplexity MCP** which RFCs and OWASP entries are relevant.
-2. It fetches key details for those specs (titles, sections, relationships).
-3. It **upserts** them into Memgraph via **Memgraph MCP**.
-4. Future audits:
-   - Query Memgraph for existing related specs.
-   - Ask Perplexity MCP again to fill in gaps and discover newer versions.
-
-Over time, this yields a **graph of standards** that:
-
-- Is always rooted in live docs (via MCP).
-- Becomes richer the more you use the tool.
-
----
-
-## 5. Repo layout
-
-```txt
-.
-├─ apps/
-│  └─ web/                 # Next.js app: chat UI + /api/chat
-├─ packages/
-│  ├─ auditor-core/        # E2B, probes, aspects, MCP/LLM clients, audit engine
-│  └─ sample-api/          # Express REST API with flawed + golden endpoints
-└─ docker/
-   ├─ docker-compose.yml   # app + Memgraph + Memgraph MCP + Perplexity MCP + MCP Gateway
-   ├─ Dockerfile.app       # dev image for app service
-   └─ memgraph-init/       # (optional) helper scripts if needed later
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Browser                                                     │
+│  └── Chat UI + Graph Visualization                          │
+└─────────────┬───────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Next.js API Route (/api/chat)                              │
+│  └── Orchestrates audit or answers questions                │
+└─────────────┬───────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  E2B Sandbox                                                │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Sample API (Express)                               │    │
+│  │  └── 5 endpoints with intentional vulnerabilities   │    │
+│  ├─────────────────────────────────────────────────────┤    │
+│  │  HTTP Probe → Sanitizer → Analysis                  │    │
+│  ├─────────────────────────────────────────────────────┤    │
+│  │  E2B MCP Gateway (built-in)                         │    │
+│  │  ├── Perplexity MCP → Live RFC/OWASP lookup        │    │
+│  │  └── Memgraph MCP → Knowledge graph storage         │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────┬───────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Groq LLM (compound-beta)                                   │
+│  └── Analyzes sanitized exchanges + specs → findings        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Additional docs in the repo:
+### Why This Architecture Matters
 
-- `ARCHITECTURE.md` – deeper architecture details.
-- `DECISIONS.md` – frozen design/scope decisions.
-- `AGENTS.md` – how coding/runtime agents are structured.
-- `CODING_AGENT_PROMPT.md` – prompt for code‑generation agents.
+1. **E2B Sandbox** - The API runs in complete isolation. No risk of malicious code affecting the host. The sandbox includes a built-in MCP gateway, so we don't manage any MCP server infrastructure.
 
----
+2. **MCP Perplexity** - Instead of hardcoding "OWASP A01 is Broken Access Control", we ask Perplexity at runtime. The knowledge is always current.
 
-## 6. Running the project (for judges)
+3. **MCP Memgraph** - The specs we discover get stored in a graph. Over time, this builds a knowledge base of RFC→OWASP relationships without us writing graph driver code.
 
-### 6.1 Prerequisites
-
-- **Docker** and **Docker Compose**.
-- **Node.js 20+** and **pnpm**.
-- Access to:
-  - A **Groq API key**.
-  - A **Perplexity MCP** container / credentials (via Docker MCP Toolkit).
-  - A **Memgraph MCP** container connected to a Memgraph DB.
-
-> The repo’s `docker/docker-compose.yml` is set up to run the required services. You will need to add your actual image names and environment variables for Perplexity MCP, Memgraph MCP, and the MCP Gateway according to your environment.
-
-### 6.2 Option 1 – GitHub Codespaces / VS Code Dev Container
-
-This repo includes a `.devcontainer/devcontainer.json` that wires everything together.
-
-#### Setting up Codespaces Secrets (Required)
-
-Before launching Codespaces, add these secrets to your GitHub account:
-
-1. Go to **GitHub Settings** → **Codespaces** → **Secrets**
-2. Click **New secret** and add each of the following:
-
-| Secret Name | Description |
-|-------------|-------------|
-| `E2B_API_KEY` | API key for E2B sandbox execution |
-| `GROQ_API_KEY` | API key for Groq LLM calls |
-| `PERPLEXITY_API_KEY` | API key for Perplexity MCP spec discovery |
-
-3. For each secret, set repository access to include this repo (or select "All repositories")
-
-> **Important**: Without these secrets, the application will not function. The secrets are securely passed to the devcontainer environment.
-
-#### Launching Codespaces
-
-1. Click the green **Code** button → **Codespaces** → **Create codespace on main**
-2. Wait for the dev container to build (this may take a few minutes on first launch)
-3. Docker Compose will automatically bring up:
-   - `app` (Next.js dev server)
-   - `memgraph` (graph database)
-   - `memgraph-mcp` (MCP server)
-4. The app starts automatically and the browser preview opens at port 3000
-5. You should now see the chat UI
-
-> **Note**: Dependencies install automatically via `postCreateCommand` and the dev server starts via `postStartCommand`.
-
-### 6.3 Option 2 – Local machine (Docker)
-
-1. Clone the repo:
-   ```bash
-   git clone <this-repo-url>
-   cd <repo-root>
-   ```
-2. Copy environment variables:
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your API keys
-   ```
-3. Start Docker services (this runs the app automatically):
-   ```bash
-   docker compose -f docker/docker-compose.yml up
-   ```
-4. Open `http://localhost:3000` in your browser.
-
-> **Note:** Docker Compose installs dependencies and starts the Next.js dev server automatically.
-
-### 6.4 Option 3 – Local machine (without Docker)
-
-1. Clone the repo and install dependencies:
-   ```bash
-   git clone <this-repo-url>
-   cd <repo-root>
-   pnpm install
-   ```
-2. Copy environment variables:
-   ```bash
-   cp .env.example .env.local
-   # Edit .env.local with your API keys
-   ```
-3. Start the Next.js app:
-   ```bash
-   pnpm dev:web
-   ```
-4. Open `http://localhost:3000` in your browser.
-
-> **Note:** You'll need Memgraph running separately for graph features.
-
-### 6.5 Required Environment Variables
-
-Create a `.env.local` file in the project root with the following variables:
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `E2B_API_KEY` | **Yes** | API key for E2B sandbox execution |
-| `GROQ_API_KEY` | **Yes** | API key for Groq LLM calls |
-| `PERPLEXITY_API_KEY` | **Yes** | API key for Perplexity MCP spec discovery |
-| `MEMGRAPH_HOST` | No | Memgraph hostname (default: `localhost`) |
-| `MEMGRAPH_PORT` | No | Memgraph port (default: `7687`) |
-
-**Important**: If these variables are not set, the system will fail:
-- Missing `GROQ_API_KEY` → LLM calls will error
-- Missing `E2B_API_KEY` → Sandbox creation will fail
-- Missing `PERPLEXITY_API_KEY` → Spec discovery will not work
-- Missing `MEMGRAPH_HOST` → Graph queries will fail silently
-
-See `.env.example` for a template.
+4. **Groq** - Fast inference for analyzing the HTTP exchanges against the discovered specs.
 
 ---
 
-## 7. How to demo (judge flow)
+## Key Features
 
-Once the app is running:
+### Real-time Graph Population
 
-1. Open the app in your browser.
-2. Click **“Run audit on sample API”**.
-3. Wait for the agent to:
-   - Spin up the sandbox.
-   - Probe the internal sample API.
-   - Run compliance analysis.
-4. Observe the response:
-   - Chat message summarising each endpoint.
-   - Optional table and/or graph of RFC/OWASP context.
-5. Ask follow‑up questions, for example:
-   - “Which RFC sections did you rely on for these findings?”
-   - “Show me how to refactor `/cors-wildcard` to be compliant.”
-   - “Why is returning stack traces a problem?”
+As you chat about RFC or OWASP topics, the knowledge graph grows:
 
-This is enough to evaluate:
+1. Ask "What is RFC 7231?"
+2. The response mentions RFC 7231, 7230, 7232
+3. These specs are automatically added to Memgraph
+4. The graph visualization updates in real-time
 
-- **Technical quality** – sandbox orchestration, MCP usage, spec reasoning.
-- **Innovation** – self‑growing spec graph, egress‑guarded tools.
-- **Overall impression** – a coherent, useful agent rather than a toy demo.
+### Live Chat on Graph Page
 
----
+The `/graph` page includes a chat sidebar. Ask questions while watching the graph populate - this demonstrates the real-time nature of the system.
 
-## 8. Limitations (current hackathon scope)
+### No Hardcoded Data
 
-To keep this feasible within the hackathon window, some choices are intentional:
+Check these files to verify:
+- `packages/auditor-core/src/config/dynamicOwaspFetcher.ts` - OWASP categories fetched from Perplexity MCP
+- `packages/auditor-core/src/graphContext.ts` - RFC/OWASP extraction from live responses
+- `EMPTY_CATEGORIES` and `EMPTY_FALLBACK_CATEGORIES` - defaults are empty arrays, not hardcoded lists
 
-- Only the **bundled sample API** is audited.
-- No arbitrary external URLs or user‑uploaded APIs (can be added later).
-- Memgraph runs a **small but growing** spec graph, not a full IETF mirror.
-- Only **Perplexity MCP** and **Memgraph MCP** are used as MCP tools.
-- Only **Groq** is used as the LLM.
+### Source Code Verification
 
-These trade‑offs keep the demo focused while still showcasing:
+Each audit finding links to the exact lines in the codebase:
 
-- E2B + Docker MCP Toolkit + MCP tools,
-- Groq for spec‑aware reasoning,
-- A realistic security story,
-- A path to a more general RFC/OWASP auditor in future.
+| Endpoint | Issue | Source |
+|----------|-------|--------|
+| `/user-leaky` | PII Exposure | [e2bClient.ts#L171-L186](packages/auditor-core/src/e2bClient.ts#L171-L186) |
+| `/debug-error` | Stack Trace Leak | [e2bClient.ts#L188-L209](packages/auditor-core/src/e2bClient.ts#L188-L209) |
+| `/items-injection` | SQL Injection | [e2bClient.ts#L211-L231](packages/auditor-core/src/e2bClient.ts#L211-L231) |
+| `/cors-wildcard` | CORS Misconfiguration | [e2bClient.ts#L233-L255](packages/auditor-core/src/e2bClient.ts#L233-L255) |
 
 ---
 
-## 9. Future directions
+## Running the Demo
 
-After the hackathon, this project can evolve into:
+### Prerequisites
 
-- Auditing **user‑supplied APIs** (with strong privacy controls).
-- Supporting more protocols (GraphQL, gRPC, WebSockets).
-- Ingesting and linking a much larger corpus of standards into Memgraph.
-- Adding a richer **GraphRAG** stack on top of Memgraph AI Toolkit.
-- Exposing the aspect/egress guard as a reusable package for other E2B agents.
+- **GitHub Codespaces** (recommended) or Docker + Node.js 20+
+- API keys for: `E2B_API_KEY`, `GROQ_API_KEY`, `PERPLEXITY_API_KEY`
 
-For now, the focus is delivering a **high‑signal, end‑to‑end demo** that highlights how E2B + MCP + Groq + Memgraph can be combined into an actually useful, spec‑aware agent.
+### Option 1: GitHub Codespaces (Easiest)
 
+1. Add secrets to GitHub Settings → Codespaces → Secrets:
+   - `E2B_API_KEY`
+   - `GROQ_API_KEY`
+   - `PERPLEXITY_API_KEY`
+
+2. Click **Code** → **Codespaces** → **Create codespace on main**
+
+3. Wait for the container to build (~2-3 minutes)
+
+4. The app starts automatically at port 3000
+
+### Option 2: Local Docker
+
+```bash
+git clone https://github.com/airnub-labs/rfc-refactor
+cd rfc-refactor
+cp .env.example .env.local
+# Edit .env.local with your API keys
+docker compose -f docker/docker-compose.yml up
+```
+
+Open http://localhost:3000
+
+---
+
+## Demo Flow for Judges
+
+### 1. Run an Audit (2 minutes)
+
+1. Open the app
+2. Click **"Run Audit"**
+3. Watch the audit run:
+   - Sandbox creation
+   - Endpoint probing
+   - Spec discovery via MCP
+   - Compliance analysis
+4. View the results with **"View Source"** links
+
+### 2. Test the Graph Population (1 minute)
+
+1. Click **"View Graph"** in the header
+2. In the chat sidebar, ask: "What is RFC 7231?"
+3. Watch the graph add RFC 7231 node
+4. Ask: "How does OWASP A03 relate to injection?"
+5. Watch OWASP node appear
+
+### 3. Verify Source Links (30 seconds)
+
+1. In the audit results, click **"View Source"** on any finding
+2. Verify the GitHub code matches the issue description
+3. This proves findings are real, not hallucinated
+
+---
+
+## Technical Highlights
+
+### Complexity Avoided
+
+| What We Didn't Build | Why |
+|---------------------|-----|
+| Custom sandboxing solution | E2B provides this |
+| Perplexity API integration | MCP server handles it |
+| Memgraph driver/connection pooling | MCP server handles it |
+| MCP server hosting | E2B's built-in gateway |
+| OWASP/RFC knowledge base | Fetched live via MCP |
+
+### Security Features
+
+- **PII Sanitization**: `@redactpii/node` + regex patterns strip sensitive data before egress
+- **Cypher Injection Prevention**: All graph queries use proper escaping and ID validation
+- **Header Filtering**: Sensitive headers (Authorization, Cookie, etc.) removed from probes
+
+### Code Quality
+
+- TypeScript throughout
+- Aspect-oriented design for cross-cutting concerns (sanitization, logging)
+- Clean separation: `auditor-core` package is framework-agnostic
+
+---
+
+## Project Structure
+
+```
+apps/web/                    # Next.js app
+  src/app/
+    page.tsx                 # Chat UI with audit results
+    graph/page.tsx           # Graph visualization with chat sidebar
+    api/chat/route.ts        # Main API endpoint
+    api/graph/route.ts       # Graph data endpoint
+
+packages/auditor-core/       # Core audit logic
+  src/
+    auditEngine.ts           # Orchestration
+    e2bClient.ts             # E2B sandbox + sample API (L158-255)
+    graphContext.ts          # Spec discovery + Memgraph upsert
+    groqClient.ts            # LLM analysis + source location mapping
+    mcpClient.ts             # MCP gateway client
+    sanitizeHttp.ts          # HTTP exchange sanitization
+    config/
+      dynamicOwaspFetcher.ts # Live OWASP fetching via MCP
+```
+
+---
+
+## What Makes This Different
+
+1. **No hardcoded rules** - All security knowledge is fetched live
+2. **Zero infrastructure management** - E2B + MCP handles everything
+3. **Verifiable results** - Source links prove findings are real
+4. **Growing knowledge base** - Graph builds as you use it
+5. **Real HTTP analysis** - Actual requests/responses, not static code
+
+This demonstrates how E2B sandboxes and MCP servers can eliminate months of infrastructure work, letting developers focus on the actual problem they're solving.
+
+---
+
+## Links
+
+- **Repository**: https://github.com/airnub-labs/rfc-refactor
+- **E2B Documentation**: https://e2b.dev/docs
+- **MCP Specification**: https://modelcontextprotocol.io
+
+---
+
+Built for the **"Build MCP Agents – with Docker, Groq, and E2B"** hackathon.
