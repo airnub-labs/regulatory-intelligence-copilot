@@ -26,70 +26,10 @@ interface CachedOwaspData {
 let cachedData: CachedOwaspData | null = null;
 
 /**
- * Default OWASP categories as fallback
+ * Empty fallback - categories must be fetched dynamically
+ * This ensures we always have the latest OWASP data
  */
-const DEFAULT_OWASP_CATEGORIES: OwaspCategory[] = [
-  {
-    id: 'A01:2021',
-    title: 'Broken Access Control',
-    pattern: /A01.*Broken Access Control/gi,
-    keywords: ['access control', 'authorization', 'privilege escalation'],
-  },
-  {
-    id: 'A02:2021',
-    title: 'Cryptographic Failures',
-    pattern: /A02.*Cryptographic Failures/gi,
-    keywords: ['cryptographic', 'encryption', 'sensitive data', 'pii', 'data exposure'],
-  },
-  {
-    id: 'A03:2021',
-    title: 'Injection',
-    pattern: /A03.*Injection/gi,
-    keywords: ['injection', 'sql injection', 'xss', 'command injection'],
-  },
-  {
-    id: 'A04:2021',
-    title: 'Insecure Design',
-    pattern: /A04.*Insecure Design/gi,
-    keywords: ['insecure design', 'threat modeling', 'secure design'],
-  },
-  {
-    id: 'A05:2021',
-    title: 'Security Misconfiguration',
-    pattern: /A05.*Security Misconfiguration/gi,
-    keywords: ['misconfiguration', 'cors', 'cross-origin', 'default credentials'],
-  },
-  {
-    id: 'A06:2021',
-    title: 'Vulnerable and Outdated Components',
-    pattern: /A06.*Vulnerable.*Components/gi,
-    keywords: ['vulnerable components', 'outdated', 'dependencies'],
-  },
-  {
-    id: 'A07:2021',
-    title: 'Identification and Authentication Failures',
-    pattern: /A07.*Authentication/gi,
-    keywords: ['authentication', 'session', 'credential', 'identity'],
-  },
-  {
-    id: 'A08:2021',
-    title: 'Software and Data Integrity Failures',
-    pattern: /A08.*Software.*Data Integrity/gi,
-    keywords: ['integrity', 'deserialization', 'ci/cd'],
-  },
-  {
-    id: 'A09:2021',
-    title: 'Security Logging and Monitoring Failures',
-    pattern: /A09.*Security Logging/gi,
-    keywords: ['logging', 'monitoring', 'audit trail'],
-  },
-  {
-    id: 'A10:2021',
-    title: 'Server-Side Request Forgery',
-    pattern: /A10.*Server-Side Request Forgery/gi,
-    keywords: ['ssrf', 'server-side request forgery'],
-  },
-];
+const EMPTY_FALLBACK_CATEGORIES: OwaspCategory[] = [];
 
 /**
  * Fetch the latest OWASP Top 10 from Perplexity
@@ -220,10 +160,10 @@ export async function fetchDynamicOwaspCategories(): Promise<{
 
   // Check if MCP gateway is configured
   if (!getMcpGatewayUrl()) {
-    console.log('[OWASP] MCP gateway not configured, using fallback categories');
+    console.log('[OWASP] MCP gateway not configured - no categories available');
     return {
-      categories: DEFAULT_OWASP_CATEGORIES,
-      version: '2021',
+      categories: EMPTY_FALLBACK_CATEGORIES,
+      version: 'unknown',
       source: 'fallback',
     };
   }
@@ -253,24 +193,24 @@ export async function fetchDynamicOwaspCategories(): Promise<{
     };
   } catch (error) {
     console.error('[OWASP] Failed to fetch dynamic categories:', error);
-    console.log('[OWASP] Falling back to default categories');
+    console.log('[OWASP] No fallback categories available - fetch required');
 
     return {
-      categories: DEFAULT_OWASP_CATEGORIES,
-      version: '2021',
+      categories: EMPTY_FALLBACK_CATEGORIES,
+      version: 'unknown',
       source: 'fallback',
     };
   }
 }
 
 /**
- * Get current OWASP categories (sync version using cache or defaults)
+ * Get current OWASP categories (sync version using cache or empty)
  */
 export function getCurrentOwaspCategories(): OwaspCategory[] {
   if (cachedData) {
     return cachedData.categories;
   }
-  return DEFAULT_OWASP_CATEGORIES;
+  return EMPTY_FALLBACK_CATEGORIES;
 }
 
 /**
@@ -280,7 +220,7 @@ export function getCurrentOwaspVersion(): string {
   if (cachedData) {
     return cachedData.version;
   }
-  return '2021';
+  return 'unknown';
 }
 
 /**
