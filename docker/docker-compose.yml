@@ -71,7 +71,7 @@ services:
       - ./perplexity-mcp:/app
     env_file:
       - ../.env.local
-    command: sh -c "npm install && npm start"
+    command: sh -c "pnpm install && pnpm start"
     # Note: For production, consider using the official mcp/perplexity-ask image
     # with an MCP-to-HTTP adapter:
     # image: mcp/perplexity-ask
@@ -92,7 +92,7 @@ services:
     depends_on:
       - memgraph-mcp
       - perplexity-mcp
-    command: sh -c "npm install && npm start"
+    command: sh -c "pnpm install && pnpm start"
 
 volumes:
   memgraph_data:
