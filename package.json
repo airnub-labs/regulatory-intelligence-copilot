@@ -8,7 +8,8 @@
     "docker/*"
   ],
   "scripts": {
-    "dev": "pnpm -r dev",
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter apps/web dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "type-check": "pnpm -r type-check"
