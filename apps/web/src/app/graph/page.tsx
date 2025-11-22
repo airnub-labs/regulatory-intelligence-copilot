@@ -174,15 +174,15 @@ export default function GraphPage() {
             graphData={graphData}
             width={dimensions.width}
             height={dimensions.height}
-            nodeLabel={(node: GraphNode) => `${node.label}\n(${node.type})`}
-            nodeColor={(node: GraphNode) => nodeColors[node.type] || nodeColors.unknown}
+            nodeLabel={(node) => `${(node as GraphNode).label}\n(${(node as GraphNode).type})`}
+            nodeColor={(node) => nodeColors[(node as GraphNode).type] || nodeColors.unknown}
             nodeRelSize={6}
-            linkLabel={(link: GraphLink) => link.type}
+            linkLabel={(link) => (link as GraphLink).type}
             linkColor={() => '#4b5563'}
             linkWidth={1}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
-            onNodeClick={handleNodeClick}
+            onNodeClick={(node) => handleNodeClick(node as GraphNode)}
             backgroundColor="#111827"
           />
         )}
