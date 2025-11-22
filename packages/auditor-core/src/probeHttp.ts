@@ -83,7 +83,7 @@ export async function probeSampleApi(handle: SandboxHandle): Promise<RawHttpExch
       }
     }
 
-    JSON.stringify(results);
+    return results;
   `;
 
   const results = await runInSandbox<RawHttpExchange[]>(handle, probeCode);
@@ -118,7 +118,7 @@ export async function probeSingleEndpoint(
       responseHeaders[key] = value;
     });
 
-    JSON.stringify({
+    return {
       request: {
         method: '${method}',
         url: url,
@@ -133,7 +133,7 @@ export async function probeSingleEndpoint(
         headers: responseHeaders,
         body: responseBody,
       },
-    });
+    };
   `;
 
   return runInSandbox<RawHttpExchange>(handle, probeCode);

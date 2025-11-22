@@ -268,28 +268,49 @@ app.listen(3001, () => {
 }
 
 /**
- * Run code inside the sandbox and return result
+ * Run JavaScript code inside the sandbox and return result
  */
 export async function runInSandbox<T>(
   handle: SandboxHandle,
   code: string
 ): Promise<T> {
   const { sandbox } = handle;
-  const result = await sandbox.runCode(code);
 
-  if (result.error) {
-    throw new Error(`Sandbox execution error: ${result.error.name}: ${result.error.value}`);
+  // Wrap code to output result as JSON
+  const wrappedCode = `
+    (async () => {
+      ${code}
+    })().then(result => {
+      if (result !== undefined) {
+        console.log(JSON.stringify(result));
+      }
+    }).catch(err => {
+      console.error('Error:', err.message);
+      process.exit(1);
+    });
+  `;
+
+  // Write JS code to file
+  const scriptPath = `/tmp/probe-${Date.now()}.js`;
+  await sandbox.filesystem.write(scriptPath, wrappedCode);
+
+  // Execute with node
+  const result = await sandbox.process.startAndWait({
+    cmd: 'node',
+    args: [scriptPath],
+  });
+
+  if (result.exitCode !== 0) {
+    throw new Error(`Sandbox execution error: ${result.stderr || 'Unknown error'}`);
   }
 
-  // Parse the last result
-  if (result.results && result.results.length > 0) {
-    const lastResult = result.results[result.results.length - 1];
-    if (lastResult.text) {
-      try {
-        return JSON.parse(lastResult.text) as T;
-      } catch {
-        return lastResult.text as T;
-      }
+  // Parse stdout as JSON
+  const output = result.stdout.trim();
+  if (output) {
+    try {
+      return JSON.parse(output) as T;
+    } catch {
+      return output as T;
     }
   }
 
