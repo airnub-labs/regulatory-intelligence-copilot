@@ -11,6 +11,11 @@ import { sanitizeObjectForEgress } from './aspects/egressGuard.js';
 let mcpGatewayUrl = '';
 let mcpGatewayToken = '';
 
+function persistMcpGatewayConfig(url: string, token: string): void {
+  mcpGatewayUrl = url;
+  mcpGatewayToken = token;
+}
+
 /**
  * Configure MCP client with gateway credentials from E2B sandbox
  */
