@@ -1,5 +1,5 @@
 import { createGroq } from '@ai-sdk/groq';
-import { streamText } from 'ai';
+import { streamText, StreamData, streamToResponse } from 'ai';
 import {
   runAuditOnSampleApi,
   reportToSummary,
@@ -60,10 +60,19 @@ export async function POST(request: Request) {
         // Embed report data in hidden comment for client to extract
         const responseWithReport = `${summary}\n\n<!--REPORT:${JSON.stringify(report)}:REPORT-->`;
 
-        // Return as a text response that AI SDK's useChat can handle
-        return new Response(responseWithReport, {
+        // Return as a streaming response that AI SDK's useChat can handle
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            // Format as AI SDK data stream
+            controller.enqueue(encoder.encode(`0:${JSON.stringify(responseWithReport)}\n`));
+            controller.close();
+          },
+        });
+
+        return new Response(stream, {
           headers: {
-            'Content-Type': 'text/plain',
+            'Content-Type': 'text/plain; charset=utf-8',
           },
         });
       } catch (error) {
