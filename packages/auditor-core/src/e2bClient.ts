@@ -72,8 +72,7 @@ async function getMcpCredentials(sandbox: Sandbox): Promise<{ mcpUrl: string; mc
   }
 
   throw new SandboxError(
-    'E2B MCP gateway methods not available. Ensure you are using an E2B sandbox with MCP support enabled.',
-    'MCP_GATEWAY_UNAVAILABLE'
+    'E2B MCP gateway methods not available. Ensure you are using an E2B sandbox with MCP support enabled.'
   );
 }
 
