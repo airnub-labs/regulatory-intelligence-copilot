@@ -4,6 +4,8 @@ import {
   runAuditOnSampleApi,
   reportToSummary,
   AUDIT_TRIGGER,
+  callMemgraphMcp,
+  getMemgraphSchema,
   type ComplianceReport,
   type GraphContext,
 } from '@e2b-auditor/core';
@@ -84,6 +86,121 @@ export async function POST(request: Request) {
             'Content-Type': 'text/plain',
           },
         });
+      }
+    }
+
+    // Check if user wants to view the knowledge graph
+    const graphViewKeywords = ['show graph', 'view graph', 'display graph', 'see graph'];
+    const graphQueryKeywords = ['query graph', 'what rfcs', 'which rfcs', 'list rfcs', 'graph schema', 'show schema', 'cypher'];
+    const lastContent = lastMessage.content.toLowerCase();
+    const isGraphView = graphViewKeywords.some(kw => lastContent.includes(kw));
+    const isGraphQuery = graphQueryKeywords.some(kw => lastContent.includes(kw));
+
+    if (isGraphView || isGraphQuery) {
+      console.log('[API] Detected graph request');
+
+      try {
+        let graphResult;
+
+        if (lastContent.includes('schema')) {
+          graphResult = await getMemgraphSchema();
+        } else {
+          // Default query to get all nodes and relationships
+          const cypherQuery = lastContent.includes('cypher:')
+            ? lastContent.split('cypher:')[1].trim()
+            : 'MATCH (n) OPTIONAL MATCH (n)-[r]->(m) RETURN n, r, m';
+
+          graphResult = await callMemgraphMcp(cypherQuery);
+        }
+
+        // For graph view requests, format as inline graph data
+        if (isGraphView) {
+          // Parse result into nodes and links for force-graph
+          const nodes = new Map<string, { id: string; label: string; type: string; properties: Record<string, unknown> }>();
+          const links: { source: string; target: string; type: string }[] = [];
+
+          if (Array.isArray(graphResult)) {
+            for (const record of graphResult) {
+              // Handle node 'n'
+              if (record.n) {
+                const node = record.n;
+                const id = node.id || node.properties?.id || `node-${nodes.size}`;
+                if (!nodes.has(id)) {
+                  nodes.set(id, {
+                    id,
+                    label: node.properties?.title || node.properties?.name || node.labels?.[0] || id,
+                    type: node.labels?.[0] || 'unknown',
+                    properties: node.properties || {},
+                  });
+                }
+              }
+
+              // Handle node 'm' (target)
+              if (record.m) {
+                const node = record.m;
+                const id = node.id || node.properties?.id || `node-${nodes.size}`;
+                if (!nodes.has(id)) {
+                  nodes.set(id, {
+                    id,
+                    label: node.properties?.title || node.properties?.name || node.labels?.[0] || id,
+                    type: node.labels?.[0] || 'unknown',
+                    properties: node.properties || {},
+                  });
+                }
+              }
+
+              // Handle relationship 'r'
+              if (record.r && record.n && record.m) {
+                const sourceId = record.n.id || record.n.properties?.id;
+                const targetId = record.m.id || record.m.properties?.id;
+                if (sourceId && targetId) {
+                  links.push({
+                    source: sourceId,
+                    target: targetId,
+                    type: record.r.type || 'RELATED_TO',
+                  });
+                }
+              }
+            }
+          }
+
+          const graphData = {
+            nodes: Array.from(nodes.values()),
+            links,
+          };
+
+          const graphResponseText = `Here's the current knowledge graph (${graphData.nodes.length} nodes, ${graphData.links.length} relationships):<!--GRAPH:${JSON.stringify(graphData)}:GRAPH-->`;
+
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(`0:${JSON.stringify(graphResponseText)}\n`));
+              controller.close();
+            },
+          });
+          return new Response(stream, {
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          });
+        }
+
+        // For query requests, return JSON
+        const resultSummary = JSON.stringify(graphResult, null, 2);
+        const graphResponseText = `Here are the results from the knowledge graph:\n\n\`\`\`json\n${resultSummary}\n\`\`\``;
+
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`0:${JSON.stringify(graphResponseText)}\n`));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      } catch (error) {
+        console.error('[API] Graph query error:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return new Response(`Error querying graph: ${errorMessage}`, { status: 500 });
       }
     }
 
