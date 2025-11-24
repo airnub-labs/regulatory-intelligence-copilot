@@ -1,80 +1,27 @@
 'use client';
 
 import { useChat } from 'ai/react';
-import { useRef, useEffect, useState, useCallback } from 'react';
-import dynamic from 'next/dynamic';
+import { useRef, useEffect, useState } from 'react';
 
-// Dynamically import ForceGraph2D to avoid SSR issues
-const ForceGraph2D = dynamic(
-  () => import('react-force-graph-2d').then(mod => mod.default),
-  {
-    ssr: false,
-    loading: () => <div className="flex items-center justify-center h-48 bg-gray-800 rounded">Loading graph...</div>,
-  }
-);
-
-interface GraphNode {
-  id: string;
-  type: string;
-  properties: Record<string, string>;
+/**
+ * User profile for regulatory context
+ */
+interface UserProfile {
+  personaType: 'self-employed' | 'single-director' | 'paye-employee' | 'investor' | 'advisor';
+  jurisdictions: string[];
 }
-
-interface InlineGraphData {
-  nodes: Array<{ id: string; label: string; type: string; properties: Record<string, unknown> }>;
-  links: Array<{ source: string; target: string; type: string }>;
-}
-
-// Color map for different node types
-const nodeColors: Record<string, string> = {
-  RFC: '#3b82f6',
-  OWASP: '#ef4444',
-  Endpoint: '#10b981',
-  Finding: '#f59e0b',
-  unknown: '#6b7280',
-};
-
-interface GraphEdge {
-  source: string;
-  target: string;
-  type: string;
-}
-
-interface Report {
-  summary: string;
-  overallHealth: string;
-  endpoints: Array<{
-    endpoint: string;
-    method: string;
-    status: string;
-    issues: Array<{
-      severity: string;
-      description: string;
-      rfcReferences: string[];
-      owaspReferences: string[];
-    }>;
-    suggestions: string[];
-    sourceLocation?: {
-      file: string;
-      startLine: number;
-      endLine: number;
-      repoUrl?: string;
-    };
-  }>;
-  rfcsCited: string[];
-  owaspCited: string[];
-  graphContext?: {
-    nodes: GraphNode[];
-    edges: GraphEdge[];
-  };
-}
-
-const AUDIT_TRIGGER = '__RUN_SAMPLE_AUDIT__';
 
 export default function Home() {
-  const { messages, input, handleInputChange, handleSubmit, append, isLoading } = useChat({
-    api: '/api/chat',
+  const [profile, setProfile] = useState<UserProfile>({
+    personaType: 'single-director',
+    jurisdictions: ['IE'],
   });
-  const [report, setReport] = useState<Report | null>(null);
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+    api: '/api/chat',
+    body: { profile },
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
 
@@ -82,7 +29,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Only scroll when a new message is added, not during streaming updates
+  // Only scroll when a new message is added
   useEffect(() => {
     if (messages.length > prevMessageCountRef.current) {
       scrollToBottom();
@@ -90,331 +37,160 @@ export default function Home() {
     prevMessageCountRef.current = messages.length;
   }, [messages.length]);
 
-  // Check for report data in the last assistant message
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage?.role === 'assistant' && lastMessage.content) {
-      // Try to extract report JSON if present
-      try {
-        const match = lastMessage.content.match(/<!--REPORT:([\s\S]*?):REPORT-->/);
-        if (match) {
-          const reportData = JSON.parse(match[1]);
-          setReport(reportData);
-        }
-      } catch {
-        // No report data in message
-      }
-    }
-  }, [messages]);
-
-  const runAudit = () => {
-    append({
-      role: 'user',
-      content: `Run audit on sample API ${AUDIT_TRIGGER}`,
-    });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'compliant':
-      case 'healthy':
-        return 'text-green-400';
-      case 'warning':
-      case 'degraded':
-        return 'text-yellow-400';
-      case 'critical':
-        return 'text-red-400';
-      default:
-        return 'text-gray-400';
-    }
-  };
-
-  const getSeverityBadge = (severity: string) => {
-    const colors: Record<string, string> = {
-      low: 'bg-blue-900 text-blue-300',
-      medium: 'bg-yellow-900 text-yellow-300',
-      high: 'bg-orange-900 text-orange-300',
-      critical: 'bg-red-900 text-red-300',
-    };
-    return colors[severity] || 'bg-gray-900 text-gray-300';
-  };
-
-  // Clean message content by removing audit trigger, report data, and graph data
-  const cleanContent = (content: string) => {
-    return content
-      .replace(AUDIT_TRIGGER, '')
-      .replace(/<!--REPORT:.*?:REPORT-->/s, '')
-      .replace(/<!--GRAPH:.*?:GRAPH-->/s, '')
-      .trim();
-  };
-
-  // Extract inline graph data from message
-  const extractGraphData = (content: string): InlineGraphData | null => {
-    try {
-      const match = content.match(/<!--GRAPH:([\s\S]*?):GRAPH-->/);
-      if (match) {
-        return JSON.parse(match[1]);
-      }
-    } catch {
-      // No valid graph data
-    }
-    return null;
-  };
-
-  // Inline Graph Viewer Component
-  const InlineGraphViewer = ({ data }: { data: InlineGraphData }) => {
-    if (data.nodes.length === 0) {
-      return (
-        <div className="h-48 bg-gray-800 rounded flex items-center justify-center text-gray-400">
-          Graph is empty. Run an audit to populate it.
-        </div>
-      );
-    }
-
-    return (
-      <div className="h-64 bg-gray-800 rounded overflow-hidden">
-        <ForceGraph2D
-          graphData={data}
-          width={400}
-          height={256}
-          nodeLabel={(node) => {
-            const n = node as { label?: string; type?: string };
-            return `${n.label || ''}\n(${n.type || ''})`;
-          }}
-          nodeColor={(node) => {
-            const n = node as { type?: string };
-            return nodeColors[n.type || 'unknown'] || nodeColors.unknown;
-          }}
-          nodeRelSize={5}
-          linkColor={() => '#4b5563'}
-          linkWidth={1}
-          linkDirectionalArrowLength={3}
-          linkDirectionalArrowRelPos={1}
-          backgroundColor="#1f2937"
-        />
-      </div>
-    );
-  };
-
   return (
     <main className="flex min-h-screen flex-col bg-gray-900 text-white">
       {/* Header */}
-      <header className="border-b border-gray-800 p-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold">E2B RFC/OWASP Auditor</h1>
-          <p className="text-sm text-gray-400">
-            Audit HTTP APIs for RFC compliance and security issues
-          </p>
+      <header className="border-b border-gray-800 p-4">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold">Regulatory Intelligence Copilot 🧭</h1>
+            <p className="text-sm text-gray-400">
+              Graph-powered regulatory research for tax, welfare, pensions, and EU rules
+            </p>
+          </div>
+          <a
+            href="/graph"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
+          >
+            View Graph
+          </a>
         </div>
-        <a
-          href="/graph"
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
-        >
-          View Graph
-        </a>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Chat Section */}
-        <div className="flex flex-1 flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center text-gray-500 mt-8">
-                <p>Welcome! Click "Run Audit" to analyze the sample API,</p>
-                <p>or ask a question about RFC/OWASP compliance.</p>
-              </div>
-            )}
-
-            {messages.map((message) => {
-              const graphData = message.role === 'assistant' ? extractGraphData(message.content) : null;
-              const cleanedContent = cleanContent(message.content);
-
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-lg p-3 ${
-                      message.role === 'user'
-                        ? 'bg-blue-600'
-                        : 'bg-gray-800'
-                    }`}
-                  >
-                    {cleanedContent && (
-                      <pre className="whitespace-pre-wrap font-sans text-sm">
-                        {cleanedContent}
-                      </pre>
-                    )}
-                    {graphData && (
-                      <div className={cleanedContent ? 'mt-3' : ''}>
-                        <InlineGraphViewer data={graphData} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-800 rounded-lg p-3">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-100" />
-                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce delay-200" />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
+      <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto">
+        {/* Profile Selector */}
+        <div className="border-b border-gray-800 p-4 flex gap-4 items-center">
+          <div className="flex gap-2 items-center">
+            <label className="text-sm text-gray-400">Persona:</label>
+            <select
+              value={profile.personaType}
+              onChange={(e) => setProfile({ ...profile, personaType: e.target.value as UserProfile['personaType'] })}
+              className="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500"
+            >
+              <option value="single-director">Single Director Company (IE)</option>
+              <option value="self-employed">Self-Employed</option>
+              <option value="paye-employee">PAYE Employee</option>
+              <option value="investor">Investor (CGT)</option>
+              <option value="advisor">Tax/Welfare Advisor</option>
+            </select>
           </div>
 
-          {/* Input */}
-          <div className="border-t border-gray-800 p-4">
-            <form onSubmit={handleSubmit} className="flex gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={handleInputChange}
-                placeholder="Ask about RFC/OWASP compliance..."
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500"
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 px-4 py-2 rounded-lg transition-colors"
-              >
-                Send
-              </button>
-              <button
-                type="button"
-                onClick={runAudit}
-                disabled={isLoading}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-gray-700 px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
-              >
-                Run Audit
-              </button>
-            </form>
+          <div className="flex gap-2 items-center">
+            <label className="text-sm text-gray-400">Jurisdictions:</label>
+            <div className="flex gap-1">
+              {['IE', 'EU', 'MT', 'IM'].map((jur) => (
+                <button
+                  key={jur}
+                  onClick={() => {
+                    const current = profile.jurisdictions;
+                    if (current.includes(jur)) {
+                      setProfile({ ...profile, jurisdictions: current.filter(j => j !== jur) });
+                    } else {
+                      setProfile({ ...profile, jurisdictions: [...current, jur] });
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    profile.jurisdictions.includes(jur)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  {jur}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Report Panel */}
-        {report && (
-          <div className="w-96 border-l border-gray-800 overflow-y-auto p-4">
-            <h2 className="text-lg font-bold mb-4">Audit Report</h2>
-
-            <div className="mb-4">
-              <span className="text-sm text-gray-400">Overall Health: </span>
-              <span className={`font-bold ${getStatusColor(report.overallHealth)}`}>
-                {report.overallHealth.toUpperCase()}
-              </span>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-gray-400 mt-8 space-y-4">
+              <p className="text-lg">Welcome to the Regulatory Intelligence Copilot!</p>
+              <p className="text-sm">Ask questions about:</p>
+              <div className="grid grid-cols-2 gap-2 max-w-2xl mx-auto text-left">
+                <div className="p-3 bg-gray-800 rounded">
+                  <p className="font-semibold text-blue-400">Tax & Company Law</p>
+                  <p className="text-xs text-gray-500">Corporation tax, CGT, R&D credits, director obligations</p>
+                </div>
+                <div className="p-3 bg-gray-800 rounded">
+                  <p className="font-semibold text-green-400">Social Welfare</p>
+                  <p className="text-xs text-gray-500">PRSI, benefits, entitlements, contributions</p>
+                </div>
+                <div className="p-3 bg-gray-800 rounded">
+                  <p className="font-semibold text-purple-400">Pensions</p>
+                  <p className="text-xs text-gray-500">State pension, occupational, personal pensions</p>
+                </div>
+                <div className="p-3 bg-gray-800 rounded">
+                  <p className="font-semibold text-yellow-400">EU & Cross-Border</p>
+                  <p className="text-xs text-gray-500">Social security coordination, EU regulations</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-6">
+                ⚠️ This is a research tool, not legal/tax advice. Always verify with qualified professionals.
+              </p>
             </div>
+          )}
 
-            {report.endpoints.map((endpoint, idx) => (
-              <div key={idx} className="mb-4 p-3 bg-gray-800 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs bg-gray-700 px-2 py-1 rounded">
-                    {endpoint.method}
-                  </span>
-                  <span className="text-sm font-mono">{endpoint.endpoint}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-sm ${getStatusColor(endpoint.status)}`}>
-                    {endpoint.status}
-                  </span>
-                  {endpoint.sourceLocation && (
-                    <a
-                      href={`${endpoint.sourceLocation.repoUrl}/blob/main/${endpoint.sourceLocation.file}#L${endpoint.sourceLocation.startLine}-L${endpoint.sourceLocation.endLine}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300 underline"
-                      title="View source code"
-                    >
-                      View Source
-                    </a>
-                  )}
-                </div>
-
-                {endpoint.issues.length > 0 && (
-                  <div className="mt-2 space-y-2">
-                    {endpoint.issues.map((issue, issueIdx) => (
-                      <div key={issueIdx} className="text-xs">
-                        <span className={`px-1.5 py-0.5 rounded ${getSeverityBadge(issue.severity)}`}>
-                          {issue.severity}
-                        </span>
-                        <p className="mt-1 text-gray-300">{issue.description}</p>
-                        {issue.rfcReferences.length > 0 && (
-                          <p className="text-gray-500">
-                            RFC: {issue.rfcReferences.join(', ')}
-                          </p>
-                        )}
-                        {issue.owaspReferences.length > 0 && (
-                          <p className="text-gray-500">
-                            OWASP: {issue.owaspReferences.join(', ')}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${
+                message.role === 'user' ? 'justify-end' : 'justify-start'
+              }`}
+            >
+              <div
+                className={`max-w-[85%] rounded-lg p-4 ${
+                  message.role === 'user'
+                    ? 'bg-blue-600'
+                    : 'bg-gray-800 border border-gray-700'
+                }`}
+              >
+                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                  {message.content}
+                </pre>
               </div>
-            ))}
+            </div>
+          ))}
 
-            {(report.rfcsCited.length > 0 || report.owaspCited.length > 0) && (
-              <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-                <h3 className="text-sm font-bold mb-2">Standards Referenced</h3>
-                {report.rfcsCited.length > 0 && (
-                  <p className="text-xs text-gray-400">
-                    RFCs: {report.rfcsCited.join(', ')}
-                  </p>
-                )}
-                {report.owaspCited.length > 0 && (
-                  <p className="text-xs text-gray-400">
-                    OWASP: {report.owaspCited.join(', ')}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Graph Context Visualization */}
-            {report.graphContext && report.graphContext.nodes.length > 0 && (
-              <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-                <h3 className="text-sm font-bold mb-2">Knowledge Graph</h3>
-                <div className="space-y-2">
-                  {report.graphContext.nodes.map((node, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${
-                        node.type === 'rfc' ? 'bg-blue-900 text-blue-300' : 'bg-purple-900 text-purple-300'
-                      }`}>
-                        {node.type.toUpperCase()}
-                      </span>
-                      <span className="text-xs text-gray-300">{node.id}</span>
-                      {node.properties.title && (
-                        <span className="text-xs text-gray-500 truncate">{node.properties.title}</span>
-                      )}
-                    </div>
-                  ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div className="flex space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                 </div>
-                {report.graphContext.edges.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-gray-700">
-                    <p className="text-xs text-gray-500 mb-1">Relationships:</p>
-                    {report.graphContext.edges.map((edge, idx) => (
-                      <p key={idx} className="text-xs text-gray-400">
-                        {edge.source} → {edge.type} → {edge.target}
-                      </p>
-                    ))}
-                  </div>
-                )}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="border-t border-gray-800 p-4">
+          <form onSubmit={handleSubmit} className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={handleInputChange}
+              placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed px-6 py-3 rounded-lg transition-colors font-medium"
+            >
+              {isLoading ? 'Thinking...' : 'Send'}
+            </button>
+          </form>
+          <p className="text-xs text-gray-500 mt-2 text-center">
+            Research assistance only • Not legal, tax, or welfare advice • Verify with qualified professionals
+          </p>
+        </div>
       </div>
     </main>
   );
