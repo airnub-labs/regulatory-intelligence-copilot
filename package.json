@@ -13,7 +13,9 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "type-check": "pnpm -r type-check",
-    "seed:graph": "tsx scripts/seed-graph.ts"
+    "seed:graph": "tsx scripts/seed-graph.ts",
+    "seed:jurisdictions": "tsx scripts/seed-special-jurisdictions.ts",
+    "seed:all": "pnpm seed:graph && pnpm seed:jurisdictions"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
