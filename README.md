@@ -12,24 +12,28 @@ The **Regulatory Intelligence Copilot** is a fork and evolution of the original 
 
 Instead of auditing HTTP APIs against RFCs and OWASP, this repo focuses on:
 
-- 🧠 **Graph-based reasoning over regulations** – Irish tax, social welfare, pensions, CGT, and EU rules are modelled as a **knowledge graph** in Memgraph.
+- 🧠 **Graph-based reasoning over regulations** – tax, social welfare, pensions, CGT, and EU rules are modelled as a **knowledge graph** in Memgraph.
 - 💬 **Chat-first UX** – a single conversational interface where users ask natural-language questions.
 - 🧑‍💼 **Expert agents** – specialised agents for:
   - Single-director Irish companies.
   - Self-employed welfare & social safety net.
   - Irish CGT & investments.
   - R&D tax credits.
-  - EU social security / regulatory effects.
-- 🌐 **Global Regulatory Agent** – a meta-agent that can reason across domains and explain interactions (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU).
-- 🧪 **Sandboxed analysis** – all heavy work runs inside an **E2B sandbox**, with outbound calls routed through an **MCP gateway**.
+  - EU social security / cross-border regulatory effects.
+- 🌐 **Global Regulatory Agent** – a meta-agent that can reason across domains and explain interactions (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU, across jurisdictions such as IE / EU / MT / IM).
+- 🧪 **Sandboxed analysis** – heavy work runs inside an **E2B sandbox**, with outbound calls routed through an **MCP gateway**.
 - 🔐 **Privacy-first & non-advice** – PII redaction on egress and explicit “research-only” framing.
 
-Under the hood, it reuses the original architecture patterns:
+Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
-- Next.js app with a **single `/api/chat`** endpoint.
+- Next.js app with a **single `/api/chat`**-style entrypoint.
 - **E2B sandbox** to host the internal agent runtime.
-- **MCP tools** for Memgraph, LLMs (Groq), and legal document search.
+- **MCP tools** for Memgraph, LLMs, and external legal content.
 - **Memgraph** as the core regulatory graph database.
+
+For the full concept, see:
+
+- 📄 `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
 
 ---
 
@@ -37,22 +41,22 @@ Under the hood, it reuses the original architecture patterns:
 
 At a high level, the system looks like this:
 
-1. **User** types a question into the chat UI.
-2. The **Next.js API route** (`POST /api/chat`) forwards the message and any basic profile info (e.g. self-employed, single director, investor) to the backend **compliance orchestrator**.
+1. The **user** types a question into the chat UI.
+2. The **Next.js API route** (e.g. `POST /api/chat`) forwards the message and any basic profile info (persona, jurisdictions) to the backend **compliance orchestrator**.
 3. The orchestrator:
    - Decides which **agent** to invoke (global vs domain-specific).
    - Spins up or reuses an **E2B sandbox**.
 4. Inside the sandbox, the selected **agent runner**:
-   - Uses an **egress guard** to redact personal/financial data.
-   - Queries **Memgraph** (via an MCP server) for relevant laws, benefits, reliefs, timelines, exclusions, and case law.
-   - Optionally calls **legal search MCPs** to discover missing rules, then upserts them into the graph.
-   - Uses a **timeline & exclusion engine** to reason about deadlines, lock-ins, and mutual exclusions.
-   - Calls a **Groq LLM** (via MCP) to generate an explanation based on the question and graph slice.
+   - Uses an **egress guard** to redact personal/financial data before any external calls.
+   - Queries **Memgraph** for relevant laws, benefits, reliefs, timelines, exclusions, and cross-jurisdiction links via a GraphClient.
+   - Optionally calls **MCP tools** (e.g. legal search, case-law feeds) to discover missing rules, then upserts them into the graph.
+   - Uses the **Timeline Engine** to reason about deadlines, lookbacks, lock-ins, and usage frequency.
+   - Calls an LLM (OpenAI / Groq / OSS) via the **provider-agnostic LLM router** to generate an explanation based on the question and graph slice.
 5. The sandbox streams a **research-style answer** back through the orchestrator to `/api/chat` and then to the UI.
 
 For a more detailed breakdown of components and data flow, see:
 
-> 📄 **[ARCHITECTURE.md](./ARCHITECTURE.md)**
+- 📄 `docs/architecture_v_0_2.md`
 
 ---
 
@@ -60,78 +64,137 @@ For a more detailed breakdown of components and data flow, see:
 
 ### 1. Regulatory Graph (Memgraph)
 
-All the interesting reasoning lives in a **graph**, not in ad-hoc prompts:
+All the interesting reasoning lives in a **graph**, not in ad-hoc prompts.
 
-- Node types like `:Statute`, `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Case`, `:Guidance`, `:EURegulation`, `:Timeline`, `:ProfileTag`.
-- Edge types like `CITES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`.
+See:
+
+- 📄 `docs/specs/graph_schema_v_0_3.md`
+- 📄 `docs/specs/graph_schema_changelog_v_0_3.md`
+
+Key ideas:
+
+- Node types like `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:Timeline`, `:ProfileTag`, `:Jurisdiction`, etc.
+- Edge types like `CITES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `FILING_DEADLINE`, `EFFECTIVE_WINDOW`, `COORDINATED_WITH`, `TREATY_LINKED_TO`, `EQUIVALENT_TO`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, `IN_JURISDICTION`.
 
 This allows the system to:
 
-- Surface **hidden interactions** (e.g. claiming one benefit excludes another, or a tax relief is limited by an EU rule).
-- Model **time-based eligibility** (lookback windows, waiting periods, lock-ins).
-- Represent **cross-domain dependencies** (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU).
+- Surface **hidden interactions** (e.g. claiming one benefit excludes another, or a tax relief is limited by an EU rule or treaty).
+- Model **time-based eligibility** (lookback windows, waiting periods, lock-ins, filing deadlines, usage frequency).
+- Represent **cross-domain dependencies** (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU) across multiple jurisdictions.
 
-### 2. Agent Lenses
+The graph is a **living knowledge graph**:
 
-Agents are **different lenses on the same graph**:
+- Batch ingestion loads baseline legislation, guidance, and key case law.
+- MCP jobs and agents **upsert** (`MERGE`) new nodes and edges when new sources are discovered.
+- No user-specific scenarios are stored; personas are represented via `:ProfileTag` and user scenarios stay ephemeral.
 
-- `SingleDirector_IE_SocialSafetyNet_Agent`
-- `IE_SelfEmployed_TaxAgent`
-- `IE_CGT_Investor_Agent`
-- `IE_RnD_TaxCredit_Agent`
-- `EU_Regulation_Agent`
-- `GlobalRegulatoryComplianceAgent` (orchestrator / meta-agent)
+### 2. Timeline Engine
+
+Temporal rules are handled by a dedicated **Timeline Engine**:
+
+- 📄 `docs/specs/timeline_engine_v_0_2.md`
+
+Key features:
+
+- Encodes lookback windows, lock-in periods, filing deadlines, and effective windows as `:Timeline` nodes linked to rules and benefits.
+- Provides pure functions to evaluate:
+  - “Given this scenario time and jurisdiction, is the user inside or outside the window?”
+  - “What happens if they act now vs in 6 months?”
+- Agents must **not hard-code** durations or deadlines; they query the graph for `:Timeline` nodes and pass them to the Timeline Engine.
+
+### 3. Agent Lenses
+
+Agents are **different lenses on the same graph**. They are defined in:
+
+- 📄 `AGENTS.md`
+
+Current logical agents include:
+
+- Global regulatory copilot (orchestrator / meta-agent).
+- Single-director IE social safety net agent.
+- IE tax & company obligations agent.
+- EU regulation & cross-border coordination agent.
+- IE CGT & investments agent.
+- IE R&D tax credit agent.
 
 Each agent:
 
-- Has a domain-specific system prompt.
-- Queries a **filtered subgraph** (e.g. only rules tagged as relevant for a single director).
-- Uses the same sandbox + MCP + timeline engine stack.
+- Has a domain-specific system prompt built using **prompt aspects**.
+- Queries a **filtered subgraph** (e.g. only rules tagged as relevant for a single director in IE).
+- Uses the shared Timeline Engine + LLM router.
 
-See **[AGENTS.md](./AGENTS.md)** for detailed agent definitions.
+### 4. LLM Router & Prompt Aspects
 
-### 3. E2B + MCP + Egress Guard
+LLM usage is **provider- and model-agnostic**:
 
-- All execution happens inside **E2B sandboxes**.
-- The sandbox only talks to the outside via **MCP tools** (Memgraph, LLMs, legal search, etc.).
-- An **egress guard** ensures we don’t leak sensitive details to external tools:
-  - Redacts PII like names, addresses, PPSNs, phone numbers, emails.
-  - Buckets or obfuscates exact financial figures where possible.
-  - Sends only what’s needed to reason about rules and relationships.
+- A single **LLM router** chooses which provider/model to call based on:
+  - Tenant configuration.
+  - Task type (`main_chat`, `egress_guard`, `pii_sanitizer`, etc.).
+- Supports:
+  - OpenAI Responses API (including GPT-4.x and `gpt-oss-*` models).
+  - Groq-hosted models.
+  - Locally-hosted OSS models.
+
+Prompts are built via a composable **aspect** system:
+
+- Jurisdiction context (primary + secondary jurisdictions).
+- Agent context (agent ID and domain).
+- User profile / persona context.
+- Standard disclaimers and safety text.
+- Optional additional aspects (e.g. product tier, audience).
+
+See:
+
+- 📄 `PROMPTS.md`
+- 📄 `docs/decisions_v_0_2.md`
 
 ---
 
 ## Who This Is For
 
-- **Self-employed people** in Ireland who want to understand:
+- **Self-employed people** in Ireland or similar jurisdictions who want to understand:
   - What they may be entitled to (benefits, credits) and what might conflict.
-  - How different decisions interact across tax, welfare, pensions, CGT.
+  - How decisions interact across tax, welfare, pensions, and CGT.
 - **Single-director company owners** who juggle:
   - Corporation tax, PRSI, salary vs dividends, and social welfare entitlements.
 - **Advisors & accountants** who need:
   - Faster research across multiple domains.
   - A graph view of rule interactions, mutual exclusions, and timelines.
-- **Curious developers / researchers** exploring:
+- **Researchers & developers** exploring:
   - GraphRAG beyond simple document retrieval.
-  - Agentic architectures on real-world regulations.
+  - Agentic architectures for complex regulations.
 
-Again: **this tool does not replace professional advice**. It’s there to:
+Again: **this tool does not replace professional advice**. It is there to:
 
 - Surface relevant rules.
 - Reveal interactions and trade-offs.
-- Help you ask better questions of real-world authorities and professionals.
+- Help you ask better questions of real authorities and professionals.
 
 ---
 
-## Features (Current & Planned)
+## Documentation Map
 
-- 🧠 **Graph-based regulatory reasoning** (Memgraph) over laws, benefits, reliefs, guidance, and case law.
-- ⏱️ **Timeline & exclusion logic** for deadlines, waiting periods, lookback windows, and lock-ins.
-- 🧑‍💼 **Domain agents + Global agent** for different personas and use cases.
-- 🧪 **E2B sandboxed runtime** with MCP tools for Memgraph, Groq, and legal search.
-- 🔎 **On-demand graph enrichment** when the system encounters new or underspecified areas.
-- 🔐 **Egress guard & non-advice stance** baked into prompts and pipeline.
-- 🔔 **(Planned)** Change detection & notifications when new court rulings or legislative updates affect your situation.
+If you’re new to the repo, start here:
+
+- 🧠 **Concept & vision**
+  - `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
+
+- 🏛 **Architecture & decisions**
+  - `docs/architecture_v_0_2.md`
+  - `docs/decisions_v_0_2.md`
+  - `docs/roadmap_v_0_2.md`
+  - `docs/migration_plan_v_0_2.md`
+
+- 🕸 **Graph & timelines**
+  - `docs/specs/graph_schema_v_0_3.md`
+  - `docs/specs/graph_schema_changelog_v_0_3.md`
+  - `docs/specs/timeline_engine_v_0_2.md`
+
+- 🤖 **Agents & prompts**
+  - `AGENTS.md`
+  - `PROMPTS.md`
+
+Older versions (e.g. `*_v_0_1.md`, `*_v_0_2.md` for schemas and concepts) are kept as **historical context** and should not be used as the implementation target.
 
 ---
 
@@ -143,11 +206,10 @@ Again: **this tool does not replace professional advice**. It’s there to:
 
 - **Node.js** 20+ (LTS recommended)
 - **pnpm** (or your preferred package manager)
-- **Docker** (for Memgraph + MCP gateway + E2B sidecars)
+- **Docker** (for Memgraph + MCP gateway + sandbox sidecars)
 - Accounts / API keys for:
   - **E2B**
-  - **Groq** (for LLM inference)
-  - Any legal search APIs you wire into MCP (optional / pluggable)
+  - At least one LLM provider (e.g. OpenAI, Groq) or a locally hosted OSS model
 
 ### 2. Clone & Install
 
@@ -155,29 +217,30 @@ Again: **this tool does not replace professional advice**. It’s there to:
 git clone https://github.com/<your-org>/regulatory-intelligence-copilot.git
 cd regulatory-intelligence-copilot
 
-# Install dependencies (adjust if you prefer npm or yarn)
+# Install dependencies
 pnpm install
 ```
 
 ### 3. Environment Configuration
 
-Create a `.env` or `.env.local` file (depending on your setup) and configure environment variables, for example:
+Create a `.env` / `.env.local` and configure environment variables, for example:
 
 ```bash
 E2B_API_KEY=...
+OPENAI_API_KEY=...
 GROQ_API_KEY=...
 MEMGRAPH_URI=bolt://localhost:7687
 MEMGRAPH_USER=...
 MEMGRAPH_PASSWORD=...
-MCP_GATEWAY_URL=http://localhost:port
-# Any other MCP-specific config
+MCP_GATEWAY_URL=http://localhost:4000
+# Add any other MCP- or provider-specific config
 ```
 
-The exact env var names may differ depending on how you wire up the MCP gateway and clients. Keep all secrets **out of source control**.
+Keep all secrets **out of source control**.
 
 ### 4. Start Infra (Memgraph + MCP Gateway)
 
-With Docker installed, bring up the graph DB and MCP gateway stack. A typical pattern is:
+With Docker installed, bring up the graph DB and MCP gateway stack. For example:
 
 ```bash
 # Example – adjust to match your docker-compose.yml
@@ -186,11 +249,8 @@ docker compose up memgraph mcp-gateway
 
 Ensure:
 
-- Memgraph is reachable at the URI you configured.
-- The MCP gateway exposes:
-  - `memgraph-mcp`
-  - `llm-groq-mcp`
-  - `legal-search-mcp` (or similar)
+- Memgraph is reachable at the configured `MEMGRAPH_URI`.
+- The MCP gateway exposes the tools you expect (e.g. Memgraph MCP, legal-search MCP, LLM MCPs).
 
 ### 5. Run the Dev Server
 
@@ -204,41 +264,46 @@ http://localhost:3000
 
 You should see the chat UI. Try questions like:
 
-- “I’m a single director of an Irish limited company, what do I need to know about PRSI and Illness Benefit?”
-- “If I sell and then buy back shares within 30 days, how might that affect CGT loss relief?”
+- “I’m a single director of an Irish limited company. What should I understand about PRSI and Illness Benefit?”
+- “If I sell and then buy back shares within a short period, how might that affect CGT loss relief eligibility?”
 
-(Answers will depend on how much law you’ve already ingested into Memgraph.)
+(Answers will depend on how much law and guidance you’ve already ingested into Memgraph.)
 
 ---
 
 ## Repository Layout (Target)
 
-The target structure for the forked repo is roughly:
+The exact structure may evolve, but the **target layout** is roughly:
 
 ```txt
 regulatory-intelligence-copilot/
   apps/
-    web/                 # Next.js chat UI + /api/chat
+    web/                     # Next.js chat UI + /api/chat
   packages/
-    compliance-core/     # Orchestrator, agent interfaces, timeline/exclusion logic
-    graph-client/        # Thin Memgraph client wrapper (via MCP)
-    egress-guard/        # PII & financial redaction utilities
+    compliance-core/         # Orchestrator, agent interfaces, timeline/exclusion logic
+    graph-client/            # Thin Memgraph client wrapper
+    egress-guard/            # PII & financial redaction utilities
+    llm-router/              # Provider-agnostic LLM router + policies
   docs/
-    ARCHITECTURE.md
-    AGENTS.md
-    MIGRATION_PLAN.md
+    architecture_v_0_2.md
+    decisions_v_0_2.md
+    roadmap_v_0_2.md
+    migration_plan_v_0_2.md
     specs/
-      graph_schema_v0.1.md
-      timeline_engine_v0.1.md
+      regulatory_graph_copilot_concept_v_0_3.md
+      graph_schema_v_0_3.md
+      graph_schema_changelog_v_0_3.md
+      timeline_engine_v_0_2.md
+      # plus historical v0.1/v0.2 docs
+  AGENTS.md
+  PROMPTS.md
 ```
 
-The exact names may change as you implement, but the idea is:
+The important part is the separation between:
 
-- **apps/web** – UI + HTTP edge.
-- **compliance-core** – brain of the orchestration and agents.
-- **graph-client** – isolated Memgraph access, easy to test.
-- **egress-guard** – reusable redaction logic.
-- **docs/** – living design docs.
+- **apps/** – UI and HTTP edges.
+- **packages/** – reusable engine components.
+- **docs/** – living design & spec documents.
 
 ---
 
@@ -256,7 +321,7 @@ This project **is**:
   - Graph-based reasoning.
   - Agentic architectures.
   - E2B + MCP patterns.
-  - To the very messy domain of real-world regulations.
+  - To the messy domain of real-world regulations.
 
 Always treat outputs as **starting points for further research**.
 
@@ -264,12 +329,18 @@ Always treat outputs as **starting points for further research**.
 
 ## Roadmap (High-Level)
 
+For detailed milestones, see:
+
+- 📄 `docs/roadmap_v_0_2.md`
+
+At a high level, the goals include:
+
 - [ ] Implement minimal Global + SingleDirector agent over a small set of statutes/benefits.
 - [ ] Add structured ingestion jobs for core Irish tax & welfare rules.
 - [ ] Implement CGT & R&D agents with timeline-aware reasoning.
-- [ ] Wire in basic change detection and a simple notification feed.
+- [ ] Wire in change detection and a notification feed when new rulings / updates affect parts of the graph.
 - [ ] Improve graph visualisation / inspector for power users and advisors.
-- [ ] Harden prompts & redaction for safety and robustness.
+- [ ] Harden prompts, redaction, and egress guard for safety and robustness.
 
 ---
 
@@ -285,7 +356,7 @@ Contributions, suggestions, and critiques are welcome — especially from:
 Please open issues or PRs with:
 
 - Clear descriptions of the regulatory scenarios you care about.
-- Pointers (links) to official legislation or guidance you think should be modelled.
+- Links to official legislation or guidance you think should be modelled.
 
 ---
 
