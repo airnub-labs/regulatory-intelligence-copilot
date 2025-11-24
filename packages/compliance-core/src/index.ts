@@ -95,7 +95,12 @@ export {
 } from './timeline/timelineEngine.js';
 
 // Graph Client
-export { createGraphClient } from './graph/graphClient.js';
+export { createGraphClient } from './graph/graphClient.js'; // Legacy MCP-based
+export {
+  BoltGraphClient,
+  createBoltGraphClient,
+  type BoltGraphClientConfig,
+} from './graph/boltGraphClient.js'; // Direct Bolt connection
 
 // LLM Client (legacy MCP-based)
 export {

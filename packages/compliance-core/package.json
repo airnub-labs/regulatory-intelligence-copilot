@@ -20,7 +20,8 @@
   "dependencies": {
     "@e2b/code-interpreter": "^2.2.0",
     "@redactpii/node": "^1.0.0",
-    "eventsource-parser": "^3.0.6"
+    "eventsource-parser": "^3.0.6",
+    "neo4j-driver": "^5.15.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
