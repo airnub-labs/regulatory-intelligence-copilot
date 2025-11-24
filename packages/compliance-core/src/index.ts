@@ -23,12 +23,15 @@ export {
 
 // Errors
 export {
-  AuditorError,
+  ComplianceError,
+  AuditorError, // deprecated alias
   SandboxError,
   McpError,
   LlmError,
   GraphError,
-  isAuditorError,
+  AgentError,
+  isComplianceError,
+  isAuditorError, // deprecated alias
   getErrorMessage,
 } from './errors.js';
 
