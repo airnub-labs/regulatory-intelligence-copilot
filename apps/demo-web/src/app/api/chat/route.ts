@@ -2,7 +2,7 @@
  * Chat API endpoint for Regulatory Intelligence Copilot
  *
  * Handles conversational queries about tax, welfare, pensions, and regulatory compliance.
- * Uses provider-agnostic LLM Router and prompt aspects for consistent behavior.
+ * Uses provider-agnostic LLM Router with streaming support.
  */
 
 import {
@@ -14,14 +14,11 @@ import {
   hasActiveSandbox,
   callMemgraphMcp,
   configureMcpGateway,
+  createLlmRouter,
   type UserProfile,
   type ChatMessage,
+  type LlmStreamChunk,
 } from '@reg-copilot/compliance-core';
-
-// For streaming, we still use AI SDK temporarily
-// TODO: Implement streaming in LlmRouter for full provider-agnostic streaming
-import { createGroq } from '@ai-sdk/groq';
-import { streamText } from 'ai';
 
 /**
  * Build system prompt using aspects
@@ -37,11 +34,26 @@ async function buildSystemPrompt(
   });
 }
 
+/**
+ * Convert LlmStreamChunk to AI SDK data stream format
+ */
+function convertToDataStream(chunk: LlmStreamChunk): string {
+  if (chunk.type === 'text' && chunk.delta) {
+    return `0:${JSON.stringify(chunk.delta)}\n`;
+  }
+  if (chunk.type === 'error') {
+    return `3:${JSON.stringify(chunk.error?.message || 'Unknown error')}\n`;
+  }
+  return ''; // Skip 'done' chunks
+}
+
 export async function POST(request: Request) {
   try {
     const groqApiKey = process.env.GROQ_API_KEY;
-    if (!groqApiKey) {
-      const message = 'GROQ_API_KEY is missing. Add it to apps/web/.env.local or export it in your shell.';
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+
+    if (!groqApiKey && !openaiApiKey) {
+      const message = 'No LLM API keys configured. Set GROQ_API_KEY or OPENAI_API_KEY.';
       console.error(`[API] ${message}`);
       return new Response(message, {
         status: 500,
@@ -124,7 +136,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // For normal chat, use provider-agnostic approach with prompt aspects
+    // For normal chat, use provider-agnostic LLM Router with streaming
     console.log('[API] Processing chat request with profile:', profile?.personaType, profile?.jurisdictions);
 
     // Determine jurisdictions
@@ -134,28 +146,77 @@ export async function POST(request: Request) {
     const systemPrompt = await buildSystemPrompt(jurisdictions, profile);
 
     // Sanitize user input before processing
-    const sanitizedMessages = messages.map(m => ({
-      role: m.role as 'user' | 'assistant',
+    const sanitizedMessages: ChatMessage[] = messages.map(m => ({
+      role: m.role as 'user' | 'assistant' | 'system',
       content: m.role === 'user' ? sanitizeTextForEgress(m.content) : m.content,
     }));
 
-    // Use AI SDK with Groq for streaming responses
-    // Note: Using Groq directly here for streaming. Full LlmRouter streaming support coming in future PR.
-    const groq = createGroq({ apiKey: groqApiKey });
-
-    const result = await streamText({
-      model: groq('llama-3.1-70b-versatile'), // Use consistent model
-      system: systemPrompt, // Use aspect-built prompt instead of hardcoded
-      messages: sanitizedMessages,
-      temperature: 0.3,
-      maxTokens: 2048,
+    // Create LLM router with available providers
+    const llmRouter = createLlmRouter({
+      openaiApiKey,
+      groqApiKey,
+      defaultProvider: groqApiKey ? 'groq' : 'openai',
+      defaultModel: groqApiKey ? 'llama-3.1-70b-versatile' : 'gpt-4',
     });
 
-    // Log the request for debugging
-    console.log('[API] Chat request processed, streaming response');
+    // Add system prompt as first message
+    const allMessages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      ...sanitizedMessages,
+    ];
 
-    // Return the stream response
-    return result.toDataStreamResponse();
+    // Stream response using LlmRouter
+    console.log('[API] Streaming response via LlmRouter');
+
+    // Create a ReadableStream that converts LlmStreamChunk to AI SDK format
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          if (!llmRouter.streamChat) {
+            controller.enqueue(encoder.encode('3:"Streaming not supported"\n'));
+            controller.close();
+            return;
+          }
+
+          for await (const chunk of llmRouter.streamChat(allMessages, {
+            temperature: 0.3,
+            maxTokens: 2048,
+            tenantId: 'default',
+            task: 'main-chat',
+          })) {
+            const data = convertToDataStream(chunk);
+            if (data) {
+              controller.enqueue(encoder.encode(data));
+            }
+
+            if (chunk.type === 'error') {
+              console.error('[API] Stream error:', chunk.error);
+              controller.close();
+              return;
+            }
+
+            if (chunk.type === 'done') {
+              controller.close();
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('[API] Stream error:', error);
+          controller.enqueue(
+            encoder.encode(`3:${JSON.stringify(error instanceof Error ? error.message : 'Unknown error')}\n`)
+          );
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Vercel-AI-Data-Stream': 'v1',
+      },
+    });
   } catch (error) {
     console.error('[API] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
