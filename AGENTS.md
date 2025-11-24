@@ -1,7 +1,17 @@
-# AGENTS
+# AGENTS – Regulatory Intelligence Copilot (v0.3)
 
-> **Status:** Current (aligned with:** `architecture_v_0_2.md`, `regulatory_graph_copilot_concept_v_0_3.md`, `graph_schema_v_0_3.md`, `timeline_engine_v_0_2.md`, `decisions_v_0_2.md`)  
+> **Status:** Current (aligned with:** `architecture_v_0_3.md`, `regulatory_graph_copilot_concept_v_0_3.md`, `graph_schema_v_0_3.md`, `timeline_engine_v_0_2.md`, `decisions_v_0_3.md`, `roadmap_v_0_3.md`)  
 > **Purpose:** Define the *logical* agents in the Regulatory Intelligence Copilot and how they should behave. Implementation details (files, classes, wiring) must follow this specification.
+
+This document supersedes earlier versions of `AGENTS.md` and incorporates the v0.3 decisions including:
+
+- Node 24 LTS baseline.
+- Next.js 16 / React 19 / Tailwind 4 for web apps.
+- Provider-agnostic LLM routing (OpenAI Responses + GPT‑OSS, Groq, local/OSS models).
+- Vercel AI SDK v5 used only inside LLM provider adapters (never in agents/UI).
+- Direct Memgraph `GraphClient` using `graph_schema_v_0_3.md`.
+- Prompt aspects and jurisdiction‑neutral base prompts.
+- Tenant‑ and task‑aware LLM policies and egress control.
 
 ---
 
@@ -10,15 +20,49 @@
 The system is **chat‑first** and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.
-- It delegates to **domain / jurisdiction expert agents** when needed (e.g. "Single‑director IE social safety net"), then reconciles their results.
+- It delegates to **domain/jurisdiction expert agents** when needed, then reconciles their results.
 - All agents:
-  - Are **jurisdiction‑aware but jurisdiction‑neutral** by default (they accept one or more jurisdictions as context; code is not hard‑wired to Ireland only).
+  - Are **jurisdiction‑aware but jurisdiction‑neutral** by default (they accept one or more jurisdictions as context; code is not hard‑wired to Ireland only except where explicitly intended for a specialist lens).
   - Use the **Memgraph regulatory graph** (`graph_schema_v_0_3.md`) as the structured source of truth.
   - Use the **Timeline Engine** (`timeline_engine_v_0_2.md`) for any time‑based logic.
   - Call LLMs through the **provider‑agnostic LLM router** (no direct calls to OpenAI/Groq/etc.).
   - Respect **privacy / egress guardrails** and never leak raw personal data unnecessarily.
 
-Agents are identified by **stable agent IDs** (strings) used in prompts, routing, and logging.
+Agents are identified by **stable agent IDs** (strings) used in prompts, routing, tenant policies, and logging.
+
+
+### 1.1 Agent Inputs & Outputs
+
+All agents operate over a shared logical interface (actual TypeScript types may differ but should follow this shape):
+
+```ts
+interface UserProfileContext {
+  tenantId: string;
+  persona: string;               // e.g. 'single-director', 'advisor', 'individual-investor'
+  jurisdictions: string[];       // e.g. ['IE'], ['IE','EU'], ['MT','EU']
+  locale?: string;               // e.g. 'en-IE'
+}
+
+interface AgentChatRequest {
+  messages: ChatTurn[];          // conversation history
+  profile: UserProfileContext;
+}
+
+interface AgentChatResponse {
+  answer: string;
+  referencedNodes: string[];     // graph node IDs referenced in reasoning
+  jurisdictions: string[];       // jurisdictions considered for this answer
+  uncertaintyLevel: 'low' | 'medium' | 'high';
+  disclaimerKey: string;         // key for standardised disclaimer text
+  agentId: string;               // which agent produced this answer
+}
+```
+
+All agents must:
+
+- Use the **GraphClient** and **Timeline Engine** instead of hard‑coding rules.
+- Use the **prompt aspect system** to build system prompts.
+- Call the **LLM router** with an appropriate `task` (e.g. `"main-chat"`) and rely on tenant/task policies to select model and provider.
 
 ---
 
@@ -27,18 +71,18 @@ Agents are identified by **stable agent IDs** (strings) used in prompts, routing
 **Agent ID (suggested):** `global_regulatory_copilot`  
 **Role:** Primary orchestrator and generalist.
 
-### Scope
+### 2.1 Scope
 
 - First contact for *all* user questions.
 - Works across:
-  - Tax (income, corporation, CGT)
-  - Social welfare and benefits
-  - Pensions
-  - Company / director obligations
-  - EU‑level rules affecting any of the above
+  - Tax (income, corporation, CGT)  
+  - Social welfare and benefits  
+  - Pensions  
+  - Company/director obligations  
+  - EU‑level rules affecting any of the above  
   - Cross‑border interactions (e.g. IE–MT–IM–EU)
 
-### Responsibilities
+### 2.2 Responsibilities
 
 1. **Conversation orchestration**
    - Interpret the user’s question, profile (persona tags), and jurisdiction context.
@@ -47,38 +91,45 @@ Agents are identified by **stable agent IDs** (strings) used in prompts, routing
      - Delegate to one or more **expert agents** and merge results.
 
 2. **Graph‑first reasoning**
-   - Query the regulatory graph (Memgraph) using high‑level functions provided by the GraphClient.
-   - Pull a **local neighbourhood subgraph** relevant to the query (statutes/benefits/reliefs, conditions, timelines, exclusions, cross‑jurisdiction links).
-   - Pass that subgraph (in summarised form) into the LLM for explanation.
+   - Use `GraphClient` to query the regulatory graph for:
+     - Relevant statutes/sections, benefits, reliefs, guidance, case law nodes.
+     - Conditions, timelines, mutual exclusions, and cross‑jurisdiction links.
+   - Pull a **local neighbourhood subgraph** relevant to the query based on persona and jurisdictions.
+   - Use the LLM router to explain that subgraph in natural language.
 
 3. **Timeline reasoning via Timeline Engine**
-   - When a question involves dates or periods, use the Timeline Engine to:
+   - When a question involves dates or periods, call the Timeline Engine to:
      - Compute lookback windows.
      - Evaluate lock‑ins.
      - Identify filing deadlines and effective windows.
    - Never hard‑code time rules; always derive them from `:Timeline` nodes in the graph.
 
 4. **Jurisdiction neutrality + expert routing**
-   - Treat the user’s jurisdiction(s) as **context**, not as hard‑coded if/else logic.
+   - Treat the user’s jurisdictions as **context**, not as hard‑coded if/else logic.
    - Where a specific expert exists (e.g. IE single‑director social safety net), call that expert agent with a well‑formed sub‑task.
    - For unsupported jurisdictions, remain helpful using EU principles, general patterns, and graph data where available, while clearly flagging limitations.
 
 5. **Safety and tone**
    - Provide **research assistance**, not legal/tax/welfare advice.
-   - Emphasise when something is ambiguous, case‑specific, or needs a human professional.
+   - Emphasise ambiguity and encourage users to confirm with qualified professionals.
    - Avoid telling users exactly what to claim or how to file; instead, explain rules, interactions, and trade‑offs.
 
 ---
 
 ## 3. Expert Agents
 
-Expert agents are **narrow and deep**. They:
+Expert agents are **narrow and deep** lenses into the same underlying graph.
+They:
 
-- Use the same underlying graph and timeline engine as the global agent.
+- Use the **same GraphClient and Timeline Engine** as the global agent.
 - Have **specialised prompts** (built from shared aspects) that focus them on a particular domain + jurisdiction combination.
 - Are invoked by the global agent when it detects that a question fits their niche.
 
-The initial set below is **not exhaustive**; the architecture must allow for adding more expert agents (e.g. for Malta, Isle of Man, other EU states) without changing core orchestration.
+The architecture must allow adding new expert agents (e.g. for Malta, Isle of Man, other EU states) without modifying the global orchestrator’s core logic.
+
+Below are the initial v0.3 lenses; their exact file locations may evolve but their behaviour must not.
+
+---
 
 ### 3.1 Single‑Director IE Social Safety Net Agent
 
@@ -93,10 +144,11 @@ The initial set below is **not exhaustive**; the architecture must allow for add
 
 - Use the graph to:
   - Find relevant **benefits** (Jobseeker’s Benefit (Self‑Employed), Illness Benefit, Treatment Benefit, Paternity/Maternity/Parent’s Benefit, State Pension, etc.).
-  - Follow `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, and `APPLIES_TO` edges from benefits to conditions and profile tags.
+  - Follow edges from benefits to conditions and profile tags, e.g.:
+    - `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `APPLIES_TO`, `IN_JURISDICTION`, `PROFILE_MATCHES`.
   - Discover **mutual exclusions** and compatibility:
-    - E.g. which benefits cannot be combined at the same time.
-    - E.g. how taking salary vs dividends affects PRSI class and future entitlements.
+    - Which benefits cannot be combined at the same time.
+    - How taking salary vs dividends affects PRSI class and future entitlements.
 
 - Apply **timeline logic** to:
   - Contributions lookback windows (PRSI history).
@@ -141,7 +193,7 @@ The initial set below is **not exhaustive**; the architecture must allow for add
 
 - Work primarily with:
   - `:EURegulation` / `:EUDirective` nodes.
-  - `IMPLEMENTED_BY`, `OVERRIDES`, `COORDINATED_WITH`, `TREATY_LINKED_TO`, and `EQUIVALENT_TO` edges.
+  - `IMPLEMENTED_BY`, `OVERRIDES`, `COORDINATED_WITH`, `TREATY_LINKED_TO`, `EQUIVALENT_TO`, and related edges.
 
 - Answer questions like:
   - Which country’s system applies when the user works in multiple EU states?
@@ -182,7 +234,7 @@ The initial set below is **not exhaustive**; the architecture must allow for add
 - Explain:
   - Eligibility conditions and thresholds.
   - Interactions with other state aid and reliefs (mutual exclusions, stacking limits).
-  - Documentation patterns and risk signals drawn from guidance and case law.
+  - Documentation patterns and risk signals drawn from guidance and case law where modelled.
 
 ---
 
@@ -190,44 +242,61 @@ The initial set below is **not exhaustive**; the architecture must allow for add
 
 All agents MUST follow these principles:
 
-1. **Graph‑first, LLM‑second**
-   - Use the Memgraph regulatory graph as the first stop for relevant rules and relationships.
-   - Only then use LLMs (via the LLM router) to:
-     - Summarise results.
-     - Rank or structure relevant rules.
-     - Generate natural‑language explanations.
+### 4.1 Graph‑first, LLM‑second
 
-2. **Timeline engine for temporal logic**
-   - Never hard‑code dates or durations in prompts or code.
-   - Always derive time rules from `:Timeline` nodes and pass them to the Timeline Engine for evaluation.
+- Use the Memgraph regulatory graph as the first stop for relevant rules and relationships.
+- Only then use LLMs (via the LLM router) to:
+  - Summarise results.
+  - Rank or structure relevant rules.
+  - Generate natural‑language explanations.
 
-3. **Jurisdiction‑aware prompts via aspects**
-   - All prompts must be built using the **prompt aspect system** (`jurisdictionAspect`, `agentContextAspect`, `profileContextAspect`, `disclaimerAspect`, etc.).
-   - No agent should hand‑craft raw system prompts; aspects enforce consistency and safety.
+### 4.2 Timeline Engine for Temporal Logic
 
-4. **Provider‑agnostic LLM usage**
-   - Agents call a **logical task** on the LLM router (e.g. `"main_chat"`, `"egress_guard"`, `"pii_sanitizer"`) and must not depend on a specific provider or model.
-   - Tenant‑ and task‑specific model selection is handled by configuration and the router, not by the agent itself.
+- Never hard‑code dates or durations in prompts or code.
+- Always derive time rules from `:Timeline` nodes and pass them to the Timeline Engine for evaluation.
 
-5. **Privacy, redaction, and egress control**
-   - Agents run inside controlled sandboxes.
-   - A redaction/egress‑guard layer must be applied before any context is sent to external LLMs or MCPs.
-   - Where possible, summarise and anonymise before sending.
+### 4.3 Jurisdiction‑Aware Prompts via Aspects
 
-6. **Research assistance, not legal advice**
-   - Clearly signal that responses are **intelligence and research tools**.
-   - Encourage users to consult qualified professionals for decisions involving risk, disputes, or large sums.
+- All prompts must be built using the **prompt aspect system**:
+  - `jurisdictionAspect`
+  - `agentContextAspect`
+  - `profileContextAspect`
+  - `disclaimerAspect`
+  - `additionalContextAspect`
+
+- No agent should hand‑craft raw system prompts; aspects enforce consistency and safety.
+
+### 4.4 Provider‑Agnostic LLM Usage
+
+- Agents call a **logical task** on the LLM router (e.g. `"main-chat"`, `"egress-guard"`, `"pii-sanitizer"`) and must not depend on a specific provider or model.
+- Tenant‑ and task‑specific model selection is handled by configuration and the router, not by the agent itself.
+- The LLM router may internally use Vercel AI SDK v5–based providers, but agents must be completely unaware of this.
+
+### 4.5 Privacy, Redaction, and Egress Control
+
+- Agents run inside controlled backends and, if applicable, E2B sandboxes.
+- An egress‑guard layer must be applied before any context is sent to external LLMs or MCPs.
+- Where possible, summarise and anonymise before sending.
+- The graph stores **rules and relationships**, not user‑identifiable data.
+
+### 4.6 Research Assistance, Not Legal Advice
+
+- Clearly signal that responses are **intelligence and research tools**.
+- Encourage users to consult qualified professionals for decisions involving risk, disputes, or large sums.
+- Surface uncertainty levels and references when appropriate.
 
 ---
 
 ## 5. Extending the Agent Set
 
-The architecture must allow new agents to be added without touching core orchestrator logic. To add a new agent:
+The architecture must allow new agents to be added without touching core orchestrator logic.
+
+To add a new agent:
 
 1. Define a **stable agent ID** and description in `AGENTS.md`.
 2. Implement the agent using:
-   - The shared GraphClient.
-   - The Timeline Engine.
+   - The shared `GraphClient`.
+   - The `TimelineEngine`.
    - The prompt aspect system.
    - The LLM router.
 3. Register the agent in the **agent registry/orchestrator** so the global copilot can route to it based on:
@@ -241,6 +310,7 @@ Example future agents:
 - `mt_tax_company_obligations` – Malta tax & company law for SMEs.
 - `im_social_security_agent` – Isle of Man social security & cross‑border coordination.
 - `eu_pensions_coordination` – EU pensions and cross‑border retirement coordination.
+- `mt_cgt_investments` – Malta CGT and structuring rules.
 
 These agents should follow the same principles and share the same infrastructure as the initial set defined above.
 
