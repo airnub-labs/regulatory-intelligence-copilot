@@ -1,4 +1,4 @@
-import { callMemgraphMcp, getMcpGatewayUrl, hasActiveSandbox } from '@e2b-auditor/core';
+import { callMemgraphMcp, getMcpGatewayUrl, hasActiveSandbox } from '@reg-copilot/compliance-core';
 
 function normalizeMemgraphRows(result: unknown): Array<Record<string, unknown>> {
   if (Array.isArray(result)) {

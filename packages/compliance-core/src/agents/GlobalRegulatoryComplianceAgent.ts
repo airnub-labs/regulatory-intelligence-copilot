@@ -11,6 +11,7 @@ import type {
   AgentInput,
   AgentContext,
   AgentResult,
+  GraphContext,
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
@@ -97,7 +98,7 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
 
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
-    let graphContext = { nodes: [], edges: [] };
+    let graphContext: GraphContext = { nodes: [], edges: [] };
 
     try {
       if (jurisdictions.length > 1) {

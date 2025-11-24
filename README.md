@@ -37,6 +37,29 @@ For the full concept, see:
 
 ---
 
+## 📚 Architecture & Design Documentation
+
+Comprehensive design documentation is available in the `docs/` directory:
+
+### Core Architecture
+- **[Architecture v0.2](docs/architecture_v_0_2.md)** – System components, data flow, and package structure
+- **[Decisions v0.2](docs/decisions_v_0_2.md)** – Architectural decision records (ADRs) and design rationale
+- **[Migration Plan v0.2](docs/migration_plan_v_0_2.md)** – Migration from RFC/OWASP auditor to regulatory copilot
+
+### Agents & Behavior
+- **[Agents](AGENTS.md)** – Agent interfaces, orchestration, and domain-specific agents
+
+### Graph & Timeline Modeling
+- **[Graph Schema v0.2](docs/specs/graph_schema_v_0_2.md)** – Node types, edge types, and schema design
+- **[Graph Schema Changelog](docs/specs/graph_schema_changelog.md)** – Schema evolution and breaking changes
+- **[Timeline Engine v0.1](docs/specs/timeline_engine_v_0_1.md)** – Time-based reasoning (lookback windows, lock-ins, deadlines)
+- **[Cross-Jurisdiction Design](docs/specs/cross_jurisdiction_graph_design.md)** – Multi-jurisdiction coordination
+
+### Roadmap
+- **[Roadmap v0.2](docs/roadmap_v_0_2.md)** – Feature roadmap and implementation phases
+
+---
+
 ## High-Level Architecture
 
 At a high level, the system looks like this:

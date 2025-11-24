@@ -142,10 +142,14 @@ export function isLockInActive(
 ): LockInCheckResult {
   const { end, description: lockInDesc } = computeLockInEnd(triggerDate, timeline);
 
-  const active = now <= end;
+  // Lock-in is active only if we're between start and end (inclusive)
+  const active = now >= triggerDate && now <= end;
   const windowDesc = describeWindow(timeline);
 
-  const description = active
+  const description = now < triggerDate
+    ? `The check date (${formatDate(now)}) is before the lock-in period started (${formatDate(triggerDate)}). ` +
+      `The lock-in will run for ${windowDesc} once triggered, ending around ${formatDate(end)}.`
+    : active
     ? `The lock-in period appears to still be active. ` +
       `It started on ${formatDate(triggerDate)} and runs for ${windowDesc}, ending around ${formatDate(end)}. ` +
       `Other options with mutual exclusions may not be available during this period.`

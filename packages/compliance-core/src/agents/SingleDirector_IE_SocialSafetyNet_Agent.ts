@@ -12,9 +12,12 @@ import type {
   AgentContext,
   AgentResult,
   GraphContext,
+  Timeline,
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
-import { buildRegulatoryPrompt, REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import { buildPromptWithAspects } from '../aspects/promptAspects.js';
+import { computeLookbackRange, computeLockInEnd } from '../timeline/timelineEngine.js';
 
 const AGENT_ID = 'SingleDirector_IE_SocialSafetyNet_Agent';
 const AGENT_NAME = 'Single Director Ireland Social Safety Net Agent';
@@ -44,11 +47,9 @@ const TRIGGER_KEYWORDS = [
 ];
 
 /**
- * Agent-specific system prompt
+ * Agent-specific context to append to base prompt
  */
-const AGENT_SYSTEM_PROMPT = `${REGULATORY_COPILOT_SYSTEM_PROMPT}
-
-You are specifically focused on:
+const AGENT_CONTEXT = `You are specifically focused on:
 - Single-director company structures in Ireland
 - PRSI Class S contributions and entitlements
 - Social welfare benefits available to self-employed/directors
@@ -67,9 +68,36 @@ Common topics:
 Remember: Single directors often pay Class S PRSI, which has different entitlements than Class A (PAYE employees).`;
 
 /**
- * Format graph context for LLM consumption
+ * Build system prompt with aspects for this agent
  */
-function formatGraphContext(context: GraphContext): string {
+async function buildAgentSystemPrompt(
+  jurisdictions: string[],
+  profile?: AgentInput['profile']
+): Promise<string> {
+  return buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
+    jurisdictions,
+    agentId: AGENT_ID,
+    agentDescription: AGENT_CONTEXT,
+    profile,
+  });
+}
+
+/**
+ * Timeline calculation data for a benefit
+ */
+interface TimelineCalculations {
+  benefitId: string;
+  lookbackRanges: Array<{ timeline: Timeline; description: string }>;
+  lockInPeriods: Array<{ timeline: Timeline; description: string }>;
+}
+
+/**
+ * Format graph context for LLM consumption, including timeline calculations
+ */
+function formatGraphContext(
+  context: GraphContext,
+  timelineCalculations?: TimelineCalculations[]
+): string {
   if (context.nodes.length === 0) {
     return 'No relevant rules found in the graph. The response will be based on general knowledge, which may be incomplete or outdated.';
   }
@@ -104,6 +132,38 @@ function formatGraphContext(context: GraphContext): string {
       ].filter(Boolean).join(' ') || 'unspecified';
       return `- ${t.label} (${t.id}): ${window}`;
     }).join('\n'));
+  }
+
+  // Add timeline calculations if available
+  if (timelineCalculations && timelineCalculations.length > 0) {
+    const calcSections: string[] = [];
+
+    for (const calc of timelineCalculations) {
+      const benefit = benefits.find(b => b.id === calc.benefitId);
+      if (!benefit) continue;
+
+      const calcLines: string[] = [`\nFor ${benefit.label}:`];
+
+      if (calc.lookbackRanges.length > 0) {
+        calcLines.push('  Lookback Windows:');
+        for (const { timeline, description } of calc.lookbackRanges) {
+          calcLines.push(`  - ${timeline.label}: ${description}`);
+        }
+      }
+
+      if (calc.lockInPeriods.length > 0) {
+        calcLines.push('  Lock-in Periods:');
+        for (const { timeline, description } of calc.lockInPeriods) {
+          calcLines.push(`  - ${timeline.label}: ${description}`);
+        }
+      }
+
+      calcSections.push(calcLines.join('\n'));
+    }
+
+    if (calcSections.length > 0) {
+      sections.push('Timeline Calculations (as of today):\n' + calcSections.join('\n'));
+    }
   }
 
   if (sections_.length > 0) {
@@ -160,7 +220,7 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
     const matchesProfile = input.profile?.personaType === 'single-director' ||
       (input.profile?.hasCompany && input.profile?.prsiClass === 'S');
 
-    return hasKeyword || matchesProfile;
+    return hasKeyword || Boolean(matchesProfile);
   },
 
   async handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult> {
@@ -203,22 +263,76 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
       return true;
     });
 
-    // Format context for LLM
-    const formattedContext = formatGraphContext(graphContext);
+    // Compute timeline calculations for benefits
+    const timelineCalculations: TimelineCalculations[] = [];
+    const benefits = graphContext.nodes.filter(n => n.type === 'Benefit');
+    const now = new Date();
 
-    // Build prompt
-    const prompt = buildRegulatoryPrompt(
-      input.question,
-      formattedContext,
-      'Single-director company owner in Ireland, likely Class S PRSI contributor'
-    );
+    for (const benefit of benefits) {
+      try {
+        // Fetch timeline constraints for this benefit
+        const timelines = await ctx.graphClient.getTimelines(benefit.id);
+
+        if (timelines.length > 0) {
+          const lookbackRanges: Array<{ timeline: Timeline; description: string }> = [];
+          const lockInPeriods: Array<{ timeline: Timeline; description: string }> = [];
+
+          for (const timeline of timelines) {
+            // Check if this is a lookback window (most common)
+            // Lookback windows are typically used for contribution requirements
+            const lookbackResult = computeLookbackRange(timeline, now);
+            lookbackRanges.push({
+              timeline,
+              description: lookbackResult.description,
+            });
+
+            // Also compute lock-in period (less common, but important for tax reliefs)
+            // Use an example trigger date of today for demonstration
+            const lockInResult = computeLockInEnd(now, timeline);
+            lockInPeriods.push({
+              timeline,
+              description: lockInResult.description,
+            });
+          }
+
+          timelineCalculations.push({
+            benefitId: benefit.id,
+            lookbackRanges,
+            lockInPeriods,
+          });
+        }
+      } catch (error) {
+        console.log(`${LOG_PREFIX.agent} Timeline calculation error for ${benefit.id}:`, error);
+      }
+    }
+
+    // Format context for LLM with timeline calculations
+    const formattedContext = formatGraphContext(graphContext, timelineCalculations);
+
+    // Build system prompt using aspects
+    const jurisdictions = input.profile?.jurisdictions || ['IE'];
+    const systemPrompt = await buildAgentSystemPrompt(jurisdictions, input.profile);
+
+    // Build user prompt
+    const userPrompt = `User Question: ${input.question}
+
+Profile Context: Single-director company owner in Ireland, likely Class S PRSI contributor
+
+Graph Context:
+${formattedContext}
+
+Please provide a research-based response that:
+1. Explains relevant rules and benefits from the graph context
+2. Highlights lookback windows, mutual exclusions, and conditions
+3. Notes any uncertainties or gaps in the data
+4. Encourages professional verification`;
 
     // Call LLM
     const response = await ctx.llmClient.chat({
       messages: [
-        { role: 'system', content: AGENT_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         ...(input.conversationHistory || []),
-        { role: 'user', content: prompt },
+        { role: 'user', content: userPrompt },
       ],
     });
 

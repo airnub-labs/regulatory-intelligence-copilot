@@ -10,17 +10,22 @@
 /**
  * Base error class for all compliance errors
  */
-export class AuditorError extends Error {
+export class ComplianceError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = 'AuditorError';
+    this.name = 'ComplianceError';
   }
 }
 
 /**
+ * @deprecated Use ComplianceError instead
+ */
+export const AuditorError = ComplianceError;
+
+/**
  * Error thrown when E2B sandbox operations fail
  */
-export class SandboxError extends AuditorError {
+export class SandboxError extends ComplianceError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'SandboxError';
@@ -30,7 +35,7 @@ export class SandboxError extends AuditorError {
 /**
  * Error thrown when MCP gateway calls fail
  */
-export class McpError extends AuditorError {
+export class McpError extends ComplianceError {
   public readonly toolName?: string;
 
   constructor(message: string, toolName?: string, options?: ErrorOptions) {
@@ -43,7 +48,7 @@ export class McpError extends AuditorError {
 /**
  * Error thrown when LLM calls fail
  */
-export class LlmError extends AuditorError {
+export class LlmError extends ComplianceError {
   public readonly statusCode?: number;
 
   constructor(message: string, statusCode?: number, options?: ErrorOptions) {
@@ -56,7 +61,7 @@ export class LlmError extends AuditorError {
 /**
  * Error thrown when graph operations fail
  */
-export class GraphError extends AuditorError {
+export class GraphError extends ComplianceError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'GraphError';
@@ -66,7 +71,7 @@ export class GraphError extends AuditorError {
 /**
  * Error thrown when agent operations fail
  */
-export class AgentError extends AuditorError {
+export class AgentError extends ComplianceError {
   public readonly agentId?: string;
 
   constructor(message: string, agentId?: string, options?: ErrorOptions) {
@@ -77,11 +82,16 @@ export class AgentError extends AuditorError {
 }
 
 /**
- * Type guard to check if an error is an AuditorError
+ * Type guard to check if an error is a ComplianceError
  */
-export function isAuditorError(error: unknown): error is AuditorError {
-  return error instanceof AuditorError;
+export function isComplianceError(error: unknown): error is ComplianceError {
+  return error instanceof ComplianceError;
 }
+
+/**
+ * @deprecated Use isComplianceError instead
+ */
+export const isAuditorError = isComplianceError;
 
 /**
  * Extract a user-friendly error message from any error

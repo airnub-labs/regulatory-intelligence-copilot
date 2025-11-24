@@ -1,49 +1,41 @@
-import { createGroq } from '@ai-sdk/groq';
-import { streamText } from 'ai';
+/**
+ * Chat API endpoint for Regulatory Intelligence Copilot
+ *
+ * Handles conversational queries about tax, welfare, pensions, and regulatory compliance.
+ * Uses provider-agnostic LLM Router and prompt aspects for consistent behavior.
+ */
+
 import {
+  buildPromptWithAspects,
+  sanitizeTextForEgress,
+  NON_ADVICE_DISCLAIMER,
+  REGULATORY_COPILOT_SYSTEM_PROMPT,
   getOrCreateActiveSandbox,
   hasActiveSandbox,
   callMemgraphMcp,
   configureMcpGateway,
-  createGraphClient,
-  createTimelineEngine,
-  createLlmClient,
-  GlobalRegulatoryComplianceAgent,
-  NON_ADVICE_DISCLAIMER,
-  REGULATORY_COPILOT_SYSTEM_PROMPT,
-  sanitizeTextForEgress,
-  type AgentContext,
-  type AgentInput,
   type UserProfile,
   type ChatMessage,
 } from '@reg-copilot/compliance-core';
 
-// System prompt for the regulatory copilot (jurisdiction-neutral)
-const SYSTEM_PROMPT = `You are a regulatory research copilot that helps users understand tax, social welfare, pensions, CGT, and related rules in their jurisdiction.
+// For streaming, we still use AI SDK temporarily
+// TODO: Implement streaming in LlmRouter for full provider-agnostic streaming
+import { createGroq } from '@ai-sdk/groq';
+import { streamText } from 'ai';
 
-IMPORTANT CONSTRAINTS:
-- You are a RESEARCH TOOL, not a legal, tax, or welfare advisor
-- NEVER give definitive advice like "you should do X" or "you must do Y"
-- ALWAYS highlight uncertainties, edge cases, and conditions that may apply
-- ALWAYS encourage users to confirm with qualified professionals in their jurisdiction
-- When explaining rules, cite specific sections, benefits, or reliefs by name
-- Use hedging language: "appears to", "may apply", "based on this rule"
-- Pay attention to the user's jurisdiction when they mention it
-
-Key topics you can help with:
-- Tax law (Corporation Tax, CGT, VAT, income tax, R&D credits)
-- Social welfare benefits and social security
-- Pension systems (State, occupational, personal)
-- Cross-border coordination and EU regulations
-
-When responding:
-1. Explain the relevant rules from available sources
-2. Highlight any mutual exclusions, lookback windows, or lock-in periods
-3. Note uncertainties that require professional review
-4. Keep responses clear and structured
-5. Consider cross-border implications when relevant
-
-Always end with a reminder that this is for research purposes only.`;
+/**
+ * Build system prompt using aspects
+ */
+async function buildSystemPrompt(
+  jurisdictions: string[],
+  profile?: UserProfile
+): Promise<string> {
+  return buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
+    jurisdictions,
+    profile,
+    includeDisclaimer: true,
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -56,8 +48,6 @@ export async function POST(request: Request) {
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       });
     }
-
-    const groq = createGroq({ apiKey: groqApiKey });
 
     const body = await request.json();
     const { messages, profile } = body as {
@@ -134,21 +124,35 @@ export async function POST(request: Request) {
       }
     }
 
-    // For normal chat, use the compliance orchestrator with Groq streaming
+    // For normal chat, use provider-agnostic approach with prompt aspects
+    console.log('[API] Processing chat request with profile:', profile?.personaType, profile?.jurisdictions);
+
+    // Determine jurisdictions
+    const jurisdictions = profile?.jurisdictions || ['IE'];
+
+    // Build system prompt using aspects (ensures consistency across all entry points)
+    const systemPrompt = await buildSystemPrompt(jurisdictions, profile);
+
     // Sanitize user input before processing
-    const sanitizedQuestion = sanitizeTextForEgress(lastMessage.content);
+    const sanitizedMessages = messages.map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.role === 'user' ? sanitizeTextForEgress(m.content) : m.content,
+    }));
 
     // Use AI SDK with Groq for streaming responses
+    // Note: Using Groq directly here for streaming. Full LlmRouter streaming support coming in future PR.
+    const groq = createGroq({ apiKey: groqApiKey });
+
     const result = await streamText({
-      model: groq('compound-beta'),
-      system: SYSTEM_PROMPT,
-      messages: messages.map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.role === 'user' ? sanitizeTextForEgress(m.content) : m.content,
-      })),
+      model: groq('llama-3.1-70b-versatile'), // Use consistent model
+      system: systemPrompt, // Use aspect-built prompt instead of hardcoded
+      messages: sanitizedMessages,
       temperature: 0.3,
       maxTokens: 2048,
     });
+
+    // Log the request for debugging
+    console.log('[API] Chat request processed, streaming response');
 
     // Return the stream response
     return result.toDataStreamResponse();

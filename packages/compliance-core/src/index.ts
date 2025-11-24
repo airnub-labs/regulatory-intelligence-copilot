@@ -23,12 +23,15 @@ export {
 
 // Errors
 export {
-  AuditorError,
+  ComplianceError,
+  AuditorError, // deprecated alias
   SandboxError,
   McpError,
   LlmError,
   GraphError,
-  isAuditorError,
+  AgentError,
+  isComplianceError,
+  isAuditorError, // deprecated alias
   getErrorMessage,
 } from './errors.js';
 
@@ -92,9 +95,14 @@ export {
 } from './timeline/timelineEngine.js';
 
 // Graph Client
-export { createGraphClient } from './graph/graphClient.js';
+export { createGraphClient } from './graph/graphClient.js'; // Legacy MCP-based
+export {
+  BoltGraphClient,
+  createBoltGraphClient,
+  type BoltGraphClientConfig,
+} from './graph/boltGraphClient.js'; // Direct Bolt connection
 
-// LLM Client
+// LLM Client (legacy MCP-based)
 export {
   createLlmClient,
   buildRegulatoryPrompt,
@@ -102,6 +110,33 @@ export {
   buildSystemPromptAsync,
   REGULATORY_COPILOT_SYSTEM_PROMPT,
 } from './llm/llmClient.js';
+
+// LLM Router (provider-agnostic)
+export {
+  // Note: LlmClient is NOT exported from llmRouter to avoid conflict with types.ts
+  type LlmCompletionOptions,
+  type LlmTaskPolicy,
+  type TenantLlmPolicy,
+  type LlmProviderClient,
+  type LlmProviderRegistry,
+  type LlmPolicyStore,
+  LlmRouter,
+  OpenAiResponsesClient,
+  GroqLlmClient,
+  LocalHttpLlmClient,
+  InMemoryPolicyStore,
+  createLlmRouter,
+} from './llm/llmRouter.js';
+export { createDefaultLlmRouter } from './llm/llmRouterFactory.js';
+
+// Compliance Engine (Orchestrator)
+export {
+  ComplianceEngine,
+  createComplianceEngine,
+  type ComplianceRequest,
+  type ComplianceResponse,
+  type ComplianceEngineDeps,
+} from './orchestrator/complianceEngine.js';
 
 // Agents
 export { SingleDirector_IE_SocialSafetyNet_Agent } from './agents/SingleDirector_IE_SocialSafetyNet_Agent.js';
