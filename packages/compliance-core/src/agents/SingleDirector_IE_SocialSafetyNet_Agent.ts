@@ -1,0 +1,267 @@
+/**
+ * Single Director Ireland Social Safety Net Agent
+ *
+ * Handles compliance questions for single-director company owners in Ireland,
+ * focusing on social welfare entitlements, PRSI obligations, and interactions
+ * between company director status and welfare benefits.
+ */
+
+import type {
+  Agent,
+  AgentInput,
+  AgentContext,
+  AgentResult,
+  GraphContext,
+} from '../types.js';
+import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
+import { buildRegulatoryPrompt, REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+
+const AGENT_ID = 'SingleDirector_IE_SocialSafetyNet_Agent';
+const AGENT_NAME = 'Single Director Ireland Social Safety Net Agent';
+
+/**
+ * Keywords that indicate this agent should handle the question
+ */
+const TRIGGER_KEYWORDS = [
+  'single director',
+  'sole director',
+  'company director',
+  'ltd company',
+  'limited company',
+  'class s',
+  'prsi class s',
+  'self-employed prsi',
+  'jobseeker',
+  'illness benefit',
+  'treatment benefit',
+  'state pension',
+  'contributory pension',
+  'welfare entitlement',
+  'social welfare',
+  'dsp',
+  'social safety net',
+  'safety net',
+];
+
+/**
+ * Agent-specific system prompt
+ */
+const AGENT_SYSTEM_PROMPT = `${REGULATORY_COPILOT_SYSTEM_PROMPT}
+
+You are specifically focused on:
+- Single-director company structures in Ireland
+- PRSI Class S contributions and entitlements
+- Social welfare benefits available to self-employed/directors
+- Interactions between company director status and benefit eligibility
+- Lookback windows for contribution requirements
+- Mutual exclusions between different benefits
+
+Common topics:
+- Jobseeker's Benefit (Self-Employed)
+- Illness Benefit for Class S contributors
+- Treatment Benefit eligibility
+- Maternity/Paternity Benefit
+- State Pension (Contributory)
+- Invalidity Pension
+
+Remember: Single directors often pay Class S PRSI, which has different entitlements than Class A (PAYE employees).`;
+
+/**
+ * Format graph context for LLM consumption
+ */
+function formatGraphContext(context: GraphContext): string {
+  if (context.nodes.length === 0) {
+    return 'No relevant rules found in the graph. The response will be based on general knowledge, which may be incomplete or outdated.';
+  }
+
+  const sections: string[] = [];
+
+  // Group nodes by type
+  const benefits = context.nodes.filter(n => n.type === 'Benefit');
+  const conditions = context.nodes.filter(n => n.type === 'Condition');
+  const timelines = context.nodes.filter(n => n.type === 'Timeline');
+  const sections_ = context.nodes.filter(n => n.type === 'Section');
+
+  if (benefits.length > 0) {
+    sections.push('Benefits:\n' + benefits.map(b =>
+      `- ${b.label} (${b.id}): ${b.properties.short_summary || 'No summary available'}`
+    ).join('\n'));
+  }
+
+  if (conditions.length > 0) {
+    sections.push('Conditions:\n' + conditions.map(c =>
+      `- ${c.label} (${c.id}): ${c.properties.description || 'No description'}`
+    ).join('\n'));
+  }
+
+  if (timelines.length > 0) {
+    sections.push('Time Constraints:\n' + timelines.map(t => {
+      const props = t.properties;
+      const window = [
+        props.window_years ? `${props.window_years}y` : '',
+        props.window_months ? `${props.window_months}m` : '',
+        props.window_days ? `${props.window_days}d` : '',
+      ].filter(Boolean).join(' ') || 'unspecified';
+      return `- ${t.label} (${t.id}): ${window}`;
+    }).join('\n'));
+  }
+
+  if (sections_.length > 0) {
+    sections.push('Statutory Sections:\n' + sections_.map(s =>
+      `- ${s.label} (${s.id}): ${s.properties.title || 'No title'}`
+    ).join('\n'));
+  }
+
+  // Add relationship information
+  if (context.edges.length > 0) {
+    const exclusions = context.edges.filter(e =>
+      e.type === 'EXCLUDES' || e.type === 'MUTUALLY_EXCLUSIVE_WITH'
+    );
+    const requirements = context.edges.filter(e => e.type === 'REQUIRES');
+    const lookbacks = context.edges.filter(e => e.type === 'LOOKBACK_WINDOW');
+
+    if (exclusions.length > 0) {
+      sections.push('Mutual Exclusions:\n' + exclusions.map(e =>
+        `- ${e.source} ${e.type} ${e.target}`
+      ).join('\n'));
+    }
+
+    if (requirements.length > 0) {
+      sections.push('Requirements:\n' + requirements.map(e =>
+        `- ${e.source} REQUIRES ${e.target}`
+      ).join('\n'));
+    }
+
+    if (lookbacks.length > 0) {
+      sections.push('Lookback Windows:\n' + lookbacks.map(e =>
+        `- ${e.source} has LOOKBACK_WINDOW ${e.target}`
+      ).join('\n'));
+    }
+  }
+
+  return sections.join('\n\n');
+}
+
+/**
+ * Single Director Ireland Social Safety Net Agent
+ */
+export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
+  id: AGENT_ID,
+  name: AGENT_NAME,
+  description: 'Handles social welfare and benefit questions for single-director company owners in Ireland',
+
+  async canHandle(input: AgentInput): Promise<boolean> {
+    const questionLower = input.question.toLowerCase();
+
+    // Check for trigger keywords
+    const hasKeyword = TRIGGER_KEYWORDS.some(kw => questionLower.includes(kw));
+
+    // Check profile
+    const matchesProfile = input.profile?.personaType === 'single-director' ||
+      (input.profile?.hasCompany && input.profile?.prsiClass === 'S');
+
+    return hasKeyword || matchesProfile;
+  },
+
+  async handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult> {
+    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} handling question`);
+
+    // Get profile tag ID
+    const profileId = input.profile?.personaType === 'single-director'
+      ? 'PROFILE_SINGLE_DIRECTOR_IE'
+      : 'PROFILE_SELF_EMPLOYED_IE';
+
+    // Query graph for relevant rules
+    let graphContext: GraphContext = { nodes: [], edges: [] };
+
+    try {
+      // Get rules for profile and jurisdiction
+      graphContext = await ctx.graphClient.getRulesForProfileAndJurisdiction(
+        profileId,
+        'IE',
+        extractKeywords(input.question)
+      );
+
+      // If we found nodes, expand their neighbourhoods for related rules
+      if (graphContext.nodes.length > 0) {
+        for (const node of graphContext.nodes.slice(0, 3)) {
+          const neighbourhood = await ctx.graphClient.getNeighbourhood(node.id);
+          // Merge results
+          graphContext.nodes.push(...neighbourhood.nodes);
+          graphContext.edges.push(...neighbourhood.edges);
+        }
+      }
+    } catch (error) {
+      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+    }
+
+    // Deduplicate nodes
+    const seenNodes = new Set<string>();
+    graphContext.nodes = graphContext.nodes.filter(n => {
+      if (seenNodes.has(n.id)) return false;
+      seenNodes.add(n.id);
+      return true;
+    });
+
+    // Format context for LLM
+    const formattedContext = formatGraphContext(graphContext);
+
+    // Build prompt
+    const prompt = buildRegulatoryPrompt(
+      input.question,
+      formattedContext,
+      'Single-director company owner in Ireland, likely Class S PRSI contributor'
+    );
+
+    // Call LLM
+    const response = await ctx.llmClient.chat({
+      messages: [
+        { role: 'system', content: AGENT_SYSTEM_PROMPT },
+        ...(input.conversationHistory || []),
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    // Build result
+    const referencedNodes = graphContext.nodes.slice(0, 10).map(n => ({
+      id: n.id,
+      label: n.label,
+      type: n.type,
+    }));
+
+    // Determine uncertainty level
+    let uncertaintyLevel: 'low' | 'medium' | 'high' = 'medium';
+    if (graphContext.nodes.length === 0) {
+      uncertaintyLevel = 'high';
+    } else if (graphContext.nodes.length > 5 && graphContext.edges.length > 3) {
+      uncertaintyLevel = 'low';
+    }
+
+    return {
+      answer: response.content,
+      referencedNodes,
+      uncertaintyLevel,
+      agentId: AGENT_ID,
+      notes: graphContext.nodes.length === 0
+        ? ['Graph context was sparse; response may be based on general knowledge']
+        : undefined,
+      followUps: [
+        'What PRSI contributions are needed for this benefit?',
+        'Are there any time limits or waiting periods?',
+        'What other benefits might be affected by this claim?',
+      ],
+    };
+  },
+};
+
+/**
+ * Extract potential keywords from question
+ */
+function extractKeywords(question: string): string | undefined {
+  const words = question.toLowerCase().split(/\s+/);
+  const keywords = words.filter(w =>
+    w.length > 4 &&
+    !['would', 'could', 'should', 'about', 'which', 'where', 'there'].includes(w)
+  );
+  return keywords[0];
+}

@@ -1,8 +1,13 @@
-import { createSandbox, runSampleApiInSandbox, type SandboxHandle } from './e2bClient.js';
+/**
+ * Sandbox Manager for Regulatory Intelligence Copilot
+ *
+ * Manages the lifecycle of E2B sandboxes and MCP gateway configuration.
+ */
+
+import { createSandbox, type SandboxHandle } from './e2bClient.js';
 import { configureMcpGateway, isMcpGatewayConfigured } from './mcpClient.js';
 
 let activeSandbox: SandboxHandle | null = null;
-const startedSampleApis = new Set<string>();
 
 export function hasActiveSandbox(): boolean {
   return activeSandbox !== null;
@@ -42,23 +47,7 @@ export async function getOrCreateActiveSandbox(): Promise<SandboxHandle> {
 }
 
 /**
- * Ensure the sample API is running inside the active sandbox. The server is
- * started at most once per sandbox to avoid port conflicts.
- */
-export async function ensureSampleApiRunning(): Promise<SandboxHandle> {
-  const sandbox = await getOrCreateActiveSandbox();
-
-  if (!startedSampleApis.has(sandbox.id)) {
-    await runSampleApiInSandbox(sandbox);
-    startedSampleApis.add(sandbox.id);
-  }
-
-  return sandbox;
-}
-
-/**
- * Dispose of the active sandbox when absolutely necessary. Avoid using this
- * during normal operation so Memgraph data stays available for the graph view.
+ * Dispose of the active sandbox when necessary.
  */
 export async function resetActiveSandbox(): Promise<void> {
   if (!activeSandbox) return;
@@ -67,6 +56,5 @@ export async function resetActiveSandbox(): Promise<void> {
     await activeSandbox.sandbox.kill();
   } finally {
     activeSandbox = null;
-    startedSampleApis.clear();
   }
 }

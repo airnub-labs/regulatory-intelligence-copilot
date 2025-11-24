@@ -1,6 +1,7 @@
 {
-  "name": "@e2b-auditor/core",
+  "name": "@reg-copilot/compliance-core",
   "version": "0.1.0",
+  "description": "Core compliance library for regulatory intelligence copilot",
   "private": true,
   "type": "module",
   "main": "dist/index.js",

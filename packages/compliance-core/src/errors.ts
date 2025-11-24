@@ -1,30 +1,14 @@
 /**
- * Custom error classes for the auditor
- *
- * This module provides a hierarchy of typed errors that make it easier
- * to handle different failure scenarios consistently across the codebase.
+ * Custom error classes for the Regulatory Intelligence Copilot
  *
  * Usage:
  * ```typescript
  * throw new SandboxError('Failed to create sandbox', { cause: originalError });
  * ```
- *
- * Catching specific errors:
- * ```typescript
- * try {
- *   await runAudit();
- * } catch (error) {
- *   if (error instanceof McpError) {
- *     // Handle MCP-specific failures
- *   } else if (error instanceof SandboxError) {
- *     // Handle sandbox failures
- *   }
- * }
- * ```
  */
 
 /**
- * Base error class for all auditor errors
+ * Base error class for all compliance errors
  */
 export class AuditorError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -47,7 +31,6 @@ export class SandboxError extends AuditorError {
  * Error thrown when MCP gateway calls fail
  */
 export class McpError extends AuditorError {
-  /** The MCP tool that failed */
   public readonly toolName?: string;
 
   constructor(message: string, toolName?: string, options?: ErrorOptions) {
@@ -58,10 +41,9 @@ export class McpError extends AuditorError {
 }
 
 /**
- * Error thrown when Groq LLM calls fail
+ * Error thrown when LLM calls fail
  */
 export class LlmError extends AuditorError {
-  /** HTTP status code if available */
   public readonly statusCode?: number;
 
   constructor(message: string, statusCode?: number, options?: ErrorOptions) {
@@ -72,36 +54,25 @@ export class LlmError extends AuditorError {
 }
 
 /**
- * Error thrown when HTTP probing fails
- */
-export class ProbeError extends AuditorError {
-  /** The endpoint that failed */
-  public readonly endpoint?: string;
-
-  constructor(message: string, endpoint?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'ProbeError';
-    this.endpoint = endpoint;
-  }
-}
-
-/**
- * Error thrown when sanitization fails
- */
-export class SanitizationError extends AuditorError {
-  constructor(message: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'SanitizationError';
-  }
-}
-
-/**
  * Error thrown when graph operations fail
  */
 export class GraphError extends AuditorError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
     this.name = 'GraphError';
+  }
+}
+
+/**
+ * Error thrown when agent operations fail
+ */
+export class AgentError extends AuditorError {
+  public readonly agentId?: string;
+
+  constructor(message: string, agentId?: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'AgentError';
+    this.agentId = agentId;
   }
 }
 

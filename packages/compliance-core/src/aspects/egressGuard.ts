@@ -56,10 +56,15 @@ const redactPii = (text: string): string => redactor.redact(text);
 const SENSITIVE_PATTERNS = [
   // Email addresses
   { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, replacement: '[EMAIL]' },
-  // Phone numbers
+  // Phone numbers (US and Irish formats)
   { pattern: /(\+?1?[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, replacement: '[PHONE]' },
-  // SSN
+  { pattern: /(\+353|0)[\s-]?\d{2,3}[\s-]?\d{3,4}[\s-]?\d{3,4}/g, replacement: '[PHONE]' },
+  // SSN (US)
   { pattern: /\d{3}-\d{2}-\d{4}/g, replacement: '[SSN]' },
+  // PPSN (Irish Personal Public Service Number)
+  { pattern: /\d{7}[A-Z]{1,2}/g, replacement: '[PPSN]' },
+  // IBAN
+  { pattern: /[A-Z]{2}\d{2}[A-Z0-9]{4,30}/g, replacement: '[IBAN]' },
   // Credit card numbers
   { pattern: /\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}/g, replacement: '[CREDIT_CARD]' },
   // API keys (common patterns)
