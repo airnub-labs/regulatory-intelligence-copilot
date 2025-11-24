@@ -1,268 +1,430 @@
-# CODING AGENT PROMPT – Regulatory Intelligence Copilot
+# CODING AGENT PROMPT – Regulatory Intelligence Copilot (v0.3)
 
-You are acting as a **senior TypeScript + graph engineer** embedded in the `regulatory-intelligence-copilot` repository.
+You are acting as a **senior TypeScript + graph + AI engineer** embedded in the
+`regulatory-intelligence-copilot` repository.
 
-Your job is to **implement the architecture and specs** for the new regulatory intelligence copilot by refactoring the fork of `rfc-refactor`, while preserving working infra (E2B, MCP, Memgraph, chat plumbing).
+Your job is to **implement and evolve the v0.3 architecture and specs** for the
+Regulatory Intelligence Copilot by refactoring the fork of `rfc-refactor`, while
+preserving the working infra (Memgraph, MCP, E2B, chat plumbing) and aligning
+with the latest decisions.
 
-You should work in small, safe, reviewable commits and keep the project in a running, shippable state as much as possible.
+You must work in **small, safe, reviewable commits** and keep the project in a
+running, shippable state as much as possible.
 
 ---
 
 ## 1. Context & Goal
 
-The original project `rfc-refactor` was a hackathon prototype focused on HTTP/RFC/OWASP auditing.
+The original project `rfc-refactor` was a hackathon prototype for
+HTTP/RFC/OWASP auditing.
 
-This fork, `regulatory-intelligence-copilot`, has a **new mission**:
+This fork, **`regulatory-intelligence-copilot`**, has a new mission:
 
-> **Chat-first, graph-powered regulatory research copilot for complex regulatory compliance.**
+> **Chat-first, graph-powered regulatory research copilot for complex regulatory
+>  compliance.**
 
-It uses a **Memgraph knowledge graph** + **E2B sandbox** + **MCP** + **LLMs** to help:
-- Self-employed people and single-director companies in Ireland.
-- Advisors (accountants, tax/welfare specialists).
+It uses a **Memgraph knowledge graph** + **LLMs** + **MCP/E2B where needed** to
+help:
+
+- Self-employed people and single-director companies in Ireland (and, later,
+  other EU-linked jurisdictions such as MT / IM).
+- Advisors (accountants, tax/welfare specialists) doing research.
 
 It should:
-- Model rules (tax, welfare, pensions, CGT, EU law) and their interactions in a **graph**.
-- Support **cross-jurisdiction reasoning** (Ireland, other EU states, Isle of Man, Malta, EU).
+
+- Model rules (tax, welfare, pensions, CGT, EU law) and their interactions in a
+  **graph**.
+- Support **cross-jurisdiction reasoning** (IE, EU, MT, IM, etc.).
 - Answer questions via a **single chat endpoint**.
 - Treat LLMs as *explainers*, not as sources of legal advice.
+- Be safely embeddable into other **Next.js/Supabase SaaS** projects.
 
-You are implementing **a new product using an existing repo as a starting point**.
-
----
-
-## 2. Canonical Design Documents
-
-Before making changes, mentally load and respect these project docs (they are in this repo or will be added by you):
-
-- **Architecture & Decisions**
-  - `ARCHITECTURE.md`
-  - `DECISIONS.md`
-  - `ROADMAP.md` (or `ROADMAP_v2.md` if present)
-  - `MIGRATION_PLAN.md`
-- **Agents & Behaviour**
-  - `AGENTS.md`
-- **Graph & Time Modelling**
-  - `docs/specs/graph_schema_v0_2.md`
-  - `docs/specs/graph_schema_changelog.md`
-  - `docs/specs/timeline_engine_v0_1.md`
-  - `docs/specs/cross_jurisdiction_graph_design.md`
-
-These documents are **authoritative**. If implementation and docs disagree, prefer the docs and update the code to match (or, if you must change behaviour, update the docs in the same PR and clearly explain why).
+You are implementing **a new product using an existing repo as a starting
+point**, targeting the **v0.3 architecture**.
 
 ---
 
-## 3. Tech Stack Expectations
+## 2. Canonical Design Documents (READ THESE FIRST)
 
-- **Language:** TypeScript
-- **Runtime & Framework:** Next.js (App Router) for the UI + API routes
-- **Infra:**
-  - E2B sandbox for agent execution
-  - Docker MCP gateway for tools
-  - Memgraph as graph database (backed by Docker volume, used by MCP server)
-- **Frontend:** Next.js + (optionally) shadcn/ui for chat UI
+Before making code changes, mentally load and respect these project docs (they
+are in this repo). They are the **source of truth** for behaviour and
+boundaries:
 
-You should reuse as much of the existing infra from `rfc-refactor` as is reasonable, but remove HTTP-audit-specific logic.
+### Core Architecture & Decisions
 
----
+- `docs/architecture_v_0_3.md`
+- `docs/decisions_v_0_3.md`
+- `docs/roadmap_v_0_3.md`
+- `docs/migration_plan_v_0_2.md`
+- `docs/node_24_lts_rationale.md`
 
-## 4. High-Level Responsibilities
+### Agents & Prompts
 
-Your main responsibilities in this execution pass:
+- `AGENTS.md`
+- `PROMPTS.md` (this file, once updated by you)
 
-1. **Apply the migration plan.**  
-   - Cleanly pivot from HTTP/RFC/OWASP auditing to *regulatory intelligence copilot* as per `MIGRATION_PLAN.md`.
-   - Remove legacy audit functionality while preserving infra.
+### Graph & Timeline Modelling
 
-2. **Implement the core architecture.**  
-   - Make the code match `ARCHITECTURE.md` and `DECISIONS.md`.
-   - Ensure a single chat flow: Next.js chat UI → `/api/chat` → E2B sandbox → agents → Memgraph/LLM.
+- `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
+- `docs/specs/graph_schema_v_0_3.md`
+- `docs/specs/graph_schema_changelog_v_0_3.md`
+- `docs/specs/timeline_engine_v_0_2.md`
 
-3. **Implement the initial agent system.**  
-   - Structures described in `AGENTS.md` must be present and wired:
-     - Agent interfaces and shared context.
-     - Domain agents (start with `SingleDirector_IE_SocialSafetyNet_Agent`).
-     - `GlobalRegulatoryComplianceAgent` orchestrator (can be minimal in the first pass).
-
-4. **Implement the v0.2 graph client.**  
-   - Implement a Memgraph client that understands `graph_schema_v0_2.md`.
-   - Support queries that agents need for v0.1/v0.2 functionality.
-
-5. **Implement the Timeline Engine.**  
-   - Add a pure TypeScript module per `timeline_engine_v0_1.md`.
-   - Integrate it with agent logic for any rules that involve lookback/lock-in windows.
-
-6. **Ensure privacy & non-advice stance.**  
-   - Implement an egress guard as specified in `DECISIONS.md`.
-   - Ensure prompts and answer templates include disclaimers and avoid giving legal/tax advice.
-
-7. **Maintain & improve developer experience.**  
-   - Keep the dev environment easy to spin up (Next.js + Memgraph + MCP gateway + E2B configuration).
-   - Optionally maintain or improve `.devcontainer` and Docker configurations.
+Older docs (v0.1/v0.2 and `cross_jurisdiction_graph_design.md`) are
+**historical context only**. If implementation and these v0.3 docs disagree,
+update the code to match v0.3 (or if you must change behaviour, update the
+relevant doc in the same PR and explain why in the PR description).
 
 ---
 
-## 5. Migration Instructions (from MIGRATION_PLAN.md)
+## 3. Tech Stack & Baselines (Non‑Negotiable)
 
-Follow the guidance in `MIGRATION_PLAN.md`. In summary (do **not** treat this as exhaustive—re-read the plan itself):
+### Runtime & Language
 
-1. **Keep / reuse:**
-   - E2B integration and sandbox utilities.
-   - MCP gateway wiring.
-   - Memgraph client/config (but adjust to v0.2 schema).
-   - Chat UI and `/api/chat` plumbing.
-   - Any generic redaction or logging utilities.
+- **Node.js:** minimum **24.x LTS** for all backend services and tools.
+  - Ensure `"engines": { "node": ">=24.0.0" }` is set where appropriate.
+  - Devcontainers/CI images must use Node 24.
+- **TypeScript:** latest Node 24–compatible TS (e.g. TS 5.9+).
 
-2. **Remove or archive:**
-   - Sample HTTP API and probe runners.
-   - OWASP and RFC-specific models, types, hardcoded rules.
-   - HTTP transcript visualisations and audit reports.
+### Web Stack
 
-3. **Introduce new modules:**
-   - `packages/compliance-core` (or equivalent) for shared agent types, graph helpers, timeline engine.
-   - `packages/egress-guard` (or similar) for outbound sanitisation.
+For web apps in this repo (e.g. `apps/demo-web`):
 
-4. **Align names and boundaries** with the new conceptual model (agents, graph, timeline, etc.).
+- **Next.js:** v16+ (App Router).
+- **React:** v19+.
+- **Tailwind CSS:** v4+.
+- shadcn/ui for primitives where helpful.
 
-When in doubt, default to **removing HTTP audit–specific code** and keeping only infra that is reusable for the regulatory copilot.
+### LLM & AI SDK
+
+- LLM usage is **provider-agnostic**, via a `LlmRouter` + `LlmProvider` interface.
+- Supported providers include:
+  - **OpenAI** via the **Responses API** (including `gpt-4.x` and `gpt-oss-*`).
+  - **Groq** (e.g. LLaMA 3 models).
+  - **Local/OSS models** hosted on EU-only infra (no external egress).
+- **Vercel AI SDK v5** is allowed **only as an implementation detail**:
+  - Use it inside provider adapters (e.g. `AiSdkOpenAIProvider`), never in
+    domain logic, agents, or frontend.
+  - Do **not** shape the LLM abstractions around AI SDK; shape them around
+    `LlmRouter`, tasks, and tenant policies.
+
+### Graph & Infra
+
+- **Memgraph** is the canonical regulatory knowledge graph.
+  - Use a **typed GraphClient** to talk to Memgraph directly (Bolt/HTTP).
+  - Memgraph MCP may exist for LLM tool-calls, but **core app logic** should use
+    the GraphClient, not MCP.
+- **MCP & E2B** are used for:
+  - External legal search / ingestion.
+  - Optional sandboxed code execution.
+  - They are not required for the hot path of normal chat questions.
 
 ---
 
-## 6. Concrete Implementation Tasks (First Pass)
+## 4. High-Level Responsibilities in This Pass
 
-Work on these in **small, incremental steps**, committing frequently.
+Your main responsibilities when this prompt is run:
 
-### 6.1 Repo Renaming & Documentation
+1. **Conform code to v0.3 architecture and decisions.**  
+   - Ensure the implementation in `main` matches the intent of
+     `architecture_v_0_3.md` and `decisions_v_0_3.md`.
+   - Eliminate remaining assumptions from the old HTTP/RFC audit project.
 
-- Update project metadata to `regulatory-intelligence-copilot`.
-- Replace the old README with the new one (regulatory copilot focused).
-- Ensure `ARCHITECTURE.md`, `DECISIONS.md`, `ROADMAP.md`, `AGENTS.md`, `MIGRATION_PLAN.md`, and the `docs/specs/*.md` schema files are present and referenced.
+2. **Stabilise the engine packages.**  
+   - Ensure clear separation between:
+     - `apps/demo-web` (UI and HTTP edges).
+     - `packages/reg-intel-core` – Compliance Engine + agent interfaces.
+     - `packages/reg-intel-graph` – GraphClient + helpers.
+     - `packages/reg-intel-llm` – LlmRouter + providers + egress guard.
+     - `packages/reg-intel-prompts` – prompt aspects & base system prompts.
+     - `packages/reg-intel-next-adapter` – helper to mount engine in Next.js.
 
-### 6.2 Chat API & Frontend
+3. **Implement / refine the LLM routing layer.**  
+   - Provider-agnostic `LlmRouter` with per-tenant & per-task policies.
+   - OpenAI Responses API for OpenAI (including GPT‑OSS models).
+   - Groq + local/OSS providers.
+   - Egress guard integrated on all outbound calls.
 
-- Confirm that **only one main endpoint** exists for user interaction: `POST /api/chat`.
-- Ensure the chat endpoint:
-  - Accepts messages + optional profile metadata.
-  - Dispatches to the E2B sandbox with the appropriate payload.
-  - Returns a streamed or simple JSON response to the frontend.
-- Simplify/remove any legacy “run audit” REST endpoints; replicate that behaviour via **chat prompts** instead.
+4. **Wire prompt aspects throughout.**  
+   - Jurisdiction-neutral base prompts.
+   - Jurisdiction, persona, agent, and disclaimer aspects applied for every LLM
+     call.
 
-### 6.3 Sandbox Orchestrator
+5. **Use direct Memgraph GraphClient (v0.3 schema).**  
+   - Ensure core engine and agents call Memgraph via `reg-intel-graph`
+     abstractions using the v0.3 schema.
 
-Inside the sandbox execution code:
+6. **Maintain privacy & non-advice stance.**  
+   - Egress guard for PII/sensitive data.
+   - Clear non-advice disclaimers in prompts and responses.
 
-- Implement a **task/agent orchestrator** that:
-  - Accepts a structured request: messages, user profile context, jurisdictional context.
-  - Calls the `GlobalRegulatoryComplianceAgent`.
-  - Returns a structured result: answer text, referenced node IDs, meta (jurisdictions, uncertainty flags, etc.).
+7. **Keep the repo reusable.**  
+   - Maintain clean interfaces so `reg-intel-*` packages can be imported into
+     other Next.js/Supabase SaaS apps without major rewrites.
 
-- Implement **Agent interfaces** per `AGENTS.md`:
+---
+
+## 5. Migration & Cleanup Expectations
+
+Follow `docs/migration_plan_v_0_2.md` but adjust for v0.3 decisions.
+
+### 5.1 Keep / Reuse
+
+- E2B integration utilities (where still used).
+- MCP gateway wiring and basic config.
+- Memgraph connection/config, migrated to v0.3 schema via `reg-intel-graph`.
+- Chat UI and `/api/chat` plumbing (updated for v0.3 engine).
+- Any generic logging/redaction utilities that still make sense.
+
+### 5.2 Remove / Archive
+
+- HTTP audit–specific code:
+  - Sample REST API.
+  - HTTP probe runners.
+  - OWASP/RFC-specific models and types.
+  - HTTP transcript visualisations.
+  - RFC/OWASP-specific reports.
+- Any leftover assumptions that the graph is about HTTP headers or OWASP.
+
+Archive legacy modules under a `legacy/` folder if removal is too disruptive,
+but **do not expose** them in the main runtime.
+
+---
+
+## 6. Concrete Implementation Tasks (v0.3)
+
+Work in **small, incremental steps**. After each step, ensure the project still
+builds and `/api/chat` works.
+
+### 6.1 Align Project Structure & Docs
+
+- Ensure the repo layout aligns with the target shape described in:
+  - `docs/architecture_v_0_3.md`
+  - `docs/roadmap_v_0_3.md`
+- Confirm presence and linkage of:
+  - `docs/architecture_v_0_3.md`
+  - `docs/decisions_v_0_3.md`
+  - `docs/roadmap_v_0_3.md`
+  - `docs/migration_plan_v_0_2.md`
+  - `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
+  - `docs/specs/graph_schema_v_0_3.md`
+  - `docs/specs/graph_schema_changelog_v_0_3.md`
+  - `docs/specs/timeline_engine_v_0_2.md`
+  - `docs/node_24_lts_rationale.md`
+- Ensure `README.md` is the v0.3 version and references the above correctly.
+- Ensure `AGENTS.md` and this `PROMPT_v_0_3.md` are in sync.
+
+### 6.2 LLM Layer – Router, Providers, Tasks
+
+Implement or refine the LLM layer per `architecture_v_0_3.md` and
+`decisions_v_0_3.md`:
+
+1. **Core types** (in `reg-intel-llm`):
+
+   - `LlmMessage`, `LlmCompletionOptions`, `LlmProvider`, `LlmClient`.
+   - `LlmTaskPolicy`, `TenantLlmPolicy` for per-task/per-tenant configuration.
+
+2. **LlmRouter**:
+
+   - Accepts `tenantId` and optional `task` (e.g. `"main-chat"`, `"egress-guard"`,
+     `"pii-sanitizer"`).
+   - Looks up the tenant’s policy to select `provider` and `model`.
+   - Enforces `allowRemoteEgress` (if false, block remote providers).
+   - Calls the selected `LlmProvider` and returns a unified async stream.
+
+3. **Providers**:
+
+   - `OpenAiResponsesProvider`:
+     - Uses OpenAI **Responses API**, not legacy chat completions.
+     - Supports GPT‑OSS models as configured.
+   - `GroqLlmProvider`.
+   - `LocalHttpLlmProvider` for OSS models hosted in your own infra.
+   - Optional AI SDK v5–based providers (`AiSdkOpenAIProvider`, `AiSdkGroqProvider`):
+     - Wrap `streamText`/`generateText` under the `LlmProvider` interface.
+     - Not referenced directly by agents or frontend.
+
+4. **Egress guard integration**:
+
+   - Implement `EgressGuard` with `redact()` and ensure all outbound payloads to
+     remote LLM providers go through it.
+   - For local/OSS providers in a locked-down infra, allow raw input as per
+     decisions, but keep the option to reuse the same guard.
+
+### 6.3 Prompt Aspects & Jurisdiction-Neutral Prompts
+
+Per `PROMPTS.md`, `AGENTS.md`, and `architecture_v_0_3.md`:
+
+- Ensure base system prompts like:
+  - `REGULATORY_COPILOT_SYSTEM_PROMPT`
+  - `GLOBAL_SYSTEM_PROMPT`
+
+  are **jurisdiction-neutral** and live in `reg-intel-prompts`.
+
+- Ensure prompt aspects are implemented and used everywhere:
+  - `jurisdictionAspect`
+  - `agentContextAspect`
+  - `profileContextAspect`
+  - `disclaimerAspect`
+  - `additionalContextAspect`
+
+- Replace any manual string concatenation of system prompts with:
 
   ```ts
-  interface AgentContext {
-    graphClient: GraphClient;
-    timeline: TimelineEngine;
-    egressGuard: EgressGuard;
-    llmClient: LlmClient; // via MCP (Groq)
+  const systemPrompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
+    jurisdictions: profile.jurisdictions,
+    agentId: agent.id,
+    profile: { personaType: profile.persona },
+    additionalContext,
+  });
+  ```
+
+- Implement dynamic profile tags (e.g. `PROFILE_SINGLE_DIRECTOR_IE`) via a
+  helper instead of hardcoding IE.
+
+### 6.4 Compliance Engine & Agents
+
+Per `AGENTS.md` and `architecture_v_0_3.md`:
+
+- Implement or update `reg-intel-core` to expose:
+
+  ```ts
+  interface UserProfileContext {
+    tenantId: string;
+    persona: string;
+    jurisdictions: string[];
+    locale?: string;
   }
 
-  interface AgentResult {
+  interface ChatRequest {
+    messages: ChatTurn[];
+    profile: UserProfileContext;
+  }
+
+  interface ChatResponse {
     answer: string;
     referencedNodes: string[];
-    notes?: string[];
-    uncertaintyLevel?: "low" | "medium" | "high";
+    jurisdictions: string[];
+    uncertaintyLevel: 'low' | 'medium' | 'high';
+    disclaimerKey: string;
   }
 
-  interface Agent {
-    id: string;
-    canHandle(input: AgentInput): Promise<boolean>;
-    handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult>;
+  interface ComplianceEngine {
+    handleChat(request: ChatRequest): Promise<ChatResponse>;
   }
   ```
 
-- Implement `SingleDirector_IE_SocialSafetyNet_Agent` as the **first concrete agent**.
-- Implement `GlobalRegulatoryComplianceAgent` that, initially, just delegates everything to that agent (you can later add routing logic).
-
-### 6.4 Graph Client (Memgraph, v0.2 Schema)
-
-- Implement a `GraphClient` that:
-  - Connects to Memgraph (via MCP or direct, depending on existing infra).
-  - Provides high-level methods that correspond to the query patterns in `graph_schema_v0_2.md`:
-    - `getRulesForProfileAndJurisdiction(profileId, jurisdictionId, keyword?)`
-    - `getNeighbourhood(nodeId)`
-    - `getMutualExclusions(nodeId)`
-    - `getTimelines(nodeId)`
-    - `getCrossBorderSlice(jurisdictionIds)`
-
-- Make sure it knows about `:Jurisdiction` and `IN_JURISDICTION` edges.
-- Ensure it returns **structured JSON**, not raw Cypher strings, suitable for LLM prompts.
-
-### 6.5 Timeline Engine
-
-- Implement the Timeline Engine module as described in `timeline_engine_v0_1.md`:
-  - Core functions like `computeLookbackRange`, `isWithinLookback`, `computeLockInEnd`, `isLockInActive`.
-  - Input: `Timeline` node(s) + reference date.
-  - Output: concrete date ranges + human-readable descriptors.
-
-- Integrate this into at least one agent (e.g. CGT or welfare agent when you add it).
-
-### 6.6 Egress Guard
-
-- Implement `EgressGuard` in a dedicated module, roughly:
+- `createComplianceEngine` should accept dependencies:
 
   ```ts
-  interface EgressGuard {
-    redact(input: unknown): RedactedPayload;
-  }
+  { llm: LlmClient; graph: GraphClient; timeline: TimelineEngine; egressGuard: EgressGuard; }
   ```
 
-- Use a well-maintained library (e.g. for PII detection) if already present in the repo; otherwise write a minimal rules-based layer.
-- Ensure **all outbound calls** (LLM MCP, legal-search MCP) are passed through the egress guard.
+- Implement or refine:
+  - `GlobalRegulatoryComplianceAgent` (orchestrator).
+  - Domain agents (at minimum):
+    - `SingleDirector_IE_SocialSafetyNet_Agent`.
+    - Additional IE/EU agents as described in `AGENTS.md`.
 
-### 6.7 Non-Advice UX & Prompts
+- The engine is responsible for:
+  - Routing to the correct agent.
+  - Building the prompt with aspects.
+  - Passing graph/timeline context.
+  - Returning a `ChatResponse` aligned with the schema above.
 
-- Ensure system prompts to the LLM:
-  - Clearly state the assistant is a **regulatory research copilot**, not a legal/tax advisor.
-  - Ask the model to highlight **uncertainties and edge cases**.
-  - Encourage the user to confirm with qualified professionals.
+### 6.5 GraphClient & Timeline Engine
 
-- Ensure user-facing responses always include a short disclaimer footer.
+Per `graph_schema_v_0_3.md` and `timeline_engine_v_0_2.md`:
+
+- Implement or refine `reg-intel-graph` with:
+  - A typed `GraphClient` that encapsulates Memgraph Cypher queries.
+  - Helper methods to retrieve:
+    - Rules/benefits/conditions for a given profile & jurisdiction.
+    - Mutual exclusions and cross-domain interactions.
+    - Timeline nodes and properties for lookbacks, lock-ins, deadlines, effective windows.
+    - Cross-jurisdiction relationships (e.g. IE ↔ EU, IE ↔ MT, IE ↔ IM).
+
+- Implement or update `TimelineEngine`:
+  - Pure functions for computing whether a scenario date falls inside/outside
+    lookback windows, lock-ins, deadlines.
+  - Agents should **never hard-code** durations; they query the graph and call
+    `TimelineEngine`.
+
+### 6.6 Web App Integration & WebSocket Graph Streaming
+
+Per `architecture_v_0_3.md` and `roadmap_v_0_3.md`:
+
+- Ensure `apps/demo-web`:
+  - Uses Next.js 16 / React 19 / Tailwind 4.
+  - Talks to a single backend entrypoint (e.g. `POST /api/chat`).
+  - Displays basic metadata (agent, jurisdictions considered, uncertainty level
+    if available).
+
+- Implement or refine graph endpoints:
+  - `GET /api/graph` – returns an initial subgraph snapshot based on profile
+    and jurisdictions.
+  - `GET /api/graph/stream` – WebSocket endpoint emitting **incremental graph
+    patches** (nodes/edges added/updated/removed).
+
+- Frontend graph UI:
+  - Initial load via `GET /api/graph`.
+  - Subscribe to `/api/graph/stream` and apply patches in-memory.
+  - Ensure large graphs are handled via incremental updates, not full reloads.
 
 ---
 
-## 7. Safety, Privacy & Scope Boundaries
+## 7. Privacy, Non-Advice & EU Focus
 
-You must:
+You must enforce the privacy and non-advice stance described in:
 
-- **Never** store user-specific data (income numbers, names, PPSNs, etc.) in Memgraph.
-- Keep user context in the sandbox only and pass it around purely in memory.
-- Ensure any outbound requests (LLM / search MCPs) use the egress guard to minimise leakage of sensitive information.
-- Avoid making strong, definitive prescriptions. Frame outputs as **research**, not instructions.
+- `docs/decisions_v_0_3.md`
+- `docs/architecture_v_0_3.md`
 
-If a design trade-off arises between:
-- Richness of explanation vs user privacy → **choose privacy**.
-- Implementation speed vs clarity of architecture → **choose clarity**.
+Key rules:
+
+- **No user-identifiable or scenario-specific data** (income, PPSN, names,
+  addresses) is ever stored in Memgraph.
+- The graph stores **rules and relationships**, not personal data.
+- Any outbound calls to external LLMs or legal APIs must be redacted via the
+  egress guard.
+- Tenants may configure `allowRemoteEgress = false`:
+  - For those tenants, only local/OSS LLMs can be used.
+- All prompts and responses:
+  - Must clearly state that the system is a **research copilot**, not an
+    advisor.
+  - Should surface uncertainties and references, not definitive prescriptions.
+
+The initial focus is **EU-first** (Ireland/EU/MT/IM), but the architecture must
+not assume any hard-coded jurisdiction beyond agent specialisation where
+explicitly intended.
 
 ---
 
 ## 8. How to Work
 
-When you modify code:
+When making changes under this prompt:
 
-1. **Read the relevant spec first** (ARCHITECTURE, AGENTS, graph schema, timeline engine, DECISIONS, MIGRATION_PLAN).
-2. Make the *minimal set of changes* required to align code with the spec.
-3. Keep the project building and the test suite (if any) passing.
-4. Prefer explicit types and small, composable functions.
-5. Add or update comments where behaviour is non-obvious.
+1. **Read the relevant spec first** (architecture, decisions, agents, graph
+   schema, timeline engine, migration plan).
+2. Make the **minimal set of changes** required to align code with v0.3.
+3. Keep the project building and `/api/chat` working.
+4. Favour explicit types, small composable functions, and clear boundaries.
+5. When you need to change behaviour that contradicts the docs, update the
+   relevant doc in `docs/` and explain the change in the PR description.
 
-If you encounter ambiguity in the specs:
-- Prefer solutions that keep the system **extensible** (e.g. easy to add new agents, jurisdictions, or rule types later).
+If you hit ambiguity:
 
-Your end goal for this pass is to:
+- Prefer designs that:
+  - Keep the system **extensible** (easy to add agents, jurisdictions, rule
+    types).
+  - Preserve **provider-agnostic LLM routing** and **graph-first reasoning**.
+  - Respect **privacy** and **non-advice** over convenience.
 
-- Complete the migration away from HTTP/RFC auditing.
-- Have a working vertical slice:
-  - Chat UI → `/api/chat` → E2B sandbox → `GlobalRegulatoryComplianceAgent` → `SingleDirector_IE_SocialSafetyNet_Agent` → Memgraph → LLM.
-- Use `graph_schema_v0_2.md` and the Timeline Engine for at least one real, non-trivial answer.
+Your end goal for a successful run of this prompt is to:
 
-Stay within these specs, avoid adding new technologies unless strictly necessary, and keep the implementation as simple and robust as possible.
+- Leave the main branch closer to the v0.3 design.
+- Have a working vertical slice where:
+  - Chat UI → `/api/chat` → Compliance Engine → Global + domain agents →
+    Memgraph + Timeline Engine → LlmRouter → streamed answer.
+- Ensure that switching models/providers (OpenAI/Groq/local) and tenant
+  egress policies can be done by config with **no consumer code rewrites**.
 
