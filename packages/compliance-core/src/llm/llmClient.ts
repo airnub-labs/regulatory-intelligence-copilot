@@ -8,6 +8,7 @@
 import type { LlmClient, LlmChatRequest, LlmChatResponse } from '../types.js';
 import { callPerplexityMcp } from '../mcpClient.js';
 import { DEFAULT_GROQ_MODEL, DEFAULT_LLM_TEMPERATURE, DEFAULT_MAX_TOKENS } from '../constants.js';
+import { buildPromptWithAspects, type PromptContext } from '../aspects/promptAspects.js';
 
 /**
  * Base system prompt for regulatory copilot (jurisdiction-neutral)
@@ -34,9 +35,11 @@ When responding:
 Keep responses clear, structured, and focused on explaining what the rules say, not on prescribing actions.`;
 
 /**
- * Build a jurisdiction-aware system prompt
+ * Build a jurisdiction-aware system prompt (legacy function, uses aspects internally)
  */
 export function buildSystemPrompt(jurisdictions?: string[]): string {
+  // Synchronous wrapper for backwards compatibility
+  // For async usage, use buildPromptWithAspects directly
   if (!jurisdictions || jurisdictions.length === 0) {
     return REGULATORY_COPILOT_SYSTEM_PROMPT;
   }
@@ -48,6 +51,15 @@ export function buildSystemPrompt(jurisdictions?: string[]): string {
   return `${REGULATORY_COPILOT_SYSTEM_PROMPT}
 
 Jurisdiction Context: ${jurisdictionContext}`;
+}
+
+/**
+ * Build a system prompt using aspects (async, preferred method)
+ */
+export async function buildSystemPromptAsync(
+  options: Omit<PromptContext, 'basePrompt'> = {}
+): Promise<string> {
+  return buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, options);
 }
 
 /**

@@ -40,6 +40,20 @@ export {
   isSensitiveHeader,
   SENSITIVE_HEADERS,
 } from './aspects/egressGuard.js';
+export {
+  buildPromptWithAspects,
+  createPromptBuilder,
+  createCustomPromptBuilder,
+  defaultPromptBuilder,
+  jurisdictionAspect,
+  agentContextAspect,
+  profileContextAspect,
+  disclaimerAspect,
+  additionalContextAspect,
+  type PromptContext,
+  type BuiltPrompt,
+  type PromptAspect,
+} from './aspects/promptAspects.js';
 
 // E2B Client
 export {
@@ -85,6 +99,7 @@ export {
   createLlmClient,
   buildRegulatoryPrompt,
   buildSystemPrompt,
+  buildSystemPromptAsync,
   REGULATORY_COPILOT_SYSTEM_PROMPT,
 } from './llm/llmClient.js';
 

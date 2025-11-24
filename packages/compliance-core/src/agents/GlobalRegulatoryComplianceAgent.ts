@@ -13,7 +13,8 @@ import type {
   AgentResult,
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../constants.js';
-import { REGULATORY_COPILOT_SYSTEM_PROMPT, buildSystemPrompt } from '../llm/llmClient.js';
+import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import { buildPromptWithAspects } from '../aspects/promptAspects.js';
 import { SingleDirector_IE_SocialSafetyNet_Agent } from './SingleDirector_IE_SocialSafetyNet_Agent.js';
 
 const AGENT_ID = 'GlobalRegulatoryComplianceAgent';
@@ -32,14 +33,9 @@ const DOMAIN_AGENTS: Agent[] = [
 ];
 
 /**
- * Build global agent system prompt with jurisdiction context
+ * Global agent additional context
  */
-function buildGlobalSystemPrompt(jurisdictions: string[]): string {
-  const basePrompt = buildSystemPrompt(jurisdictions);
-
-  return `${basePrompt}
-
-You are the Global Regulatory Compliance Agent, providing an integrated view across:
+const GLOBAL_AGENT_CONTEXT = `You are the Global Regulatory Compliance Agent, providing an integrated view across:
 - Tax law (Corporation Tax, CGT, VAT, income tax)
 - Social welfare benefits and contributions
 - Pensions (State, occupational, personal)
@@ -51,6 +47,20 @@ When answering:
 3. Highlight cross-cutting concerns (e.g., tax implications of welfare claims)
 4. Recommend which specific area the user might want to explore further
 5. Consider jurisdiction-specific rules and cross-border implications`;
+
+/**
+ * Build global agent system prompt with jurisdiction context using aspects
+ */
+async function buildGlobalSystemPrompt(
+  jurisdictions: string[],
+  profile?: AgentInput['profile']
+): Promise<string> {
+  return buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
+    jurisdictions,
+    agentId: AGENT_ID,
+    agentDescription: GLOBAL_AGENT_CONTEXT,
+    profile,
+  });
 }
 
 /**
@@ -117,10 +127,13 @@ ${graphContext.nodes.slice(0, 5).map(n => `- ${n.label} (${n.type})`).join('\n')
 
 Please provide a comprehensive response considering all relevant regulatory domains.`;
 
+    // Build system prompt using aspects
+    const systemPrompt = await buildGlobalSystemPrompt(jurisdictions, input.profile);
+
     // Call LLM with jurisdiction-aware prompt
     const response = await ctx.llmClient.chat({
       messages: [
-        { role: 'system', content: buildGlobalSystemPrompt(jurisdictions) },
+        { role: 'system', content: systemPrompt },
         ...(input.conversationHistory || []),
         { role: 'user', content: prompt },
       ],
