@@ -84,6 +84,7 @@ export { createGraphClient } from './graph/graphClient.js';
 export {
   createLlmClient,
   buildRegulatoryPrompt,
+  buildSystemPrompt,
   REGULATORY_COPILOT_SYSTEM_PROMPT,
 } from './llm/llmClient.js';
 

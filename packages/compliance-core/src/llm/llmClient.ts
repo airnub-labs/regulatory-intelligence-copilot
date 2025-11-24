@@ -10,26 +10,45 @@ import { callPerplexityMcp } from '../mcpClient.js';
 import { DEFAULT_GROQ_MODEL, DEFAULT_LLM_TEMPERATURE, DEFAULT_MAX_TOKENS } from '../constants.js';
 
 /**
- * Base system prompt for regulatory copilot
+ * Base system prompt for regulatory copilot (jurisdiction-neutral)
  */
-export const REGULATORY_COPILOT_SYSTEM_PROMPT = `You are a regulatory research copilot for Irish tax, social welfare, pensions, and CGT rules.
+export const REGULATORY_COPILOT_SYSTEM_PROMPT = `You are a regulatory research copilot that helps users understand tax, social welfare, pensions, CGT, and related rules in their jurisdiction.
 
 IMPORTANT CONSTRAINTS:
 - You are a RESEARCH TOOL, not a legal, tax, or welfare advisor
 - NEVER give definitive advice like "you should do X" or "you must do Y"
 - ALWAYS highlight uncertainties, edge cases, and conditions that may apply
-- ALWAYS encourage users to confirm with qualified professionals
+- ALWAYS encourage users to confirm with qualified professionals in their jurisdiction
 - When explaining rules, cite specific sections, benefits, or reliefs by name
 - If the graph data is incomplete, say so explicitly
 - Use hedging language: "appears to", "may apply", "based on this rule"
+- Pay attention to the user's jurisdiction context when provided
 
 When responding:
 1. Explain the relevant rules from the provided graph context
 2. Highlight any mutual exclusions, lookback windows, or lock-in periods
 3. Note any uncertainties or conditions that require professional review
 4. Reference specific node IDs/names from the graph
+5. Consider cross-border implications when multiple jurisdictions are involved
 
 Keep responses clear, structured, and focused on explaining what the rules say, not on prescribing actions.`;
+
+/**
+ * Build a jurisdiction-aware system prompt
+ */
+export function buildSystemPrompt(jurisdictions?: string[]): string {
+  if (!jurisdictions || jurisdictions.length === 0) {
+    return REGULATORY_COPILOT_SYSTEM_PROMPT;
+  }
+
+  const jurisdictionContext = jurisdictions.length === 1
+    ? `The user is primarily interested in rules from: ${jurisdictions[0]}`
+    : `The user is interested in rules from multiple jurisdictions: ${jurisdictions.join(', ')}. Pay attention to cross-border interactions and coordination rules.`;
+
+  return `${REGULATORY_COPILOT_SYSTEM_PROMPT}
+
+Jurisdiction Context: ${jurisdictionContext}`;
+}
 
 /**
  * Create an LLM client that uses Perplexity MCP

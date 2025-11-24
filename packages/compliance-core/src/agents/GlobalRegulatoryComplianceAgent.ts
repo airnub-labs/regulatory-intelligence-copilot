@@ -12,8 +12,8 @@ import type {
   AgentContext,
   AgentResult,
 } from '../types.js';
-import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
-import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../constants.js';
+import { REGULATORY_COPILOT_SYSTEM_PROMPT, buildSystemPrompt } from '../llm/llmClient.js';
 import { SingleDirector_IE_SocialSafetyNet_Agent } from './SingleDirector_IE_SocialSafetyNet_Agent.js';
 
 const AGENT_ID = 'GlobalRegulatoryComplianceAgent';
@@ -27,25 +27,31 @@ const DOMAIN_AGENTS: Agent[] = [
   // Future agents will be added here:
   // IE_CGT_Investor_Agent,
   // IE_RnD_TaxCredit_Agent,
+  // MT_Tax_Agent,
   // EU_Law_Agent,
 ];
 
 /**
- * Global agent system prompt
+ * Build global agent system prompt with jurisdiction context
  */
-const GLOBAL_SYSTEM_PROMPT = `${REGULATORY_COPILOT_SYSTEM_PROMPT}
+function buildGlobalSystemPrompt(jurisdictions: string[]): string {
+  const basePrompt = buildSystemPrompt(jurisdictions);
+
+  return `${basePrompt}
 
 You are the Global Regulatory Compliance Agent, providing an integrated view across:
-- Irish tax law (Corporation Tax, CGT, VAT)
-- Social welfare benefits and PRSI
+- Tax law (Corporation Tax, CGT, VAT, income tax)
+- Social welfare benefits and contributions
 - Pensions (State, occupational, personal)
-- EU regulations affecting Ireland
+- EU regulations and cross-border coordination
 
 When answering:
 1. Consider how different regulatory domains interact
 2. Identify potential conflicts or synergies between rules
 3. Highlight cross-cutting concerns (e.g., tax implications of welfare claims)
-4. Recommend which specific area the user might want to explore further`;
+4. Recommend which specific area the user might want to explore further
+5. Consider jurisdiction-specific rules and cross-border implications`;
+}
 
 /**
  * Global Regulatory Compliance Agent
@@ -80,7 +86,7 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
     console.log(`${LOG_PREFIX.agent} No specialized agent matched, handling globally`);
 
     // Get cross-border context if multiple jurisdictions
-    const jurisdictions = input.profile?.jurisdictions || ['IE'];
+    const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
     let graphContext = { nodes: [], edges: [] };
 
     try {
@@ -111,10 +117,10 @@ ${graphContext.nodes.slice(0, 5).map(n => `- ${n.label} (${n.type})`).join('\n')
 
 Please provide a comprehensive response considering all relevant regulatory domains.`;
 
-    // Call LLM
+    // Call LLM with jurisdiction-aware prompt
     const response = await ctx.llmClient.chat({
       messages: [
-        { role: 'system', content: GLOBAL_SYSTEM_PROMPT },
+        { role: 'system', content: buildGlobalSystemPrompt(jurisdictions) },
         ...(input.conversationHistory || []),
         { role: 'user', content: prompt },
       ],
@@ -146,24 +152,30 @@ Please provide a comprehensive response considering all relevant regulatory doma
 
 /**
  * Get profile tag ID from input
+ * Uses jurisdiction from profile or defaults to DEFAULT_JURISDICTION
  */
 function getProfileTagId(input: AgentInput): string {
   const personaType = input.profile?.personaType;
+  const jurisdiction = input.profile?.jurisdictions?.[0] || DEFAULT_JURISDICTION;
 
-  switch (personaType) {
-    case 'single-director':
-      return 'PROFILE_SINGLE_DIRECTOR_IE';
-    case 'self-employed':
-      return 'PROFILE_SELF_EMPLOYED_IE';
-    case 'investor':
-      return 'PROFILE_INVESTOR_IE';
-    case 'paye-employee':
-      return 'PROFILE_PAYE_EMPLOYEE_IE';
-    case 'advisor':
-      return 'PROFILE_ADVISOR_IE';
-    default:
-      return 'PROFILE_GENERAL_IE';
-  }
+  const baseProfile = (() => {
+    switch (personaType) {
+      case 'single-director':
+        return 'PROFILE_SINGLE_DIRECTOR';
+      case 'self-employed':
+        return 'PROFILE_SELF_EMPLOYED';
+      case 'investor':
+        return 'PROFILE_INVESTOR';
+      case 'paye-employee':
+        return 'PROFILE_PAYE_EMPLOYEE';
+      case 'advisor':
+        return 'PROFILE_ADVISOR';
+      default:
+        return 'PROFILE_GENERAL';
+    }
+  })();
+
+  return `${baseProfile}_${jurisdiction}`;
 }
 
 /**
