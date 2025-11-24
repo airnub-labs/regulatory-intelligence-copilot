@@ -21,13 +21,13 @@ Instead of auditing HTTP APIs against RFCs and OWASP, this repo focuses on:
   - R&D tax credits.
   - EU social security / cross-border regulatory effects.
 - 🌐 **Global Regulatory Agent** – a meta-agent that can reason across domains and explain interactions (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU, across jurisdictions such as IE / EU / MT / IM).
-- 🧪 **Sandboxed analysis** – heavy work runs inside an **E2B sandbox**, with outbound calls routed through an **MCP gateway**.
+- 🧪 **Sandboxed analysis** – heavy or untrusted work can run inside an **E2B sandbox**, with outbound calls routed through an **MCP gateway**.
 - 🔐 **Privacy-first & non-advice** – PII redaction on egress and explicit “research-only” framing.
 
 Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
 - Next.js app with a **single `/api/chat`**-style entrypoint.
-- **E2B sandbox** to host the internal agent runtime.
+- Optional **E2B sandbox** to host isolated agent runtimes.
 - **MCP tools** for Memgraph, LLMs, and external legal content.
 - **Memgraph** as the core regulatory graph database.
 
@@ -39,24 +39,27 @@ For the full concept, see:
 
 ## 📚 Architecture & Design Documentation
 
-Comprehensive design documentation is available in the `docs/` directory:
+Comprehensive design documentation is available in the `docs/` directory.
 
 ### Core Architecture
-- **[Architecture v0.2](docs/architecture_v_0_2.md)** – System components, data flow, and package structure
-- **[Decisions v0.2](docs/decisions_v_0_2.md)** – Architectural decision records (ADRs) and design rationale
-- **[Migration Plan v0.2](docs/migration_plan_v_0_2.md)** – Migration from RFC/OWASP auditor to regulatory copilot
 
-### Agents & Behavior
-- **[Agents](AGENTS.md)** – Agent interfaces, orchestration, and domain-specific agents
+- **`docs/architecture_v_0_3.md`** – System components, data flow, packages, and how everything fits together.
+- **`docs/decisions_v_0_3.md`** – Architectural decision records (ADRs) and design rationale.
+- **`docs/migration_plan_v_0_2.md`** – Migration from the original RFC/OWASP auditor to the regulatory copilot.
+- **`docs/roadmap_v_0_3.md`** – Roadmap and phased implementation plan.
+- **`docs/node_24_lts_rationale.md`** – Why Node.js 24 LTS is the minimum supported runtime.
 
-### Graph & Timeline Modeling
-- **[Graph Schema v0.2](docs/specs/graph_schema_v_0_2.md)** – Node types, edge types, and schema design
-- **[Graph Schema Changelog](docs/specs/graph_schema_changelog.md)** – Schema evolution and breaking changes
-- **[Timeline Engine v0.1](docs/specs/timeline_engine_v_0_1.md)** – Time-based reasoning (lookback windows, lock-ins, deadlines)
-- **[Cross-Jurisdiction Design](docs/specs/cross_jurisdiction_graph_design.md)** – Multi-jurisdiction coordination
+### Agents & Behaviour
 
-### Roadmap
-- **[Roadmap v0.2](docs/roadmap_v_0_2.md)** – Feature roadmap and implementation phases
+- **`AGENTS.md`** – Agent interfaces, orchestration, domain/jurisdiction-specific agents, and the Global Regulatory Compliance Agent.
+
+### Graph & Timeline Modelling
+
+- **`docs/specs/graph_schema_v_0_3.md`** – Node/edge types, schema design, and cross-jurisdiction modelling.
+- **`docs/specs/graph_schema_changelog_v_0_3.md`** – Schema evolution and breaking changes.
+- **`docs/specs/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
+
+Earlier versions (e.g. `*_v_0_1.md`, `graph_schema_v_0_2.md`, `regulatory_graph_copilot_concept_v_0_1/0_2.md`) are kept as **historical context** only.
 
 ---
 
@@ -65,21 +68,22 @@ Comprehensive design documentation is available in the `docs/` directory:
 At a high level, the system looks like this:
 
 1. The **user** types a question into the chat UI.
-2. The **Next.js API route** (e.g. `POST /api/chat`) forwards the message and any basic profile info (persona, jurisdictions) to the backend **compliance orchestrator**.
-3. The orchestrator:
-   - Decides which **agent** to invoke (global vs domain-specific).
-   - Spins up or reuses an **E2B sandbox**.
-4. Inside the sandbox, the selected **agent runner**:
-   - Uses an **egress guard** to redact personal/financial data before any external calls.
-   - Queries **Memgraph** for relevant laws, benefits, reliefs, timelines, exclusions, and cross-jurisdiction links via a GraphClient.
-   - Optionally calls **MCP tools** (e.g. legal search, case-law feeds) to discover missing rules, then upserts them into the graph.
-   - Uses the **Timeline Engine** to reason about deadlines, lookbacks, lock-ins, and usage frequency.
-   - Calls an LLM (OpenAI / Groq / OSS) via the **provider-agnostic LLM router** to generate an explanation based on the question and graph slice.
-5. The sandbox streams a **research-style answer** back through the orchestrator to `/api/chat` and then to the UI.
+2. The **Next.js API route** (e.g. `POST /api/chat`) forwards the message and basic profile info (persona, jurisdictions) to the backend **Compliance Engine**.
+3. The Compliance Engine:
+   - Uses a provider-agnostic **LLM router** to pick the appropriate model/provider for the task (OpenAI Responses + GPT‑OSS, Groq, or local/OSS models).
+   - Builds system prompts via **prompt aspects** (jurisdiction, persona, agent context, disclaimers).
+   - Selects a **domain or global agent** to handle the query.
+4. The selected agent:
+   - Queries **Memgraph** (via a typed `GraphClient`) for relevant rules, benefits, timelines, exclusions, and cross-jurisdiction links.
+   - Uses the **Timeline Engine** to reason about lookbacks, lock-ins, deadlines, and effective periods.
+   - Optionally calls **MCP tools** (e.g. legal search, case-law feeds) from a sandbox to discover missing rules, then upserts them into the graph.
+   - Sends a graph slice + context through the LLM router to generate a research-style explanation.
+5. The backend streams a **research-style answer** back to `/api/chat` and from there to the UI.
+6. In parallel, **graph updates** (from ingestion jobs or change-monitoring) are sent to the frontend via **WebSocket graph patches**, so the live graph view stays up to date without reloading full snapshots.
 
 For a more detailed breakdown of components and data flow, see:
 
-- 📄 `docs/architecture_v_0_2.md`
+- 📄 `docs/architecture_v_0_3.md`
 
 ---
 
@@ -103,13 +107,13 @@ This allows the system to:
 
 - Surface **hidden interactions** (e.g. claiming one benefit excludes another, or a tax relief is limited by an EU rule or treaty).
 - Model **time-based eligibility** (lookback windows, waiting periods, lock-ins, filing deadlines, usage frequency).
-- Represent **cross-domain dependencies** (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU) across multiple jurisdictions.
+- Represent **cross-domain dependencies** (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU) across multiple jurisdictions (e.g. IE, EU, MT, IM).
 
 The graph is a **living knowledge graph**:
 
 - Batch ingestion loads baseline legislation, guidance, and key case law.
 - MCP jobs and agents **upsert** (`MERGE`) new nodes and edges when new sources are discovered.
-- No user-specific scenarios are stored; personas are represented via `:ProfileTag` and user scenarios stay ephemeral.
+- No user-specific scenarios are stored; personas are represented via `:ProfileTag` and user scenarios remain ephemeral.
 
 ### 2. Timeline Engine
 
@@ -120,10 +124,10 @@ Temporal rules are handled by a dedicated **Timeline Engine**:
 Key features:
 
 - Encodes lookback windows, lock-in periods, filing deadlines, and effective windows as `:Timeline` nodes linked to rules and benefits.
-- Provides pure functions to evaluate:
+- Provides pure functions to evaluate things like:
   - “Given this scenario time and jurisdiction, is the user inside or outside the window?”
-  - “What happens if they act now vs in 6 months?”
-- Agents must **not hard-code** durations or deadlines; they query the graph for `:Timeline` nodes and pass them to the Timeline Engine.
+  - “What changes if they act now vs in 6 months?”
+- Agents **do not hard-code** durations or deadlines; they query the graph for `:Timeline` nodes and pass them to the Timeline Engine.
 
 ### 3. Agent Lenses
 
@@ -131,9 +135,9 @@ Agents are **different lenses on the same graph**. They are defined in:
 
 - 📄 `AGENTS.md`
 
-Current logical agents include:
+Examples:
 
-- Global regulatory copilot (orchestrator / meta-agent).
+- Global Regulatory Compliance Agent (orchestrator / meta-agent).
 - Single-director IE social safety net agent.
 - IE tax & company obligations agent.
 - EU regulation & cross-border coordination agent.
@@ -143,20 +147,23 @@ Current logical agents include:
 Each agent:
 
 - Has a domain-specific system prompt built using **prompt aspects**.
-- Queries a **filtered subgraph** (e.g. only rules tagged as relevant for a single director in IE).
+- Queries a **filtered subgraph** (e.g. only rules tagged as relevant for a single director in a given jurisdiction).
 - Uses the shared Timeline Engine + LLM router.
 
 ### 4. LLM Router & Prompt Aspects
 
-LLM usage is **provider- and model-agnostic**:
+LLM usage is **provider- and model-agnostic**.
 
-- A single **LLM router** chooses which provider/model to call based on:
-  - Tenant configuration.
-  - Task type (`main_chat`, `egress_guard`, `pii_sanitizer`, etc.).
-- Supports:
-  - OpenAI Responses API (including GPT-4.x and `gpt-oss-*` models).
-  - Groq-hosted models.
-  - Locally-hosted OSS models.
+A single **LLM router** chooses which provider/model to call based on:
+
+- Tenant configuration and data-protection requirements.
+- Task type (`main_chat`, `egress_guard`, `pii_sanitizer`, etc.).
+
+Supported patterns include:
+
+- OpenAI **Responses API** (including `gpt-4.x` and `gpt-oss-*` models).
+- Groq-hosted models.
+- Locally-hosted OSS models (for tenants that require **no external egress**).
 
 Prompts are built via a composable **aspect** system:
 
@@ -169,7 +176,7 @@ Prompts are built via a composable **aspect** system:
 See:
 
 - 📄 `PROMPTS.md`
-- 📄 `docs/decisions_v_0_2.md`
+- 📄 `docs/decisions_v_0_3.md`
 
 ---
 
@@ -203,10 +210,11 @@ If you’re new to the repo, start here:
   - `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
 
 - 🏛 **Architecture & decisions**
-  - `docs/architecture_v_0_2.md`
-  - `docs/decisions_v_0_2.md`
-  - `docs/roadmap_v_0_2.md`
+  - `docs/architecture_v_0_3.md`
+  - `docs/decisions_v_0_3.md`
+  - `docs/roadmap_v_0_3.md`
   - `docs/migration_plan_v_0_2.md`
+  - `docs/node_24_lts_rationale.md`
 
 - 🕸 **Graph & timelines**
   - `docs/specs/graph_schema_v_0_3.md`
@@ -217,7 +225,7 @@ If you’re new to the repo, start here:
   - `AGENTS.md`
   - `PROMPTS.md`
 
-Older versions (e.g. `*_v_0_1.md`, `*_v_0_2.md` for schemas and concepts) are kept as **historical context** and should not be used as the implementation target.
+Older versions (e.g. v0.1/v0.2) are kept for historical context only.
 
 ---
 
@@ -227,12 +235,12 @@ Older versions (e.g. `*_v_0_1.md`, `*_v_0_2.md` for schemas and concepts) are ke
 
 ### 1. Prerequisites
 
-- **Node.js** 20+ (LTS recommended)
-- **pnpm** (or your preferred package manager)
-- **Docker** (for Memgraph + MCP gateway + sandbox sidecars)
+- **Node.js** 24+ (LTS) – see `docs/node_24_lts_rationale.md` for why.
+- **pnpm** (or your preferred package manager).
+- **Docker** (for Memgraph + MCP gateway + any sandbox sidecars).
 - Accounts / API keys for:
-  - **E2B**
-  - At least one LLM provider (e.g. OpenAI, Groq) or a locally hosted OSS model
+  - **E2B** (if using sandboxed code execution).
+  - At least one LLM provider (e.g. OpenAI, Groq) or a locally hosted OSS model.
 
 ### 2. Clone & Install
 
@@ -288,7 +296,7 @@ http://localhost:3000
 You should see the chat UI. Try questions like:
 
 - “I’m a single director of an Irish limited company. What should I understand about PRSI and Illness Benefit?”
-- “If I sell and then buy back shares within a short period, how might that affect CGT loss relief eligibility?”
+- “If I sell shares at a loss and buy back within a short period, how might that affect CGT loss relief eligibility?”
 
 (Answers will depend on how much law and guidance you’ve already ingested into Memgraph.)
 
@@ -301,17 +309,19 @@ The exact structure may evolve, but the **target layout** is roughly:
 ```txt
 regulatory-intelligence-copilot/
   apps/
-    web/                     # Next.js chat UI + /api/chat
+    demo-web/                 # Next.js chat UI + /api/chat
   packages/
-    compliance-core/         # Orchestrator, agent interfaces, timeline/exclusion logic
-    graph-client/            # Thin Memgraph client wrapper
-    egress-guard/            # PII & financial redaction utilities
-    llm-router/              # Provider-agnostic LLM router + policies
+    reg-intel-core/           # Compliance Engine, agent interfaces, orchestrator
+    reg-intel-graph/          # Typed Memgraph GraphClient + graph utilities
+    reg-intel-llm/            # Provider-agnostic LLM router + egress guard + providers
+    reg-intel-prompts/        # Prompt aspects, base system prompts
+    reg-intel-next-adapter/   # Helpers to mount the engine in Next.js apps
   docs/
-    architecture_v_0_2.md
-    decisions_v_0_2.md
-    roadmap_v_0_2.md
+    architecture_v_0_3.md
+    decisions_v_0_3.md
+    roadmap_v_0_3.md
     migration_plan_v_0_2.md
+    node_24_lts_rationale.md
     specs/
       regulatory_graph_copilot_concept_v_0_3.md
       graph_schema_v_0_3.md
@@ -327,6 +337,8 @@ The important part is the separation between:
 - **apps/** – UI and HTTP edges.
 - **packages/** – reusable engine components.
 - **docs/** – living design & spec documents.
+
+This makes it easier to reuse the engine inside other Next.js/Supabase SaaS projects.
 
 ---
 
@@ -354,7 +366,7 @@ Always treat outputs as **starting points for further research**.
 
 For detailed milestones, see:
 
-- 📄 `docs/roadmap_v_0_2.md`
+- 📄 `docs/roadmap_v_0_3.md`
 
 At a high level, the goals include:
 
