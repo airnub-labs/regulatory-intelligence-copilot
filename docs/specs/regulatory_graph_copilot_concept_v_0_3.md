@@ -204,8 +204,10 @@ Graph modelling:
 
 Agents and prompt aspects use this to:
 
-- Frame answers for the user’s **primary jurisdiction** while still surfacing relevant interactions with secondary jurisdictions.
+- Frame answers for the user's **primary jurisdiction** while still surfacing relevant interactions with secondary jurisdictions.
 - Make it clear when EU/coordination rules override or constrain national rules.
+
+For details on how IE/UK/NI/IM/CTA/GI/AD are represented in the graph, see `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
 
 ---
 

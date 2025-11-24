@@ -101,6 +101,9 @@ Initial focus:
 
 The graph schema explicitly supports multiple jurisdictions (including EU, Isle of Man, Malta, etc.) so cross‑border interactions can be modelled.
 
+**Jurisdictions & Cross-Border Modelling:**
+- [x] NI is modelled as a `Region` under `UK`, with EU-linked goods rules via `Regime` nodes, not as a separate `Jurisdiction`. See `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
+
 ---
 
 ## D-010 – Data Ingestion Strategy (Static Seed + On-Demand Enrichment)
