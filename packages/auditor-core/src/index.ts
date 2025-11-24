@@ -1,12 +1,14 @@
 /**
  * Main entry point for @e2b-auditor/core
  *
- * This package provides the core functionality for auditing HTTP APIs
- * against RFC standards and OWASP Top 10 security guidelines.
+ * This package now includes the regulatory intelligence building blocks
+ * alongside the legacy HTTP audit utilities. New code should prefer the
+ * compliance-oriented exports below.
  */
 
 // Types
 export * from './types.js';
+export * from './compliance/types.js';
 
 // Constants
 export {
@@ -106,3 +108,16 @@ export { groqChat, analyzeComplianceWithGroq } from './groqClient.js';
 
 // Audit Engine
 export { runAuditOnSampleApi, reportToSummary } from './auditEngine.js';
+
+// Compliance orchestration
+export {
+  BasicTimelineEngine,
+  formatDateRange,
+} from './compliance/timelineEngine.js';
+export { BasicEgressGuard } from './compliance/egressGuard.js';
+export { MemgraphGraphClient } from './compliance/graphClient.js';
+export {
+  GlobalRegulatoryComplianceAgent,
+} from './compliance/agents/globalRegulatoryComplianceAgent.js';
+export { SingleDirectorIESocialSafetyNetAgent } from './compliance/agents/singleDirectorSocialSafetyNetAgent.js';
+export { runRegulatoryAnalysis } from './compliance/orchestrator.js';
