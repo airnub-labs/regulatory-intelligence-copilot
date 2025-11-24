@@ -115,6 +115,7 @@ export {
 export {
   // Note: LlmClient is NOT exported from llmRouter to avoid conflict with types.ts
   type LlmCompletionOptions,
+  type LlmStreamChunk,
   type LlmTaskPolicy,
   type TenantLlmPolicy,
   type LlmProviderClient,
@@ -128,6 +129,13 @@ export {
   createLlmRouter,
 } from './llm/llmRouter.js';
 export { createDefaultLlmRouter } from './llm/llmRouterFactory.js';
+
+// AI SDK v5 Provider Adapters (optional)
+export {
+  AiSdkOpenAIProvider,
+  AiSdkGroqProvider,
+  createAiSdkProviders,
+} from './llm/aiSdkProviders.js';
 
 // Compliance Engine (Orchestrator)
 export {

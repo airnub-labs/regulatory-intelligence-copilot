@@ -27,6 +27,15 @@ export interface LlmCompletionOptions {
 }
 
 /**
+ * Streaming chunk from LLM
+ */
+export interface LlmStreamChunk {
+  type: 'text' | 'error' | 'done';
+  delta?: string; // Text delta for type='text'
+  error?: Error; // Error object for type='error'
+}
+
+/**
  * LLM task policy - defines model/provider for a specific task
  */
 export interface LlmTaskPolicy {
@@ -56,6 +65,11 @@ export interface LlmClient {
     messages: ChatMessage[],
     options?: LlmCompletionOptions
   ): Promise<string>;
+
+  streamChat?(
+    messages: ChatMessage[],
+    options?: LlmCompletionOptions
+  ): AsyncIterable<LlmStreamChunk>;
 }
 
 /**
@@ -67,6 +81,12 @@ export interface LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string>;
+
+  streamChat?(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk>;
 }
 
 /**
@@ -120,6 +140,83 @@ export class OpenAiResponsesClient implements LlmProviderClient {
 
     return content;
   }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk> {
+    const response = await fetch(`${this.baseUrl}/responses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.maxTokens ?? 2048,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      yield {
+        type: 'error',
+        error: new LlmError(`OpenAI Responses API error: ${error}`, response.status),
+      };
+      return;
+    }
+
+    if (!response.body) {
+      yield { type: 'error', error: new LlmError('No response body') };
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            const delta = json.choices?.[0]?.delta?.content;
+            if (delta) {
+              yield { type: 'text', delta };
+            }
+          } catch (e) {
+            // Skip malformed JSON
+            continue;
+          }
+        }
+      }
+
+      yield { type: 'done' };
+    } catch (error) {
+      yield {
+        type: 'error',
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
+  }
 }
 
 /**
@@ -170,6 +267,83 @@ export class GroqLlmClient implements LlmProviderClient {
 
     return content;
   }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk> {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.maxTokens ?? 2048,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      yield {
+        type: 'error',
+        error: new LlmError(`Groq API error: ${error}`, response.status),
+      };
+      return;
+    }
+
+    if (!response.body) {
+      yield { type: 'error', error: new LlmError('No response body') };
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            const delta = json.choices?.[0]?.delta?.content;
+            if (delta) {
+              yield { type: 'text', delta };
+            }
+          } catch (e) {
+            // Skip malformed JSON
+            continue;
+          }
+        }
+      }
+
+      yield { type: 'done' };
+    } catch (error) {
+      yield {
+        type: 'error',
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
+  }
 }
 
 /**
@@ -216,6 +390,82 @@ export class LocalHttpLlmClient implements LlmProviderClient {
     }
 
     return content;
+  }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk> {
+    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        max_tokens: options?.maxTokens ?? 2048,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      yield {
+        type: 'error',
+        error: new LlmError(`Local HTTP LLM error: ${error}`, response.status),
+      };
+      return;
+    }
+
+    if (!response.body) {
+      yield { type: 'error', error: new LlmError('No response body') };
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed === 'data: [DONE]') continue;
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            const delta = json.choices?.[0]?.delta?.content;
+            if (delta) {
+              yield { type: 'text', delta };
+            }
+          } catch (e) {
+            // Skip malformed JSON
+            continue;
+          }
+        }
+      }
+
+      yield { type: 'done' };
+    } catch (error) {
+      yield {
+        type: 'error',
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 }
 
@@ -274,6 +524,57 @@ export class LlmRouter implements LlmClient {
     messages: ChatMessage[],
     options?: LlmCompletionOptions
   ): Promise<string> {
+    const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
+
+    // Get provider client
+    const providerClient = this.providers[provider];
+    if (!providerClient) {
+      throw new LlmError(`Unknown provider: ${provider}`);
+    }
+
+    // Call provider
+    return providerClient.chat(messages, model, taskOptions);
+  }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    options?: LlmCompletionOptions
+  ): AsyncIterable<LlmStreamChunk> {
+    const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
+
+    // Get provider client
+    const providerClient = this.providers[provider];
+    if (!providerClient) {
+      yield {
+        type: 'error',
+        error: new LlmError(`Unknown provider: ${provider}`),
+      };
+      return;
+    }
+
+    // Check if provider supports streaming
+    if (!providerClient.streamChat) {
+      yield {
+        type: 'error',
+        error: new LlmError(`Provider ${provider} does not support streaming`),
+      };
+      return;
+    }
+
+    // Stream from provider
+    yield* providerClient.streamChat(messages, model, taskOptions);
+  }
+
+  /**
+   * Resolve provider, model, and task options based on tenant policy
+   */
+  private async resolveProviderAndModel(
+    options?: LlmCompletionOptions
+  ): Promise<{
+    provider: string;
+    model: string;
+    taskOptions: { temperature?: number; maxTokens?: number };
+  }> {
     const tenantId = options?.tenantId ?? 'default';
     const task = options?.task;
 
@@ -322,14 +623,7 @@ export class LlmRouter implements LlmClient {
       model = options.model;
     }
 
-    // Get provider client
-    const providerClient = this.providers[provider];
-    if (!providerClient) {
-      throw new LlmError(`Unknown provider: ${provider}`);
-    }
-
-    // Call provider
-    return providerClient.chat(messages, model, taskOptions);
+    return { provider, model, taskOptions };
   }
 }
 
