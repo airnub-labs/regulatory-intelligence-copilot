@@ -1,0 +1,144 @@
+// Minimal seed for IE / UK / NI / IM / EU + CTA + NI/EU goods regime
+// Intended for Memgraph / Neo4j-style Cypher
+// Idempotent-ish: uses MERGE for core nodes and relationships.
+
+//////////////////////////////
+// 1. Jurisdictions
+//////////////////////////////
+
+MERGE (ie:Jurisdiction {code: 'IE'})
+  ON CREATE SET ie.name = 'Ireland',
+                ie.kind = 'sovereign_state';
+
+MERGE (uk:Jurisdiction {code: 'UK'})
+  ON CREATE SET uk.name = 'United Kingdom',
+                uk.kind = 'sovereign_state';
+
+MERGE (im:Jurisdiction {code: 'IM'})
+  ON CREATE SET im.name = 'Isle of Man',
+                im.kind = 'crown_dependency';
+
+MERGE (eu:Jurisdiction {code: 'EU'})
+  ON CREATE SET eu.name = 'European Union',
+                eu.kind = 'supranational';
+
+//////////////////////////////
+// 2. Special Region: Northern Ireland
+//////////////////////////////
+
+MERGE (ni:Region {code: 'NI'})
+  ON CREATE SET ni.name = 'Northern Ireland',
+                ni.kind = 'special_trade_region';
+
+MERGE (ni)-[:PART_OF]->(uk);
+
+//////////////////////////////
+// 3. Agreements / Treaties / Frameworks
+//////////////////////////////
+
+// Common Travel Area (CTA)
+MERGE (cta:Agreement {code: 'CTA'})
+  ON CREATE SET cta.name = 'Common Travel Area',
+                cta.kind = 'mobility_cooperation',
+                cta.description = 'Common Travel Area between Ireland, the UK, Isle of Man, and Channel Islands';
+
+// Ireland / Northern Ireland Protocol (as in the EU-UK Withdrawal Agreement)
+MERGE (niProt:Agreement {code: 'NI_PROTOCOL'})
+  ON CREATE SET niProt.name = 'Ireland/Northern Ireland Protocol',
+                niProt.kind = 'protocol',
+                niProt.description = 'Protocol on Ireland/Northern Ireland relating to goods and customs';
+
+// Windsor Framework (implementing / modifying the NI Protocol)
+MERGE (wf:Agreement {code: 'WINDSOR_FRAMEWORK'})
+  ON CREATE SET wf.name = 'Windsor Framework',
+                wf.kind = 'implementing_framework',
+                wf.description = 'Framework adjusting implementation of the NI Protocol';
+
+MERGE (niProt)-[:MODIFIED_BY]->(wf);
+
+//////////////////////////////
+// 4. Parties to CTA
+//////////////////////////////
+
+MERGE (ie)-[:PARTY_TO]->(cta);
+MERGE (uk)-[:PARTY_TO]->(cta);
+MERGE (im)-[:PARTY_TO]->(cta);
+// Channel Islands could be added later as separate Jurisdiction nodes.
+
+//////////////////////////////
+// 5. Regimes derived from Agreements
+//////////////////////////////
+
+// CTA mobility rights regime
+MERGE (ctaReg:Regime {code: 'CTA_MOBILITY_RIGHTS'})
+  ON CREATE SET ctaReg.name = 'CTA Mobility & Residence Rights',
+                ctaReg.domain = 'mobility',
+                ctaReg.scope = 'persons';
+
+MERGE (cta)-[:ESTABLISHES_REGIME]->(ctaReg);
+
+// Regime: NI applies certain EU goods/single-market rules via NI Protocol & Windsor
+MERGE (niGoods:Regime {code: 'NI_EU_GOODS_REGIME'})
+  ON CREATE SET niGoods.name = 'NI EU-Linked Goods Regime',
+                niGoods.domain = 'goods',
+                niGoods.scope = 'trade_customs_vat';
+
+MERGE (niProt)-[:ESTABLISHES_REGIME]->(niGoods);
+MERGE (niGoods)-[:COORDINATED_WITH]->(eu);
+MERGE (niGoods)-[:IMPLEMENTED_VIA]->(wf);
+
+// Attach regimes to jurisdictions / regions
+MERGE (ie)-[:SUBJECT_TO_REGIME]->(ctaReg);
+MERGE (uk)-[:SUBJECT_TO_REGIME]->(ctaReg);
+MERGE (im)-[:SUBJECT_TO_REGIME]->(ctaReg);
+MERGE (ni)-[:SUBJECT_TO_REGIME]->(niGoods);
+
+//////////////////////////////
+// 6. Example Benefits / Rules Linking to Regimes
+//////////////////////////////
+
+// Example benefit: Right of IE/UK/IM citizens to live & work across CTA
+MERGE (ctaWork:Benefit {code: 'CTA_RIGHT_TO_LIVE_AND_WORK'})
+  ON CREATE SET ctaWork.name = 'Right to live and work across the CTA',
+                ctaWork.kind = 'mobility_benefit';
+
+MERGE (ctaWork)-[:AVAILABLE_VIA_REGIME]->(ctaReg);
+MERGE (ctaWork)-[:IN_JURISDICTION]->(ie);
+MERGE (ctaWork)-[:IN_JURISDICTION]->(uk);
+MERGE (ctaWork)-[:IN_JURISDICTION]->(im);
+
+// Example rule: Social security coordination reference for cross-border workers
+MERGE (ssCoord:Rule {code: 'IE_UK_SOCIAL_SECURITY_COORDINATION'})
+  ON CREATE SET ssCoord.name = 'IE-UK Social Security Coordination (CTA context)',
+                ssCoord.domain = 'social_security',
+                ssCoord.description = 'High-level coordination of contributions and benefits between IE and UK under CTA-linked arrangements and relevant bilateral agreements';
+
+MERGE (ssCoord)-[:APPLIES_BETWEEN]->(ie);
+MERGE (ssCoord)-[:APPLIES_BETWEEN]->(uk);
+MERGE (ssCoord)-[:RELATED_TO_AGREEMENT]->(cta);
+
+//////////////////////////////
+// 7. Example Timeline Node (Optional)
+//////////////////////////////
+
+// You can refine this later to match your timeline_engine_v_0_2.md
+MERGE (brexit:Timeline {code: 'BREXIT_DATE'})
+  ON CREATE SET brexit.label = 'Brexit Date',
+                brexit.effectiveDate = date('2020-01-31');
+
+MERGE (niProt)-[:EFFECTIVE_FROM]->(brexit);
+
+// Optional: Windsor Framework coming into effect could be another Timeline node
+// MERGE (wfEffective:Timeline {code: 'WINDSOR_EFFECTIVE'})
+//   ON CREATE SET wfEffective.label = 'Windsor Framework Effective',
+//                 wfEffective.effectiveDate = date('2023-10-01');
+// MERGE (wf)-[:EFFECTIVE_FROM]->(wfEffective);
+
+//////////////////////////////
+// 8. Sanity-Check Query (run manually after loading)
+//////////////////////////////
+// MATCH (ni:Region {code:'NI'})-[*1..3]-(n)
+// RETURN ni, n LIMIT 50;
+//
+// MATCH (ctaReg:Regime {code:'CTA_MOBILITY_RIGHTS'})-[:APPLIES_IN]->(j:Jurisdiction)
+// RETURN ctaReg, collect(j.code) AS cta_parties;
