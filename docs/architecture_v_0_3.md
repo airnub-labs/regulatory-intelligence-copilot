@@ -9,6 +9,12 @@
 > - Clarify the role of **Vercel AI SDK v5** as an **edge‑only implementation detail** behind a provider‑agnostic `LlmRouter`.
 > - Reaffirm that **MCP / E2B / Memgraph** live **outside** the AI SDK tool layer.
 
+## Normative References
+
+- `docs/specs/graph_schema_v_0_3.md`
+- `docs/specs/timeline_engine_v_0_2.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
+
 For architectural intent and design trade‑offs, see also:
 
 - `docs/decisions_v_0_3.md`
@@ -401,7 +407,11 @@ The graph schema (see `graph_schema_v_0_3.md`) includes:
 - Node labels like `:Statute`, `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Timeline`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:ProfileTag`, `:Jurisdiction`, and nodes that model social welfare, pensions, CGT, and cross‑border coordination.
 - Edge types like `CITES`, `REFERENCES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, and cross‑border relationships linking domestic and EU instruments.
 
-### 8.3 GraphRAG Retrieval
+### 8.3 Jurisdictions & Cross-Border Modelling
+
+Special cases (IE/UK/NI/IM/GI/AD and CTA/Windsor/NI Protocol) must follow `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
+
+### 8.4 GraphRAG Retrieval
 
 Agents use a GraphRAG‑style flow:
 

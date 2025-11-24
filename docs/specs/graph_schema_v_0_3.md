@@ -222,6 +222,14 @@ Represents a change event (new Act, guidance, case, EU judgment, etc.).
 
 You may use a single label `:Update` or dual labels `:Update:ChangeEvent` for clarity.
 
+### 2.13 Special Jurisdictions & Regimes
+
+Northern Ireland, CTA, Isle of Man, Gibraltar, Andorra and similar edge cases are modelled using the `:Jurisdiction` / `:Region` / `:Agreement` / `:Regime` pattern defined in:
+
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+
+Schema changes **must remain compatible** with that document.
+
 ---
 
 ## 3. Core Relationship Types

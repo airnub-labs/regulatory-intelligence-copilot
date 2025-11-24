@@ -196,11 +196,13 @@ Below are the initial v0.3 lenses; their exact file locations may evolve but the
   - `IMPLEMENTED_BY`, `OVERRIDES`, `COORDINATED_WITH`, `TREATY_LINKED_TO`, `EQUIVALENT_TO`, and related edges.
 
 - Answer questions like:
-  - Which country’s system applies when the user works in multiple EU states?
+  - Which country's system applies when the user works in multiple EU states?
   - How does EC 883/2004 (or similar coordination instruments) affect benefit or contribution rules?
   - How an EU court decision affects domestic interpretation.
 
 - Provide **cross‑jurisdiction views** for the global agent to integrate into overall guidance.
+
+This agent relies on the special jurisdictions modelling defined in `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
 
 ---
 

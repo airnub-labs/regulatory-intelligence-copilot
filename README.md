@@ -58,6 +58,7 @@ Comprehensive design documentation is available in the `docs/` directory.
 - **`docs/specs/graph_schema_v_0_3.md`** – Node/edge types, schema design, and cross-jurisdiction modelling.
 - **`docs/specs/graph_schema_changelog_v_0_3.md`** – Schema evolution and breaking changes.
 - **`docs/specs/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
+- **`docs/specs/special_jurisdictions_modelling_v_0_1.md`** – Special cases (IE/UK/NI/IM/GI/AD/CTA) modelling patterns.
 
 Earlier versions (e.g. `*_v_0_1.md`, `graph_schema_v_0_2.md`, `regulatory_graph_copilot_concept_v_0_1/0_2.md`) are kept as **historical context** only.
 
@@ -220,6 +221,7 @@ If you’re new to the repo, start here:
   - `docs/specs/graph_schema_v_0_3.md`
   - `docs/specs/graph_schema_changelog_v_0_3.md`
   - `docs/specs/timeline_engine_v_0_2.md`
+  - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 
 - 🤖 **Agents & prompts**
   - `AGENTS.md`
