@@ -300,24 +300,72 @@ You should see the chat UI. Try questions like:
 - “I’m a single director of an Irish limited company. What should I understand about PRSI and Illness Benefit?”
 - “If I sell shares at a loss and buy back within a short period, how might that affect CGT loss relief eligibility?”
 
-(Answers will depend on how much law and guidance you’ve already ingested into Memgraph.)
+(Answers will depend on how much law and guidance you've already ingested into Memgraph.)
 
 ---
 
-## Repository Layout (Target)
+## Implementation Status (v0.3)
 
-The exact structure may evolve, but the **target layout** is roughly:
+The v0.3 architecture is **partially implemented**. Here's what's working and what's planned:
+
+### ✅ Implemented
+
+- **Node 24 LTS baseline** – All packages require Node.js >=24.0.0
+- **apps/demo-web** – Next.js 16 / React 19 with updated dependencies (Tailwind 4, AI SDK v5 prep)
+- **LLM Router** – Provider-agnostic routing with:
+  - OpenAI Responses API support
+  - Groq support
+  - Local/OSS HTTP model support
+  - Per-tenant and per-task policy framework
+- **Prompt Aspects** – Composable jurisdiction-neutral prompt building with:
+  - Jurisdiction context
+  - Agent context
+  - Profile/persona context
+  - Disclaimer aspect
+  - Additional context aspect
+- **Compliance Engine** – Core orchestrator that coordinates agents, graph, timeline, and LLM
+- **Agents** – GlobalRegulatoryComplianceAgent + SingleDirector_IE_SocialSafetyNet_Agent
+- **Timeline Engine** – Pure functions for lookback windows, lock-ins, deadlines
+- **GraphClient** – Direct Bolt connection to Memgraph + MCP-based fallback
+- **Egress Guard** – PII redaction utilities
+
+### 🚧 In Progress / Planned
+
+- **Streaming responses** – LLM Router currently returns `Promise<string>`; v0.3 spec calls for `AsyncIterable` streaming support throughout
+- **AI SDK v5 provider adapters** – Alternative implementations using `streamText`/`generateText` as wrappers
+- **ComplianceEngine streaming** – Update to return streaming responses instead of fully-buffered strings
+- **WebSocket graph streaming** – `/api/graph/stream` endpoint for incremental graph patches
+- **Package split** – Future refactor to split `compliance-core` into `reg-intel-{core,graph,llm,prompts,next-adapter}` when API surface stabilizes
+
+### 📋 Roadmap Items (Phase 2+)
+
+See `docs/roadmap_v_0_3.md` for the full phased plan. Key upcoming work includes:
+
+- Expand domain agents (IE tax, CGT, R&D, EU coordination)
+- Batch ingestion for core IE/EU regulations
+- On-demand enrichment via MCP legal search
+- Change tracking and notification system
+- Multi-tenant policy store (beyond in-memory)
+- Richer graph visualization in the UI
+
+---
+
+## Repository Layout
+
+### Current Structure (v0.3-in-progress)
 
 ```txt
 regulatory-intelligence-copilot/
   apps/
-    demo-web/                 # Next.js chat UI + /api/chat
+    demo-web/                 # Next.js 16 chat UI + /api/chat (renamed from apps/web)
   packages/
-    reg-intel-core/           # Compliance Engine, agent interfaces, orchestrator
-    reg-intel-graph/          # Typed Memgraph GraphClient + graph utilities
-    reg-intel-llm/            # Provider-agnostic LLM router + egress guard + providers
-    reg-intel-prompts/        # Prompt aspects, base system prompts
-    reg-intel-next-adapter/   # Helpers to mount the engine in Next.js apps
+    compliance-core/          # Unified engine package containing:
+                              # - Compliance Engine, agent interfaces, orchestrator
+                              # - LLM Router + providers (OpenAI Responses, Groq, Local)
+                              # - GraphClient (Bolt + MCP-based)
+                              # - Timeline Engine
+                              # - Prompt aspects & base system prompts
+                              # - Egress guard
   docs/
     architecture_v_0_3.md
     decisions_v_0_3.md
@@ -329,12 +377,28 @@ regulatory-intelligence-copilot/
       graph_schema_v_0_3.md
       graph_schema_changelog_v_0_3.md
       timeline_engine_v_0_2.md
+      special_jurisdictions_modelling_v_0_1.md
       # plus historical v0.1/v0.2 docs
   AGENTS.md
   PROMPTS.md
 ```
 
-The important part is the separation between:
+### Target Structure (Future)
+
+The v0.3 architecture spec describes a **future split** of `compliance-core` into smaller, more focused packages:
+
+```txt
+packages/
+  reg-intel-core/           # Compliance Engine, agent interfaces, orchestrator only
+  reg-intel-graph/          # GraphClient + Memgraph utilities
+  reg-intel-llm/            # LLM router + providers + egress guard
+  reg-intel-prompts/        # Prompt aspects + base system prompts
+  reg-intel-next-adapter/   # Helpers to mount engine in Next.js apps
+```
+
+**Current decision:** Keep `compliance-core` unified for now to maintain velocity. The package can be split later when the API surface stabilizes and reuse patterns emerge.
+
+The important principle remains:
 
 - **apps/** – UI and HTTP edges.
 - **packages/** – reusable engine components.
