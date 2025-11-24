@@ -108,7 +108,7 @@ export {
 
 // LLM Router (provider-agnostic)
 export {
-  type LlmClient,
+  // Note: LlmClient is NOT exported from llmRouter to avoid conflict with types.ts
   type LlmCompletionOptions,
   type LlmTaskPolicy,
   type TenantLlmPolicy,
@@ -123,6 +123,15 @@ export {
   createLlmRouter,
 } from './llm/llmRouter.js';
 export { createDefaultLlmRouter } from './llm/llmRouterFactory.js';
+
+// Compliance Engine (Orchestrator)
+export {
+  ComplianceEngine,
+  createComplianceEngine,
+  type ComplianceRequest,
+  type ComplianceResponse,
+  type ComplianceEngineDeps,
+} from './orchestrator/complianceEngine.js';
 
 // Agents
 export { SingleDirector_IE_SocialSafetyNet_Agent } from './agents/SingleDirector_IE_SocialSafetyNet_Agent.js';

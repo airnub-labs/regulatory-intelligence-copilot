@@ -14,7 +14,8 @@ import type {
   GraphContext,
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
-import { buildRegulatoryPrompt, REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import { buildPromptWithAspects } from '../aspects/promptAspects.js';
 
 const AGENT_ID = 'SingleDirector_IE_SocialSafetyNet_Agent';
 const AGENT_NAME = 'Single Director Ireland Social Safety Net Agent';
@@ -44,11 +45,9 @@ const TRIGGER_KEYWORDS = [
 ];
 
 /**
- * Agent-specific system prompt
+ * Agent-specific context to append to base prompt
  */
-const AGENT_SYSTEM_PROMPT = `${REGULATORY_COPILOT_SYSTEM_PROMPT}
-
-You are specifically focused on:
+const AGENT_CONTEXT = `You are specifically focused on:
 - Single-director company structures in Ireland
 - PRSI Class S contributions and entitlements
 - Social welfare benefits available to self-employed/directors
@@ -65,6 +64,21 @@ Common topics:
 - Invalidity Pension
 
 Remember: Single directors often pay Class S PRSI, which has different entitlements than Class A (PAYE employees).`;
+
+/**
+ * Build system prompt with aspects for this agent
+ */
+async function buildAgentSystemPrompt(
+  jurisdictions: string[],
+  profile?: AgentInput['profile']
+): Promise<string> {
+  return buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
+    jurisdictions,
+    agentId: AGENT_ID,
+    agentDescription: AGENT_CONTEXT,
+    profile,
+  });
+}
 
 /**
  * Format graph context for LLM consumption
@@ -206,19 +220,30 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
     // Format context for LLM
     const formattedContext = formatGraphContext(graphContext);
 
-    // Build prompt
-    const prompt = buildRegulatoryPrompt(
-      input.question,
-      formattedContext,
-      'Single-director company owner in Ireland, likely Class S PRSI contributor'
-    );
+    // Build system prompt using aspects
+    const jurisdictions = input.profile?.jurisdictions || ['IE'];
+    const systemPrompt = await buildAgentSystemPrompt(jurisdictions, input.profile);
+
+    // Build user prompt
+    const userPrompt = `User Question: ${input.question}
+
+Profile Context: Single-director company owner in Ireland, likely Class S PRSI contributor
+
+Graph Context:
+${formattedContext}
+
+Please provide a research-based response that:
+1. Explains relevant rules and benefits from the graph context
+2. Highlights lookback windows, mutual exclusions, and conditions
+3. Notes any uncertainties or gaps in the data
+4. Encourages professional verification`;
 
     // Call LLM
     const response = await ctx.llmClient.chat({
       messages: [
-        { role: 'system', content: AGENT_SYSTEM_PROMPT },
+        { role: 'system', content: systemPrompt },
         ...(input.conversationHistory || []),
-        { role: 'user', content: prompt },
+        { role: 'user', content: userPrompt },
       ],
     });
 
