@@ -1,102 +1,246 @@
 # AGENTS
 
-## Domain-Specific Agents
-
-### Single-Director Company Agent (Ireland)
-
-**Scope**  
-Handles compliance for a one‑person limited company in Ireland. This agent is an expert on Irish corporate law, tax obligations (e.g. Corporation Tax, VAT), filing deadlines, and relevant EU regulations that affect Irish companies. It models the persona of a single‑director business owner.
-
-**Responsibilities**
-- Maintain a **knowledge graph** of Irish company law and tax rules, including statutes, regulations, and inter‑law relationships (e.g. how a CIT Act clause relates to an EU directive). The graph is stored in Memgraph and contains nodes like `Regulation`, `TaxRate`, `BenefitScheme`, etc., and edges like `IMPOSES`, `EXEMPTS`, `REQUIRES`, or `SUPERSEDES` that capture regulatory relationships.
-- **Reason over graphs:** Query the regulatory graph to retrieve applicable rules for a given situation. For example, given a query about claiming R&D tax relief, the agent traverses nodes and edges to find conditions, deadlines, or mutual exclusions (such as whether certain reliefs are incompatible). It uses graph relations to understand cross‑references (e.g. one law citing another) and precedence (e.g. later amendments superseding earlier rules).
-- **Timeline reasoning:** Track time‑based rules (filing dates, waiting periods). The agent knows timeline constraints for corporate actions (e.g. annual returns, tax payment deadlines). It uses timeline logic to calculate due dates and eligibility windows. For instance, it can determine that a preliminary tax payment must be made by a particular date, or that a company must wait one year after incorporation before claiming certain reliefs.
-- **Mutual exclusions:** Recognise and enforce exclusive conditions. For example, if a company participates in one grant scheme, the agent knows if that disqualifies another (encoded as nodes/edges in the graph or additional rule metadata).
-- **Advisory output:** Answer user questions in clear language, linking to specific regulations. It can cite graph nodes (e.g. “Under Section X of the Taxes Consolidation Act, your company must…”). If multiple rules conflict, it clarifies which takes precedence and why.
+> **Status:** Current (aligned with:** `architecture_v_0_2.md`, `regulatory_graph_copilot_concept_v_0_3.md`, `graph_schema_v_0_3.md`, `timeline_engine_v_0_2.md`, `decisions_v_0_2.md`)  
+> **Purpose:** Define the *logical* agents in the Regulatory Intelligence Copilot and how they should behave. Implementation details (files, classes, wiring) must follow this specification.
 
 ---
 
-### Welfare Benefits Agent (Ireland)
+## 1. Agent Architecture Overview
 
-**Scope**  
-Focuses on Irish social welfare law for individuals (e.g. unemployment benefits, pensions, family supports). This agent simulates an expert social welfare officer.
+The system is **chat‑first** and **agent‑orchestrated**:
 
-**Responsibilities**
-- Build and query a **welfare knowledge graph**: laws and rules on social support programs (e.g. Jobseeker’s Allowance, Jobseeker’s Benefit, Illness Benefit, Treatment Benefit, State Pension) are represented as nodes and edges. Relationships such as `ELIGIBLE_FOR`, `EXCLUDES`, `AMENDS`, `LIMITED_BY`, and `DEPENDS_ON` capture how benefits interact.
-- **Timeline and eligibility checks:** Use timeline logic to manage application windows and waiting periods (e.g. a newly unemployed person must have worked a certain period in the last year to qualify). The agent calculates if the client meets time‑based conditions and advises on deadlines (application cutoffs, review dates, contribution lookback periods).
-- **Cross-benefit reasoning:** Identify exclusions between benefits (e.g. cannot draw full Jobseeker’s Allowance while simultaneously receiving certain other full‑rate payments). It uses the graph to see if edges exist between benefit schemes indicating exclusivity or conditional overlaps.
-- **Personalised guidance:** Interpret the user’s situation (age, PRSI record, income, household composition) to navigate the graph and find relevant supports. It surfaces exact statutory provisions or policy rules (graph nodes) that apply and explains them in plain language.
+- A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.
+- It delegates to **domain / jurisdiction expert agents** when needed (e.g. "Single‑director IE social safety net"), then reconciles their results.
+- All agents:
+  - Are **jurisdiction‑aware but jurisdiction‑neutral** by default (they accept one or more jurisdictions as context; code is not hard‑wired to Ireland only).
+  - Use the **Memgraph regulatory graph** (`graph_schema_v_0_3.md`) as the structured source of truth.
+  - Use the **Timeline Engine** (`timeline_engine_v_0_2.md`) for any time‑based logic.
+  - Call LLMs through the **provider‑agnostic LLM router** (no direct calls to OpenAI/Groq/etc.).
+  - Respect **privacy / egress guardrails** and never leak raw personal data unnecessarily.
 
----
-
-### EU Law Agent (EU Regulatory Compliance)
-
-**Scope**  
-Handles questions about EU regulations, directives, and rulings that affect Ireland (and possibly cross-border scenarios). Acts as an EU law specialist.
-
-**Responsibilities**
-- Maintain an **EU regulatory graph**: EU legislation, directives, and court decisions are nodes (e.g. “EU VAT Directive”, “CJEU Case C‑371/89”), with edges to Irish law nodes (to represent implementation or conflict) and to timeline nodes (effective dates, transposition deadlines).
-- **Inter-domain reasoning:** Translate EU rules into the Irish context. For example, it can explain how an EU VAT change affects Irish VAT rates or how an EU Social Security Coordination regulation impacts welfare entitlements for citizens with cross-border work histories.
-- **Cross-references:** Use the graph to follow links between EU law and domestic law (e.g. an EU directive implemented by an Irish statute, or a CJEU case that narrows a domestic interpretation). It can answer “Is benefit X still valid under new EU rules?” by tracing update edges.
-- **Harmonisation checks:** Advise on compliance when Irish law has been amended by EU requirements. It flags when a domestic rule may conflict with a new EU ruling or when EU law creates a new obligation that reconfigures existing Irish practice.
+Agents are identified by **stable agent IDs** (strings) used in prompts, routing, and logging.
 
 ---
 
-### CGT & Investments Agent (Ireland)
+## 2. Global Regulatory Copilot Agent
 
-**Scope**  
-Specialised in Irish Capital Gains Tax (CGT) rules, especially timing‑sensitive aspects like disposals, reacquisitions, loss relief, and anti‑avoidance constraints on selling and buying back assets (e.g., shares).
+**Agent ID (suggested):** `global_regulatory_copilot`  
+**Role:** Primary orchestrator and generalist.
 
-**Responsibilities**
-- Model **transactions and assets** in the graph: nodes for `Asset`, `Transaction` (DISPOSAL, ACQUISITION), and edges like `INVOLVES`, `PART_OF_POOL`.
-- Encode **timing rules and windows**: edges such as `LOOKBACK_WINDOW {days: N}` from rules to transaction types capture where a repurchase within N days affects loss relief or matching.
-- Represent **share matching and pooling rules**, as well as specific anti‑avoidance sections that restrict the use of capital losses.
-- Use the E2B sandbox to simulate **transaction sequences** and combine graph rules with calculators. The agent does not give personalised advice like “sell on this exact date” but explains constraints and patterns (e.g. “if you sell and repurchase within X days, loss Y may be restricted under Section Z”).
+### Scope
+
+- First contact for *all* user questions.
+- Works across:
+  - Tax (income, corporation, CGT)
+  - Social welfare and benefits
+  - Pensions
+  - Company / director obligations
+  - EU‑level rules affecting any of the above
+  - Cross‑border interactions (e.g. IE–MT–IM–EU)
+
+### Responsibilities
+
+1. **Conversation orchestration**
+   - Interpret the user’s question, profile (persona tags), and jurisdiction context.
+   - Decide whether to:
+     - Answer directly using **global graph queries**, or
+     - Delegate to one or more **expert agents** and merge results.
+
+2. **Graph‑first reasoning**
+   - Query the regulatory graph (Memgraph) using high‑level functions provided by the GraphClient.
+   - Pull a **local neighbourhood subgraph** relevant to the query (statutes/benefits/reliefs, conditions, timelines, exclusions, cross‑jurisdiction links).
+   - Pass that subgraph (in summarised form) into the LLM for explanation.
+
+3. **Timeline reasoning via Timeline Engine**
+   - When a question involves dates or periods, use the Timeline Engine to:
+     - Compute lookback windows.
+     - Evaluate lock‑ins.
+     - Identify filing deadlines and effective windows.
+   - Never hard‑code time rules; always derive them from `:Timeline` nodes in the graph.
+
+4. **Jurisdiction neutrality + expert routing**
+   - Treat the user’s jurisdiction(s) as **context**, not as hard‑coded if/else logic.
+   - Where a specific expert exists (e.g. IE single‑director social safety net), call that expert agent with a well‑formed sub‑task.
+   - For unsupported jurisdictions, remain helpful using EU principles, general patterns, and graph data where available, while clearly flagging limitations.
+
+5. **Safety and tone**
+   - Provide **research assistance**, not legal/tax/welfare advice.
+   - Emphasise when something is ambiguous, case‑specific, or needs a human professional.
+   - Avoid telling users exactly what to claim or how to file; instead, explain rules, interactions, and trade‑offs.
 
 ---
 
-### R&D Tax Credit Agent (Ireland)
+## 3. Expert Agents
 
-**Scope**  
-Focused on the R&D tax credit regime in Ireland (e.g. Taxes Consolidation Act sections governing R&D expenditure), including eligibility, documentation, and interactions with other reliefs.
+Expert agents are **narrow and deep**. They:
 
-**Responsibilities**
-- Maintain a focused subgraph of **R&D-related statutes**, guidance, and case law.
-- Model **eligibility conditions** as nodes/edges (`REQUIRES_ACTIVITY_TYPE`, `REQUIRES_DOCUMENTATION`, `AVAILABLE_TO`, etc.).
-- Capture **mutual exclusions** and priority rules where claiming R&D interacts with other schemes or state aids.
-- Provide explanations of **documentation expectations** and high‑level risk/signals drawn from guidance and relevant decisions.
+- Use the same underlying graph and timeline engine as the global agent.
+- Have **specialised prompts** (built from shared aspects) that focus them on a particular domain + jurisdiction combination.
+- Are invoked by the global agent when it detects that a question fits their niche.
+
+The initial set below is **not exhaustive**; the architecture must allow for adding more expert agents (e.g. for Malta, Isle of Man, other EU states) without changing core orchestration.
+
+### 3.1 Single‑Director IE Social Safety Net Agent
+
+**Agent ID (suggested):** `single_director_ie_social_safety_net`  
+**Scope:** Social welfare and related entitlements for a **single‑director company** registered in Ireland.
+
+#### Responsibilities
+
+- Interpret the user’s situation as a **persona + jurisdiction**:
+  - Persona: single director of a limited company.
+  - Primary jurisdiction: Ireland (IE).
+
+- Use the graph to:
+  - Find relevant **benefits** (Jobseeker’s Benefit (Self‑Employed), Illness Benefit, Treatment Benefit, Paternity/Maternity/Parent’s Benefit, State Pension, etc.).
+  - Follow `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, and `APPLIES_TO` edges from benefits to conditions and profile tags.
+  - Discover **mutual exclusions** and compatibility:
+    - E.g. which benefits cannot be combined at the same time.
+    - E.g. how taking salary vs dividends affects PRSI class and future entitlements.
+
+- Apply **timeline logic** to:
+  - Contributions lookback windows (PRSI history).
+  - Waiting periods and review cycles.
+  - Lock‑in effects of decisions (e.g. choosing certain schemes).
+
+- Provide **plain‑language explanations** of:
+  - Why a benefit may or may not be available.
+  - What interactions exist between benefits, PRSI classes, and company status.
+
+- Clearly **avoid personalised advice**; frame results as insights about rules and possible questions to bring to an advisor or welfare office.
 
 ---
 
-## Cross-Domain Expert Agent
+### 3.2 IE Tax & Company Obligations Agent
 
-### Global Regulatory Compliance Agent
+**Agent ID (suggested):** `ie_tax_company_obligations`  
+**Scope:** Irish tax and company law obligations for small companies and self‑employed individuals.
 
-**Scope**  
-A single “meta” agent that oversees and integrates all domain-specific areas. This agent acts as a regulatory compliance expert with broad knowledge of Irish tax, welfare, pensions, CGT, and EU law.
+#### Responsibilities
 
-**Responsibilities**
-- **Integrated reasoning:** Draw on all domain graphs (corporate tax, welfare, pensions, CGT, EU) to handle cross-cutting queries. For example, if a user asks about opening a company (tax/corporate) while receiving a disability benefit (welfare) under changing EU disability standards, the agent coordinates between the different domain subgraphs.
-- **Conflict resolution:** Identify and reconcile conflicting rules across domains. Using the knowledge graph, it finds intersections (common nodes/edges) between domain subgraphs. For instance, it can detect if a corporate tax relief unintentionally disqualifies a person from a means-tested benefit, and explain such exclusions and trade-offs.
-- **Policy update monitoring:** Incorporate **notifications of legislative changes** (e.g. Finance Acts, EU directives, new court rulings) into responses. When the compliance graph is updated with new rulings or amended statutes, this agent adapts its reasoning and can proactively highlight the impact on ongoing user scenarios.
-- **Holistic guidance:** Serve as the primary entry point for general regulatory questions. It may:
-  - Answer directly using the global graph.
-  - Orchestrate calls to specific domain agents.
-  - Merge and reconcile their outputs into a single coherent explanation.
+- Use graph nodes/edges for:
+  - Corporation tax, income tax, VAT rules.
+  - Filing obligations (annual returns, CT1, VAT returns, etc.).
+  - Director obligations and close‑company rules.
+
+- Focus on:
+  - **Timelines**: filing deadlines, payment due dates, preliminary tax rules.
+  - **Interactions**: how taking income as salary vs dividends impacts tax and PRSI.
+  - **Conflict detection**: whether using one relief affects eligibility for another (mutual exclusions, limitations).
+
+- Provide structured explanations and highlight connections to other domains (e.g. welfare/PRSI impacts) for the global agent to merge.
 
 ---
 
-## Reasoning & Safety Principles
+### 3.3 EU Regulation & Cross‑Border Coordination Agent
 
-All agents share the following principles:
+**Agent ID (suggested):** `eu_cross_border_coordination`  
+**Scope:** EU regulations/directives, social security coordination, and cross‑border interactions (e.g. IE‑MT‑IM‑EU).
 
-- **Graph-first reasoning:** Use Memgraph as the primary store for statutes, rules, benefits, timelines, and relationships. Agents query this graph before and/or alongside any LLM reasoning.
-- **Timeline awareness:** Treat deadlines, waiting periods, and lookback windows as first-class; they are represented either as graph structures or as explicit metadata used in reasoning.
-- **Mutual exclusions and dependencies:** Model and respect `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOCKS_IN_FOR_PERIOD`, `LOOKBACK_WINDOW`, and dependency edges so that answers capture real‑world trade-offs.
-- **LLM as explainer, not authority:** Groq (or another LLM) is used to summarise and explain what the graph and rules say. It should not fabricate law; its role is to turn structured rule data into understandable text and to help with ranking/relevance.
-- **Research tool, not advice:** All agents treat outputs as **regulatory intelligence and research assistance**, not legal/tax/welfare advice. They should:
-  - Surface relevant rules and interactions.
-  - Highlight uncertainties and edge cases.
-  - Encourage users to confirm important decisions with qualified professionals or authorities.
-- **Privacy and egress control:** All agents run in an E2B sandbox and use an egress guard/redaction layer so that personal and financial details are not leaked to external tools or LLMs. Only the minimum necessary context leaves the sandbox, and graph updates about user profiles are handled with care.
+#### Responsibilities
+
+- Work primarily with:
+  - `:EURegulation` / `:EUDirective` nodes.
+  - `IMPLEMENTED_BY`, `OVERRIDES`, `COORDINATED_WITH`, `TREATY_LINKED_TO`, and `EQUIVALENT_TO` edges.
+
+- Answer questions like:
+  - Which country’s system applies when the user works in multiple EU states?
+  - How does EC 883/2004 (or similar coordination instruments) affect benefit or contribution rules?
+  - How an EU court decision affects domestic interpretation.
+
+- Provide **cross‑jurisdiction views** for the global agent to integrate into overall guidance.
+
+---
+
+### 3.4 CGT & Investments Agent (Ireland)
+
+**Agent ID (suggested):** `ie_cgt_investments`  
+**Scope:** Irish Capital Gains Tax & investment‑related rules, especially **timing‑sensitive** aspects (disposals, reacquisitions, loss relief).
+
+#### Responsibilities
+
+- Model and reason over:
+  - CGT‑related `:Section` and `:Relief` nodes.
+  - Conditions and timelines around disposals, reacquisitions, matching rules, and anti‑avoidance.
+
+- Use timelines to:
+  - Explain lookback windows affecting loss relief.
+  - Identify when a sale and buyback pattern may trigger restrictions.
+
+- Explain constraints and patterns, **not** personalised trading or tax advice.
+
+---
+
+### 3.5 R&D Tax Credit Agent (Ireland)
+
+**Agent ID (suggested):** `ie_rnd_tax_credit`  
+**Scope:** Irish R&D tax credit regime (and related reliefs), focusing on eligibility, interactions, and documentation expectations.
+
+#### Responsibilities
+
+- Work on a focused subgraph of R&D‑related statutes, reliefs, and guidance.
+- Explain:
+  - Eligibility conditions and thresholds.
+  - Interactions with other state aid and reliefs (mutual exclusions, stacking limits).
+  - Documentation patterns and risk signals drawn from guidance and case law.
+
+---
+
+## 4. Shared Behaviour & Safety Rules
+
+All agents MUST follow these principles:
+
+1. **Graph‑first, LLM‑second**
+   - Use the Memgraph regulatory graph as the first stop for relevant rules and relationships.
+   - Only then use LLMs (via the LLM router) to:
+     - Summarise results.
+     - Rank or structure relevant rules.
+     - Generate natural‑language explanations.
+
+2. **Timeline engine for temporal logic**
+   - Never hard‑code dates or durations in prompts or code.
+   - Always derive time rules from `:Timeline` nodes and pass them to the Timeline Engine for evaluation.
+
+3. **Jurisdiction‑aware prompts via aspects**
+   - All prompts must be built using the **prompt aspect system** (`jurisdictionAspect`, `agentContextAspect`, `profileContextAspect`, `disclaimerAspect`, etc.).
+   - No agent should hand‑craft raw system prompts; aspects enforce consistency and safety.
+
+4. **Provider‑agnostic LLM usage**
+   - Agents call a **logical task** on the LLM router (e.g. `"main_chat"`, `"egress_guard"`, `"pii_sanitizer"`) and must not depend on a specific provider or model.
+   - Tenant‑ and task‑specific model selection is handled by configuration and the router, not by the agent itself.
+
+5. **Privacy, redaction, and egress control**
+   - Agents run inside controlled sandboxes.
+   - A redaction/egress‑guard layer must be applied before any context is sent to external LLMs or MCPs.
+   - Where possible, summarise and anonymise before sending.
+
+6. **Research assistance, not legal advice**
+   - Clearly signal that responses are **intelligence and research tools**.
+   - Encourage users to consult qualified professionals for decisions involving risk, disputes, or large sums.
+
+---
+
+## 5. Extending the Agent Set
+
+The architecture must allow new agents to be added without touching core orchestrator logic. To add a new agent:
+
+1. Define a **stable agent ID** and description in `AGENTS.md`.
+2. Implement the agent using:
+   - The shared GraphClient.
+   - The Timeline Engine.
+   - The prompt aspect system.
+   - The LLM router.
+3. Register the agent in the **agent registry/orchestrator** so the global copilot can route to it based on:
+   - Jurisdiction context.
+   - Persona/profile tags.
+   - Detected topic.
+4. Add/update tests and, if needed, documentation describing its domain.
+
+Example future agents:
+
+- `mt_tax_company_obligations` – Malta tax & company law for SMEs.
+- `im_social_security_agent` – Isle of Man social security & cross‑border coordination.
+- `eu_pensions_coordination` – EU pensions and cross‑border retirement coordination.
+
+These agents should follow the same principles and share the same infrastructure as the initial set defined above.
 
