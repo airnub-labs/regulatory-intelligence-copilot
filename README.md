@@ -328,13 +328,16 @@ The v0.3 architecture is **partially implemented**. Here's what's working and wh
 - **Timeline Engine** – Pure functions for lookback windows, lock-ins, deadlines
 - **GraphClient** – Direct Bolt connection to Memgraph + MCP-based fallback
 - **Egress Guard** – PII redaction utilities
+- **Streaming responses** – LLM Router supports `AsyncIterable<LlmStreamChunk>` streaming with:
+  - `streamChat()` method on all providers (OpenAI Responses, Groq, Local)
+  - SSE (Server-Sent Events) parsing with proper line buffering
+  - Error handling with error chunks and done signals
+  - Integrated into `/api/chat` endpoint
+- **AI SDK v5 provider adapters** – Optional implementations (`AiSdkOpenAIProvider`, `AiSdkGroqProvider`) using `streamText`/`generateText` as wrappers around AI SDK
 
 ### 🚧 In Progress / Planned
 
-- **Streaming responses** – LLM Router currently returns `Promise<string>`; v0.3 spec calls for `AsyncIterable` streaming support throughout
-- **AI SDK v5 provider adapters** – Alternative implementations using `streamText`/`generateText` as wrappers
-- **ComplianceEngine streaming** – Update to return streaming responses instead of fully-buffered strings
-- **WebSocket graph streaming** – `/api/graph/stream` endpoint for incremental graph patches
+- **WebSocket graph streaming** – `/api/graph/stream` endpoint for incremental graph patches (nodes_added, nodes_updated, nodes_removed, edges_added, edges_removed)
 - **Package split** – Future refactor to split `compliance-core` into `reg-intel-{core,graph,llm,prompts,next-adapter}` when API surface stabilizes
 
 ### 📋 Roadmap Items (Phase 2+)
