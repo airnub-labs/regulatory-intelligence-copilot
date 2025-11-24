@@ -1,132 +1,123 @@
-import { callMemgraphMcp, getMcpGatewayUrl, hasActiveSandbox } from '@reg-copilot/compliance-core';
+/**
+ * Graph API endpoint - Initial snapshot
+ *
+ * Returns an initial subgraph snapshot based on user profile and jurisdictions.
+ * Used in conjunction with /api/graph/stream for incremental updates.
+ *
+ * Per v0.3 architecture (docs/architecture_v_0_3.md Section 9):
+ * - REST endpoint returns initial snapshot
+ * - WebSocket endpoint (/api/graph/stream) sends incremental patches
+ */
 
-function normalizeMemgraphRows(result: unknown): Array<Record<string, unknown>> {
-  if (Array.isArray(result)) {
-    return result as Array<Record<string, unknown>>;
-  }
+import {
+  createGraphClient,
+  hasActiveSandbox,
+  getMcpGatewayUrl,
+} from '@reg-copilot/compliance-core';
 
-  if (result && typeof result === 'object') {
-    const obj = result as Record<string, unknown>;
-
-    // Handle Memgraph formats like { columns: [...], data: [[...], ...] }
-    if (Array.isArray(obj.data) && Array.isArray(obj.columns)) {
-      const columns = obj.columns as string[];
-      return (obj.data as Array<unknown>).map(row => {
-        if (Array.isArray(row)) {
-          const mapped: Record<string, unknown> = {};
-          columns.forEach((col, idx) => {
-            mapped[col] = (row as Array<unknown>)[idx];
-          });
-          return mapped;
-        }
-        return row as Record<string, unknown>;
-      });
-    }
-
-    if (Array.isArray(obj.data)) return obj.data as Array<Record<string, unknown>>;
-    if (Array.isArray(obj.rows)) return obj.rows as Array<Record<string, unknown>>;
-    if (Array.isArray(obj.records)) return obj.records as Array<Record<string, unknown>>;
-    if (Array.isArray(obj.result)) return obj.result as Array<Record<string, unknown>>;
-  }
-
-  if (typeof result === 'string') {
-    try {
-      const parsed = JSON.parse(result);
-      return normalizeMemgraphRows(parsed);
-    } catch {
-      return [];
-    }
-  }
-
-  return [];
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Check if MCP gateway is configured (only available after running an audit)
+    // Check if MCP gateway is configured (only available after sandbox is active)
     if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
-      // Return empty graph - this is normal before first audit
+      // Return empty graph - this is normal before first interaction
       return Response.json({
+        type: 'graph_snapshot',
+        timestamp: new Date().toISOString(),
         nodes: [],
-        links: [],
-        message: 'Graph is empty. Run an audit to populate the knowledge graph.',
+        edges: [],
+        metadata: {
+          nodeCount: 0,
+          edgeCount: 0,
+          message: 'Graph is empty. Interact with the chat to populate the knowledge graph.',
+        },
       });
     }
 
-    // Fetch all nodes and relationships from the graph
-    const result = await callMemgraphMcp(`
-      MATCH (n)
-      OPTIONAL MATCH (n)-[r]->(m)
-      RETURN n, r, m
-    `);
+    const { searchParams } = new URL(request.url);
 
-    // Parse the result into nodes and links for force-graph
-    type MemgraphNode = { id?: unknown; properties?: Record<string, unknown>; labels?: string[] };
-    type MemgraphRelationship = { type?: string };
+    // Get query parameters
+    const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
+    const profileType = searchParams.get('profileType') || 'single_director';
+    const keyword = searchParams.get('keyword') || undefined;
 
-    const nodes = new Map<string, { id: string; label: string; type: string; properties: Record<string, unknown> }>();
-    const links: { source: string; target: string; type: string }[] = [];
+    console.log('[API/graph] Fetching initial graph snapshot:', {
+      jurisdictions,
+      profileType,
+      keyword,
+    });
 
-    const rows = normalizeMemgraphRows(result);
-    for (const record of rows) {
-      const row = record as Record<string, MemgraphNode | MemgraphRelationship | undefined>;
+    // Create graph client
+    const graphClient = createGraphClient();
 
-      const extractNodeId = (node: MemgraphNode, fallbackIndex: number): string => {
-        const directId = typeof node.id === 'string' ? node.id : undefined;
-        const propId = typeof node.properties?.id === 'string' ? (node.properties.id as string) : undefined;
-        return directId || propId || `node-${fallbackIndex}`;
-      };
+    // Build profile-based query - get rules for the primary jurisdiction
+    const primaryJurisdiction = jurisdictions[0];
+    const graphContext = await graphClient.getRulesForProfileAndJurisdiction(
+      profileType,
+      primaryJurisdiction,
+      keyword
+    );
 
-      const addNode = (node: MemgraphNode | undefined): void => {
-        if (!node) return;
-        const id = extractNodeId(node, nodes.size);
-        if (nodes.has(id)) return;
+    // If multiple jurisdictions, also get cross-border slice
+    if (jurisdictions.length > 1) {
+      const crossBorderContext = await graphClient.getCrossBorderSlice(jurisdictions);
 
-        const labelValue = node.properties?.title || node.properties?.name || node.labels?.[0] || id;
-        const label = typeof labelValue === 'string' ? labelValue : String(labelValue ?? id);
-        const type = Array.isArray(node.labels) && typeof node.labels[0] === 'string'
-          ? node.labels[0]
-          : 'unknown';
+      // Merge contexts (deduplicate nodes and edges)
+      const nodeMap = new Map<string, typeof graphContext.nodes[0]>();
+      const edgeSet = new Set<string>();
+      const mergedEdges: typeof graphContext.edges = [];
 
-        nodes.set(id, {
-          id,
-          label,
-          type,
-          properties: node.properties || {},
-        });
-      };
-
-      addNode(row.n as MemgraphNode | undefined);
-      addNode(row.m as MemgraphNode | undefined);
-
-      // Handle relationship 'r'
-      if (row.r && row.n && row.m) {
-        const sourceId = extractNodeId(row.n as MemgraphNode, nodes.size);
-        const targetId = extractNodeId(row.m as MemgraphNode, nodes.size);
-
-        if (sourceId && targetId) {
-          const relType = (row.r as MemgraphRelationship).type || 'RELATED_TO';
-          links.push({
-            source: sourceId,
-            target: targetId,
-            type: relType,
-          });
+      // Add nodes from both contexts
+      for (const node of [...graphContext.nodes, ...crossBorderContext.nodes]) {
+        if (!nodeMap.has(node.id)) {
+          nodeMap.set(node.id, node);
         }
       }
+
+      // Add edges from both contexts
+      for (const edge of [...graphContext.edges, ...crossBorderContext.edges]) {
+        const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
+        if (!edgeSet.has(edgeKey)) {
+          edgeSet.add(edgeKey);
+          mergedEdges.push(edge);
+        }
+      }
+
+      graphContext.nodes = Array.from(nodeMap.values());
+      graphContext.edges = mergedEdges;
     }
 
+    console.log(
+      `[API/graph] Returning snapshot: ${graphContext.nodes.length} nodes, ${graphContext.edges.length} edges`
+    );
+
+    // Return v0.3 format snapshot
     return Response.json({
-      nodes: Array.from(nodes.values()),
-      links,
+      type: 'graph_snapshot',
+      timestamp: new Date().toISOString(),
+      jurisdictions,
+      profileType,
+      nodes: graphContext.nodes,
+      edges: graphContext.edges,
+      metadata: {
+        nodeCount: graphContext.nodes.length,
+        edgeCount: graphContext.edges.length,
+      },
     });
   } catch (error) {
-    console.error('[API] Graph fetch error:', error);
+    console.error('[API/graph] Error:', error);
     let errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     if (errorMessage.toLowerCase().includes('sandbox')) {
-      errorMessage = 'Knowledge graph sandbox is unavailable or expired. Run a new audit to rehydrate Memgraph.';
+      errorMessage =
+        'Knowledge graph sandbox is unavailable or expired. Interact with the chat to rehydrate Memgraph.';
     }
 
-    return Response.json({ error: errorMessage, nodes: [], links: [] }, { status: 500 });
+    return Response.json(
+      {
+        type: 'error',
+        error: errorMessage,
+      },
+      { status: 500 }
+    );
   }
 }
