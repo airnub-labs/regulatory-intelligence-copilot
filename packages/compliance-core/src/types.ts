@@ -1,0 +1,347 @@
+/**
+ * Core types for Regulatory Intelligence Copilot
+ *
+ * This module defines the shared interfaces used across the compliance system
+ * including agents, graph operations, timeline engine, and egress guard.
+ */
+
+// =============================================================================
+// Graph Schema Types (v0.2)
+// =============================================================================
+
+/**
+ * Jurisdiction node representing a country or legal order
+ */
+export interface Jurisdiction {
+  id: string;
+  name: string;
+  type: 'COUNTRY' | 'SUPRANATIONAL' | 'CROWN_DEPENDENCY';
+  notes?: string;
+}
+
+/**
+ * Timeline node for lookback/lock-in periods
+ */
+export interface Timeline {
+  id: string;
+  label: string;
+  window_days?: number;
+  window_months?: number;
+  window_years?: number;
+  notes?: string;
+}
+
+/**
+ * Profile tag for user personas
+ */
+export interface ProfileTag {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+/**
+ * Graph node representing any regulatory entity
+ */
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'Statute' | 'Section' | 'Benefit' | 'Relief' | 'Condition' | 'Timeline' | 'Case' | 'Guidance' | 'EURegulation' | 'EUDirective' | 'ProfileTag' | 'Jurisdiction' | 'Update';
+  properties: Record<string, unknown>;
+}
+
+/**
+ * Graph edge representing a relationship
+ */
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  properties?: Record<string, unknown>;
+}
+
+/**
+ * Graph context for agent reasoning
+ */
+export interface GraphContext {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+// =============================================================================
+// User Profile Types
+// =============================================================================
+
+/**
+ * User profile for context filtering
+ */
+export interface UserProfile {
+  personaType: 'self-employed' | 'single-director' | 'paye-employee' | 'investor' | 'advisor';
+  jurisdictions: string[];
+  ageBand?: '18-25' | '26-35' | '36-45' | '46-55' | '56-65' | '65+';
+  hasCompany?: boolean;
+  prsiClass?: string;
+}
+
+// =============================================================================
+// Agent Types
+// =============================================================================
+
+/**
+ * Input to an agent
+ */
+export interface AgentInput {
+  question: string;
+  profile?: UserProfile;
+  conversationHistory?: ChatMessage[];
+  now?: Date;
+}
+
+/**
+ * Context provided to agents for reasoning
+ */
+export interface AgentContext {
+  graphClient: GraphClient;
+  timeline: TimelineEngine;
+  egressGuard: EgressGuard;
+  llmClient: LlmClient;
+  now: Date;
+  profile?: UserProfile;
+}
+
+/**
+ * Result returned by an agent
+ */
+export interface AgentResult {
+  answer: string;
+  referencedNodes: Array<{
+    id: string;
+    label: string;
+    type: string;
+  }>;
+  notes?: string[];
+  uncertaintyLevel?: 'low' | 'medium' | 'high';
+  followUps?: string[];
+  agentId: string;
+}
+
+/**
+ * Agent interface that all domain agents must implement
+ */
+export interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  canHandle(input: AgentInput): Promise<boolean>;
+  handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult>;
+}
+
+// =============================================================================
+// Graph Client Types
+// =============================================================================
+
+/**
+ * Graph client interface for Memgraph operations
+ */
+export interface GraphClient {
+  /**
+   * Get rules matching profile and jurisdiction with optional keyword
+   */
+  getRulesForProfileAndJurisdiction(
+    profileId: string,
+    jurisdictionId: string,
+    keyword?: string
+  ): Promise<GraphContext>;
+
+  /**
+   * Get neighbourhood of a node (1-2 hops)
+   */
+  getNeighbourhood(nodeId: string): Promise<GraphContext>;
+
+  /**
+   * Get mutual exclusions for a node
+   */
+  getMutualExclusions(nodeId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get timeline constraints for a node
+   */
+  getTimelines(nodeId: string): Promise<Timeline[]>;
+
+  /**
+   * Get cross-border slice for multiple jurisdictions
+   */
+  getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext>;
+
+  /**
+   * Execute raw Cypher query
+   */
+  executeCypher(query: string, params?: Record<string, unknown>): Promise<unknown>;
+}
+
+// =============================================================================
+// Timeline Engine Types
+// =============================================================================
+
+/**
+ * Date range result
+ */
+export interface DateRange {
+  start: Date;
+  end: Date;
+}
+
+/**
+ * Result of lookback computation
+ */
+export interface LookbackResult {
+  range: DateRange;
+  description: string;
+}
+
+/**
+ * Result of lookback check
+ */
+export interface LookbackCheckResult {
+  within: boolean;
+  range: DateRange;
+  description: string;
+}
+
+/**
+ * Result of lock-in computation
+ */
+export interface LockInResult {
+  end: Date;
+  description: string;
+}
+
+/**
+ * Result of lock-in check
+ */
+export interface LockInCheckResult {
+  active: boolean;
+  end: Date;
+  description: string;
+}
+
+/**
+ * Timeline engine interface
+ */
+export interface TimelineEngine {
+  computeLookbackRange(timeline: Timeline, now: Date): LookbackResult;
+  isWithinLookback(eventDate: Date, timeline: Timeline, now: Date): LookbackCheckResult;
+  computeLockInEnd(triggerDate: Date, timeline: Timeline): LockInResult;
+  isLockInActive(triggerDate: Date, timeline: Timeline, now: Date): LockInCheckResult;
+}
+
+// =============================================================================
+// Egress Guard Types
+// =============================================================================
+
+/**
+ * Redacted payload with metadata
+ */
+export interface RedactedPayload {
+  content: unknown;
+  redactionCount: number;
+  redactedTypes: string[];
+}
+
+/**
+ * Egress guard interface
+ */
+export interface EgressGuard {
+  redact(input: unknown): RedactedPayload;
+  redactText(text: string): string;
+}
+
+// =============================================================================
+// LLM Client Types
+// =============================================================================
+
+/**
+ * Chat message
+ */
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * LLM chat request
+ */
+export interface LlmChatRequest {
+  messages: ChatMessage[];
+  model?: string;
+  temperature?: number;
+  max_tokens?: number;
+}
+
+/**
+ * LLM chat response
+ */
+export interface LlmChatResponse {
+  content: string;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+/**
+ * LLM client interface
+ */
+export interface LlmClient {
+  chat(request: LlmChatRequest): Promise<LlmChatResponse>;
+}
+
+// =============================================================================
+// MCP Types
+// =============================================================================
+
+/**
+ * MCP call parameters
+ */
+export interface MCPCallParams {
+  toolName: string;
+  params: Record<string, unknown>;
+}
+
+/**
+ * MCP call response
+ */
+export interface MCPCallResponse {
+  result: unknown;
+  error?: string;
+}
+
+// =============================================================================
+// Orchestrator Types
+// =============================================================================
+
+/**
+ * Compliance request to the orchestrator
+ */
+export interface ComplianceRequest {
+  messages: ChatMessage[];
+  profile?: UserProfile;
+  jurisdictions?: string[];
+}
+
+/**
+ * Compliance response from the orchestrator
+ */
+export interface ComplianceResponse {
+  answer: string;
+  referencedNodes: Array<{
+    id: string;
+    label: string;
+    type: string;
+  }>;
+  agentUsed: string;
+  uncertaintyLevel?: 'low' | 'medium' | 'high';
+  followUps?: string[];
+  disclaimer: string;
+}

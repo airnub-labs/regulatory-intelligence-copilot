@@ -1,6 +1,7 @@
 {
-  "name": "e2b-rfc-owasp-auditor",
+  "name": "regulatory-intelligence-copilot",
   "version": "0.1.0",
+  "description": "Chat-first, graph-powered regulatory research copilot for complex regulatory compliance",
   "private": true,
   "workspaces": [
     "apps/*",

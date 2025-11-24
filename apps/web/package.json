@@ -1,9 +1,10 @@
 {
-  "name": "@e2b-auditor/web",
+  "name": "@reg-copilot/web",
   "version": "0.1.0",
+  "description": "Web frontend for regulatory intelligence copilot",
   "private": true,
   "scripts": {
-    "predev": "pnpm --filter @e2b-auditor/core build",
+    "predev": "pnpm --filter @reg-copilot/compliance-core build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -12,7 +13,7 @@
   },
   "dependencies": {
     "@ai-sdk/groq": "^0.0.1",
-    "@e2b-auditor/core": "workspace:*",
+    "@reg-copilot/compliance-core": "workspace:*",
     "@e2b/code-interpreter": "^2.2.0",
     "ai": "^3.0.0",
     "next": "^16.0.0",
