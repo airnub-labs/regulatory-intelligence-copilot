@@ -160,7 +160,7 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
     const matchesProfile = input.profile?.personaType === 'single-director' ||
       (input.profile?.hasCompany && input.profile?.prsiClass === 'S');
 
-    return hasKeyword || matchesProfile;
+    return hasKeyword || Boolean(matchesProfile);
   },
 
   async handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult> {

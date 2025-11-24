@@ -97,7 +97,7 @@ export {
 // Graph Client
 export { createGraphClient } from './graph/graphClient.js';
 
-// LLM Client
+// LLM Client (legacy MCP-based)
 export {
   createLlmClient,
   buildRegulatoryPrompt,
@@ -105,6 +105,24 @@ export {
   buildSystemPromptAsync,
   REGULATORY_COPILOT_SYSTEM_PROMPT,
 } from './llm/llmClient.js';
+
+// LLM Router (provider-agnostic)
+export {
+  type LlmClient,
+  type LlmCompletionOptions,
+  type LlmTaskPolicy,
+  type TenantLlmPolicy,
+  type LlmProviderClient,
+  type LlmProviderRegistry,
+  type LlmPolicyStore,
+  LlmRouter,
+  OpenAiResponsesClient,
+  GroqLlmClient,
+  LocalHttpLlmClient,
+  InMemoryPolicyStore,
+  createLlmRouter,
+} from './llm/llmRouter.js';
+export { createDefaultLlmRouter } from './llm/llmRouterFactory.js';
 
 // Agents
 export { SingleDirector_IE_SocialSafetyNet_Agent } from './agents/SingleDirector_IE_SocialSafetyNet_Agent.js';
