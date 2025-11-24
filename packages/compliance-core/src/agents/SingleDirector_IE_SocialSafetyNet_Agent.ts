@@ -12,10 +12,12 @@ import type {
   AgentContext,
   AgentResult,
   GraphContext,
+  Timeline,
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 import { buildPromptWithAspects } from '../aspects/promptAspects.js';
+import { computeLookbackRange, computeLockInEnd } from '../timeline/timelineEngine.js';
 
 const AGENT_ID = 'SingleDirector_IE_SocialSafetyNet_Agent';
 const AGENT_NAME = 'Single Director Ireland Social Safety Net Agent';
@@ -81,9 +83,21 @@ async function buildAgentSystemPrompt(
 }
 
 /**
- * Format graph context for LLM consumption
+ * Timeline calculation data for a benefit
  */
-function formatGraphContext(context: GraphContext): string {
+interface TimelineCalculations {
+  benefitId: string;
+  lookbackRanges: Array<{ timeline: Timeline; description: string }>;
+  lockInPeriods: Array<{ timeline: Timeline; description: string }>;
+}
+
+/**
+ * Format graph context for LLM consumption, including timeline calculations
+ */
+function formatGraphContext(
+  context: GraphContext,
+  timelineCalculations?: TimelineCalculations[]
+): string {
   if (context.nodes.length === 0) {
     return 'No relevant rules found in the graph. The response will be based on general knowledge, which may be incomplete or outdated.';
   }
@@ -118,6 +132,38 @@ function formatGraphContext(context: GraphContext): string {
       ].filter(Boolean).join(' ') || 'unspecified';
       return `- ${t.label} (${t.id}): ${window}`;
     }).join('\n'));
+  }
+
+  // Add timeline calculations if available
+  if (timelineCalculations && timelineCalculations.length > 0) {
+    const calcSections: string[] = [];
+
+    for (const calc of timelineCalculations) {
+      const benefit = benefits.find(b => b.id === calc.benefitId);
+      if (!benefit) continue;
+
+      const calcLines: string[] = [`\nFor ${benefit.label}:`];
+
+      if (calc.lookbackRanges.length > 0) {
+        calcLines.push('  Lookback Windows:');
+        for (const { timeline, description } of calc.lookbackRanges) {
+          calcLines.push(`  - ${timeline.label}: ${description}`);
+        }
+      }
+
+      if (calc.lockInPeriods.length > 0) {
+        calcLines.push('  Lock-in Periods:');
+        for (const { timeline, description } of calc.lockInPeriods) {
+          calcLines.push(`  - ${timeline.label}: ${description}`);
+        }
+      }
+
+      calcSections.push(calcLines.join('\n'));
+    }
+
+    if (calcSections.length > 0) {
+      sections.push('Timeline Calculations (as of today):\n' + calcSections.join('\n'));
+    }
   }
 
   if (sections_.length > 0) {
@@ -217,8 +263,51 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
       return true;
     });
 
-    // Format context for LLM
-    const formattedContext = formatGraphContext(graphContext);
+    // Compute timeline calculations for benefits
+    const timelineCalculations: TimelineCalculations[] = [];
+    const benefits = graphContext.nodes.filter(n => n.type === 'Benefit');
+    const now = new Date();
+
+    for (const benefit of benefits) {
+      try {
+        // Fetch timeline constraints for this benefit
+        const timelines = await ctx.graphClient.getTimelines(benefit.id);
+
+        if (timelines.length > 0) {
+          const lookbackRanges: Array<{ timeline: Timeline; description: string }> = [];
+          const lockInPeriods: Array<{ timeline: Timeline; description: string }> = [];
+
+          for (const timeline of timelines) {
+            // Check if this is a lookback window (most common)
+            // Lookback windows are typically used for contribution requirements
+            const lookbackResult = computeLookbackRange(timeline, now);
+            lookbackRanges.push({
+              timeline,
+              description: lookbackResult.description,
+            });
+
+            // Also compute lock-in period (less common, but important for tax reliefs)
+            // Use an example trigger date of today for demonstration
+            const lockInResult = computeLockInEnd(now, timeline);
+            lockInPeriods.push({
+              timeline,
+              description: lockInResult.description,
+            });
+          }
+
+          timelineCalculations.push({
+            benefitId: benefit.id,
+            lookbackRanges,
+            lockInPeriods,
+          });
+        }
+      } catch (error) {
+        console.log(`${LOG_PREFIX.agent} Timeline calculation error for ${benefit.id}:`, error);
+      }
+    }
+
+    // Format context for LLM with timeline calculations
+    const formattedContext = formatGraphContext(graphContext, timelineCalculations);
 
     // Build system prompt using aspects
     const jurisdictions = input.profile?.jurisdictions || ['IE'];
