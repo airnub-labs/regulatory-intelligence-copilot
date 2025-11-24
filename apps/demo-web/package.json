@@ -1,7 +1,7 @@
 {
-  "name": "@reg-copilot/web",
+  "name": "@reg-copilot/demo-web",
   "version": "0.1.0",
-  "description": "Web frontend for regulatory intelligence copilot",
+  "description": "Demo web frontend for regulatory intelligence copilot",
   "private": true,
   "scripts": {
     "predev": "pnpm --filter @reg-copilot/compliance-core build",
@@ -12,10 +12,11 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^0.0.1",
+    "@ai-sdk/groq": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
     "@reg-copilot/compliance-core": "workspace:*",
     "@e2b/code-interpreter": "^2.2.0",
-    "ai": "^3.0.0",
+    "ai": "^5.0.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -27,7 +28,10 @@
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.16",
     "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.0"
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
   }
 }
