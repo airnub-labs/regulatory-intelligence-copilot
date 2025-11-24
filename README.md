@@ -334,10 +334,16 @@ The v0.3 architecture is **partially implemented**. Here's what's working and wh
   - Error handling with error chunks and done signals
   - Integrated into `/api/chat` endpoint
 - **AI SDK v5 provider adapters** – Optional implementations (`AiSdkOpenAIProvider`, `AiSdkGroqProvider`) using `streamText`/`generateText` as wrappers around AI SDK
+- **WebSocket graph streaming** – SSE-based incremental graph updates with:
+  - `GET /api/graph` REST endpoint for initial subgraph snapshots (with jurisdiction/profile filtering)
+  - `GET /api/graph/stream` SSE endpoint for real-time graph patches
+  - Graph patch format: nodes_added, nodes_updated, nodes_removed, edges_added, edges_removed
+  - Connection management with keep-alive and graceful disconnect handling
+  - Ready for Memgraph change detection integration (placeholder in place)
 
 ### 🚧 In Progress / Planned
 
-- **WebSocket graph streaming** – `/api/graph/stream` endpoint for incremental graph patches (nodes_added, nodes_updated, nodes_removed, edges_added, edges_removed)
+- **Graph change detection** – Connect graph streaming to actual Memgraph change notifications (triggers/polling)
 - **Package split** – Future refactor to split `compliance-core` into `reg-intel-{core,graph,llm,prompts,next-adapter}` when API surface stabilizes
 
 ### 📋 Roadmap Items (Phase 2+)
