@@ -12,6 +12,18 @@ This version updates the original architecture to:
 
 ---
 
+## Normative references
+
+This architecture document must be read together with the following specs:
+
+- `docs/specs/graph_schema_v_0_3.md`
+- `docs/specs/timeline_engine_v_0_2.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/specs/graph_ingress_guard_v_0_1.md`
+
+---
+
 ## 1. High‑Level Overview
 
 The system is a **chat‑centric web app + reusable engine** that:
@@ -348,9 +360,30 @@ function createMemgraphGraphClient(config: {
 }): GraphClient;
 ```
 
-This client uses Memgraph’s Bolt/HTTP interface directly. MCP may still wrap Memgraph for certain LLM tool‑calling scenarios, but **core app graph queries use GraphClient directly**.
+This client uses Memgraph's Bolt/HTTP interface directly. MCP may still wrap Memgraph for certain LLM tool‑calling scenarios, but **core app graph queries use GraphClient directly**.
 
-### 7.2 Schema Overview (Summary)
+### 7.2 Graph ingress guard
+
+All writes to the global Memgraph instance are routed through a
+`GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
+specified in:
+
+- `docs/specs/graph_ingress_guard_v_0_1.md`
+
+No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
+against Memgraph. The ingress guard enforces that:
+
+- Only schema‑approved node and relationship types (see `graph_schema_v_0_3.md`)
+  are persisted.
+- Only whitelisted properties for those types are allowed.
+- No user/tenant data, PII, or scenario‑specific text is ever written to the
+  global graph.
+
+Custom behaviour (e.g. audit tagging, local LLM classification) is added via
+configurable ingress aspects layered on top of the non‑removable baseline
+aspects.
+
+### 7.3 Schema Overview (Summary)
 
 The graph schema continues to include:
 
@@ -359,7 +392,7 @@ The graph schema continues to include:
 
 The exact details remain in the graph schema spec documents.
 
-### 7.3 GraphRAG Retrieval
+### 7.4 GraphRAG Retrieval
 
 Agents use a GraphRAG‑style flow:
 

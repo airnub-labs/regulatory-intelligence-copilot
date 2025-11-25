@@ -15,6 +15,7 @@
 - `docs/specs/timeline_engine_v_0_2.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
+- `docs/specs/graph_ingress_guard_v_0_1.md` – aspect-based graph write validation
 
 For architectural intent and design trade‑offs, see also:
 
@@ -418,20 +419,41 @@ function createMemgraphGraphClient(config: {
 }): GraphClient;
 ```
 
-This client uses Memgraph’s Bolt/HTTP interface directly. Memgraph MCP may still wrap Memgraph for certain LLM tool‑calling scenarios, but **core app graph queries use GraphClient directly**.
+This client uses Memgraph's Bolt/HTTP interface directly. Memgraph MCP may still wrap Memgraph for certain LLM tool‑calling scenarios, but **core app graph queries use GraphClient directly**.
 
-### 8.2 Schema Overview (Summary)
+### 8.2 Graph ingress guard
+
+All writes to the global Memgraph instance are routed through a
+`GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
+specified in:
+
+- `docs/specs/graph_ingress_guard_v_0_1.md`
+
+No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
+against Memgraph. The ingress guard enforces that:
+
+- Only schema‑approved node and relationship types (see `graph_schema_v_0_3.md`)
+  are persisted.
+- Only whitelisted properties for those types are allowed.
+- No user/tenant data, PII, or scenario‑specific text is ever written to the
+  global graph.
+
+Custom behaviour (e.g. audit tagging, local LLM classification) is added via
+configurable ingress aspects layered on top of the non‑removable baseline
+aspects.
+
+### 8.3 Schema Overview (Summary)
 
 The graph schema (see `graph_schema_v_0_3.md`) includes:
 
 - Node labels like `:Statute`, `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Timeline`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:ProfileTag`, `:Jurisdiction`, and nodes that model social welfare, pensions, CGT, and cross‑border coordination.
 - Edge types like `CITES`, `REFERENCES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, and cross‑border relationships linking domestic and EU instruments.
 
-### 8.3 Jurisdictions & Cross-Border Modelling
+### 8.4 Jurisdictions & Cross-Border Modelling
 
 Special cases (IE/UK/NI/IM/GI/AD and CTA/Windsor/NI Protocol) must follow `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
 
-### 8.4 GraphRAG Retrieval
+### 8.5 GraphRAG Retrieval
 
 Agents use a GraphRAG‑style flow:
 

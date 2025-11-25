@@ -348,5 +348,42 @@ See `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` for full cont
 
 ---
 
-These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-026, D-027, …) as the system evolves.
+## D-026 – Aspect-based graph ingress guard for Memgraph (normative)
+
+**Status:** Accepted
+**Date:** 2025-11-25
+
+### Context
+
+The global Memgraph instance stores only schema‑approved nodes and relationships representing public regulatory rules. It must never contain user/tenant data, PII, or scenario‑specific text. To enforce these constraints consistently across all write paths, we need a centralized mechanism that validates and filters all incoming data before it reaches the database.
+
+### Decision
+
+- All writes to the global Memgraph instance must go through a dedicated
+  `GraphWriteService` that applies an ordered chain of **Graph Ingress
+  Aspects**.
+- Baseline aspects (schema validation, property whitelisting, static PII /
+  tenant checks) are non‑removable and encode the guarantees from
+  `data_privacy_and_architecture_boundaries_v_0_1.md` and
+  `graph_ingress_guard_v_0_1.md`.
+- Custom aspects (e.g. audit tagging, source annotation, future local LLM
+  classification) may be configured via a registry+config mechanism, but may
+  not weaken or bypass the baseline invariants.
+- No component is allowed to issue raw Cypher write statements (`CREATE`,
+  `MERGE`, `SET` on new nodes/relationships) directly against Memgraph outside
+  the GraphWriteService.
+
+See `docs/specs/graph_ingress_guard_v_0_1.md` for the detailed design of the
+aspect pattern and the baseline/custom aspect split.
+
+### Consequences
+
+- All graph write operations must be channeled through GraphWriteService.
+- Schema changes require updating both the schema spec and the ingress guard configuration.
+- Privacy and data classification guarantees are enforced at the code level, not just by policy.
+- Custom ingestion workflows can add domain‑specific metadata without compromising baseline protections.
+
+---
+
+These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-027, D-028, …) as the system evolves.
 
