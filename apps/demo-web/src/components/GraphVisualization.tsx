@@ -16,7 +16,17 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import dynamic from 'next/dynamic';
+
+// Dynamically import ForceGraph2D to avoid SSR issues
+const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+    </div>
+  ),
+});
 
 interface GraphNode {
   id: string;
@@ -34,7 +44,7 @@ interface GraphEdge {
 
 interface GraphData {
   nodes: GraphNode[];
-  edges: GraphEdge[];
+  links: GraphEdge[]; // ForceGraph2D expects 'links' not 'edges'
 }
 
 interface GraphPatch {
@@ -58,13 +68,15 @@ export function GraphVisualization({
   profileType = 'single_director',
   keyword,
 }: GraphVisualizationProps) {
-  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], edges: [] });
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const eventSourceRef = useRef<EventSource | null>(null);
   const fgRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Node colors by type
   const getNodeColor = (node: GraphNode) => {
@@ -83,6 +95,22 @@ export function GraphVisualization({
     };
     return colors[node.type] || '#6b7280'; // gray default
   };
+
+  // Handle window resize
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        setDimensions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
 
   // Load initial graph snapshot
   const loadInitialGraph = useCallback(async () => {
@@ -107,15 +135,15 @@ export function GraphVisualization({
         throw new Error(data.error);
       }
 
-      // Transform edges to use node references (required by force-graph)
-      const transformedEdges = data.edges.map((edge: GraphEdge) => ({
+      // Transform edges to links with id (required by force-graph)
+      const transformedLinks = (data.edges || []).map((edge: GraphEdge) => ({
         ...edge,
         id: `${edge.source}-${edge.type}-${edge.target}`,
       }));
 
       setGraphData({
         nodes: data.nodes || [],
-        edges: transformedEdges || [],
+        links: transformedLinks,
       });
       setLastUpdate(data.timestamp);
       setLoading(false);
@@ -129,21 +157,20 @@ export function GraphVisualization({
   // Apply graph patch
   const applyPatch = useCallback((patch: GraphPatch) => {
     setGraphData((prev) => {
-      const newNodes = [...prev.nodes];
-      const newEdges = [...prev.edges];
+      let newNodes = [...prev.nodes];
+      let newLinks = [...prev.links];
 
-      // Remove nodes
-      if (patch.nodes_removed) {
+      // Remove nodes (also removes associated edges)
+      if (patch.nodes_removed && patch.nodes_removed.length > 0) {
         const removedIds = new Set(patch.nodes_removed);
-        const filteredNodes = newNodes.filter((n) => !removedIds.has(n.id));
-        const filteredEdges = newEdges.filter(
+        newNodes = newNodes.filter((n) => !removedIds.has(n.id));
+        newLinks = newLinks.filter(
           (e) => !removedIds.has(e.source as string) && !removedIds.has(e.target as string)
         );
-        return { nodes: filteredNodes, edges: filteredEdges };
       }
 
       // Add nodes
-      if (patch.nodes_added) {
+      if (patch.nodes_added && patch.nodes_added.length > 0) {
         for (const node of patch.nodes_added) {
           if (!newNodes.find((n) => n.id === node.id)) {
             newNodes.push(node);
@@ -152,7 +179,7 @@ export function GraphVisualization({
       }
 
       // Update nodes
-      if (patch.nodes_updated) {
+      if (patch.nodes_updated && patch.nodes_updated.length > 0) {
         for (const update of patch.nodes_updated) {
           const index = newNodes.findIndex((n) => n.id === update.id);
           if (index !== -1) {
@@ -162,28 +189,28 @@ export function GraphVisualization({
       }
 
       // Remove edges
-      if (patch.edges_removed) {
+      if (patch.edges_removed && patch.edges_removed.length > 0) {
         for (const edge of patch.edges_removed) {
-          const index = newEdges.findIndex(
+          const index = newLinks.findIndex(
             (e) => e.source === edge.source && e.target === edge.target && e.type === edge.type
           );
           if (index !== -1) {
-            newEdges.splice(index, 1);
+            newLinks.splice(index, 1);
           }
         }
       }
 
       // Add edges
-      if (patch.edges_added) {
+      if (patch.edges_added && patch.edges_added.length > 0) {
         for (const edge of patch.edges_added) {
           const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
-          if (!newEdges.find((e) => (e as any).id === edgeWithId.id)) {
-            newEdges.push(edgeWithId);
+          if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
+            newLinks.push(edgeWithId);
           }
         }
       }
 
-      return { nodes: newNodes, edges: newEdges };
+      return { nodes: newNodes, links: newLinks };
     });
     setLastUpdate(patch.timestamp);
   }, []);
@@ -296,7 +323,7 @@ export function GraphVisualization({
   }
 
   return (
-    <div className="relative w-full h-full">
+    <div ref={containerRef} className="relative w-full h-full">
       {/* Status bar */}
       <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur rounded-lg shadow-lg p-4 space-y-2">
         <div className="flex items-center gap-2">
@@ -307,7 +334,7 @@ export function GraphVisualization({
         </div>
         <div className="text-xs text-gray-600">
           <div>Nodes: {graphData.nodes.length}</div>
-          <div>Edges: {graphData.edges.length}</div>
+          <div>Links: {graphData.links.length}</div>
           {lastUpdate && <div>Updated: {new Date(lastUpdate).toLocaleTimeString()}</div>}
         </div>
       </div>
@@ -334,6 +361,8 @@ export function GraphVisualization({
       <ForceGraph2D
         ref={fgRef}
         graphData={graphData}
+        width={dimensions.width}
+        height={dimensions.height}
         nodeLabel={(node: any) => `${node.label || node.id}\n(${node.type})`}
         nodeColor={(node: any) => getNodeColor(node)}
         nodeRelSize={6}
@@ -366,8 +395,6 @@ export function GraphVisualization({
         onNodeClick={(node: any) => {
           console.log('Node clicked:', node);
         }}
-        width={typeof window !== 'undefined' ? window.innerWidth : 800}
-        height={typeof window !== 'undefined' ? window.innerHeight - 100 : 600}
       />
     </div>
   );
