@@ -15,9 +15,17 @@ The schema is designed to:
 
 - Capture **rules and their interactions**, not free‑form text.
 - Support **multi‑domain** reasoning (tax, welfare, pensions, CGT, EU law).
-- Support **multi‑jurisdiction** reasoning (Ireland, other EU countries, Isle of Man, Malta, etc.), without assuming any single “primary” country.
+- Support **multi‑jurisdiction** reasoning (Ireland, other EU countries, Isle of Man, Malta, etc.), without assuming any single "primary" country.
 - Support **time‑based reasoning** (lookbacks, lock‑ins, deadlines, usage frequency) through `:Timeline` nodes and edges consumed by the Timeline Engine.
 - Act as a **living, incrementally enriched graph** as new rules, guidance, and case law are discovered via MCP and conversation.
+
+### Normative References
+
+This schema spec must be read together with:
+
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+- `docs/specs/timeline_engine_v_0_2.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
 
 ---
 
@@ -48,8 +56,30 @@ The schema is designed to:
    - Adding new node labels and edge types without breaking existing logic.
    - Incremental upserts as MCP tools and LLM‑assisted ingestion discover new rules, cases, and relationships.
 
-6. **User‑agnostic**  
+6. **User‑agnostic**
    The graph never stores personal user data or specific scenarios. Personas/use cases are modelled via `:ProfileTag` and inputs passed at query time.
+
+---
+
+## 1.1 Privacy & Data Classification
+
+The graph schema is constrained by the data privacy boundaries defined in:
+
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+
+**In summary:**
+
+- Graph nodes and relationships are **public and rule-only**: they may represent jurisdictions, regions, agreements, regimes, rules, benefits, obligations, timelines and document metadata derived from public sources.
+- Graph properties must **never include**:
+  - User identifiers (names, emails, account IDs)
+  - Tenant identifiers (organization names, tenant keys)
+  - Uploaded document contents or line-level text
+  - Free-text scenario descriptions containing user-specific details
+  - PII (personal identifiable information) of any kind
+- If new node or edge types are introduced, they **must** be classified according to the privacy spec before being persisted in Memgraph.
+- User profile and scenario context is passed to agents during queries but never stored in the graph.
+
+This ensures the graph remains a **shared, multi-tenant knowledge base** that can be freely queried and visualized without privacy concerns.
 
 ---
 
