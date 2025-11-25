@@ -38,6 +38,9 @@ importers:
       ai:
         specifier: ^5.0.0
         version: 5.0.101(zod@3.25.76)
+      force-graph:
+        specifier: ^1.51.0
+        version: 1.51.0
       next:
         specifier: ^16.0.0
         version: 16.0.3(react-dom@19.2.0)(react@19.2.0)

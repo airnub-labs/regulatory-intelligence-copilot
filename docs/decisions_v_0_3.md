@@ -306,10 +306,47 @@ We use E2B sandboxes, MCP servers, and Memgraph as core execution and data layer
 
 ### Consequences
 
-- Clear separation of concerns between “LLM reasoning” and “execution/data access”.
+- Clear separation of concerns between "LLM reasoning" and "execution/data access".
 - Easier to enforce isolation and audit egress.
 
 ---
 
-These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-025, D-026, …) as the system evolves.
+## D-025 – Data Privacy & Graph Boundaries (Normative)
+
+**Status:** Accepted (new)
+
+### Context
+
+The global regulatory graph (Memgraph) is a **shared knowledge base** intended to model public regulatory data across jurisdictions. User-specific data (PII, scenarios, uploaded documents) must never contaminate this shared graph to maintain privacy, compliance, and multi-tenant trust.
+
+### Decision
+
+- The global regulatory graph (Memgraph) is a **public, shared knowledge base** and may only contain public regulatory data:
+  - Jurisdictions, regions, agreements, regimes
+  - Rules, benefits, obligations, reliefs, conditions
+  - Timelines, profile tags
+  - References to public documents and metadata
+- **No user-specific or tenant-specific data** (including PII, scenarios, uploaded documents, or derived metrics) may ever be stored in the graph.
+- User uploads are processed inside short-lived E2B sandboxes. By default, raw files and line-level contents are **not persisted**; only abstracted features may be returned to the application, and never upserted into the global graph.
+- User profile and scenario data live in:
+  - Per-tenant storage (with appropriate access controls)
+  - In-memory session context during request handling
+  - Never in the graph
+- Any exceptions or refinements to these rules must be made by updating:
+  - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+  - This decisions file
+
+### Consequences
+
+- Clear separation between public regulatory knowledge and private user data.
+- Graph can be freely queried and visualized without privacy concerns.
+- Simplified compliance story for GDPR and other privacy regulations.
+- Multi-tenant deployments can safely share a single graph instance.
+- Uploaded documents and user scenarios require separate storage strategy.
+
+See `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` for full context, rationale, and detailed classification rules.
+
+---
+
+These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-026, D-027, …) as the system evolves.
 

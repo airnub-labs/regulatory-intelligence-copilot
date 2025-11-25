@@ -14,6 +14,7 @@
 - `docs/specs/graph_schema_v_0_3.md`
 - `docs/specs/timeline_engine_v_0_2.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
 
 For architectural intent and design trade‑offs, see also:
 
@@ -55,6 +56,25 @@ At every layer, the architecture is designed to be:
 - **Provider‑agnostic & EU‑friendly** – easy to run entirely on local models for strict data residency.
 - **Reusable** – engine packages can be imported into other Next.js/Supabase apps.
 - **Future‑proof** – aligned with Node 24 LTS, modern React, Tailwind 4, and Vercel AI SDK v5.
+
+---
+
+## 1.1 Data & Privacy Boundaries
+
+The high-level system architecture is constrained by the data privacy boundaries defined in:
+
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+
+In particular, the global regulatory graph is **public and rule-only**: it may only store public regulatory data (jurisdictions, regions, agreements, regimes, rules, benefits, timelines) and document metadata, and must never store user or tenant-specific data, PII, or uploaded document contents. User profile and scenario data live outside the graph in per-tenant storage and in-memory session context.
+
+**Key constraints:**
+
+- **Graph (Memgraph):** Public regulatory data only. No PII, no user scenarios, no tenant-specific data.
+- **E2B sandboxes:** Short-lived execution environments. By default, uploaded files and their contents are not persisted beyond the sandbox lifetime.
+- **Per-tenant storage:** User scenarios, uploaded documents (if retained), and derived metrics are stored separately from the graph, with appropriate access controls.
+- **In-memory context:** User profile and scenario context passed to agents during request handling, never persisted in the graph.
+
+See the normative spec above for full details, rationale, and any future refinements to these boundaries.
 
 ---
 
