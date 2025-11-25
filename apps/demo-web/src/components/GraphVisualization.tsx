@@ -8,14 +8,25 @@
  * via GET /api/graph/stream (SSE).
  *
  * Features:
- * - Force-directed graph layout
- * - Real-time updates via SSE
+ * - Force-directed graph layout with interactive controls
+ * - Real-time updates via SSE with pause/resume capability
+ * - Search functionality (by name, type, or ID)
+ * - Node type filtering with counts
+ * - Node selection with details panel
+ * - Zoom, pan, and reset view controls
  * - Jurisdiction and profile filtering
  * - Node and edge styling by type
- * - Interactive tooltips and selection
+ *
+ * Performance Optimizations:
+ * - useMemo for expensive computations (node types, counts, connections)
+ * - useCallback for stable function references (prevents re-renders)
+ * - Efficient filtering with Set-based lookups
+ * - Memoized color mapping function
+ * - Single-pass connection counting for details panel
+ * - Debounced resize handling
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
@@ -84,8 +95,8 @@ export function GraphVisualization({
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Node colors by type
-  const getNodeColor = (node: GraphNode) => {
+  // Memoized node color mapping - prevents recreation on every render
+  const getNodeColor = useCallback((node: GraphNode | { type: string }) => {
     const colors: Record<string, string> = {
       Jurisdiction: '#3b82f6', // blue
       Region: '#8b5cf6', // purple
@@ -100,7 +111,7 @@ export function GraphVisualization({
       ProfileTag: '#06b6d4', // cyan
     };
     return colors[node.type] || '#6b7280'; // gray default
-  };
+  }, []);
 
   // Handle window resize
   useEffect(() => {
@@ -256,11 +267,22 @@ export function GraphVisualization({
     setFilteredData(filtered);
   }, [graphData, selectedTypes, searchQuery]);
 
-  // Get unique node types for filtering
-  const nodeTypes = Array.from(new Set(graphData.nodes.map((n) => n.type)));
+  // Memoized unique node types for filtering
+  const nodeTypes = useMemo(() => {
+    return Array.from(new Set(graphData.nodes.map((n) => n.type))).sort();
+  }, [graphData.nodes]);
 
-  // Toggle node type filter
-  const toggleTypeFilter = (type: string) => {
+  // Memoized node counts by type for filter panel
+  const nodeCountsByType = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const node of graphData.nodes) {
+      counts.set(node.type, (counts.get(node.type) || 0) + 1);
+    }
+    return counts;
+  }, [graphData.nodes]);
+
+  // Memoized toggle type filter callback
+  const toggleTypeFilter = useCallback((type: string) => {
     setSelectedTypes((prev) => {
       const next = new Set(prev);
       if (next.has(type)) {
@@ -270,20 +292,43 @@ export function GraphVisualization({
       }
       return next;
     });
-  };
+  }, []);
 
-  // Clear all filters
-  const clearFilters = () => {
+  // Memoized clear filters callback
+  const clearFilters = useCallback(() => {
     setSelectedTypes(new Set());
     setSearchQuery('');
-  };
+  }, []);
 
-  // Reset graph view
-  const resetView = () => {
+  // Memoized reset view callback
+  const resetView = useCallback(() => {
     if (fgRef.current) {
       fgRef.current.zoomToFit(400);
     }
-  };
+  }, []);
+
+  // Memoized focus on node callback
+  const focusOnNode = useCallback((node: GraphNode) => {
+    if (fgRef.current && node.x !== undefined && node.y !== undefined) {
+      fgRef.current.centerAt(node.x, node.y, 1000);
+      fgRef.current.zoom(3, 1000);
+    }
+  }, []);
+
+  // Memoized connection counts for selected node
+  const selectedNodeConnections = useMemo(() => {
+    if (!selectedNode) return { incoming: 0, outgoing: 0 };
+
+    let incoming = 0;
+    let outgoing = 0;
+
+    for (const link of filteredData.links) {
+      if (link.target === selectedNode.id) incoming++;
+      if (link.source === selectedNode.id) outgoing++;
+    }
+
+    return { incoming, outgoing };
+  }, [selectedNode, filteredData.links]);
 
   // Connect to SSE stream
   const connectToStream = useCallback(() => {
@@ -479,7 +524,7 @@ export function GraphVisualization({
                   ></div>
                   <span className="text-xs">{type}</span>
                   <span className="text-xs text-gray-500 ml-auto">
-                    {graphData.nodes.filter((n) => n.type === type).length}
+                    {nodeCountsByType.get(type) || 0}
                   </span>
                 </label>
               ))}
@@ -588,27 +633,18 @@ export function GraphVisualization({
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Incoming:</span>
-                  <span className="font-medium">
-                    {filteredData.links.filter((l) => l.target === selectedNode.id).length}
-                  </span>
+                  <span className="font-medium">{selectedNodeConnections.incoming}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Outgoing:</span>
-                  <span className="font-medium">
-                    {filteredData.links.filter((l) => l.source === selectedNode.id).length}
-                  </span>
+                  <span className="font-medium">{selectedNodeConnections.outgoing}</span>
                 </div>
               </div>
             </div>
 
             <div className="pt-2 border-t">
               <button
-                onClick={() => {
-                  if (fgRef.current) {
-                    fgRef.current.centerAt(selectedNode.x, selectedNode.y, 1000);
-                    fgRef.current.zoom(3, 1000);
-                  }
-                }}
+                onClick={() => focusOnNode(selectedNode)}
                 className="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Focus on Node
