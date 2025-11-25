@@ -106,7 +106,6 @@ export {
 export {
   GraphChangeDetector,
   createGraphChangeDetector,
-  createGraphChangeDetectorLegacy,
   type GraphPatch,
   type ChangeFilter,
   type ChangeCallback,

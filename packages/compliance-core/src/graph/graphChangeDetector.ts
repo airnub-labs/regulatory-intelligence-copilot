@@ -255,11 +255,15 @@ export class GraphChangeDetector {
         // Query only nodes updated since last poll
         currentContext = await this.timestampQueryFn(filter, lastPoll.timestamp);
 
-        // If timestamp query returns results, merge with snapshot
         if (currentContext.nodes.length > 0 || currentContext.edges.length > 0) {
           console.log(`${LOG_PREFIX.graph} Timestamp query for ${filterKey}: ${currentContext.nodes.length} nodes since ${lastPoll.timestamp.toISOString()}`);
+        }
 
-          // Update snapshot with changed nodes
+        // Compute diff from timestamp query results BEFORE updating snapshot
+        const patch = this.computeTimestampBasedDiff(currentContext, snapshot);
+
+        // Now update snapshot with changed nodes
+        if (currentContext.nodes.length > 0 || currentContext.edges.length > 0) {
           const currentNodes = this.nodesToMap(currentContext.nodes);
           const currentEdges = this.edgesToMap(currentContext.edges);
 
@@ -278,9 +282,7 @@ export class GraphChangeDetector {
           hasData: currentContext.nodes.length > 0,
         });
 
-        // Compute diff from timestamp query results
-        const patch = this.computeTimestampBasedDiff(currentContext, snapshot);
-
+        // Emit patch if there are changes
         if (this.hasChanges(patch)) {
           this.emitPatchWithBatching(filterKey, patch);
         }
@@ -662,13 +664,3 @@ export function createGraphChangeDetector(
   return new GraphChangeDetector(graphQueryFn, config, timestampQueryFn);
 }
 
-/**
- * Create a GraphChangeDetector with legacy signature (backwards compatible)
- * @deprecated Use createGraphChangeDetector with config object instead
- */
-export function createGraphChangeDetectorLegacy(
-  graphQueryFn: (filter: ChangeFilter) => Promise<GraphContext>,
-  pollIntervalMs?: number
-): GraphChangeDetector {
-  return new GraphChangeDetector(graphQueryFn, { pollIntervalMs });
-}
