@@ -348,5 +348,41 @@ See `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` for full cont
 
 ---
 
-These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-026, D-027, …) as the system evolves.
+## D-026 – Aspect-based graph ingress guard for Memgraph (normative)
+
+**Status:** Accepted (new)
+
+### Context
+
+To enforce the data privacy and schema guarantees defined in D-025 and related specs, we need a structured mechanism to validate all writes to the global Memgraph instance before they are executed.
+
+### Decision
+
+- All writes to the global Memgraph instance must go through a dedicated
+  `GraphWriteService` that applies an ordered chain of **Graph Ingress
+  Aspects**.
+- Baseline aspects (schema validation, property whitelisting, static PII /
+  tenant checks) are non‑removable and encode the guarantees from
+  `data_privacy_and_architecture_boundaries_v_0_1.md` and
+  `graph_ingress_guard_v_0_1.md`.
+- Custom aspects (e.g. audit tagging, source annotation, future local LLM
+  classification) may be configured via a registry+config mechanism, but may
+  not weaken or bypass the baseline invariants.
+- No component is allowed to issue raw Cypher write statements (`CREATE`,
+  `MERGE`, `SET` on new nodes/relationships) directly against Memgraph outside
+  the GraphWriteService.
+
+See `docs/specs/graph_ingress_guard_v_0_1.md` for the detailed design of the
+aspect pattern and the baseline/custom aspect split.
+
+### Consequences
+
+- Clear enforcement boundary for graph privacy and schema compliance.
+- Predictable and auditable writes to the global graph.
+- Extensibility for fork-specific and future features without weakening guarantees.
+- Foundation for SOC 2 / GDPR compliance work.
+
+---
+
+These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-027, D-028, …) as the system evolves.
 

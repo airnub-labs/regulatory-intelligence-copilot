@@ -15,6 +15,7 @@
 - `docs/specs/timeline_engine_v_0_2.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
+- `docs/specs/graph_ingress_guard_v_0_1.md`
 
 For architectural intent and design trade‑offs, see also:
 
@@ -75,6 +76,27 @@ In particular, the global regulatory graph is **public and rule-only**: it may o
 - **In-memory context:** User profile and scenario context passed to agents during request handling, never persisted in the graph.
 
 See the normative spec above for full details, rationale, and any future refinements to these boundaries.
+
+### Graph ingress guard
+
+All writes to the global Memgraph instance are routed through a
+`GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
+specified in:
+
+- `docs/specs/graph_ingress_guard_v_0_1.md`
+
+No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
+against Memgraph. The ingress guard enforces that:
+
+- Only schema‑approved node and relationship types (see `graph_schema_v_0_3.md`)
+  are persisted.
+- Only whitelisted properties for those types are allowed.
+- No user/tenant data, PII, or scenario‑specific text is ever written to the
+  global graph.
+
+Custom behaviour (e.g. audit tagging, local LLM classification) is added via
+configurable ingress aspects layered on top of the non‑removable baseline
+aspects.
 
 ---
 
