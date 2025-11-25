@@ -1,325 +1,348 @@
-# Graph Ingress Guard – v0.1
+# Graph Ingress Guard – v0_1 (Consolidated)
 
-> **Status:** Current draft, but **normative** once adopted.
+> **Status:** Current and **normative** once adopted.
 >
-> This spec defines how **all writes to the global Memgraph instance** must be
-> routed and validated, to ensure that only public regulatory knowledge is
-> persisted and that no user/tenant data or PII ever enters the shared graph.
+> This spec defines **how all writes to the global Memgraph instance must be
+> routed and validated**, using an **aspect-based Graph Ingress Guard**. It
+> replaces the earlier non‑aspect design.
+
+- The global graph is **public & rule‑only**.
+- All writes go through a **GraphWriteService**.
+- The GraphWriteService always runs a chain of **ingress aspects** that enforce
+  schema + privacy guarantees and allow safe extensibility.
+
+Referenced specs:
+
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/specs/graph_schema_v_0_3.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+
+---
 
 ## 1. Purpose & Context
 
-The platform already enforces an **egress guard** pattern for MCP calls:
+We already enforce an **egress guard** pattern for MCP and LLM calls via the
+E2B MCP gateway. That egress guard:
 
-- All MCP clients are routed through the **E2B MCP gateway**.
-- An egress guard sits at this boundary to strip or redact PII and other
-  sensitive content before it leaves the system.
+- Centralises outbound calls,
+- Applies aspects/middleware (PII stripping, disclaimers, context),
+- Allows forks to customise behaviour without touching call sites.
 
-This document introduces the mirror pattern for Memgraph:
+This document introduces the mirror pattern for **Memgraph writes**:
 
-> A **Graph Ingress Guard** that sits in front of all writes to the global
-> Memgraph database and prevents any sensitive or tenant-specific data from
-> being upserted into the shared regulatory graph.
+> A **Graph Ingress Guard**, implemented as an aspect chain around a
+> GraphWriteService, that prevents any sensitive or tenant‑specific data from
+> being written to the shared regulatory graph.
 
-This is directly aligned with:
+The goal is to:
 
-- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-  - Global graph is **public & rule-only**.
-- `docs/specs/graph_schema_v_0_3.md`
-  - Defines allowed node/edge types.
-- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
-  - All complex IE/UK/NI/IM/GI/AD cases are still **public regulatory
-    structure**.
-
-The Graph Ingress Guard provides **defense in depth** and a **single audit
-point** for future SOC 2 and GDPR work.
+- Enforce **non‑negotiable privacy + schema guarantees** for the global graph.
+- Provide a **flexible extension mechanism** for forks and future features.
+- Support future SOC 2 / GDPR work with a clear, auditable boundary.
 
 ---
 
 ## 2. Scope
 
-This spec applies to **every code path** that writes to the global Memgraph
-instance, including but not limited to:
+The Graph Ingress Guard applies to **every code path** that writes to the
+**global Memgraph instance**, including:
 
-- Ingestion pipelines for statutes, guidance, case law, and treaties.
-- Live ingestion triggered from agent/chat sessions (e.g. when discovering a
-  new public document while answering a question).
+- Ingestion pipelines for statutes, guidance, case law, treaties.
+- Live ingestion triggered from agent/chat sessions.
 - Background jobs that update regimes, timelines, or derived rules.
 
 It does **not** govern:
 
-- Tenant-private storage (Supabase/Postgres, S3, tenant-specific vector
-  indices).
-- In-memory session state.
-- E2B sandbox internals (they are governed by the MCP/egress guard and
-  privacy specs).
+- Tenant‑private storage (Supabase/Postgres, S3, tenant‑scoped vector indices).
+- In‑memory session state.
+- E2B sandbox internals (governed by the MCP/egress guard & privacy spec).
 
 ---
 
-## 3. High-Level Design
+## 3. Core Pattern: GraphWriteService + Ingress Aspects
 
 ### 3.1 GraphWriteService as the Only Writer
 
-All writes to Memgraph must go through a dedicated **GraphWriteService** (or
-library), implemented in the core backend (e.g. `compliance-core`).
+All writes to Memgraph must go through a **GraphWriteService** (or equivalent
+repository) in the core backend.
 
 **Rule:**
 
 > No other part of the codebase may execute direct Cypher writes to Memgraph.
 
-The GraphWriteService:
+The GraphWriteService exposes domain‑level methods, e.g.:
 
-- Exposes **domain-level methods**, e.g.:
-  - `upsertJurisdiction(dto)`
-  - `upsertRegion(dto)`
-  - `upsertAgreement(dto)`
-  - `upsertRegime(dto)`
-  - `upsertRule(dto)`
-  - `linkRuleToDocument(ruleId, docSectionId)`
-- Implements **schema-level and privacy checks** before emitting any Cypher.
+- `upsertJurisdiction(dto)`
+- `upsertRegion(dto)`
+- `upsertAgreement(dto)`
+- `upsertRegime(dto)`
+- `upsertRule(dto)`
+- `linkRuleToDocument(ruleId, docSectionId)`
 
-This creates a single **Graph Ingress Guard** layer where all write-time
-validation lives.
+Internally, each method:
 
-### 3.2 Flow Overview
+1. Builds a **GraphWriteContext**.
+2. Passes it through an ordered chain of **GraphIngressAspect** functions.
+3. The final step (“terminal”) translates the validated context into Cypher and
+   executes the write.
 
-1. Upstream service (ingestor, agent, background job) constructs a **public
-   DTO** describing the desired node/relationship.
-2. It calls the appropriate GraphWriteService method.
-3. The GraphWriteService:
-   - Validates node/edge types against the schema.
-   - Applies property whitelists.
-   - Runs PII and tenant-data checks.
-   - Optionally calls a small, local model for fuzzy classification.
-4. If all checks pass, it composes Cypher and executes the write.
-5. If checks fail, it **rejects** the write and logs a structured warning or
-   error (without storing PII in logs).
+### 3.2 Context & Aspect Types
 
----
+```ts
+export interface GraphWriteContext {
+  operation: 'create' | 'merge' | 'update' | 'delete';
+  nodeLabel?: string;
+  relType?: string;
+  properties: Record<string, unknown>;
+  tenantId?: string;   // for logging / audit only, never persisted
+  source: 'ingestion' | 'agent' | 'background_job';
+  metadata?: Record<string, unknown>;
+}
 
-## 4. Allowed vs Disallowed Content
+export type GraphIngressAspect = (
+  ctx: GraphWriteContext,
+  next: (ctx: GraphWriteContext) => Promise<GraphWriteContext>
+) => Promise<GraphWriteContext>;
+```
 
-### 4.1 Allowed Node & Edge Types
+### 3.3 Aspect Composition
 
-The Graph Ingress Guard must enforce that only **schema-approved** node and
-edge types are persisted. Allowed labels (as per `graph_schema_v_0_3.md`):
+```ts
+export function composeIngressAspects(
+  aspects: GraphIngressAspect[],
+  terminal: (ctx: GraphWriteContext) => Promise<GraphWriteContext>
+): (ctx: GraphWriteContext) => Promise<GraphWriteContext> {
+  return aspects.reduceRight(
+    (next, aspect) => (ctx) => aspect(ctx, next),
+    terminal,
+  );
+}
+```
 
-- Nodes (non-exhaustive, but illustrative):
-  - `Jurisdiction`
-  - `Region`
-  - `Agreement`
-  - `Regime`
-  - `Rule`
-  - `Benefit`
-  - `Obligation`
-  - `Timeline`
-  - `Document`
-  - `DocumentSection`
+The **terminal** function is the only place that:
 
-- Relationships (examples):
-  - `PART_OF`
-  - `PARTY_TO`
-  - `SUBJECT_TO_REGIME`
-  - `ESTABLISHES_REGIME`
-  - `COORDINATED_WITH`
-  - `AVAILABLE_VIA_REGIME`
-  - `DERIVED_FROM`
-  - `BASED_ON`
-  - `EFFECTIVE_FROM`
-
-Node labels or relationship types **outside this set** must be rejected unless
-and until they are added to the schema spec and this guard.
-
-### 4.2 Property Whitelists
-
-Each node/edge type has a **whitelist of allowed properties**, e.g.:
-
-- Common properties:
-  - `code`
-  - `name`
-  - `domain`
-  - `kind`
-  - `source_ids`
-  - `source_type`
-  - `official_citation`
-  - `confidence`
-  - `status`
-
-Any property not on the whitelist for that type must be rejected.
-
-This significantly reduces the surface area where user/tenant data could
-accidentally be stored.
-
-### 4.3 Disallowed Data Classes
-
-The following must **never** appear as values in properties written to the
-graph:
-
-- Direct identifiers:
-  - User names, emails, phone numbers.
-  - PPSNs, national IDs, account numbers, IBANs.
-  - Tenant IDs or account IDs.
-- Uploaded document contents or excerpts from user-private files.
-- Free-text scenario descriptions (even if semi-anonymised), such as:
-  - "I run a small company in Galway and pay myself €X per month".
-- Any PII or tenant-specific attributes as defined in the privacy spec.
-
-The GraphWriteService must implement checks that:
-
-- Forbid property names like `tenant_id`, `user_id`, `email`, etc.
-- Apply basic PII pattern detection (emails, PPSNs, IBANs, etc.).
-
-If suspicious content is detected, the write must be aborted.
+- Turns the final `GraphWriteContext` into Cypher.
+- Executes the write against Memgraph.
 
 ---
 
-## 5. Phase 1: Static & Rules-Based Guard
+## 4. Baseline vs Custom Aspects
 
-The initial implementation of the Graph Ingress Guard should be:
+We distinguish between:
 
-- **Deterministic**
-- **Low overhead**
-- **Fully auditable**
+1. **Baseline (non‑removable) aspects** – enforce critical invariants from
+   privacy + schema specs.
+2. **Custom (configurable) aspects** – can be added/removed/reordered via
+   configuration, for forks and future features.
 
-### 5.1 Schema Validation
+### 4.1 Baseline Aspects (must always run)
 
-- Validate node labels and relationship types against
-  `graph_schema_v_0_3.md`.
-- Reject any node/edge with unknown or disallowed labels/types.
+Baseline aspects are hard‑wired into the GraphWriteService and **cannot be
+removed by configuration**. They encode the guarantees from
+`data_privacy_and_architecture_boundaries_v_0_1.md` and this spec.
 
-### 5.2 Property Whitelist Enforcement
+Baseline aspects:
 
-- For each node/edge type, maintain a local whitelist of allowed property
-  names.
-- Reject any write that includes properties not on the whitelist.
+1. **SchemaValidationAspect**
+   - Validates `nodeLabel` and `relType` against
+     `graph_schema_v_0_3.md`.
+   - Rejects writes with unknown labels/types.
 
-### 5.3 PII & Tenant Checks
+2. **PropertyWhitelistAspect**
+   - Enforces per‑type property whitelists.
+   - Rejects any properties not allowed for that node/edge type.
 
-- Basic regex and heuristic checks for:
-  - Email addresses (`/\S+@\S+\.\S+/`).
-  - National ID / PPSN patterns.
-  - IBAN / card formats (where applicable).
-  - URIs that look like user-specific resources.
-- Explicitly forbid property values that:
-  - Equal or contain known tenant IDs or user IDs.
+3. **StaticPIIAndTenantCheckAspect**
+   - Runs deterministic checks for PII and tenant IDs, including:
+     - Email patterns, PPSN/national ID patterns, IBAN/card formats (where
+       relevant).
+     - Disallowed keys like `tenant_id`, `user_id`, `email`.
+   - Rejects values that look like user/tenant data or free‑text scenarios.
 
-### 5.4 Failure Behaviour
+These aspects ensure:
 
-On validation failure:
+- Only **schema‑approved node/edge types** are written.
+- Only **whitelisted properties** for those types are used.
+- No obvious PII or tenant‑specific data is persisted.
 
-- **Reject the write** (no Memgraph update).
-- Log a structured warning/error event with:
-  - Type of violation (e.g. `UNKNOWN_PROPERTY`, `PII_DETECTED`).
-  - Node/edge type involved.
-  - Redacted snippet of offending value if needed.
+### 4.2 Custom Aspects (pluggable)
 
-Logs must follow the privacy spec (no full PII leaks into logs).
+Above the baseline stack, we support a configurable chain of **custom
+GraphIngressAspect**s, for example:
+
+- `AuditTaggingAspect` – add audit metadata into `metadata` and/or central
+  logging.
+- `SourceAnnotationAspect` – tag context with ingestion source, batch ID,
+  document version, etc.
+- `LLMClassificationAspect` (Phase 2) – uses a small local model to classify
+  ambiguous text as safe/unsafe for the global graph.
+- `FeatureFlagAspect` – allow experimental schema fields for specific
+  environments.
+
+These are wired via configuration, e.g.:
+
+```yaml
+graphIngress:
+  customAspects:
+    - audit-tagging
+    - source-annotation
+    # - llm-classifier  # opt-in, disabled by default
+```
+
+A simple registry resolves IDs to implementations:
+
+```ts
+const REGISTRY: Record<string, GraphIngressAspect> = {
+  'audit-tagging': auditTaggingAspect,
+  'source-annotation': sourceAnnotationAspect,
+  'llm-classifier': llmClassificationAspect,
+};
+
+export function resolveAspectsFromConfig(ids: string[]): GraphIngressAspect[] {
+  return ids.map((id) => {
+    const aspect = REGISTRY[id];
+    if (!aspect) throw new Error(`Unknown ingress aspect: ${id}`);
+    return aspect;
+  });
+}
+```
+
+Fork maintainers and SaaS operators can customise **custom** aspects by editing
+config, without touching the GraphWriteService API or call sites.
 
 ---
 
-## 6. Phase 2: Intelligent Guard (Small Local Model)
+## 5. Allowed vs Disallowed Content
 
-In future, the Graph Ingress Guard may be extended with a **small, local
-model** to catch more subtle issues that static rules miss.
+### 5.1 Allowed Node & Edge Types
 
-### 6.1 Constraints
+Allowed node labels and relationship types are defined in
+`graph_schema_v_0_3.md` (e.g. `Jurisdiction`, `Region`, `Agreement`, `Regime`,
+`Rule`, `Benefit`, `Timeline`, `Document`, `DocumentSection`, and relationships
+like `PART_OF`, `PARTY_TO`, `SUBJECT_TO_REGIME`, `DERIVED_FROM`, etc.).
 
-Any intelligent component used in the guard must:
+The **SchemaValidationAspect** must:
 
-- Run **locally or within the platform's controlled infra** (e.g. GPT-OSS or
-  another OSS model), *not* an external API like OpenAI/Anthropic.
-- Reuse the same privacy principles as the LLM egress guard:
-  - No raw user documents or full scenarios are sent outside the platform.
+- Reject any write where `nodeLabel` / `relType` is not in the approved set.
 
-The model should be **second-line**, not first-line:
+### 5.2 Property Whitelists
 
-1. Static/schema checks run first.
-2. Only residual or ambiguous cases go to the local model.
+Each node/edge type has a **whitelist of allowed property names**, e.g.:
 
-### 6.2 Example Use Cases
+- `code`
+- `name`
+- `domain`
+- `kind`
+- `source_ids`
+- `source_type`
+- `official_citation`
+- `confidence`
+- `status`
 
-A small model could be used to:
+The **PropertyWhitelistAspect** must:
 
-- Classify short text as `PUBLIC_REGULATORY_DESCRIPTION` vs
+- Reject writes containing properties outside the whitelist for that type.
+
+### 5.3 Disallowed Data Classes
+
+The **StaticPIIAndTenantCheckAspect** must ensure that the following **never
+appear** as values in properties written to the graph:
+
+- User identifiers (names, emails, phone numbers).
+- National IDs / PPSNs, account numbers, IBANs, card numbers.
+- Tenant/account IDs.
+- Free‑text scenario descriptions (e.g. "I run a small company in Galway...").
+- Any direct excerpts from user‑private uploaded documents.
+
+On detection, the aspect must:
+
+- Reject the write (no Cypher executed).
+- Emit a structured warning/error event (with redacted content) to logs.
+
+---
+
+## 6. Phase 1 vs Phase 2 Implementation
+
+### 6.1 Phase 1 – Static & Deterministic
+
+Phase 1 focuses on:
+
+- Schema validation.
+- Property whitelisting.
+- Deterministic PII/tenant checks.
+
+This is:
+
+- Low overhead.
+- Predictable and auditable.
+- Sufficient to prevent most accidental leakage into the global graph.
+
+### 6.2 Phase 2 – Intelligent Guard (Small Local Model)
+
+In future, we may add an **LLMClassificationAspect** that uses a **small local
+model** (e.g. GPT‑OSS) to identify subtle, ambiguous cases that static checks
+miss.
+
+Constraints:
+
+- The model must run **locally or within controlled infra**, not via external
+  APIs like OpenAI/Anthropic.
+- It is a **second line of defense**, after schema + static checks.
+
+Example behaviour:
+
+- Inspect text properties after whitelist filtering.
+- Classify them as `PUBLIC_REGULATORY_DESCRIPTION` vs
   `POTENTIAL_USER_SCENARIO`.
-- Spot subtle PII-like content missed by regexes.
-- Suggest normalisations (e.g. "this looks like a specific taxpayer's
-  situation, not a general rule") and block such writes.
+- If unsafe, reject the write and emit an audit event.
 
-### 6.3 Failure Behaviour
-
-If the model flags content as **unsafe for global graph**:
-
-- The write is rejected.
-- An audit event is recorded (without full content), e.g.:
-  - `GRAPH_INGRESS_MODEL_BLOCKED: category=POTENTIAL_USER_SCENARIO`.
-
-The system must never auto-correct such content into the graph; any override
-requires explicit code changes and spec updates.
+The aspect must never auto‑"fix" unsafe content into the graph; any override
+requires intentional code + spec changes.
 
 ---
 
-## 7. Integration with Existing Specs
+## 7. Testing & Code Review Guidelines
 
-The Graph Ingress Guard is a **mechanical enforcement** of decisions made in:
+To keep the Graph Ingress Guard effective:
 
-- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-  - Global graph is public & rule-only.
-  - No user/tenant data in Memgraph.
-- `docs/specs/graph_schema_v_0_3.md`
-  - Defines allowed node/edge types and properties.
-- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
-  - Complex IE/UK/NI/IM/GI/AD and CTA modelling is still purely public law.
+- **No direct Memgraph writes**
+  - Code review must reject PRs with raw `CREATE`/`MERGE` statements outside
+    GraphWriteService.
 
-Any change to the set of allowed node/edge types or properties must:
+- **Unit tests**
+  - Cover allowed writes (public rules, regimes, agreements) that pass
+    baseline aspects.
+  - Cover disallowed writes (PII, tenant IDs, scenario text) that get blocked.
 
-1. Update the relevant schema and modelling specs.
-2. Update the GraphWriteService and its whitelists.
+- **Integration tests**
+  - Verify ingestion pipelines still succeed when writing valid public data.
+  - Verify that uploads/scenario flows never cause direct graph writes.
 
----
-
-## 8. Testing & Code Review Guidelines
-
-To keep the guard effective:
-
-- **No direct Memgraph writes**:
-  - Code review must reject any PR that issues raw Cypher `CREATE`/`MERGE`
-    statements outside the GraphWriteService.
-
-- **Unit tests**:
-  - Cover representative allowed writes (public rules, agreements, regimes).
-  - Cover representative disallowed writes (PII, tenant IDs, scenario text).
-
-- **Integration tests**:
-  - Ensure ingestion pipelines that parse public docs can still upsert
-    successfully.
-  - Ensure uploads and scenario flows never cause graph writes directly.
-
-- **Security/regression tests**:
-  - Periodically attempt to insert synthetic PII through various paths to
-    verify that the guard blocks them.
+- **Security/regression tests**
+  - Periodically attempt to inject synthetic PII through various paths to
+    confirm the guard blocks them.
 
 ---
 
-## 9. Non-Goals
+## 8. Non‑Goals
 
 The Graph Ingress Guard is **not** responsible for:
 
-- Validating legal correctness of rules or regimes.
-- Ensuring that all public documents have been ingested.
-- Deciding which public documents to ingest (that is the responsibility of
-  ingestion pipelines and agents).
+- Assessing legal correctness of rules/regimes.
+- Ensuring all public documents are ingested.
+- Deciding which public sources to ingest (that is ingestion/agent logic).
 
-Its sole responsibility is:
+Its sole responsibility:
 
-> To ensure that whatever is written to the global Memgraph instance conforms
-> to the schema and privacy boundaries: **public, rule-only, and free of
-> tenant/user-specific data.**
+> Ensure that whatever is written to the global Memgraph instance conforms to
+> the schema and privacy boundaries: **public, rule‑only, free of
+> tenant/user‑specific data.**
 
 ---
 
-## 10. Normative References
+## 9. Normative References
 
-Implementers of the GraphWriteService / Graph Ingress Guard must consult:
+Implementers of the GraphWriteService and ingress aspects must consult:
 
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
 - `docs/specs/graph_schema_v_0_3.md`
@@ -327,5 +350,5 @@ Implementers of the GraphWriteService / Graph Ingress Guard must consult:
 - `docs/architecture_v_0_3.md`
 - `docs/decisions_v_0_3.md`
 
-before making changes that affect Memgraph writes.
+before making changes that affect Memgraph writes or the ingress aspect chain.
 
