@@ -8,14 +8,25 @@
  * via GET /api/graph/stream (SSE).
  *
  * Features:
- * - Force-directed graph layout
- * - Real-time updates via SSE
+ * - Force-directed graph layout with interactive controls
+ * - Real-time updates via SSE with pause/resume capability
+ * - Search functionality (by name, type, or ID)
+ * - Node type filtering with counts
+ * - Node selection with details panel
+ * - Zoom, pan, and reset view controls
  * - Jurisdiction and profile filtering
  * - Node and edge styling by type
- * - Interactive tooltips and selection
+ *
+ * Performance Optimizations:
+ * - useMemo for expensive computations (node types, counts, connections)
+ * - useCallback for stable function references (prevents re-renders)
+ * - Efficient filtering with Set-based lookups
+ * - Memoized color mapping function
+ * - Single-pass connection counting for details panel
+ * - Debounced resize handling
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
@@ -69,17 +80,23 @@ export function GraphVisualization({
   keyword,
 }: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
+  const [filteredData, setFilteredData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [paused, setPaused] = useState(false);
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [showControls, setShowControls] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Node colors by type
-  const getNodeColor = (node: GraphNode) => {
+  // Memoized node color mapping - prevents recreation on every render
+  const getNodeColor = useCallback((node: GraphNode | { type: string }) => {
     const colors: Record<string, string> = {
       Jurisdiction: '#3b82f6', // blue
       Region: '#8b5cf6', // purple
@@ -94,7 +111,7 @@ export function GraphVisualization({
       ProfileTag: '#06b6d4', // cyan
     };
     return colors[node.type] || '#6b7280'; // gray default
-  };
+  }, []);
 
   // Handle window resize
   useEffect(() => {
@@ -156,6 +173,8 @@ export function GraphVisualization({
 
   // Apply graph patch
   const applyPatch = useCallback((patch: GraphPatch) => {
+    if (paused) return; // Don't apply patches when paused
+
     setGraphData((prev) => {
       let newNodes = [...prev.nodes];
       let newLinks = [...prev.links];
@@ -213,7 +232,103 @@ export function GraphVisualization({
       return { nodes: newNodes, links: newLinks };
     });
     setLastUpdate(patch.timestamp);
+  }, [paused]);
+
+  // Apply filters and search to graph data
+  useEffect(() => {
+    let filtered = { ...graphData };
+
+    // Filter by node types
+    if (selectedTypes.size > 0) {
+      filtered.nodes = filtered.nodes.filter((n) => selectedTypes.has(n.type));
+      // Keep only edges where both nodes are in filtered set
+      const nodeIds = new Set(filtered.nodes.map((n) => n.id));
+      filtered.links = filtered.links.filter(
+        (e) => nodeIds.has(e.source as string) && nodeIds.has(e.target as string)
+      );
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered.nodes = filtered.nodes.filter(
+        (n) =>
+          n.label.toLowerCase().includes(query) ||
+          n.id.toLowerCase().includes(query) ||
+          n.type.toLowerCase().includes(query)
+      );
+      // Keep only edges where both nodes are in filtered set
+      const nodeIds = new Set(filtered.nodes.map((n) => n.id));
+      filtered.links = filtered.links.filter(
+        (e) => nodeIds.has(e.source as string) && nodeIds.has(e.target as string)
+      );
+    }
+
+    setFilteredData(filtered);
+  }, [graphData, selectedTypes, searchQuery]);
+
+  // Memoized unique node types for filtering
+  const nodeTypes = useMemo(() => {
+    return Array.from(new Set(graphData.nodes.map((n) => n.type))).sort();
+  }, [graphData.nodes]);
+
+  // Memoized node counts by type for filter panel
+  const nodeCountsByType = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const node of graphData.nodes) {
+      counts.set(node.type, (counts.get(node.type) || 0) + 1);
+    }
+    return counts;
+  }, [graphData.nodes]);
+
+  // Memoized toggle type filter callback
+  const toggleTypeFilter = useCallback((type: string) => {
+    setSelectedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
   }, []);
+
+  // Memoized clear filters callback
+  const clearFilters = useCallback(() => {
+    setSelectedTypes(new Set());
+    setSearchQuery('');
+  }, []);
+
+  // Memoized reset view callback
+  const resetView = useCallback(() => {
+    if (fgRef.current) {
+      fgRef.current.zoomToFit(400);
+    }
+  }, []);
+
+  // Memoized focus on node callback
+  const focusOnNode = useCallback((node: GraphNode) => {
+    if (fgRef.current && node.x !== undefined && node.y !== undefined) {
+      fgRef.current.centerAt(node.x, node.y, 1000);
+      fgRef.current.zoom(3, 1000);
+    }
+  }, []);
+
+  // Memoized connection counts for selected node
+  const selectedNodeConnections = useMemo(() => {
+    if (!selectedNode) return { incoming: 0, outgoing: 0 };
+
+    let incoming = 0;
+    let outgoing = 0;
+
+    for (const link of filteredData.links) {
+      if (link.target === selectedNode.id) incoming++;
+      if (link.source === selectedNode.id) outgoing++;
+    }
+
+    return { incoming, outgoing };
+  }, [selectedNode, filteredData.links]);
 
   // Connect to SSE stream
   const connectToStream = useCallback(() => {
@@ -323,79 +438,221 @@ export function GraphVisualization({
   }
 
   return (
-    <div ref={containerRef} className="relative w-full h-full">
-      {/* Status bar */}
-      <div className="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur rounded-lg shadow-lg p-4 space-y-2">
-        <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-          <span className="text-sm font-medium">
-            {connected ? 'Live Updates' : 'Disconnected'}
-          </span>
+    <div ref={containerRef} className="relative w-full h-full flex">
+      {/* Main graph area */}
+      <div className="flex-1 relative">
+        {/* Top Controls Bar */}
+        <div className="absolute top-4 left-4 right-4 z-10 flex gap-2 items-start">
+          {/* Status card */}
+          <div className="bg-white/95 backdrop-blur rounded-lg shadow-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+              <span className="text-xs font-medium">{connected ? 'Live' : 'Disconnected'}</span>
+              <button
+                onClick={() => setPaused(!paused)}
+                className={`ml-2 px-2 py-0.5 text-xs rounded ${
+                  paused ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'
+                }`}
+                title={paused ? 'Resume updates' : 'Pause updates'}
+              >
+                {paused ? '▶️ Resume' : '⏸️ Pause'}
+              </button>
+            </div>
+            <div className="text-xs text-gray-600 space-y-0.5">
+              <div>Nodes: {filteredData.nodes.length} / {graphData.nodes.length}</div>
+              <div>Edges: {filteredData.links.length} / {graphData.links.length}</div>
+              {lastUpdate && <div className="text-[10px]">{new Date(lastUpdate).toLocaleTimeString()}</div>}
+            </div>
+          </div>
+
+          {/* Search bar */}
+          <div className="flex-1 max-w-md bg-white/95 backdrop-blur rounded-lg shadow-lg p-2">
+            <input
+              type="text"
+              placeholder="Search nodes (name, type, id)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* View controls */}
+          <div className="flex gap-1 bg-white/95 backdrop-blur rounded-lg shadow-lg p-2">
+            <button
+              onClick={resetView}
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded"
+              title="Reset view"
+            >
+              🔄 Reset
+            </button>
+            <button
+              onClick={() => setShowControls(!showControls)}
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded"
+              title="Toggle filters"
+            >
+              {showControls ? '❌' : '⚙️'}
+            </button>
+          </div>
         </div>
-        <div className="text-xs text-gray-600">
-          <div>Nodes: {graphData.nodes.length}</div>
-          <div>Links: {graphData.links.length}</div>
-          {lastUpdate && <div>Updated: {new Date(lastUpdate).toLocaleTimeString()}</div>}
-        </div>
+
+        {/* Filter Panel (collapsible) */}
+        {showControls && (
+          <div className="absolute top-24 left-4 z-10 bg-white/95 backdrop-blur rounded-lg shadow-lg p-4 max-w-xs max-h-96 overflow-y-auto">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-semibold">Filter by Type</h4>
+              {selectedTypes.size > 0 && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {nodeTypes.map((type) => (
+                <label key={type} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={selectedTypes.has(type)}
+                    onChange={() => toggleTypeFilter(type)}
+                    className="rounded"
+                  />
+                  <div
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: getNodeColor({ type } as GraphNode) }}
+                  ></div>
+                  <span className="text-xs">{type}</span>
+                  <span className="text-xs text-gray-500 ml-auto">
+                    {nodeCountsByType.get(type) || 0}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Graph */}
+        <ForceGraph2D
+          ref={fgRef}
+          graphData={filteredData}
+          width={dimensions.width}
+          height={dimensions.height}
+          nodeLabel={(node: any) => `${node.label || node.id}\n(${node.type})`}
+          nodeColor={(node: any) => getNodeColor(node)}
+          nodeRelSize={6}
+          nodeCanvasObject={(node: any, ctx, globalScale) => {
+            const label = node.label || node.id;
+            const fontSize = 12 / globalScale;
+            const isSelected = selectedNode?.id === node.id;
+
+            ctx.font = `${fontSize}px Sans-Serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Draw selection ring
+            if (isSelected) {
+              ctx.strokeStyle = '#3b82f6';
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.arc(node.x, node.y, 9, 0, 2 * Math.PI);
+              ctx.stroke();
+            }
+
+            // Draw node circle
+            ctx.fillStyle = getNodeColor(node);
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 6, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Draw label
+            ctx.fillStyle = isSelected ? '#3b82f6' : '#333';
+            ctx.font = isSelected ? `bold ${fontSize}px Sans-Serif` : `${fontSize}px Sans-Serif`;
+            ctx.fillText(label, node.x, node.y + 12);
+          }}
+          linkLabel={(link: any) => link.type}
+          linkColor={() => '#94a3b8'}
+          linkWidth={1.5}
+          linkDirectionalArrowLength={4}
+          linkDirectionalArrowRelPos={1}
+          linkCurvature={0.1}
+          d3AlphaDecay={0.02}
+          d3VelocityDecay={0.3}
+          cooldownTicks={100}
+          onNodeClick={(node: any) => {
+            setSelectedNode(node as GraphNode);
+          }}
+          onBackgroundClick={() => setSelectedNode(null)}
+        />
       </div>
 
-      {/* Legend */}
-      <div className="absolute top-4 right-4 z-10 bg-white/90 backdrop-blur rounded-lg shadow-lg p-4">
-        <h4 className="text-sm font-semibold mb-2">Node Types</h4>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          {['Jurisdiction', 'Region', 'Agreement', 'Regime', 'Benefit', 'Relief', 'Condition', 'Timeline'].map(
-            (type) => (
-              <div key={type} className="flex items-center gap-2">
+      {/* Node Details Panel */}
+      {selectedNode && (
+        <div className="w-80 bg-white border-l border-gray-200 p-4 overflow-y-auto">
+          <div className="flex items-start justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Node Details</h3>
+            <button
+              onClick={() => setSelectedNode(null)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: getNodeColor({ type } as GraphNode) }}
+                  className="w-4 h-4 rounded-full"
+                  style={{ backgroundColor: getNodeColor(selectedNode) }}
                 ></div>
-                <span>{type}</span>
+                <span className="text-sm font-medium text-gray-700">{selectedNode.type}</span>
               </div>
-            )
-          )}
+              <h4 className="text-base font-semibold text-gray-900 mb-1">{selectedNode.label}</h4>
+              <p className="text-xs text-gray-500 font-mono">{selectedNode.id}</p>
+            </div>
+
+            {selectedNode.properties && Object.keys(selectedNode.properties).length > 0 && (
+              <div>
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Properties</h5>
+                <div className="space-y-2">
+                  {Object.entries(selectedNode.properties).map(([key, value]) => (
+                    <div key={key} className="text-xs">
+                      <span className="font-medium text-gray-600">{key}:</span>{' '}
+                      <span className="text-gray-900">
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Connections</h5>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Incoming:</span>
+                  <span className="font-medium">{selectedNodeConnections.incoming}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Outgoing:</span>
+                  <span className="font-medium">{selectedNodeConnections.outgoing}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t">
+              <button
+                onClick={() => focusOnNode(selectedNode)}
+                className="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Focus on Node
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Graph */}
-      <ForceGraph2D
-        ref={fgRef}
-        graphData={graphData}
-        width={dimensions.width}
-        height={dimensions.height}
-        nodeLabel={(node: any) => `${node.label || node.id}\n(${node.type})`}
-        nodeColor={(node: any) => getNodeColor(node)}
-        nodeRelSize={6}
-        nodeCanvasObject={(node: any, ctx, globalScale) => {
-          const label = node.label || node.id;
-          const fontSize = 12 / globalScale;
-          ctx.font = `${fontSize}px Sans-Serif`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = getNodeColor(node);
-
-          // Draw node circle
-          ctx.beginPath();
-          ctx.arc(node.x, node.y, 6, 0, 2 * Math.PI);
-          ctx.fill();
-
-          // Draw label
-          ctx.fillStyle = '#333';
-          ctx.fillText(label, node.x, node.y + 12);
-        }}
-        linkLabel={(link: any) => link.type}
-        linkColor={() => '#94a3b8'}
-        linkWidth={1.5}
-        linkDirectionalArrowLength={4}
-        linkDirectionalArrowRelPos={1}
-        linkCurvature={0.1}
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
-        cooldownTicks={100}
-        onNodeClick={(node: any) => {
-          console.log('Node clicked:', node);
-        }}
-      />
+      )}
     </div>
   );
 }

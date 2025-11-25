@@ -15,7 +15,12 @@
     "type-check": "pnpm -r type-check",
     "seed:graph": "tsx scripts/seed-graph.ts",
     "seed:jurisdictions": "tsx scripts/seed-special-jurisdictions.ts",
-    "seed:all": "pnpm seed:graph && pnpm seed:jurisdictions"
+    "seed:all": "pnpm seed:graph && pnpm seed:jurisdictions",
+    "test:changes": "tsx scripts/test-graph-changes.ts",
+    "test:changes:add": "tsx scripts/test-graph-changes.ts add-node",
+    "test:changes:update": "tsx scripts/test-graph-changes.ts update-node",
+    "test:changes:remove": "tsx scripts/test-graph-changes.ts remove-node",
+    "test:changes:simulate": "tsx scripts/test-graph-changes.ts simulate"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
