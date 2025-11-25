@@ -11,43 +11,25 @@
  *
  * Note: Using SSE instead of WebSocket for better Next.js/Vercel compatibility
  * and simpler server-to-client streaming.
+ *
+ * Implementation: Uses GraphChangeDetector with polling-based change detection
+ * to monitor Memgraph and emit incremental patches to connected clients.
  */
 
 import {
   hasActiveSandbox,
   getMcpGatewayUrl,
+  type GraphPatch,
 } from '@reg-copilot/compliance-core';
+import { getGraphChangeDetector } from '@/lib/graphChangeDetectorInstance';
 
 /**
- * Graph patch format per v0.3 spec
+ * Connection confirmation message
  */
-interface GraphPatch {
-  type: 'graph_patch';
+interface ConnectionMessage {
+  type: 'connected';
   timestamp: string;
-  nodes_added?: Array<{
-    id: string;
-    label: string;
-    type: string;
-    properties: Record<string, unknown>;
-  }>;
-  nodes_updated?: Array<{
-    id: string;
-    label?: string;
-    type?: string;
-    properties?: Record<string, unknown>;
-  }>;
-  nodes_removed?: string[];
-  edges_added?: Array<{
-    source: string;
-    target: string;
-    type: string;
-    properties?: Record<string, unknown>;
-  }>;
-  edges_removed?: Array<{
-    source: string;
-    target: string;
-    type: string;
-  }>;
+  message: string;
 }
 
 export async function GET(request: Request) {
@@ -67,12 +49,15 @@ export async function GET(request: Request) {
     profileType,
   });
 
+  // Get the shared change detector instance
+  const detector = getGraphChangeDetector();
+
   // Set up SSE stream
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
       // Send initial connection confirmation
-      const connectionMessage = {
+      const connectionMessage: ConnectionMessage = {
         type: 'connected',
         timestamp: new Date().toISOString(),
         message: 'Graph stream connected',
@@ -91,43 +76,37 @@ export async function GET(request: Request) {
         }
       }, 30000); // Every 30 seconds
 
-      // TODO: Implement actual graph change detection
-      // For now, this is a placeholder that demonstrates the SSE connection
-      // In production, this would:
-      // 1. Subscribe to Memgraph change notifications
-      // 2. Poll for graph changes at regular intervals
-      // 3. Use a pub/sub system for change notifications
+      // Subscribe to graph changes
+      const subscription = detector.subscribe(
+        {
+          jurisdictions,
+          profileType,
+        },
+        (patch: GraphPatch) => {
+          try {
+            // Send patch to client via SSE
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(patch)}\n\n`)
+            );
 
-      // Simulate periodic graph updates (placeholder)
-      const simulateUpdates = setInterval(() => {
-        try {
-          // In production, this would be replaced with actual change detection
-          // For now, we just send a heartbeat-style patch every 60 seconds
-          const patch: GraphPatch = {
-            type: 'graph_patch',
-            timestamp: new Date().toISOString(),
-            // Empty patch - no actual changes
-            nodes_added: [],
-            nodes_updated: [],
-            nodes_removed: [],
-            edges_added: [],
-            edges_removed: [],
-          };
-
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(patch)}\n\n`)
-          );
-        } catch (error) {
-          console.log('[API/graph/stream] Update failed, client disconnected');
-          clearInterval(simulateUpdates);
+            console.log('[API/graph/stream] Sent patch to client:', {
+              nodesAdded: patch.nodes_added?.length || 0,
+              nodesUpdated: patch.nodes_updated?.length || 0,
+              nodesRemoved: patch.nodes_removed?.length || 0,
+              edgesAdded: patch.edges_added?.length || 0,
+              edgesRemoved: patch.edges_removed?.length || 0,
+            });
+          } catch (error) {
+            console.error('[API/graph/stream] Error sending patch:', error);
+          }
         }
-      }, 60000); // Every 60 seconds
+      );
 
       // Clean up on connection close
       request.signal.addEventListener('abort', () => {
         console.log('[API/graph/stream] Client disconnected');
         clearInterval(keepAliveInterval);
-        clearInterval(simulateUpdates);
+        subscription.unsubscribe();
         controller.close();
       });
     },

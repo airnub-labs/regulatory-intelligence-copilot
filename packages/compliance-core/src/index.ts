@@ -102,6 +102,16 @@ export {
   type BoltGraphClientConfig,
 } from './graph/boltGraphClient.js'; // Direct Bolt connection
 
+// Graph Change Detection
+export {
+  GraphChangeDetector,
+  createGraphChangeDetector,
+  type GraphPatch,
+  type ChangeFilter,
+  type ChangeCallback,
+  type ChangeSubscription,
+} from './graph/graphChangeDetector.js';
+
 // LLM Client (legacy MCP-based)
 export {
   createLlmClient,
