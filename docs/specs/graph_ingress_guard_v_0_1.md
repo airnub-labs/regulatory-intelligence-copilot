@@ -1,4 +1,4 @@
-# Graph Ingress Guard – v0_1 (Consolidated + AI Policy Agent)
+# Graph Ingress Guard – v0_1
 
 > **Status:** Current and **normative** once adopted.
 >
