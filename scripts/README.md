@@ -2,6 +2,19 @@
 
 This directory contains utility scripts for the Regulatory Intelligence Copilot.
 
+## Quick Start
+
+```bash
+# Seed basic Irish regulatory data
+pnpm seed:graph
+
+# Seed special jurisdictions (IE/UK/NI/IM/EU, CTA, NI Protocol)
+pnpm seed:jurisdictions
+
+# Seed everything
+pnpm seed:all
+```
+
 ## Graph Seeding (`seed-graph.ts`)
 
 Seeds the Memgraph database with minimal Ireland regulatory data for testing and development.
@@ -174,3 +187,111 @@ await executeCypher(driver, `
   MERGE (b)-[:APPLIES_TO]->(p)
 `);
 ```
+
+---
+
+## Special Jurisdictions Seeding (`seed-special-jurisdictions.ts`)
+
+Seeds Memgraph with special jurisdiction modelling for IE/UK/NI/IM/EU, Common Travel Area (CTA), and Northern Ireland Protocol framework.
+
+Implements the design documented in:
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`  
+- `docs/graph_seed_ni_uk_ie_eu.txt`
+
+### Usage
+
+```bash
+# From project root
+pnpm seed:jurisdictions
+
+# Or directly with tsx
+npx tsx scripts/seed-special-jurisdictions.ts
+```
+
+### What Gets Seeded
+
+The script creates the special jurisdiction framework:
+
+#### Jurisdictions (4 nodes)
+- **Ireland (IE)** - Sovereign state
+- **United Kingdom (UK)** - Sovereign state
+- **Isle of Man (IM)** - Crown dependency
+- **European Union (EU)** - Supranational entity
+
+#### Regions (1 node)
+- **Northern Ireland (NI)** - Special trade region, part of UK
+  - Linked via `[:PART_OF]->(UK)`
+
+#### Agreements (3 nodes)
+- **Common Travel Area (CTA)** - Mobility cooperation between IE/UK/IM
+- **Ireland/Northern Ireland Protocol (NI_PROTOCOL)** - Post-Brexit goods/customs protocol
+- **Windsor Framework (WINDSOR_FRAMEWORK)** - Implementing framework for NI Protocol
+  - Linked via `[:MODIFIED_BY]->` relationship
+
+#### Regimes (2 nodes)
+- **CTA Mobility Rights (CTA_MOBILITY_RIGHTS)** - Rights to live and work across CTA
+  - Domain: mobility, Scope: persons
+  - Subjects: IE, UK, IM
+- **NI EU-Linked Goods Regime (NI_EU_GOODS_REGIME)** - EU single-market rules for goods in NI
+  - Domain: goods, Scope: trade/customs/VAT
+  - Coordinated with EU, implemented via Windsor Framework
+  - Subject: Northern Ireland region only
+
+#### Benefits & Rules
+- **CTA Right to Live and Work** - Mobility benefit available across CTA jurisdictions
+- **IE-UK Social Security Coordination** - Cross-border social security coordination rule
+
+#### Timelines
+- **Brexit Date (BREXIT_DATE)** - 2020-01-31, marking when NI Protocol came into effect
+
+### Key Relationships
+
+The script creates a sophisticated relationship model:
+
+```
+(IE)-[:PARTY_TO]->(CTA)-[:ESTABLISHES_REGIME]->(CTA_MOBILITY_RIGHTS)
+(UK)-[:PARTY_TO]->(CTA)
+(IM)-[:PARTY_TO]->(CTA)
+
+(NI:Region)-[:PART_OF]->(UK)
+(NI)-[:SUBJECT_TO_REGIME]->(NI_EU_GOODS_REGIME)
+
+(NI_PROTOCOL)-[:ESTABLISHES_REGIME]->(NI_EU_GOODS_REGIME)
+(NI_PROTOCOL)-[:MODIFIED_BY]->(WINDSOR_FRAMEWORK)
+(NI_PROTOCOL)-[:EFFECTIVE_FROM]->(BREXIT_DATE:Timeline)
+
+(NI_EU_GOODS_REGIME)-[:COORDINATED_WITH]->(EU)
+(NI_EU_GOODS_REGIME)-[:IMPLEMENTED_VIA]->(WINDSOR_FRAMEWORK)
+```
+
+### Design Principles
+
+This seeding follows v0.1 special jurisdiction modelling principles:
+
+1. **Constitutional Reality** - NI is modelled as a Region within UK, not a separate Jurisdiction
+2. **Regulatory Reality** - EU goods rules apply to NI via the special regime mechanism
+3. **Agreement-Regime Pattern** - Treaties/protocols establish regimes that apply to jurisdictions/regions
+4. **No Hard-Coding** - All cross-border logic is derivable from the graph structure
+
+### Use Cases
+
+This data enables queries like:
+
+- "Show all regions where EU goods rules apply but that are not in the EU"
+- "Which jurisdictions are part of the Common Travel Area?"
+- "Explain why VAT treatment differs in NI vs GB"
+- "What mobility rights do IE citizens have in the UK?"
+
+### Idempotence
+
+Like `seed-graph.ts`, this script uses `MERGE` operations exclusively, making it safe to run multiple times. It will create nodes if they don't exist, or update properties if they do.
+
+### Running Both Seeders
+
+To seed the complete graph with both Irish regulatory data and special jurisdictions:
+
+```bash
+pnpm seed:all
+```
+
+This runs `seed-graph.ts` first (Irish benefits/conditions), then `seed-special-jurisdictions.ts` (cross-border framework).

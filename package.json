@@ -12,10 +12,15 @@
     "dev:web": "pnpm --filter demo-web dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "type-check": "pnpm -r type-check"
+    "type-check": "pnpm -r type-check",
+    "seed:graph": "tsx scripts/seed-graph.ts",
+    "seed:jurisdictions": "tsx scripts/seed-special-jurisdictions.ts",
+    "seed:all": "pnpm seed:graph && pnpm seed:jurisdictions"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "neo4j-driver": "^5.15.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.0"
   },
   "packageManager": "pnpm@8.10.0",
