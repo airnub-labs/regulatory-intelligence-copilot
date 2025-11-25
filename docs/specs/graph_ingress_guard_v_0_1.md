@@ -1,4 +1,4 @@
-# Graph Ingress Guard – v0_1 (Consolidated)
+# Graph Ingress Guard – v0_1 (Consolidated + AI Policy Agent)
 
 > **Status:** Current and **normative** once adopted.
 >
@@ -10,6 +10,8 @@
 - All writes go through a **GraphWriteService**.
 - The GraphWriteService always runs a chain of **ingress aspects** that enforce
   schema + privacy guarantees and allow safe extensibility.
+- Custom ingress aspects may themselves be **AI policy agents**, as long as
+  they do not weaken the baseline guarantees.
 
 Referenced specs:
 
@@ -39,6 +41,8 @@ The goal is to:
 - Enforce **non‑negotiable privacy + schema guarantees** for the global graph.
 - Provide a **flexible extension mechanism** for forks and future features.
 - Support future SOC 2 / GDPR work with a clear, auditable boundary.
+- Allow **intelligent policy agents** to participate in guarding writes,
+  without ever becoming the sole or overriding authority.
 
 ---
 
@@ -133,7 +137,8 @@ We distinguish between:
 1. **Baseline (non‑removable) aspects** – enforce critical invariants from
    privacy + schema specs.
 2. **Custom (configurable) aspects** – can be added/removed/reordered via
-   configuration, for forks and future features.
+   configuration, for forks and future features. Some of these custom aspects
+   may themselves be **AI policy agents**.
 
 ### 4.1 Baseline Aspects (must always run)
 
@@ -165,6 +170,9 @@ These aspects ensure:
 - Only **whitelisted properties** for those types are used.
 - No obvious PII or tenant‑specific data is persisted.
 
+Under no circumstances may a custom aspect (including AI agents) bypass or
+weaken these baseline guarantees.
+
 ### 4.2 Custom Aspects (pluggable)
 
 Above the baseline stack, we support a configurable chain of **custom
@@ -178,6 +186,9 @@ GraphIngressAspect**s, for example:
   ambiguous text as safe/unsafe for the global graph.
 - `FeatureFlagAspect` – allow experimental schema fields for specific
   environments.
+- `AiPolicyAgentAspect` – delegates a decision to an internal AI policy agent,
+  which can further inspect a **minimised summary** of the write and decide to
+  allow or block it.
 
 These are wired via configuration, e.g.:
 
@@ -186,7 +197,8 @@ graphIngress:
   customAspects:
     - audit-tagging
     - source-annotation
-    # - llm-classifier  # opt-in, disabled by default
+    # - ai-policy-agent   # opt-in, disabled by default
+    # - llm-classifier    # opt-in, disabled by default
 ```
 
 A simple registry resolves IDs to implementations:
@@ -195,6 +207,7 @@ A simple registry resolves IDs to implementations:
 const REGISTRY: Record<string, GraphIngressAspect> = {
   'audit-tagging': auditTaggingAspect,
   'source-annotation': sourceAnnotationAspect,
+  'ai-policy-agent': aiPolicyAgentAspect,
   'llm-classifier': llmClassificationAspect,
 };
 
@@ -212,9 +225,76 @@ config, without touching the GraphWriteService API or call sites.
 
 ---
 
-## 5. Allowed vs Disallowed Content
+## 5. AI Policy Agent Aspects
 
-### 5.1 Allowed Node & Edge Types
+### 5.1 Concept
+
+A **Graph Ingress AI Policy Agent** is a custom aspect that:
+
+- Receives a minimal summary of the pending write (never raw user documents).
+- Applies additional policy checks (e.g. domain‑specific heuristics, advanced
+  text classification, anomaly detection).
+- Decides whether to:
+  - **Allow** the write to proceed (`return next(ctx)`), and optionally
+    annotate it with extra metadata; or
+  - **Block** the write by throwing an error and emitting an audit event.
+
+This agent can be implemented using:
+
+- A small local LLM (e.g. GPT‑OSS) running inside controlled infra; or
+- An internal policy microservice that may itself use multiple tools/models.
+
+### 5.2 Constraints
+
+AI policy agent aspects must:
+
+- Run **after** the baseline aspects (schema + whitelist + static PII), not
+  before.
+- Never attempt to relax or override baseline checks.
+- Respect the same privacy rules as the rest of the system:
+  - Prefer local / self‑hosted models.
+  - If calling external APIs, route through the established egress guard and
+    send only **minimised, non‑sensitive summaries**.
+
+### 5.3 Example Shape (Illustrative)
+
+```ts
+export const aiPolicyAgentAspect: GraphIngressAspect = async (ctx, next) => {
+  // Build a minimal summary that avoids PII and raw user content
+  const summary = buildMinimalPublicSummary(ctx); // e.g. labels, property keys,
+                                                  // high-level descriptions
+
+  const decision = await policyAgent.decide({
+    kind: 'graph_ingress',
+    summary,
+  });
+
+  if (decision.action === 'block') {
+    await auditLog.write({
+      type: 'GRAPH_INGRESS_AGENT_BLOCKED',
+      reason: decision.reason,
+      nodeLabel: ctx.nodeLabel,
+      relType: ctx.relType,
+    });
+    throw new Error('Graph ingress blocked by AI policy agent');
+  }
+
+  if (decision.patch) {
+    ctx = { ...ctx, properties: { ...ctx.properties, ...decision.patch } };
+  }
+
+  return next(ctx);
+};
+```
+
+This is illustrative only; the concrete implementation will depend on the
+chosen local model / agent framework.
+
+---
+
+## 6. Allowed vs Disallowed Content
+
+### 6.1 Allowed Node & Edge Types
 
 Allowed node labels and relationship types are defined in
 `graph_schema_v_0_3.md` (e.g. `Jurisdiction`, `Region`, `Agreement`, `Regime`,
@@ -225,7 +305,7 @@ The **SchemaValidationAspect** must:
 
 - Reject any write where `nodeLabel` / `relType` is not in the approved set.
 
-### 5.2 Property Whitelists
+### 6.2 Property Whitelists
 
 Each node/edge type has a **whitelist of allowed property names**, e.g.:
 
@@ -243,7 +323,7 @@ The **PropertyWhitelistAspect** must:
 
 - Reject writes containing properties outside the whitelist for that type.
 
-### 5.3 Disallowed Data Classes
+### 6.3 Disallowed Data Classes
 
 The **StaticPIIAndTenantCheckAspect** must ensure that the following **never
 appear** as values in properties written to the graph:
@@ -259,11 +339,14 @@ On detection, the aspect must:
 - Reject the write (no Cypher executed).
 - Emit a structured warning/error event (with redacted content) to logs.
 
+AI policy agent aspects may provide *additional* blocking logic, but may not
+allow content that the baseline aspects would reject.
+
 ---
 
-## 6. Phase 1 vs Phase 2 Implementation
+## 7. Phase 1 vs Phase 2 Implementation
 
-### 6.1 Phase 1 – Static & Deterministic
+### 7.1 Phase 1 – Static & Deterministic
 
 Phase 1 focuses on:
 
@@ -277,17 +360,23 @@ This is:
 - Predictable and auditable.
 - Sufficient to prevent most accidental leakage into the global graph.
 
-### 6.2 Phase 2 – Intelligent Guard (Small Local Model)
+Custom aspects in Phase 1 should be limited to non‑critical concerns (audit
+annotation, source tagging) or very simple policy checks.
 
-In future, we may add an **LLMClassificationAspect** that uses a **small local
-model** (e.g. GPT‑OSS) to identify subtle, ambiguous cases that static checks
-miss.
+### 7.2 Phase 2 – Intelligent Guard (AI Policy Agent / Small Local Model)
+
+In Phase 2, the system may add more advanced aspects such as:
+
+- `LLMClassificationAspect` – a small local model that classifies ambiguous
+  text properties.
+- `AiPolicyAgentAspect` – a richer agent that uses local models + rules to
+  decide allow/block.
 
 Constraints:
 
-- The model must run **locally or within controlled infra**, not via external
-  APIs like OpenAI/Anthropic.
-- It is a **second line of defense**, after schema + static checks.
+- Models must run **locally or within controlled infra**, or if external,
+  always behind the egress guard with minimal summaries.
+- They act as a **second line of defense**, never replacing baseline checks.
 
 Example behaviour:
 
@@ -301,7 +390,7 @@ requires intentional code + spec changes.
 
 ---
 
-## 7. Testing & Code Review Guidelines
+## 8. Testing & Code Review Guidelines
 
 To keep the Graph Ingress Guard effective:
 
@@ -322,9 +411,15 @@ To keep the Graph Ingress Guard effective:
   - Periodically attempt to inject synthetic PII through various paths to
     confirm the guard blocks them.
 
+- **AI agent aspects**
+  - Must have explicit tests for timeout/failure behaviour (e.g. fail closed vs
+    bypass custom aspects while still enforcing baselines).
+  - Must have clear observability (metrics, logs) for blocked writes and
+    decisions.
+
 ---
 
-## 8. Non‑Goals
+## 9. Non‑Goals
 
 The Graph Ingress Guard is **not** responsible for:
 
@@ -340,7 +435,7 @@ Its sole responsibility:
 
 ---
 
-## 9. Normative References
+## 10. Normative References
 
 Implementers of the GraphWriteService and ingress aspects must consult:
 
