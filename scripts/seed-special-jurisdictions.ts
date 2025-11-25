@@ -74,19 +74,27 @@ async function seedSpecialJurisdictions() {
       `
       MERGE (ie:Jurisdiction {code: 'IE'})
         ON CREATE SET ie.name = 'Ireland',
-                      ie.kind = 'sovereign_state'
+                      ie.kind = 'sovereign_state',
+                      ie.created_at = datetime()
+        ON MATCH SET ie.updated_at = datetime()
 
       MERGE (uk:Jurisdiction {code: 'UK'})
         ON CREATE SET uk.name = 'United Kingdom',
-                      uk.kind = 'sovereign_state'
+                      uk.kind = 'sovereign_state',
+                      uk.created_at = datetime()
+        ON MATCH SET uk.updated_at = datetime()
 
       MERGE (im:Jurisdiction {code: 'IM'})
         ON CREATE SET im.name = 'Isle of Man',
-                      im.kind = 'crown_dependency'
+                      im.kind = 'crown_dependency',
+                      im.created_at = datetime()
+        ON MATCH SET im.updated_at = datetime()
 
       MERGE (eu:Jurisdiction {code: 'EU'})
         ON CREATE SET eu.name = 'European Union',
-                      eu.kind = 'supranational'
+                      eu.kind = 'supranational',
+                      eu.created_at = datetime()
+        ON MATCH SET eu.updated_at = datetime()
     `
     );
     console.log('   ✅ Created: IE, UK, IM, EU');

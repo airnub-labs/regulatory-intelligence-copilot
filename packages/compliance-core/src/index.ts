@@ -106,10 +106,12 @@ export {
 export {
   GraphChangeDetector,
   createGraphChangeDetector,
+  createGraphChangeDetectorLegacy,
   type GraphPatch,
   type ChangeFilter,
   type ChangeCallback,
   type ChangeSubscription,
+  type GraphChangeDetectorConfig,
 } from './graph/graphChangeDetector.js';
 
 // LLM Client (legacy MCP-based)

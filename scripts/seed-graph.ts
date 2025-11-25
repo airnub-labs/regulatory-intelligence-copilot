@@ -71,17 +71,23 @@ async function seedGraph() {
       MERGE (ie:Jurisdiction {id: 'IE'})
       SET ie.name = 'Ireland',
           ie.type = 'COUNTRY',
-          ie.notes = 'Republic of Ireland'
+          ie.notes = 'Republic of Ireland',
+          ie.created_at = CASE WHEN ie.created_at IS NULL THEN datetime() ELSE ie.created_at END,
+          ie.updated_at = datetime()
 
       MERGE (eu:Jurisdiction {id: 'EU'})
       SET eu.name = 'European Union',
           eu.type = 'SUPRANATIONAL',
-          eu.notes = 'European Union supranational entity'
+          eu.notes = 'European Union supranational entity',
+          eu.created_at = CASE WHEN eu.created_at IS NULL THEN datetime() ELSE eu.created_at END,
+          eu.updated_at = datetime()
 
       MERGE (mt:Jurisdiction {id: 'MT'})
       SET mt.name = 'Malta',
           mt.type = 'COUNTRY',
-          mt.notes = 'Republic of Malta'
+          mt.notes = 'Republic of Malta',
+          mt.created_at = CASE WHEN mt.created_at IS NULL THEN datetime() ELSE mt.created_at END,
+          mt.updated_at = datetime()
     `);
 
     // Create Profile Tags
@@ -89,15 +95,21 @@ async function seedGraph() {
     await executeCypher(driver, `
       MERGE (p1:ProfileTag {id: 'single-director-ie'})
       SET p1.label = 'Single Director (Ireland)',
-          p1.description = 'Single director of an Irish limited company, typically Class S PRSI contributor'
+          p1.description = 'Single director of an Irish limited company, typically Class S PRSI contributor',
+          p1.created_at = CASE WHEN p1.created_at IS NULL THEN datetime() ELSE p1.created_at END,
+          p1.updated_at = datetime()
 
       MERGE (p2:ProfileTag {id: 'self-employed-ie'})
       SET p2.label = 'Self-Employed (Ireland)',
-          p2.description = 'Self-employed individual in Ireland, Class S PRSI contributor'
+          p2.description = 'Self-employed individual in Ireland, Class S PRSI contributor',
+          p2.created_at = CASE WHEN p2.created_at IS NULL THEN datetime() ELSE p2.created_at END,
+          p2.updated_at = datetime()
 
       MERGE (p3:ProfileTag {id: 'paye-employee-ie'})
       SET p3.label = 'PAYE Employee (Ireland)',
-          p3.description = 'PAYE employee in Ireland, Class A PRSI contributor'
+          p3.description = 'PAYE employee in Ireland, Class A PRSI contributor',
+          p3.created_at = CASE WHEN p3.created_at IS NULL THEN datetime() ELSE p3.created_at END,
+          p3.updated_at = datetime()
     `);
 
     // Create Timelines
@@ -106,22 +118,30 @@ async function seedGraph() {
       MERGE (t1:Timeline {id: 'lookback-2-years'})
       SET t1.label = '2-Year Lookback',
           t1.window_years = 2,
-          t1.notes = 'Common lookback period for PRSI contribution requirements'
+          t1.notes = 'Common lookback period for PRSI contribution requirements',
+          t1.created_at = CASE WHEN t1.created_at IS NULL THEN datetime() ELSE t1.created_at END,
+          t1.updated_at = datetime()
 
       MERGE (t2:Timeline {id: 'lookback-12-months'})
       SET t2.label = '12-Month Lookback',
           t2.window_months = 12,
-          t2.notes = 'One-year lookback for recent contributions'
+          t2.notes = 'One-year lookback for recent contributions',
+          t2.created_at = CASE WHEN t2.created_at IS NULL THEN datetime() ELSE t2.created_at END,
+          t2.updated_at = datetime()
 
       MERGE (t3:Timeline {id: 'lookback-39-weeks'})
       SET t3.label = '39-Week Lookback',
           t3.window_days = 273,
-          t3.notes = 'Specific lookback period for Jobseeker\'s Benefit'
+          t3.notes = 'Specific lookback period for Jobseeker\'s Benefit',
+          t3.created_at = CASE WHEN t3.created_at IS NULL THEN datetime() ELSE t3.created_at END,
+          t3.updated_at = datetime()
 
       MERGE (t4:Timeline {id: 'lock-in-4-years'})
       SET t4.label = '4-Year Lock-in',
           t4.window_years = 4,
-          t4.notes = 'Common lock-in period for certain tax reliefs'
+          t4.notes = 'Common lock-in period for certain tax reliefs',
+          t4.created_at = CASE WHEN t4.created_at IS NULL THEN datetime() ELSE t4.created_at END,
+          t4.updated_at = datetime()
     `);
 
     // Create Benefits
@@ -133,7 +153,9 @@ async function seedGraph() {
           b1.short_summary = 'Weekly payment for self-employed people who lose their job',
           b1.description = 'A payment for self-employed people (Class S PRSI contributors) who have lost their job. Requires PRSI contributions in the 2-4 years before claiming.',
           b1.amount = 'Up to €220 per week (2024 rates)',
-          b1.duration = 'Up to 9 months (234 days)'
+          b1.duration = 'Up to 9 months (234 days)',
+          b1.created_at = CASE WHEN b1.created_at IS NULL THEN datetime() ELSE b1.created_at END,
+          b1.updated_at = datetime()
 
       MERGE (b2:Benefit {id: 'illness-benefit-class-s'})
       SET b2.label = 'Illness Benefit (Class S)',
@@ -141,7 +163,9 @@ async function seedGraph() {
           b2.short_summary = 'Payment for self-employed people unable to work due to illness',
           b2.description = 'Weekly payment for self-employed people (Class S PRSI) who cannot work due to illness. Requires minimum PRSI contributions.',
           b2.amount = 'Up to €220 per week',
-          b2.duration = 'Up to 2 years'
+          b2.duration = 'Up to 2 years',
+          b2.created_at = CASE WHEN b2.created_at IS NULL THEN datetime() ELSE b2.created_at END,
+          b2.updated_at = datetime()
 
       MERGE (b3:Benefit {id: 'treatment-benefit'})
       SET b3.label = 'Treatment Benefit',
@@ -149,7 +173,9 @@ async function seedGraph() {
           b3.short_summary = 'Dental and optical benefits for PRSI contributors',
           b3.description = 'Provides dental and optical benefits. Class S contributors are eligible after 260 weeks of contributions.',
           b3.amount = 'Varies by treatment',
-          b3.duration = 'Ongoing while eligible'
+          b3.duration = 'Ongoing while eligible',
+          b3.created_at = CASE WHEN b3.created_at IS NULL THEN datetime() ELSE b3.created_at END,
+          b3.updated_at = datetime()
     `);
 
     // Create Conditions
@@ -158,22 +184,30 @@ async function seedGraph() {
       MERGE (c1:Condition {id: 'prsi-class-s-required'})
       SET c1.label = 'PRSI Class S Required',
           c1.description = 'Must be paying PRSI Class S contributions (self-employed)',
-          c1.evaluation_type = 'PROFILE_CHECK'
+          c1.evaluation_type = 'PROFILE_CHECK',
+          c1.created_at = CASE WHEN c1.created_at IS NULL THEN datetime() ELSE c1.created_at END,
+          c1.updated_at = datetime()
 
       MERGE (c2:Condition {id: 'min-contributions-104-weeks'})
       SET c2.label = 'Minimum 104 Weeks Contributions',
           c2.description = 'Must have at least 104 weeks (2 years) of PRSI contributions',
-          c2.evaluation_type = 'LOOKBACK_COUNT'
+          c2.evaluation_type = 'LOOKBACK_COUNT',
+          c2.created_at = CASE WHEN c2.created_at IS NULL THEN datetime() ELSE c2.created_at END,
+          c2.updated_at = datetime()
 
       MERGE (c3:Condition {id: 'min-contributions-39-weeks'})
       SET c3.label = 'Minimum 39 Weeks Contributions',
           c3.description = 'Must have at least 39 weeks of PRSI contributions in relevant period',
-          c3.evaluation_type = 'LOOKBACK_COUNT'
+          c3.evaluation_type = 'LOOKBACK_COUNT',
+          c3.created_at = CASE WHEN c3.created_at IS NULL THEN datetime() ELSE c3.created_at END,
+          c3.updated_at = datetime()
 
       MERGE (c4:Condition {id: 'ceased-self-employment'})
       SET c4.label = 'Ceased Self-Employment',
           c4.description = 'Must have ceased self-employment or business',
-          c4.evaluation_type = 'USER_DECLARATION'
+          c4.evaluation_type = 'USER_DECLARATION',
+          c4.created_at = CASE WHEN c4.created_at IS NULL THEN datetime() ELSE c4.created_at END,
+          c4.updated_at = datetime()
     `);
 
     // Create Sections (Statutory References)
@@ -183,13 +217,17 @@ async function seedGraph() {
       SET s1.label = 'Social Welfare Consolidation Act 2005, Section 62',
           s1.title = 'Jobseeker\'s Benefit',
           s1.statutory_ref = 'Social Welfare Consolidation Act 2005, s.62',
-          s1.url = 'https://www.irishstatutebook.ie/eli/2005/act/26/section/62/enacted/en/html'
+          s1.url = 'https://www.irishstatutebook.ie/eli/2005/act/26/section/62/enacted/en/html',
+          s1.created_at = CASE WHEN s1.created_at IS NULL THEN datetime() ELSE s1.created_at END,
+          s1.updated_at = datetime()
 
       MERGE (s2:Section {id: 'sw-act-2005-s41'})
       SET s2.label = 'Social Welfare Consolidation Act 2005, Section 41',
           s2.title = 'Illness Benefit',
           s2.statutory_ref = 'Social Welfare Consolidation Act 2005, s.41',
-          s2.url = 'https://www.irishstatutebook.ie/eli/2005/act/26/section/41/enacted/en/html'
+          s2.url = 'https://www.irishstatutebook.ie/eli/2005/act/26/section/41/enacted/en/html',
+          s2.created_at = CASE WHEN s2.created_at IS NULL THEN datetime() ELSE s2.created_at END,
+          s2.updated_at = datetime()
     `);
 
     // Create Relationships: Benefits -> Jurisdiction

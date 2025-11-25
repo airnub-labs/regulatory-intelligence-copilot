@@ -76,13 +76,22 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
 /**
  * Get or create the singleton GraphChangeDetector instance
  *
- * @param pollIntervalMs - Polling interval in milliseconds (default: 5000)
+ * @param config - Configuration options
  * @returns The shared GraphChangeDetector instance
  */
-export function getGraphChangeDetector(pollIntervalMs = 5000): GraphChangeDetector {
+export function getGraphChangeDetector(config?: {
+  pollIntervalMs?: number;
+  useTimestamps?: boolean;
+  batchWindowMs?: number;
+  enableBatching?: boolean;
+}): GraphChangeDetector {
   if (!detectorInstance) {
-    console.log('[GraphChangeDetector] Creating new detector instance');
-    detectorInstance = createGraphChangeDetector(queryGraphByFilter, pollIntervalMs);
+    console.log('[GraphChangeDetector] Creating new detector instance with config:', config);
+
+    // Create detector with enhanced configuration
+    // Note: Timestamp-based queries require a separate implementation
+    // For now, we use the default snapshot-based approach
+    detectorInstance = createGraphChangeDetector(queryGraphByFilter, config);
 
     // Start polling immediately
     detectorInstance.start();
