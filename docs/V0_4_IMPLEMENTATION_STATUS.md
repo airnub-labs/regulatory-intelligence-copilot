@@ -2,7 +2,7 @@
 
 > **Date:** 2025-11-26
 > **Branch:** `claude/implement-v0.4-architecture-01Skp4pfUmSPvq2wGC15kqP5`
-> **Status:** Phase 1 Complete
+> **Status:** Phase 1 & Phase 2 Complete ✅
 
 This document tracks the implementation of the v0.4 architecture as defined in:
 - `docs/architecture_v_0_4.md`
@@ -91,35 +91,69 @@ This document tracks the implementation of the v0.4 architecture as defined in:
 
 ---
 
+## ✅ Phase 2: Package Restructuring (COMPLETE)
+
+Per `architecture_v_0_4.md` and D-020, the monorepo has been reorganized with clean separation of concerns:
+
+- [x] `packages/reg-intel-core` (v0.4.0) - **RENAMED from compliance-core**
+  - Compliance Engine & Orchestrator
+  - Agents (GlobalRegulatoryComplianceAgent, SingleDirector_IE_SocialSafetyNet_Agent)
+  - Re-exports focused packages via facade pattern
+  - MCP client and E2B sandbox management
+  - Timeline Engine
+
+- [x] `packages/reg-intel-graph` (v0.4.0) - **NEW PACKAGE**
+  - BoltGraphClient (direct Bolt connection)
+  - GraphWriteService (guarded writes)
+  - Graph Ingress Guard (aspect pipeline)
+  - GraphChangeDetector (patch-based streaming)
+  - Graph-related types and errors
+
+- [x] `packages/reg-intel-llm` (v0.4.0) - **NEW PACKAGE**
+  - LlmRouter (provider-agnostic routing)
+  - Providers: OpenAiResponsesClient, GroqLlmClient, LocalHttpLlmClient
+  - AI SDK v5 adapters (optional peer dependencies)
+  - Egress Guard (PII sanitization)
+  - LLM-related types and errors
+
+- [x] `packages/reg-intel-prompts` (v0.4.0) - **NEW PACKAGE**
+  - Jurisdiction-neutral prompt building
+  - Aspect pipeline for composition
+  - Context aspects: jurisdiction, agent, profile, disclaimer
+  - Pure TypeScript, no external dependencies
+
+**Implementation Details:**
+- All packages build successfully with TypeScript 5.9
+- Facade pattern in reg-intel-core maintains backward compatibility
+- Workspace dependencies use `workspace:*` protocol
+- All scripts updated to use new package names
+- demo-web app updated to import from reg-intel-core
+
+**Why This Matters:**
+- ✅ Clear separation of concerns achieved
+- ✅ Packages can be imported into other Next.js/Supabase SaaS apps
+- ✅ Easier to maintain and test independently
+- ✅ Aligns with v0.4 naming conventions
+
+**Documentation:**
+- See `docs/PHASE_2_PLAN.md` for detailed implementation strategy
+
+---
+
 ## 📋 Remaining v0.4 Tasks (Future Phases)
 
-### Phase 2: Package Restructuring
-Per `architecture_v_0_4.md` and D-020, the monorepo should be organized as:
-- [ ] `packages/reg-intel-core` (currently `compliance-core`)
-  - Compliance Engine
-  - Agents
-  - Orchestration logic
-- [ ] `packages/reg-intel-graph` (extract from current package)
-  - GraphClient
-  - GraphWriteService
-  - Graph Ingress Guard
-- [ ] `packages/reg-intel-llm` (extract from current package)
-  - LlmRouter
-  - Providers (OpenAI, Groq, Local)
-  - Egress Guard
-- [ ] `packages/reg-intel-prompts` (extract from current package)
-  - Base prompts
-  - Prompt aspects
+### Phase 2.5: Next.js Adapter (Optional)
 - [ ] `packages/reg-intel-next-adapter` (new)
   - Next.js API route helpers
   - SSE/WebSocket adapters
+  - Middleware for streaming responses
 
 **Why This Matters:**
-- Clear separation of concerns
-- Packages can be imported into other Next.js/Supabase SaaS apps
-- Easier to maintain and test independently
+- Cleaner Next.js integration
+- Reusable across multiple web apps
+- Optional enhancement
 
-**Current Blocker:** None - can be done incrementally without breaking changes.
+**Current Blocker:** None - demo-web works fine with direct reg-intel-core imports
 
 ### Phase 3: Graph Algorithm Integration (Optional)
 Per `graph_algorithms_v_0_1.md` and D-030:
@@ -212,8 +246,8 @@ Based on v0.4 roadmap and current state:
 - [x] Prompt aspects used for all system prompts
 - [x] Node 24 LTS + modern web stack enforced
 - [x] Architecture docs reference v0.4 specs
-- [ ] Package structure matches `reg-intel-*` naming
-- [ ] Next.js adapter package exists
+- [x] Package structure matches `reg-intel-*` naming ✅ **PHASE 2 COMPLETE**
+- [ ] Next.js adapter package exists (optional enhancement)
 - [ ] End-to-end test demonstrates full v0.4 flow
 
 ### Quality Gates
@@ -232,11 +266,13 @@ Based on v0.4 roadmap and current state:
 - ✅ No breaking changes to existing functionality
 - ✅ Graph write safety enforced via ingress guard
 - ✅ LLM provider abstraction complete
-- ⚠️ Package naming doesn't match v0.4 conventions (cosmetic)
+- ✅ Package naming matches v0.4 conventions (reg-intel-*) - **PHASE 2 COMPLETE**
+- ✅ Clean package separation with facade pattern
+- ✅ All 4 core packages build and export correctly
 
 ### Blockers to Production
 1. **None critical** - current implementation is stable and aligned with v0.4 architecture
-2. Package restructuring (Phase 2) is cosmetic and can be done incrementally
+2. ~~Package restructuring (Phase 2) is cosmetic and can be done incrementally~~ **COMPLETE ✅**
 3. Graph algorithms (Phase 3) are optional enhancements
 
 ### Recommended Pre-Production Steps
@@ -258,17 +294,18 @@ The v0.4 implementation successfully achieves the core goals:
 - **Reusable engine:** Core packages can be imported by other apps
 
 ### Trade-offs Made
-- **Package naming:** Kept `compliance-core` instead of immediately renaming to `reg-intel-core`
-  - **Rationale:** Focus on functionality first, cosmetic changes later
-  - **Impact:** None on behavior, low priority technical debt
+- ~~**Package naming:** Kept `compliance-core` instead of immediately renaming to `reg-intel-core`~~ **RESOLVED IN PHASE 2 ✅**
+  - **Resolution:** All packages now use `reg-intel-*` naming conventions
+  - **Impact:** None on behavior, technical debt cleared
 
 - **Graph algorithms:** Not yet implemented
   - **Rationale:** Optional enhancement, core queries work without it
   - **Impact:** None on core functionality, will enhance GraphRAG later
 
 ### Technical Debt
-- Low priority: Package renaming to match v0.4 conventions
-- Medium priority: Package splitting for cleaner separation
+- ~~Low priority: Package renaming to match v0.4 conventions~~ **COMPLETE ✅**
+- ~~Medium priority: Package splitting for cleaner separation~~ **COMPLETE ✅**
+- Low priority: Next.js adapter package (optional enhancement)
 - Low priority: Graph algorithm integration (optional)
 
 ---
