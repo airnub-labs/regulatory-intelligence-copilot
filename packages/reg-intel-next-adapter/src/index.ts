@@ -1,5 +1,7 @@
 import {
   NON_ADVICE_DISCLAIMER,
+  REGULATORY_COPILOT_SYSTEM_PROMPT,
+  buildPromptWithAspects,
   createComplianceEngine,
   createDefaultLlmRouter,
   createGraphClient,
@@ -108,9 +110,16 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       }
 
       const sanitizedMessages = sanitizeMessages(messages);
+      const jurisdictions = profile?.jurisdictions || ['IE'];
+
+      const systemPrompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
+        jurisdictions,
+        profile,
+        includeDisclaimer: true,
+      });
 
       const complianceResult = await complianceEngine.handleChat({
-        messages: sanitizedMessages,
+        messages: [{ role: 'system', content: systemPrompt }, ...sanitizedMessages],
         profile,
         tenantId: options?.tenantId ?? 'default',
       });
