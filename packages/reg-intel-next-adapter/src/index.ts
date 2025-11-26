@@ -11,11 +11,39 @@ import {
   type ChatMessage,
   type ComplianceEngine,
   type EgressGuard,
+  type LlmClient,
+  type LlmChatRequest,
+  type LlmChatResponse,
   type RedactedPayload,
   type UserProfile,
 } from '@reg-copilot/reg-intel-core';
+import type { LlmRouter, LlmCompletionOptions } from '@reg-copilot/reg-intel-llm';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
+
+/**
+ * Adapter that wraps LlmRouter to match the LlmClient interface
+ * expected by ComplianceEngine
+ */
+class LlmRouterClientAdapter implements LlmClient {
+  constructor(private router: LlmRouter) {}
+
+  async chat(request: LlmChatRequest): Promise<LlmChatResponse> {
+    const options: LlmCompletionOptions = {
+      temperature: request.temperature,
+      maxTokens: request.max_tokens,
+      tenantId: 'default',
+      task: 'main-chat',
+    };
+
+    const result = await this.router.chat(request.messages, options);
+
+    return {
+      content: result,
+      usage: undefined, // LlmRouter doesn't return usage stats
+    };
+  }
+}
 
 class BasicEgressGuard implements EgressGuard {
   redact(input: unknown): RedactedPayload {
@@ -90,8 +118,9 @@ function* chunkText(answer: string, chunkSize = 400): Generator<string> {
 
 export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   const llmRouter = createDefaultLlmRouter();
+  const llmClient = new LlmRouterClientAdapter(llmRouter);
   const complianceEngine: ComplianceEngine = createComplianceEngine({
-    llmClient: llmRouter,
+    llmClient: llmClient,
     graphClient: createGraphClient(),
     timelineEngine: createTimelineEngine(),
     egressGuard: new BasicEgressGuard(),
@@ -115,7 +144,6 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       const systemPrompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
         jurisdictions,
         profile,
-        includeDisclaimer: true,
       });
 
       const complianceResult = await complianceEngine.handleChat({
