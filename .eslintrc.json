@@ -29,7 +29,11 @@
   },
   "overrides": [
     {
-      "files": ["packages/compliance-core/src/graph/graphWriteService.ts", "packages/compliance-core/src/graph/boltGraphClient.ts", "packages/compliance-core/src/graph/graphClient.ts"],
+      "files": [
+        "packages/reg-intel-graph/src/graphWriteService.ts",
+        "packages/reg-intel-graph/src/boltGraphClient.ts",
+        "packages/reg-intel-core/src/graph/graphClient.ts"
+      ],
       "rules": {
         "no-restricted-syntax": "off"
       }

@@ -1,9 +1,11 @@
-# @reg-copilot/compliance-core
+# @reg-copilot/reg-intel-core
 
-**Version:** 0.3.1
+**Version:** 0.4.0
 **License:** MIT
 
-Core compliance and graph utilities for the Regulatory Intelligence Copilot.
+Core orchestration, agents, and compliance engine for the Regulatory Intelligence Copilot.
+
+> **Note:** This package was renamed from `@reg-copilot/compliance-core` in v0.4.0 to align with the v0.4 architecture.
 
 ## Features
 
@@ -14,8 +16,10 @@ Core compliance and graph utilities for the Regulatory Intelligence Copilot.
 ## Installation
 
 ```bash
-pnpm add @reg-copilot/compliance-core
+pnpm add @reg-copilot/reg-intel-core
 ```
+
+> **Migration from v0.3:** If upgrading from `@reg-copilot/compliance-core`, simply update your imports to use `@reg-copilot/reg-intel-core`. All APIs remain backward compatible.
 
 ## Quick Start
 
@@ -24,7 +28,7 @@ pnpm add @reg-copilot/compliance-core
 Monitor your regulatory graph for changes in real-time:
 
 ```typescript
-import { createGraphChangeDetector } from '@reg-copilot/compliance-core';
+import { createGraphChangeDetector } from '@reg-copilot/reg-intel-core';
 
 // Create detector
 const detector = createGraphChangeDetector(async (filter) => {
@@ -371,7 +375,7 @@ See [Performance Guide](../../docs/api/graph_change_detector_performance.md) for
 
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
-import { GraphChangeDetector } from '@reg-copilot/compliance-core';
+import { GraphChangeDetector } from '@reg-copilot/reg-intel-core';
 
 describe('GraphChangeDetector', () => {
   it('should detect added nodes', async () => {

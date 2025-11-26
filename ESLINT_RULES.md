@@ -23,9 +23,9 @@ Per `docs/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go thr
 
 The following files are **exempt** from these rules (they ARE the guarded services):
 
-1. `packages/compliance-core/src/graph/graphWriteService.ts` - The service itself
-2. `packages/compliance-core/src/graph/boltGraphClient.ts` - Read-only client
-3. `packages/compliance-core/src/graph/graphClient.ts` - Legacy MCP client
+1. `packages/reg-intel-graph/src/graphWriteService.ts` - The service itself
+2. `packages/reg-intel-graph/src/boltGraphClient.ts` - Read-only client
+3. `packages/reg-intel-core/src/graph/graphClient.ts` - Legacy MCP client
 
 ### Warnings (Not Errors)
 
@@ -44,13 +44,13 @@ All `**/*.test.ts` and `**/*.spec.ts` files are exempt (testing may require dire
 ### Check for Violations
 
 ```bash
-pnpm eslint packages/compliance-core/src scripts
+pnpm eslint packages/reg-intel-core/src packages/reg-intel-graph/src scripts
 ```
 
 ### Auto-Fix (Where Possible)
 
 ```bash
-pnpm eslint --fix packages/compliance-core/src scripts
+pnpm eslint --fix packages/reg-intel-core/src packages/reg-intel-graph/src scripts
 ```
 
 ### CI Integration
