@@ -1,3 +1,5 @@
+import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
+
 /**
  * Chat API endpoint for Regulatory Intelligence Copilot
  *
@@ -7,7 +9,4 @@
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(request: Request) {
-  const { createChatRouteHandler } = await import('@reg-copilot/reg-intel-next-adapter');
-  return createChatRouteHandler()(request);
-}
+export const POST = createChatRouteHandler();

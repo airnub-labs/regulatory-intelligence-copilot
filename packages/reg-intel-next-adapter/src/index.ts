@@ -17,7 +17,7 @@ import {
   type RedactedPayload,
   type UserProfile,
 } from '@reg-copilot/reg-intel-core';
-import type { LlmRouter, LlmCompletionOptions } from '@reg-copilot/reg-intel-llm';
+import { createLlmRouter, type LlmRouter, type LlmCompletionOptions } from '@reg-copilot/reg-intel-llm';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -183,17 +183,38 @@ class SseStreamWriter {
  * ```
  */
 export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
-  const llmRouter = createDefaultLlmRouter();
-  const llmClient = new LlmRouterClientAdapter(llmRouter);
-  const complianceEngine: ComplianceEngine = createComplianceEngine({
-    llmClient: llmClient,
-    graphClient: createGraphClient(),
-    timelineEngine: createTimelineEngine(),
-    egressGuard: new BasicEgressGuard(),
-  });
+  let dependencies: {
+    llmRouter: LlmRouter;
+    complianceEngine: ComplianceEngine;
+    providerConfigured: boolean;
+  } | null = null;
+
+  const ensureDependencies = () => {
+    if (dependencies) return dependencies;
+
+    const hasLlmProvider = Boolean(
+      process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY || process.env.LOCAL_LLM_BASE_URL
+    );
+
+    const llmRouter = hasLlmProvider
+      ? createDefaultLlmRouter()
+      : createLlmRouter({ defaultProvider: 'local', defaultModel: 'stub' });
+    const llmClient = new LlmRouterClientAdapter(llmRouter);
+    const complianceEngine: ComplianceEngine = createComplianceEngine({
+      llmClient: llmClient,
+      graphClient: createGraphClient(),
+      timelineEngine: createTimelineEngine(),
+      egressGuard: new BasicEgressGuard(),
+    });
+
+    dependencies = { llmRouter, complianceEngine, providerConfigured: hasLlmProvider };
+    return dependencies;
+  };
 
   return async function POST(request: Request) {
     try {
+      const { llmRouter, complianceEngine, providerConfigured } = ensureDependencies();
+
       // Parse and validate request body
       const body = await request.json();
 
