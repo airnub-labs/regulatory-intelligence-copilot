@@ -134,6 +134,8 @@ export {
   type UpsertBenefitDto,
   type UpsertReliefDto,
   type UpsertTimelineDto,
+  type UpsertAgreementDto,
+  type UpsertRegimeDto,
   type CreateRelationshipDto,
 } from './graph/graphWriteService.js';
 

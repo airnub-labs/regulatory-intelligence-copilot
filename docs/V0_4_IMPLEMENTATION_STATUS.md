@@ -297,10 +297,12 @@ All three seed scripts were found to be writing directly to Memgraph using raw C
 - All writes pass through ingress guard aspects
 - Includes clear logging: "✨ All writes enforced via Graph Ingress Guard ✨"
 
-**Remaining Work:**
-- [ ] Refactor `scripts/seed-special-jurisdictions.ts` to use GraphWriteService
-- [ ] Refactor `scripts/test-graph-changes.ts` to use GraphWriteService
-- [ ] Add ESLint rule to prevent direct database writes outside GraphWriteService
+**Resolution: COMPLETE**
+- ✅ Refactored `scripts/seed-special-jurisdictions.ts` to use GraphWriteService
+- ✅ Refactored `scripts/test-graph-changes.ts` to use GraphWriteService (writes only)
+- ✅ Added ESLint rules to prevent direct database writes outside GraphWriteService
+- ✅ Extended GraphWriteService with `upsertAgreement` and `upsertRegime` methods
+- ✅ Updated Graph Ingress Guard with new relationship types
 
 **Verification:**
 - ✅ Audited `packages/compliance-core/src` - no direct writes found

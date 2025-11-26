@@ -3,7 +3,8 @@
  * Test Graph Changes Script
  *
  * Simulates graph changes for testing the GraphChangeDetector and SSE streaming.
- * Useful for development and testing without needing complex graph operations.
+ * Uses GraphWriteService for write operations to enforce ingress guard.
+ * Direct queries are used only for reads and deletes (not yet in GraphWriteService API).
  *
  * Usage:
  *   tsx scripts/test-graph-changes.ts [action]
@@ -23,6 +24,10 @@
  */
 
 import neo4j, { Driver } from 'neo4j-driver';
+import {
+  createGraphWriteService,
+  type GraphWriteService,
+} from '../packages/compliance-core/src/index.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -43,73 +48,42 @@ function createDriver(): Driver {
 }
 
 /**
- * Execute a Cypher query
+ * Add a test node using GraphWriteService
  */
-async function executeCypher(
-  driver: Driver,
-  query: string,
-  params?: Record<string, unknown>
-): Promise<void> {
-  const session = driver.session();
-  try {
-    await session.run(query, params || {});
-  } finally {
-    await session.close();
-  }
-}
-
-/**
- * Add a test node
- */
-async function addTestNode(driver: Driver): Promise<void> {
+async function addTestNode(writeService: GraphWriteService): Promise<string> {
   const timestamp = Date.now();
-  const nodeId = `test-benefit-${timestamp}`;
+  const nodeId = `TEST_BENEFIT_${timestamp}`;
 
   console.log(`➕ Adding test node: ${nodeId}`);
 
-  await executeCypher(
-    driver,
-    `
-    MERGE (b:Benefit {id: $id})
-    SET b.label = $label,
-        b.name = $name,
-        b.short_summary = $summary,
-        b.description = $description,
-        b.test_node = true,
-        b.created_at = datetime()
-
-    WITH b
-    MATCH (ie:Jurisdiction {id: 'IE'})
-    MERGE (b)-[:IN_JURISDICTION]->(ie)
-
-    WITH b
-    MATCH (p:ProfileTag {id: 'single-director-ie'})
-    MERGE (b)-[:APPLIES_TO]->(p)
-  `,
-    {
-      id: nodeId,
-      label: `Test Benefit ${timestamp}`,
-      name: `Test Benefit ${timestamp}`,
-      summary: 'Test benefit for change detection',
-      description: 'This is a test benefit created to verify graph change detection is working correctly.',
-    }
-  );
+  // Create the benefit using GraphWriteService
+  await writeService.upsertBenefit({
+    id: nodeId,
+    name: `Test Benefit ${timestamp}`,
+    category: 'TEST',
+    short_summary: 'Test benefit for change detection',
+    description: 'This is a test benefit created to verify graph change detection is working correctly.',
+    jurisdictionId: 'IE',
+  });
 
   console.log('✅ Test node added successfully');
+  return nodeId;
 }
 
 /**
- * Update an existing test node
+ * Update an existing test node (uses direct query for read, GraphWriteService for write)
  */
-async function updateTestNode(driver: Driver): Promise<void> {
+async function updateTestNode(driver: Driver, writeService: GraphWriteService): Promise<void> {
   console.log('🔄 Updating test node...');
 
   const session = driver.session();
   try {
-    // Find a test node
+    // Find a test node (read operation - not in GraphWriteService API yet)
     const result = await session.run(`
-      MATCH (b:Benefit {test_node: true})
-      RETURN b.id AS id
+      MATCH (b:Benefit)
+      WHERE b.id STARTS WITH 'TEST_BENEFIT_'
+      RETURN b.id AS id, b.name AS name, b.category AS category,
+             b.short_summary AS summary, b.description AS description
       LIMIT 1
     `);
 
@@ -118,20 +92,19 @@ async function updateTestNode(driver: Driver): Promise<void> {
       return;
     }
 
-    const nodeId = result.records[0].get('id');
+    const record = result.records[0];
+    const nodeId = record.get('id');
     console.log(`   Updating node: ${nodeId}`);
 
-    await session.run(
-      `
-      MATCH (b:Benefit {id: $id})
-      SET b.description = $newDescription,
-          b.updated_at = datetime()
-    `,
-      {
-        id: nodeId,
-        newDescription: `Updated at ${new Date().toISOString()} - Change detection test`,
-      }
-    );
+    // Update using GraphWriteService
+    await writeService.upsertBenefit({
+      id: nodeId,
+      name: record.get('name'),
+      category: record.get('category'),
+      short_summary: record.get('summary'),
+      description: `Updated at ${new Date().toISOString()} - Change detection test`,
+      jurisdictionId: 'IE',
+    });
 
     console.log('✅ Test node updated successfully');
   } finally {
@@ -140,7 +113,11 @@ async function updateTestNode(driver: Driver): Promise<void> {
 }
 
 /**
- * Remove a test node
+ * Remove a test node (DELETE not in GraphWriteService API - uses direct query)
+ *
+ * NOTE: This uses direct Cypher for DELETE operations which are not yet
+ * supported by GraphWriteService. In production, deletes should also go
+ * through a guarded service.
  */
 async function removeTestNode(driver: Driver): Promise<void> {
   console.log('🗑️  Removing test node...');
@@ -149,7 +126,8 @@ async function removeTestNode(driver: Driver): Promise<void> {
   try {
     // Find and remove a test node
     const result = await session.run(`
-      MATCH (b:Benefit {test_node: true})
+      MATCH (b:Benefit)
+      WHERE b.id STARTS WITH 'TEST_BENEFIT_'
       WITH b LIMIT 1
       DETACH DELETE b
       RETURN count(b) AS deleted
@@ -168,29 +146,30 @@ async function removeTestNode(driver: Driver): Promise<void> {
 }
 
 /**
- * Add a test edge
+ * Add a test edge using GraphWriteService
  */
-async function addTestEdge(driver: Driver): Promise<void> {
+async function addTestEdge(driver: Driver, writeService: GraphWriteService): Promise<void> {
   console.log('➕ Adding test edge...');
 
   const session = driver.session();
   try {
-    // Find two test nodes or create them
+    // Find two test nodes (read operation)
     const result = await session.run(`
-      MATCH (b1:Benefit {test_node: true})
-      MATCH (b2:Benefit {test_node: true})
-      WHERE b1 <> b2
+      MATCH (b1:Benefit), (b2:Benefit)
+      WHERE b1.id STARTS WITH 'TEST_BENEFIT_'
+        AND b2.id STARTS WITH 'TEST_BENEFIT_'
+        AND b1 <> b2
       RETURN b1.id AS id1, b2.id AS id2
       LIMIT 1
     `);
 
     if (result.records.length === 0) {
       console.log('⚠️  Need at least 2 test nodes. Creating them...');
-      await addTestNode(driver);
+      await addTestNode(writeService);
       await new Promise((resolve) => setTimeout(resolve, 100));
-      await addTestNode(driver);
+      await addTestNode(writeService);
       await new Promise((resolve) => setTimeout(resolve, 100));
-      await addTestEdge(driver); // Retry
+      await addTestEdge(driver, writeService); // Retry
       return;
     }
 
@@ -199,14 +178,14 @@ async function addTestEdge(driver: Driver): Promise<void> {
 
     console.log(`   Creating edge: ${id1} -> ${id2}`);
 
-    await session.run(
-      `
-      MATCH (b1:Benefit {id: $id1})
-      MATCH (b2:Benefit {id: $id2})
-      MERGE (b1)-[:MUTUALLY_EXCLUSIVE_WITH]->(b2)
-    `,
-      { id1, id2 }
-    );
+    // Create relationship using GraphWriteService
+    await writeService.createRelationship({
+      fromId: id1,
+      fromLabel: 'Benefit',
+      toId: id2,
+      toLabel: 'Benefit',
+      relType: 'MUTUALLY_EXCLUSIVE_WITH',
+    });
 
     console.log('✅ Test edge added successfully');
   } finally {
@@ -215,7 +194,10 @@ async function addTestEdge(driver: Driver): Promise<void> {
 }
 
 /**
- * Remove a test edge
+ * Remove a test edge (DELETE not in GraphWriteService API - uses direct query)
+ *
+ * NOTE: This uses direct Cypher for DELETE operations which are not yet
+ * supported by GraphWriteService.
  */
 async function removeTestEdge(driver: Driver): Promise<void> {
   console.log('🗑️  Removing test edge...');
@@ -223,7 +205,9 @@ async function removeTestEdge(driver: Driver): Promise<void> {
   const session = driver.session();
   try {
     const result = await session.run(`
-      MATCH (b1:Benefit {test_node: true})-[r:MUTUALLY_EXCLUSIVE_WITH]->(b2:Benefit {test_node: true})
+      MATCH (b1:Benefit)-[r:MUTUALLY_EXCLUSIVE_WITH]->(b2:Benefit)
+      WHERE b1.id STARTS WITH 'TEST_BENEFIT_'
+        AND b2.id STARTS WITH 'TEST_BENEFIT_'
       WITH r LIMIT 1
       DELETE r
       RETURN count(r) AS deleted
@@ -244,16 +228,19 @@ async function removeTestEdge(driver: Driver): Promise<void> {
 /**
  * Simulate a sequence of changes with delays
  */
-async function simulateChanges(driver: Driver): Promise<void> {
+async function simulateChanges(
+  driver: Driver,
+  writeService: GraphWriteService,
+): Promise<void> {
   console.log('🎬 Starting simulation of graph changes...\n');
 
   const actions = [
-    { name: 'Add Node 1', fn: () => addTestNode(driver), delay: 2000 },
-    { name: 'Add Node 2', fn: () => addTestNode(driver), delay: 3000 },
-    { name: 'Add Edge', fn: () => addTestEdge(driver), delay: 3000 },
-    { name: 'Update Node', fn: () => updateTestNode(driver), delay: 3000 },
+    { name: 'Add Node 1', fn: () => addTestNode(writeService), delay: 2000 },
+    { name: 'Add Node 2', fn: () => addTestNode(writeService), delay: 3000 },
+    { name: 'Add Edge', fn: () => addTestEdge(driver, writeService), delay: 3000 },
+    { name: 'Update Node', fn: () => updateTestNode(driver, writeService), delay: 3000 },
     { name: 'Remove Edge', fn: () => removeTestEdge(driver), delay: 3000 },
-    { name: 'Add Node 3', fn: () => addTestNode(driver), delay: 3000 },
+    { name: 'Add Node 3', fn: () => addTestNode(writeService), delay: 3000 },
     { name: 'Remove Node', fn: () => removeTestNode(driver), delay: 3000 },
   ];
 
@@ -266,6 +253,8 @@ async function simulateChanges(driver: Driver): Promise<void> {
   }
 
   console.log('\n✅ Simulation complete!');
+  console.log('✨ Write operations enforced via Graph Ingress Guard ✨');
+  console.log('⚠️  DELETE operations use direct Cypher (not yet in GraphWriteService API)');
 }
 
 /**
@@ -283,24 +272,31 @@ async function main() {
     await driver.verifyConnectivity();
     console.log('✅ Connected to Memgraph\n');
 
+    // Create GraphWriteService
+    const writeService: GraphWriteService = createGraphWriteService({
+      driver,
+      defaultSource: 'script',
+      tenantId: 'test',
+    });
+
     switch (action) {
       case 'add-node':
-        await addTestNode(driver);
+        await addTestNode(writeService);
         break;
       case 'update-node':
-        await updateTestNode(driver);
+        await updateTestNode(driver, writeService);
         break;
       case 'remove-node':
         await removeTestNode(driver);
         break;
       case 'add-edge':
-        await addTestEdge(driver);
+        await addTestEdge(driver, writeService);
         break;
       case 'remove-edge':
         await removeTestEdge(driver);
         break;
       case 'simulate':
-        await simulateChanges(driver);
+        await simulateChanges(driver, writeService);
         break;
       default:
         console.error(`❌ Unknown action: ${action}`);
@@ -315,6 +311,10 @@ async function main() {
     }
   } catch (error) {
     console.error('❌ Error:', error);
+    if (error instanceof Error) {
+      console.error('   Message:', error.message);
+      console.error('   Stack:', error.stack);
+    }
     process.exit(1);
   } finally {
     await driver.close();

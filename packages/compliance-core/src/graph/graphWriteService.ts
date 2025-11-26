@@ -103,6 +103,28 @@ export interface UpsertTimelineDto {
 }
 
 /**
+ * DTO for upserting an agreement
+ */
+export interface UpsertAgreementDto {
+  id: string;
+  name: string;
+  type?: string;
+  description?: string;
+  effective_from?: string;
+  effective_to?: string;
+}
+
+/**
+ * DTO for upserting a regime
+ */
+export interface UpsertRegimeDto {
+  id: string;
+  name: string;
+  category?: string;
+  description?: string;
+}
+
+/**
  * DTO for creating a relationship
  */
 export interface CreateRelationshipDto {
@@ -453,6 +475,34 @@ export class GraphWriteService {
     const ctx: GraphWriteContext = {
       operation: 'merge',
       nodeLabel: 'Timeline',
+      properties: { ...dto },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+    await this.executeWrite(ctx);
+  }
+
+  /**
+   * Upsert an agreement
+   */
+  async upsertAgreement(dto: UpsertAgreementDto): Promise<void> {
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Agreement',
+      properties: { ...dto },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+    await this.executeWrite(ctx);
+  }
+
+  /**
+   * Upsert a regime
+   */
+  async upsertRegime(dto: UpsertRegimeDto): Promise<void> {
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Regime',
       properties: { ...dto },
       tenantId: this.tenantId,
       source: this.defaultSource,

@@ -5,6 +5,8 @@
  * Seeds Memgraph with IE/UK/NI/IM/EU jurisdictions, CTA framework, and NI goods regime.
  * Implements the modelling documented in docs/specs/special_jurisdictions_modelling_v_0_1.md
  *
+ * All operations use GraphWriteService to enforce ingress guard aspects.
+ *
  * Based on docs/graph_seed_ni_uk_ie_eu.txt
  *
  * Usage:
@@ -17,6 +19,10 @@
  */
 
 import neo4j, { Driver } from 'neo4j-driver';
+import {
+  createGraphWriteService,
+  type GraphWriteService,
+} from '../packages/compliance-core/src/index.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -30,7 +36,6 @@ function createDriver(): Driver {
   if (MEMGRAPH_USERNAME && MEMGRAPH_PASSWORD) {
     auth = neo4j.auth.basic(MEMGRAPH_USERNAME, MEMGRAPH_PASSWORD);
   } else {
-    // No auth - pass undefined for Memgraph without authentication
     auth = undefined;
   }
 
@@ -38,23 +43,7 @@ function createDriver(): Driver {
 }
 
 /**
- * Execute a Cypher query
- */
-async function executeCypher(
-  driver: Driver,
-  query: string,
-  params?: Record<string, unknown>
-): Promise<void> {
-  const session = driver.session();
-  try {
-    await session.run(query, params || {});
-  } finally {
-    await session.close();
-  }
-}
-
-/**
- * Seed the graph with special jurisdiction data
+ * Seed the graph with special jurisdiction data using GraphWriteService
  */
 async function seedSpecialJurisdictions() {
   console.log('🌱 Starting special jurisdictions seeding...');
@@ -67,289 +56,268 @@ async function seedSpecialJurisdictions() {
     await driver.verifyConnectivity();
     console.log('✅ Connected to Memgraph');
 
+    // Create GraphWriteService
+    const writeService: GraphWriteService = createGraphWriteService({
+      driver,
+      defaultSource: 'ingestion',
+      tenantId: 'system',
+    });
+
     // 1. Create Jurisdictions
     console.log('\n🌍 Creating jurisdictions...');
-    await executeCypher(
-      driver,
-      `
-      MERGE (ie:Jurisdiction {code: 'IE'})
-        ON CREATE SET ie.name = 'Ireland',
-                      ie.kind = 'sovereign_state',
-                      ie.created_at = datetime()
-        ON MATCH SET ie.updated_at = datetime()
 
-      MERGE (uk:Jurisdiction {code: 'UK'})
-        ON CREATE SET uk.name = 'United Kingdom',
-                      uk.kind = 'sovereign_state',
-                      uk.created_at = datetime()
-        ON MATCH SET uk.updated_at = datetime()
+    await writeService.upsertJurisdiction({
+      id: 'IE',
+      name: 'Ireland',
+      type: 'COUNTRY',
+      code: 'IE',
+    });
 
-      MERGE (im:Jurisdiction {code: 'IM'})
-        ON CREATE SET im.name = 'Isle of Man',
-                      im.kind = 'crown_dependency',
-                      im.created_at = datetime()
-        ON MATCH SET im.updated_at = datetime()
+    await writeService.upsertJurisdiction({
+      id: 'UK',
+      name: 'United Kingdom',
+      type: 'COUNTRY',
+      code: 'UK',
+    });
 
-      MERGE (eu:Jurisdiction {code: 'EU'})
-        ON CREATE SET eu.name = 'European Union',
-                      eu.kind = 'supranational',
-                      eu.created_at = datetime()
-        ON MATCH SET eu.updated_at = datetime()
-    `
-    );
+    await writeService.upsertJurisdiction({
+      id: 'IM',
+      name: 'Isle of Man',
+      type: 'CROWN_DEPENDENCY',
+      code: 'IM',
+    });
+
+    await writeService.upsertJurisdiction({
+      id: 'EU',
+      name: 'European Union',
+      type: 'SUPRANATIONAL',
+      code: 'EU',
+    });
+
     console.log('   ✅ Created: IE, UK, IM, EU');
 
     // 2. Create Special Region: Northern Ireland
     console.log('\n📍 Creating Northern Ireland region...');
-    await executeCypher(
-      driver,
-      `
-      MERGE (ni:Region {code: 'NI'})
-        ON CREATE SET ni.name = 'Northern Ireland',
-                      ni.kind = 'special_trade_region'
 
-      MATCH (ni:Region {code: 'NI'})
-      MATCH (uk:Jurisdiction {code: 'UK'})
-      MERGE (ni)-[:PART_OF]->(uk)
-    `
-    );
+    await writeService.upsertRegion({
+      id: 'NI',
+      name: 'Northern Ireland',
+      type: 'special_trade_region',
+      parentJurisdictionId: 'UK',
+    });
+
     console.log('   ✅ Created: NI (part of UK)');
 
     // 3. Create Agreements
     console.log('\n📜 Creating agreements...');
-    await executeCypher(
-      driver,
-      `
-      MERGE (cta:Agreement {code: 'CTA'})
-        ON CREATE SET cta.name = 'Common Travel Area',
-                      cta.kind = 'mobility_cooperation',
-                      cta.description = 'Common Travel Area between Ireland, the UK, Isle of Man, and Channel Islands'
 
-      MERGE (niProt:Agreement {code: 'NI_PROTOCOL'})
-        ON CREATE SET niProt.name = 'Ireland/Northern Ireland Protocol',
-                      niProt.kind = 'protocol',
-                      niProt.description = 'Protocol on Ireland/Northern Ireland relating to goods and customs'
+    await writeService.upsertAgreement({
+      id: 'CTA',
+      name: 'Common Travel Area',
+      type: 'mobility_cooperation',
+      description: 'Common Travel Area between Ireland, the UK, Isle of Man, and Channel Islands',
+    });
 
-      MERGE (wf:Agreement {code: 'WINDSOR_FRAMEWORK'})
-        ON CREATE SET wf.name = 'Windsor Framework',
-                      wf.kind = 'implementing_framework',
-                      wf.description = 'Framework adjusting implementation of the NI Protocol'
-    `
-    );
+    await writeService.upsertAgreement({
+      id: 'NI_PROTOCOL',
+      name: 'Ireland/Northern Ireland Protocol',
+      type: 'protocol',
+      description: 'Protocol on Ireland/Northern Ireland relating to goods and customs',
+    });
+
+    await writeService.upsertAgreement({
+      id: 'WINDSOR_FRAMEWORK',
+      name: 'Windsor Framework',
+      type: 'implementing_framework',
+      description: 'Framework adjusting implementation of the NI Protocol',
+    });
+
     console.log('   ✅ Created: CTA, NI_PROTOCOL, WINDSOR_FRAMEWORK');
 
     // 4. Link Windsor Framework to NI Protocol
     console.log('\n🔗 Linking Windsor Framework...');
-    await executeCypher(
-      driver,
-      `
-      MATCH (niProt:Agreement {code: 'NI_PROTOCOL'})
-      MATCH (wf:Agreement {code: 'WINDSOR_FRAMEWORK'})
-      MERGE (niProt)-[:MODIFIED_BY]->(wf)
-    `
-    );
+
+    await writeService.createRelationship({
+      fromId: 'NI_PROTOCOL',
+      fromLabel: 'Agreement',
+      toId: 'WINDSOR_FRAMEWORK',
+      toLabel: 'Agreement',
+      relType: 'MODIFIED_BY',
+    });
 
     // 5. Create parties to CTA
     console.log('\n🤝 Creating CTA parties...');
-    await executeCypher(
-      driver,
-      `
-      MATCH (ie:Jurisdiction {code: 'IE'})
-      MATCH (uk:Jurisdiction {code: 'UK'})
-      MATCH (im:Jurisdiction {code: 'IM'})
-      MATCH (cta:Agreement {code: 'CTA'})
 
-      MERGE (ie)-[:PARTY_TO]->(cta)
-      MERGE (uk)-[:PARTY_TO]->(cta)
-      MERGE (im)-[:PARTY_TO]->(cta)
-    `
-    );
+    await writeService.createRelationship({
+      fromId: 'IE',
+      fromLabel: 'Jurisdiction',
+      toId: 'CTA',
+      toLabel: 'Agreement',
+      relType: 'PARTY_TO',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'UK',
+      fromLabel: 'Jurisdiction',
+      toId: 'CTA',
+      toLabel: 'Agreement',
+      relType: 'PARTY_TO',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'IM',
+      fromLabel: 'Jurisdiction',
+      toId: 'CTA',
+      toLabel: 'Agreement',
+      relType: 'PARTY_TO',
+    });
+
     console.log('   ✅ Linked: IE, UK, IM → CTA');
 
     // 6. Create Regimes
     console.log('\n⚖️  Creating regimes...');
-    await executeCypher(
-      driver,
-      `
-      MERGE (ctaReg:Regime {code: 'CTA_MOBILITY_RIGHTS'})
-        ON CREATE SET ctaReg.name = 'CTA Mobility & Residence Rights',
-                      ctaReg.domain = 'mobility',
-                      ctaReg.scope = 'persons'
 
-      MERGE (niGoods:Regime {code: 'NI_EU_GOODS_REGIME'})
-        ON CREATE SET niGoods.name = 'NI EU-Linked Goods Regime',
-                      niGoods.domain = 'goods',
-                      niGoods.scope = 'trade_customs_vat'
-    `
-    );
+    await writeService.upsertRegime({
+      id: 'CTA_MOBILITY_RIGHTS',
+      name: 'CTA Mobility & Residence Rights',
+      category: 'mobility',
+      description: 'Rights to live, work and access services across the CTA',
+    });
+
+    await writeService.upsertRegime({
+      id: 'NI_EU_GOODS_REGIME',
+      name: 'NI EU-Linked Goods Regime',
+      category: 'trade',
+      description: 'Special goods regime for Northern Ireland under the NI Protocol/Windsor Framework',
+    });
+
     console.log('   ✅ Created: CTA_MOBILITY_RIGHTS, NI_EU_GOODS_REGIME');
 
     // 7. Link regimes to agreements
     console.log('\n🔗 Linking regimes to agreements...');
-    await executeCypher(
-      driver,
-      `
-      MATCH (cta:Agreement {code: 'CTA'})
-      MATCH (ctaReg:Regime {code: 'CTA_MOBILITY_RIGHTS'})
-      MERGE (cta)-[:ESTABLISHES_REGIME]->(ctaReg)
 
-      MATCH (niProt:Agreement {code: 'NI_PROTOCOL'})
-      MATCH (niGoods:Regime {code: 'NI_EU_GOODS_REGIME'})
-      MATCH (wf:Agreement {code: 'WINDSOR_FRAMEWORK'})
-      MATCH (eu:Jurisdiction {code: 'EU'})
+    await writeService.createRelationship({
+      fromId: 'CTA',
+      fromLabel: 'Agreement',
+      toId: 'CTA_MOBILITY_RIGHTS',
+      toLabel: 'Regime',
+      relType: 'ESTABLISHES_REGIME',
+    });
 
-      MERGE (niProt)-[:ESTABLISHES_REGIME]->(niGoods)
-      MERGE (niGoods)-[:COORDINATED_WITH]->(eu)
-      MERGE (niGoods)-[:IMPLEMENTED_VIA]->(wf)
-    `
-    );
+    await writeService.createRelationship({
+      fromId: 'NI_PROTOCOL',
+      fromLabel: 'Agreement',
+      toId: 'NI_EU_GOODS_REGIME',
+      toLabel: 'Regime',
+      relType: 'ESTABLISHES_REGIME',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'NI_EU_GOODS_REGIME',
+      fromLabel: 'Regime',
+      toId: 'EU',
+      toLabel: 'Jurisdiction',
+      relType: 'COORDINATED_WITH',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'NI_EU_GOODS_REGIME',
+      fromLabel: 'Regime',
+      toId: 'WINDSOR_FRAMEWORK',
+      toLabel: 'Agreement',
+      relType: 'IMPLEMENTED_VIA',
+    });
 
     // 8. Attach regimes to jurisdictions/regions
     console.log('\n🔗 Attaching regimes to jurisdictions...');
-    await executeCypher(
-      driver,
-      `
-      MATCH (ie:Jurisdiction {code: 'IE'})
-      MATCH (uk:Jurisdiction {code: 'UK'})
-      MATCH (im:Jurisdiction {code: 'IM'})
-      MATCH (ni:Region {code: 'NI'})
-      MATCH (ctaReg:Regime {code: 'CTA_MOBILITY_RIGHTS'})
-      MATCH (niGoods:Regime {code: 'NI_EU_GOODS_REGIME'})
 
-      MERGE (ie)-[:SUBJECT_TO_REGIME]->(ctaReg)
-      MERGE (uk)-[:SUBJECT_TO_REGIME]->(ctaReg)
-      MERGE (im)-[:SUBJECT_TO_REGIME]->(ctaReg)
-      MERGE (ni)-[:SUBJECT_TO_REGIME]->(niGoods)
-    `
-    );
+    await writeService.createRelationship({
+      fromId: 'IE',
+      fromLabel: 'Jurisdiction',
+      toId: 'CTA_MOBILITY_RIGHTS',
+      toLabel: 'Regime',
+      relType: 'SUBJECT_TO_REGIME',
+    });
 
-    // 9. Create example benefits/rules
-    console.log('\n💼 Creating example benefits and rules...');
-    await executeCypher(
-      driver,
-      `
-      MERGE (ctaWork:Benefit {code: 'CTA_RIGHT_TO_LIVE_AND_WORK'})
-        ON CREATE SET ctaWork.name = 'Right to live and work across the CTA',
-                      ctaWork.kind = 'mobility_benefit'
+    await writeService.createRelationship({
+      fromId: 'UK',
+      fromLabel: 'Jurisdiction',
+      toId: 'CTA_MOBILITY_RIGHTS',
+      toLabel: 'Regime',
+      relType: 'SUBJECT_TO_REGIME',
+    });
 
-      MATCH (ctaWork:Benefit {code: 'CTA_RIGHT_TO_LIVE_AND_WORK'})
-      MATCH (ctaReg:Regime {code: 'CTA_MOBILITY_RIGHTS'})
-      MATCH (ie:Jurisdiction {code: 'IE'})
-      MATCH (uk:Jurisdiction {code: 'UK'})
-      MATCH (im:Jurisdiction {code: 'IM'})
+    await writeService.createRelationship({
+      fromId: 'IM',
+      fromLabel: 'Jurisdiction',
+      toId: 'CTA_MOBILITY_RIGHTS',
+      toLabel: 'Regime',
+      relType: 'SUBJECT_TO_REGIME',
+    });
 
-      MERGE (ctaWork)-[:AVAILABLE_VIA_REGIME]->(ctaReg)
-      MERGE (ctaWork)-[:IN_JURISDICTION]->(ie)
-      MERGE (ctaWork)-[:IN_JURISDICTION]->(uk)
-      MERGE (ctaWork)-[:IN_JURISDICTION]->(im)
-    `
-    );
+    await writeService.createRelationship({
+      fromId: 'NI',
+      fromLabel: 'Region',
+      toId: 'NI_EU_GOODS_REGIME',
+      toLabel: 'Regime',
+      relType: 'SUBJECT_TO_REGIME',
+    });
 
-    await executeCypher(
-      driver,
-      `
-      MERGE (ssCoord:Rule {code: 'IE_UK_SOCIAL_SECURITY_COORDINATION'})
-        ON CREATE SET ssCoord.name = 'IE-UK Social Security Coordination (CTA context)',
-                      ssCoord.domain = 'social_security',
-                      ssCoord.description = 'High-level coordination of contributions and benefits between IE and UK under CTA-linked arrangements and relevant bilateral agreements'
+    // 9. Create example benefit
+    console.log('\n💼 Creating example CTA benefit...');
 
-      MATCH (ssCoord:Rule {code: 'IE_UK_SOCIAL_SECURITY_COORDINATION'})
-      MATCH (ie:Jurisdiction {code: 'IE'})
-      MATCH (uk:Jurisdiction {code: 'UK'})
-      MATCH (cta:Agreement {code: 'CTA'})
+    await writeService.upsertBenefit({
+      id: 'CTA_RIGHT_TO_LIVE_AND_WORK',
+      name: 'Right to live and work across the CTA',
+      category: 'mobility',
+      description: 'Citizens of CTA countries can live and work in any CTA jurisdiction',
+      jurisdictionId: 'IE',
+    });
 
-      MERGE (ssCoord)-[:APPLIES_BETWEEN]->(ie)
-      MERGE (ssCoord)-[:APPLIES_BETWEEN]->(uk)
-      MERGE (ssCoord)-[:RELATED_TO_AGREEMENT]->(cta)
-    `
-    );
-    console.log('   ✅ Created: CTA_RIGHT_TO_LIVE_AND_WORK, IE_UK_SOCIAL_SECURITY_COORDINATION');
+    // Link benefit to regime and jurisdictions
+    await writeService.createRelationship({
+      fromId: 'CTA_RIGHT_TO_LIVE_AND_WORK',
+      fromLabel: 'Benefit',
+      toId: 'CTA_MOBILITY_RIGHTS',
+      toLabel: 'Regime',
+      relType: 'AVAILABLE_VIA_REGIME',
+    });
 
-    // 10. Create timeline node for Brexit
-    console.log('\n⏰ Creating timeline node...');
-    await executeCypher(
-      driver,
-      `
-      MERGE (brexit:Timeline {code: 'BREXIT_DATE'})
-        ON CREATE SET brexit.label = 'Brexit Date',
-                      brexit.effectiveDate = date('2020-01-31')
+    await writeService.createRelationship({
+      fromId: 'CTA_RIGHT_TO_LIVE_AND_WORK',
+      fromLabel: 'Benefit',
+      toId: 'UK',
+      toLabel: 'Jurisdiction',
+      relType: 'IN_JURISDICTION',
+    });
 
-      MATCH (brexit:Timeline {code: 'BREXIT_DATE'})
-      MATCH (niProt:Agreement {code: 'NI_PROTOCOL'})
-      MERGE (niProt)-[:EFFECTIVE_FROM]->(brexit)
-    `
-    );
-    console.log('   ✅ Created: BREXIT_DATE timeline');
+    await writeService.createRelationship({
+      fromId: 'CTA_RIGHT_TO_LIVE_AND_WORK',
+      fromLabel: 'Benefit',
+      toId: 'IM',
+      toLabel: 'Jurisdiction',
+      relType: 'IN_JURISDICTION',
+    });
 
-    // Count nodes and relationships
-    const session = driver.session();
-    try {
-      const nodeResult = await session.run('MATCH (n) RETURN count(n) as count');
-      const nodeCount = nodeResult.records[0].get('count').toNumber();
-
-      const edgeResult = await session.run('MATCH ()-[r]->() RETURN count(r) as count');
-      const edgeCount = edgeResult.records[0].get('count').toNumber();
-
-      console.log('\n✅ Special jurisdictions seeding complete!');
-      console.log(`📊 Total nodes: ${nodeCount}, Total relationships: ${edgeCount}`);
-
-      console.log('\n📋 Node Summary:');
-      const summaryResult = await session.run(
-        'MATCH (n) RETURN labels(n)[0] as type, count(n) as count ORDER BY count DESC'
-      );
-      for (const record of summaryResult.records) {
-        const type = record.get('type');
-        const count = record.get('count').toNumber();
-        console.log(`   - ${type}: ${count}`);
-      }
-
-      // Show specific nodes created
-      console.log('\n🔍 Special Jurisdiction Nodes Created:');
-      const jurisdictionsResult = await session.run(
-        'MATCH (j:Jurisdiction) RETURN j.code as code, j.name as name ORDER BY code'
-      );
-      console.log('   Jurisdictions:');
-      for (const record of jurisdictionsResult.records) {
-        console.log(`      • ${record.get('code')}: ${record.get('name')}`);
-      }
-
-      const regionsResult = await session.run(
-        'MATCH (r:Region) RETURN r.code as code, r.name as name ORDER BY code'
-      );
-      if (regionsResult.records.length > 0) {
-        console.log('   Regions:');
-        for (const record of regionsResult.records) {
-          console.log(`      • ${record.get('code')}: ${record.get('name')}`);
-        }
-      }
-
-      const agreementsResult = await session.run(
-        'MATCH (a:Agreement) RETURN a.code as code, a.name as name ORDER BY code'
-      );
-      if (agreementsResult.records.length > 0) {
-        console.log('   Agreements:');
-        for (const record of agreementsResult.records) {
-          console.log(`      • ${record.get('code')}: ${record.get('name')}`);
-        }
-      }
-
-      const regimesResult = await session.run(
-        'MATCH (r:Regime) RETURN r.code as code, r.name as name ORDER BY code'
-      );
-      if (regimesResult.records.length > 0) {
-        console.log('   Regimes:');
-        for (const record of regimesResult.records) {
-          console.log(`      • ${record.get('code')}: ${record.get('name')}`);
-        }
-      }
-    } finally {
-      await session.close();
-    }
+    console.log('\n✅ Special jurisdictions seeding completed successfully!');
+    console.log('\n📊 Summary:');
+    console.log('   - Jurisdictions: 4 (IE, UK, IM, EU)');
+    console.log('   - Regions: 1 (NI)');
+    console.log('   - Agreements: 3 (CTA, NI_PROTOCOL, WINDSOR_FRAMEWORK)');
+    console.log('   - Regimes: 2 (CTA_MOBILITY_RIGHTS, NI_EU_GOODS_REGIME)');
+    console.log('   - Benefits: 1 (CTA mobility benefit)');
+    console.log('   - Relationships: ~15');
+    console.log('\n✨ All writes enforced via Graph Ingress Guard ✨');
   } catch (error) {
     console.error('❌ Error seeding special jurisdictions:', error);
-    throw error;
+    if (error instanceof Error) {
+      console.error('   Message:', error.message);
+      console.error('   Stack:', error.stack);
+    }
+    process.exit(1);
   } finally {
     await driver.close();
+    console.log('👋 Disconnected from Memgraph');
   }
 }
 

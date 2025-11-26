@@ -104,6 +104,11 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'APPLIES_TO_PROFILE',
     'CONTAINS',
     'PARTY_TO',
+    'MODIFIED_BY',
+    'ESTABLISHES_REGIME',
+    'IMPLEMENTED_VIA',
+    'SUBJECT_TO_REGIME',
+    'AVAILABLE_VIA_REGIME',
   ];
 
   if (ctx.nodeLabel && !allowedNodeLabels.includes(ctx.nodeLabel)) {
