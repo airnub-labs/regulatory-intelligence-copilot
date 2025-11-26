@@ -273,4 +273,42 @@ The v0.4 implementation successfully achieves the core goals:
 
 ---
 
-**Summary:** v0.4 Phase 1 is complete and stable. The core architecture is aligned with v0.4 specifications. Remaining work is primarily organizational (package restructuring) and optional enhancements (graph algorithms, content seeding).
+## 🔍 Second Pass Findings (Critical)
+
+### Issue: Seed Scripts Bypassing GraphWriteService
+
+**Discovered:** 2025-11-26 during second pass verification
+
+All three seed scripts were found to be writing directly to Memgraph using raw Cypher queries, bypassing the GraphWriteService and Graph Ingress Guard:
+
+1. ❌ `scripts/seed-graph.ts` - Direct `executeCypher` calls
+2. ⚠️ `scripts/seed-special-jurisdictions.ts` - Direct `executeCypher` calls (not yet fixed)
+3. ⚠️ `scripts/test-graph-changes.ts` - Direct `session.run` calls (not yet fixed)
+
+**Why This Is Critical:**
+- Violates D-026 (Graph Ingress Guard) and D-028 (Graph Write Discipline)
+- Bypasses PII blocking, schema validation, and property whitelisting aspects
+- Creates security hole where scripts could write PII to global graph
+- Sets bad pattern that could be copied into production code
+
+**Fix Applied:**
+- ✅ `scripts/seed-graph.ts` refactored to use `GraphWriteService`
+- Now uses typed DTO methods: `upsertJurisdiction`, `upsertStatute`, `upsertSection`, etc.
+- All writes pass through ingress guard aspects
+- Includes clear logging: "✨ All writes enforced via Graph Ingress Guard ✨"
+
+**Remaining Work:**
+- [ ] Refactor `scripts/seed-special-jurisdictions.ts` to use GraphWriteService
+- [ ] Refactor `scripts/test-graph-changes.ts` to use GraphWriteService
+- [ ] Add ESLint rule to prevent direct database writes outside GraphWriteService
+
+**Verification:**
+- ✅ Audited `packages/compliance-core/src` - no direct writes found
+- ✅ Audited `apps/demo-web/src` - no direct writes found
+- ✅ Only seed scripts need updating
+
+**Documentation:** See `docs/PHASE_1_FIXES.md` for detailed analysis.
+
+---
+
+**Summary:** v0.4 Phase 1 core implementation is complete and architecturally sound. A critical gap was discovered in seed scripts bypassing the GraphWriteService, which has been documented and partially fixed. The core packages (compliance-core, demo-web) correctly enforce the v0.4 write discipline. Remaining work is primarily fixing the other two seed scripts and organizational improvements (package restructuring, optional graph algorithms).

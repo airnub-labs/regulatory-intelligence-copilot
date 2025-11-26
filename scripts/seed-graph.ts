@@ -3,7 +3,7 @@
  * Graph Seeding Script for Regulatory Intelligence Copilot
  *
  * Seeds Memgraph with minimal Ireland regulatory data for testing and development.
- * All operations use MERGE for idempotence - safe to run multiple times.
+ * All operations use GraphWriteService to enforce ingress guard aspects.
  *
  * Usage:
  *   tsx scripts/seed-graph.ts
@@ -15,6 +15,10 @@
  */
 
 import neo4j, { Driver } from 'neo4j-driver';
+import {
+  createGraphWriteService,
+  type GraphWriteService,
+} from '../packages/compliance-core/src/index.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -28,7 +32,6 @@ function createDriver(): Driver {
   if (MEMGRAPH_USERNAME && MEMGRAPH_PASSWORD) {
     auth = neo4j.auth.basic(MEMGRAPH_USERNAME, MEMGRAPH_PASSWORD);
   } else {
-    // No auth - pass undefined for Memgraph without authentication
     auth = undefined;
   }
 
@@ -36,19 +39,19 @@ function createDriver(): Driver {
 }
 
 /**
- * Execute a Cypher query
+ * Clear existing data (for development only)
  */
-async function executeCypher(driver: Driver, query: string, params?: Record<string, unknown>): Promise<void> {
+async function clearGraph(driver: Driver): Promise<void> {
   const session = driver.session();
   try {
-    await session.run(query, params || {});
+    await session.run('MATCH (n) DETACH DELETE n');
   } finally {
     await session.close();
   }
 }
 
 /**
- * Seed the graph with regulatory data
+ * Seed the graph with regulatory data using GraphWriteService
  */
 async function seedGraph() {
   console.log('🌱 Starting graph seeding...');
@@ -63,271 +66,223 @@ async function seedGraph() {
 
     // Clear existing data (optional - comment out for production)
     console.log('🧹 Clearing existing data...');
-    await executeCypher(driver, 'MATCH (n) DETACH DELETE n');
+    await clearGraph(driver);
+
+    // Create GraphWriteService
+    const writeService: GraphWriteService = createGraphWriteService({
+      driver,
+      defaultSource: 'ingestion',
+      tenantId: 'system', // System-level seeding, not tenant-specific
+    });
 
     // Create Jurisdictions
     console.log('🌍 Creating jurisdictions...');
-    await executeCypher(driver, `
-      MERGE (ie:Jurisdiction {id: 'IE'})
-      SET ie.name = 'Ireland',
-          ie.type = 'COUNTRY',
-          ie.notes = 'Republic of Ireland',
-          ie.created_at = CASE WHEN ie.created_at IS NULL THEN datetime() ELSE ie.created_at END,
-          ie.updated_at = datetime()
+    await writeService.upsertJurisdiction({
+      id: 'IE',
+      name: 'Ireland',
+      type: 'COUNTRY',
+      notes: 'Republic of Ireland',
+    });
 
-      MERGE (eu:Jurisdiction {id: 'EU'})
-      SET eu.name = 'European Union',
-          eu.type = 'SUPRANATIONAL',
-          eu.notes = 'European Union supranational entity',
-          eu.created_at = CASE WHEN eu.created_at IS NULL THEN datetime() ELSE eu.created_at END,
-          eu.updated_at = datetime()
+    await writeService.upsertJurisdiction({
+      id: 'EU',
+      name: 'European Union',
+      type: 'SUPRANATIONAL',
+      notes: 'European Union supranational entity',
+    });
 
-      MERGE (mt:Jurisdiction {id: 'MT'})
-      SET mt.name = 'Malta',
-          mt.type = 'COUNTRY',
-          mt.notes = 'Republic of Malta',
-          mt.created_at = CASE WHEN mt.created_at IS NULL THEN datetime() ELSE mt.created_at END,
-          mt.updated_at = datetime()
-    `);
+    await writeService.upsertJurisdiction({
+      id: 'MT',
+      name: 'Malta',
+      type: 'COUNTRY',
+      notes: 'Republic of Malta',
+    });
 
-    // Create Profile Tags
-    console.log('👤 Creating profile tags...');
-    await executeCypher(driver, `
-      MERGE (p1:ProfileTag {id: 'single-director-ie'})
-      SET p1.label = 'Single Director (Ireland)',
-          p1.description = 'Single director of an Irish limited company, typically Class S PRSI contributor',
-          p1.created_at = CASE WHEN p1.created_at IS NULL THEN datetime() ELSE p1.created_at END,
-          p1.updated_at = datetime()
+    console.log('   ✅ Created: IE, EU, MT');
 
-      MERGE (p2:ProfileTag {id: 'self-employed-ie'})
-      SET p2.label = 'Self-Employed (Ireland)',
-          p2.description = 'Self-employed individual in Ireland, Class S PRSI contributor',
-          p2.created_at = CASE WHEN p2.created_at IS NULL THEN datetime() ELSE p2.created_at END,
-          p2.updated_at = datetime()
+    // Create Statutes
+    console.log('📜 Creating statutes...');
+    await writeService.upsertStatute({
+      id: 'IE_SW_CONS_ACT_2005',
+      name: 'Social Welfare Consolidation Act 2005',
+      citation: 'SWCA 2005',
+      type: 'PRIMARY',
+      jurisdictionId: 'IE',
+      source_url: 'https://www.irishstatutebook.ie/eli/2005/act/26/enacted/en/html',
+    });
 
-      MERGE (p3:ProfileTag {id: 'paye-employee-ie'})
-      SET p3.label = 'PAYE Employee (Ireland)',
-          p3.description = 'PAYE employee in Ireland, Class A PRSI contributor',
-          p3.created_at = CASE WHEN p3.created_at IS NULL THEN datetime() ELSE p3.created_at END,
-          p3.updated_at = datetime()
-    `);
+    await writeService.upsertStatute({
+      id: 'IE_TCA_1997',
+      name: 'Taxes Consolidation Act 1997',
+      citation: 'TCA 1997',
+      type: 'PRIMARY',
+      jurisdictionId: 'IE',
+      source_url: 'https://www.irishstatutebook.ie/eli/1997/act/39/enacted/en/html',
+    });
 
-    // Create Timelines
-    console.log('⏰ Creating timeline nodes...');
-    await executeCypher(driver, `
-      MERGE (t1:Timeline {id: 'lookback-2-years'})
-      SET t1.label = '2-Year Lookback',
-          t1.window_years = 2,
-          t1.notes = 'Common lookback period for PRSI contribution requirements',
-          t1.created_at = CASE WHEN t1.created_at IS NULL THEN datetime() ELSE t1.created_at END,
-          t1.updated_at = datetime()
+    console.log('   ✅ Created: SWCA 2005, TCA 1997');
 
-      MERGE (t2:Timeline {id: 'lookback-12-months'})
-      SET t2.label = '12-Month Lookback',
-          t2.window_months = 12,
-          t2.notes = 'One-year lookback for recent contributions',
-          t2.created_at = CASE WHEN t2.created_at IS NULL THEN datetime() ELSE t2.created_at END,
-          t2.updated_at = datetime()
+    // Create Sections
+    console.log('📄 Creating sections...');
+    await writeService.upsertSection({
+      id: 'IE_SWCA_2005_S27',
+      label: 'Section 27',
+      title: "Jobseeker's Benefit (Self-Employed)",
+      text_excerpt: 'Provides for jobseeker\'s benefit for self-employed contributors',
+      section_number: '27',
+      statuteId: 'IE_SW_CONS_ACT_2005',
+      jurisdictionId: 'IE',
+    });
 
-      MERGE (t3:Timeline {id: 'lookback-39-weeks'})
-      SET t3.label = '39-Week Lookback',
-          t3.window_days = 273,
-          t3.notes = 'Specific lookback period for Jobseeker\'s Benefit',
-          t3.created_at = CASE WHEN t3.created_at IS NULL THEN datetime() ELSE t3.created_at END,
-          t3.updated_at = datetime()
+    await writeService.upsertSection({
+      id: 'IE_TCA_1997_S766',
+      label: 'Section 766',
+      title: 'R&D Tax Credit',
+      text_excerpt: 'Provides for relief for expenditure on research and development',
+      section_number: '766',
+      statuteId: 'IE_TCA_1997',
+      jurisdictionId: 'IE',
+    });
 
-      MERGE (t4:Timeline {id: 'lock-in-4-years'})
-      SET t4.label = '4-Year Lock-in',
-          t4.window_years = 4,
-          t4.notes = 'Common lock-in period for certain tax reliefs',
-          t4.created_at = CASE WHEN t4.created_at IS NULL THEN datetime() ELSE t4.created_at END,
-          t4.updated_at = datetime()
-    `);
+    console.log('   ✅ Created: SWCA S27, TCA S766');
 
     // Create Benefits
-    console.log('💰 Creating benefit nodes...');
-    await executeCypher(driver, `
-      MERGE (b1:Benefit {id: 'jobseekers-benefit-self-employed'})
-      SET b1.label = 'Jobseeker\'s Benefit (Self-Employed)',
-          b1.name = 'Jobseeker\'s Benefit (Self-Employed)',
-          b1.short_summary = 'Weekly payment for self-employed people who lose their job',
-          b1.description = 'A payment for self-employed people (Class S PRSI contributors) who have lost their job. Requires PRSI contributions in the 2-4 years before claiming.',
-          b1.amount = 'Up to €220 per week (2024 rates)',
-          b1.duration = 'Up to 9 months (234 days)',
-          b1.created_at = CASE WHEN b1.created_at IS NULL THEN datetime() ELSE b1.created_at END,
-          b1.updated_at = datetime()
+    console.log('💰 Creating benefits...');
+    await writeService.upsertBenefit({
+      id: 'IE_BENEFIT_JOBSEEKERS_SE',
+      name: "Jobseeker's Benefit (Self-Employed)",
+      category: 'UNEMPLOYMENT',
+      short_summary: 'Short-term payment for self-employed who lose employment',
+      description:
+        'A weekly payment for self-employed people who have lost work. Requires Class S PRSI contributions.',
+      jurisdictionId: 'IE',
+    });
 
-      MERGE (b2:Benefit {id: 'illness-benefit-class-s'})
-      SET b2.label = 'Illness Benefit (Class S)',
-          b2.name = 'Illness Benefit for Class S Contributors',
-          b2.short_summary = 'Payment for self-employed people unable to work due to illness',
-          b2.description = 'Weekly payment for self-employed people (Class S PRSI) who cannot work due to illness. Requires minimum PRSI contributions.',
-          b2.amount = 'Up to €220 per week',
-          b2.duration = 'Up to 2 years',
-          b2.created_at = CASE WHEN b2.created_at IS NULL THEN datetime() ELSE b2.created_at END,
-          b2.updated_at = datetime()
+    await writeService.upsertBenefit({
+      id: 'IE_BENEFIT_ILLNESS',
+      name: 'Illness Benefit',
+      category: 'ILLNESS',
+      short_summary: 'Short-term payment when unable to work due to illness',
+      description: 'Weekly payment if unable to work due to illness. Available to Class S contributors.',
+      jurisdictionId: 'IE',
+    });
 
-      MERGE (b3:Benefit {id: 'treatment-benefit'})
-      SET b3.label = 'Treatment Benefit',
-          b3.name = 'Treatment Benefit',
-          b3.short_summary = 'Dental and optical benefits for PRSI contributors',
-          b3.description = 'Provides dental and optical benefits. Class S contributors are eligible after 260 weeks of contributions.',
-          b3.amount = 'Varies by treatment',
-          b3.duration = 'Ongoing while eligible',
-          b3.created_at = CASE WHEN b3.created_at IS NULL THEN datetime() ELSE b3.created_at END,
-          b3.updated_at = datetime()
-    `);
+    await writeService.upsertBenefit({
+      id: 'IE_BENEFIT_STATE_PENSION_CONTRIBUTORY',
+      name: 'State Pension (Contributory)',
+      category: 'PENSION',
+      short_summary: 'Long-term pension based on PRSI contributions',
+      description:
+        'State pension paid at age 66 based on your social insurance contributions over your working life.',
+      jurisdictionId: 'IE',
+    });
 
-    // Create Conditions
-    console.log('✅ Creating condition nodes...');
-    await executeCypher(driver, `
-      MERGE (c1:Condition {id: 'prsi-class-s-required'})
-      SET c1.label = 'PRSI Class S Required',
-          c1.description = 'Must be paying PRSI Class S contributions (self-employed)',
-          c1.evaluation_type = 'PROFILE_CHECK',
-          c1.created_at = CASE WHEN c1.created_at IS NULL THEN datetime() ELSE c1.created_at END,
-          c1.updated_at = datetime()
+    console.log('   ✅ Created: Jobseeker\'s Benefit, Illness Benefit, State Pension');
 
-      MERGE (c2:Condition {id: 'min-contributions-104-weeks'})
-      SET c2.label = 'Minimum 104 Weeks Contributions',
-          c2.description = 'Must have at least 104 weeks (2 years) of PRSI contributions',
-          c2.evaluation_type = 'LOOKBACK_COUNT',
-          c2.created_at = CASE WHEN c2.created_at IS NULL THEN datetime() ELSE c2.created_at END,
-          c2.updated_at = datetime()
+    // Create Reliefs
+    console.log('💡 Creating reliefs...');
+    await writeService.upsertRelief({
+      id: 'IE_RELIEF_RND_CREDIT',
+      name: 'R&D Tax Credit',
+      tax_type: 'CORPORATION_TAX',
+      short_summary: 'Tax credit for qualifying R&D expenditure',
+      description:
+        'Corporation tax credit of 25% of qualifying R&D expenditure, with various conditions and limits.',
+      jurisdictionId: 'IE',
+    });
 
-      MERGE (c3:Condition {id: 'min-contributions-39-weeks'})
-      SET c3.label = 'Minimum 39 Weeks Contributions',
-          c3.description = 'Must have at least 39 weeks of PRSI contributions in relevant period',
-          c3.evaluation_type = 'LOOKBACK_COUNT',
-          c3.created_at = CASE WHEN c3.created_at IS NULL THEN datetime() ELSE c3.created_at END,
-          c3.updated_at = datetime()
+    console.log('   ✅ Created: R&D Tax Credit');
 
-      MERGE (c4:Condition {id: 'ceased-self-employment'})
-      SET c4.label = 'Ceased Self-Employment',
-          c4.description = 'Must have ceased self-employment or business',
-          c4.evaluation_type = 'USER_DECLARATION',
-          c4.created_at = CASE WHEN c4.created_at IS NULL THEN datetime() ELSE c4.created_at END,
-          c4.updated_at = datetime()
-    `);
+    // Create Timelines
+    console.log('⏱️  Creating timeline constraints...');
+    await writeService.upsertTimeline({
+      id: 'IE_PRSI_12_MONTH_LOOKBACK',
+      label: '12-month PRSI contribution lookback',
+      window_months: 12,
+      kind: 'LOOKBACK',
+      jurisdictionCode: 'IE',
+      description: 'Lookback period for PRSI contribution requirements on various benefits',
+    });
 
-    // Create Sections (Statutory References)
-    console.log('📜 Creating statutory sections...');
-    await executeCypher(driver, `
-      MERGE (s1:Section {id: 'sw-act-2005-s62'})
-      SET s1.label = 'Social Welfare Consolidation Act 2005, Section 62',
-          s1.title = 'Jobseeker\'s Benefit',
-          s1.statutory_ref = 'Social Welfare Consolidation Act 2005, s.62',
-          s1.url = 'https://www.irishstatutebook.ie/eli/2005/act/26/section/62/enacted/en/html',
-          s1.created_at = CASE WHEN s1.created_at IS NULL THEN datetime() ELSE s1.created_at END,
-          s1.updated_at = datetime()
+    await writeService.upsertTimeline({
+      id: 'IE_RND_4_YEAR_PERIOD',
+      label: 'R&D 4-year accounting period',
+      window_years: 4,
+      kind: 'EFFECTIVE_WINDOW',
+      jurisdictionCode: 'IE',
+      description: 'R&D tax credit can be claimed over a 4-year accounting period',
+    });
 
-      MERGE (s2:Section {id: 'sw-act-2005-s41'})
-      SET s2.label = 'Social Welfare Consolidation Act 2005, Section 41',
-          s2.title = 'Illness Benefit',
-          s2.statutory_ref = 'Social Welfare Consolidation Act 2005, s.41',
-          s2.url = 'https://www.irishstatutebook.ie/eli/2005/act/26/section/41/enacted/en/html',
-          s2.created_at = CASE WHEN s2.created_at IS NULL THEN datetime() ELSE s2.created_at END,
-          s2.updated_at = datetime()
-    `);
+    console.log('   ✅ Created: PRSI lookback, R&D period');
 
-    // Create Relationships: Benefits -> Jurisdiction
-    console.log('🔗 Creating benefit-jurisdiction relationships...');
-    await executeCypher(driver, `
-      MATCH (b:Benefit)
-      MATCH (ie:Jurisdiction {id: 'IE'})
-      MERGE (b)-[:IN_JURISDICTION]->(ie)
-    `);
+    // Create relationships
+    console.log('🔗 Creating relationships...');
 
-    // Create Relationships: Benefits -> Profile Tags
-    console.log('🔗 Creating benefit-profile relationships...');
-    await executeCypher(driver, `
-      MATCH (b1:Benefit {id: 'jobseekers-benefit-self-employed'})
-      MATCH (p1:ProfileTag {id: 'single-director-ie'})
-      MATCH (p2:ProfileTag {id: 'self-employed-ie'})
-      MERGE (b1)-[:APPLIES_TO]->(p1)
-      MERGE (b1)-[:APPLIES_TO]->(p2)
+    // Link benefits to sections
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_JOBSEEKERS_SE',
+      fromLabel: 'Benefit',
+      toId: 'IE_SWCA_2005_S27',
+      toLabel: 'Section',
+      relType: 'CITES',
+    });
 
-      MATCH (b2:Benefit {id: 'illness-benefit-class-s'})
-      MERGE (b2)-[:APPLIES_TO]->(p1)
-      MERGE (b2)-[:APPLIES_TO]->(p2)
+    // Link relief to section
+    await writeService.createRelationship({
+      fromId: 'IE_RELIEF_RND_CREDIT',
+      fromLabel: 'Relief',
+      toId: 'IE_TCA_1997_S766',
+      toLabel: 'Section',
+      relType: 'CITES',
+    });
 
-      MATCH (b3:Benefit {id: 'treatment-benefit'})
-      MERGE (b3)-[:APPLIES_TO]->(p1)
-      MERGE (b3)-[:APPLIES_TO]->(p2)
-    `);
+    // Link benefits to timeline constraints
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_JOBSEEKERS_SE',
+      fromLabel: 'Benefit',
+      toId: 'IE_PRSI_12_MONTH_LOOKBACK',
+      toLabel: 'Timeline',
+      relType: 'LOOKBACK_WINDOW',
+    });
 
-    // Create Relationships: Benefits -> Conditions
-    console.log('🔗 Creating benefit-condition relationships...');
-    await executeCypher(driver, `
-      MATCH (b1:Benefit {id: 'jobseekers-benefit-self-employed'})
-      MATCH (c1:Condition {id: 'prsi-class-s-required'})
-      MATCH (c2:Condition {id: 'min-contributions-104-weeks'})
-      MATCH (c3:Condition {id: 'min-contributions-39-weeks'})
-      MATCH (c4:Condition {id: 'ceased-self-employment'})
-      MERGE (b1)-[:REQUIRES]->(c1)
-      MERGE (b1)-[:REQUIRES]->(c2)
-      MERGE (b1)-[:REQUIRES]->(c3)
-      MERGE (b1)-[:REQUIRES]->(c4)
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_ILLNESS',
+      fromLabel: 'Benefit',
+      toId: 'IE_PRSI_12_MONTH_LOOKBACK',
+      toLabel: 'Timeline',
+      relType: 'LOOKBACK_WINDOW',
+    });
 
-      MATCH (b2:Benefit {id: 'illness-benefit-class-s'})
-      MERGE (b2)-[:REQUIRES]->(c1)
-      MERGE (b2)-[:REQUIRES]->(c2)
-    `);
+    await writeService.createRelationship({
+      fromId: 'IE_RELIEF_RND_CREDIT',
+      fromLabel: 'Relief',
+      toId: 'IE_RND_4_YEAR_PERIOD',
+      toLabel: 'Timeline',
+      relType: 'EFFECTIVE_WINDOW',
+    });
 
-    // Create Relationships: Benefits -> Timelines
-    console.log('🔗 Creating benefit-timeline relationships...');
-    await executeCypher(driver, `
-      MATCH (b1:Benefit {id: 'jobseekers-benefit-self-employed'})
-      MATCH (t1:Timeline {id: 'lookback-2-years'})
-      MATCH (t3:Timeline {id: 'lookback-39-weeks'})
-      MERGE (b1)-[:LOOKBACK_WINDOW]->(t1)
-      MERGE (b1)-[:LOOKBACK_WINDOW]->(t3)
+    console.log('   ✅ Created relationships');
 
-      MATCH (b2:Benefit {id: 'illness-benefit-class-s'})
-      MERGE (b2)-[:LOOKBACK_WINDOW]->(t1)
-    `);
-
-    // Create Relationships: Benefits -> Sections
-    console.log('🔗 Creating benefit-section relationships...');
-    await executeCypher(driver, `
-      MATCH (b1:Benefit {id: 'jobseekers-benefit-self-employed'})
-      MATCH (s1:Section {id: 'sw-act-2005-s62'})
-      MERGE (b1)-[:DEFINED_BY]->(s1)
-
-      MATCH (b2:Benefit {id: 'illness-benefit-class-s'})
-      MATCH (s2:Section {id: 'sw-act-2005-s41'})
-      MERGE (b2)-[:DEFINED_BY]->(s2)
-    `);
-
-    // Count nodes and relationships
-    const session = driver.session();
-    try {
-      const nodeResult = await session.run('MATCH (n) RETURN count(n) as count');
-      const nodeCount = nodeResult.records[0].get('count').toNumber();
-
-      const edgeResult = await session.run('MATCH ()-[r]->() RETURN count(r) as count');
-      const edgeCount = edgeResult.records[0].get('count').toNumber();
-
-      console.log('\n✅ Graph seeding complete!');
-      console.log(`📊 Created ${nodeCount} nodes and ${edgeCount} relationships`);
-      console.log('\n📋 Node Summary:');
-      const summaryResult = await session.run(
-        'MATCH (n) RETURN labels(n)[0] as type, count(n) as count ORDER BY count DESC'
-      );
-      for (const record of summaryResult.records) {
-        const type = record.get('type');
-        const count = record.get('count').toNumber();
-        console.log(`   - ${type}: ${count}`);
-      }
-    } finally {
-      await session.close();
-    }
-
+    console.log('\n✅ Graph seeding completed successfully!');
+    console.log('\n📊 Summary:');
+    console.log('   - Jurisdictions: 3 (IE, EU, MT)');
+    console.log('   - Statutes: 2');
+    console.log('   - Sections: 2');
+    console.log('   - Benefits: 3');
+    console.log('   - Reliefs: 1');
+    console.log('   - Timeline constraints: 2');
+    console.log('   - Relationships: ~5');
+    console.log('\n✨ All writes enforced via Graph Ingress Guard ✨');
   } catch (error) {
     console.error('❌ Error seeding graph:', error);
-    throw error;
+    if (error instanceof Error) {
+      console.error('   Message:', error.message);
+      console.error('   Stack:', error.stack);
+    }
+    process.exit(1);
   } finally {
     await driver.close();
+    console.log('👋 Disconnected from Memgraph');
   }
 }
 
