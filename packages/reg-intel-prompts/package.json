@@ -1,0 +1,30 @@
+{
+  "name": "@reg-copilot/reg-intel-prompts",
+  "version": "0.4.0",
+  "description": "Jurisdiction-neutral prompts and aspect system for regulatory intelligence",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

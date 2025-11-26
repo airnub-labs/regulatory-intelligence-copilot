@@ -1,0 +1,84 @@
+/**
+ * Type definitions for @reg-copilot/reg-intel-graph
+ *
+ * Graph-related types for nodes, edges, contexts, and clients.
+ */
+
+/**
+ * Timeline representing temporal constraints
+ */
+export interface Timeline {
+  id: string;
+  label: string;
+  window_days?: number;
+  window_months?: number;
+  window_years?: number;
+  notes?: string;
+}
+
+/**
+ * Graph node representing any regulatory entity
+ */
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'Statute' | 'Section' | 'Benefit' | 'Relief' | 'Condition' | 'Timeline' | 'Case' | 'Guidance' | 'EURegulation' | 'EUDirective' | 'ProfileTag' | 'Jurisdiction' | 'Update';
+  properties: Record<string, unknown>;
+}
+
+/**
+ * Graph edge representing a relationship
+ */
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  properties?: Record<string, unknown>;
+}
+
+/**
+ * Graph context for agent reasoning
+ */
+export interface GraphContext {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+/**
+ * Graph client interface for Memgraph operations
+ */
+export interface GraphClient {
+  /**
+   * Get rules matching profile and jurisdiction with optional keyword
+   */
+  getRulesForProfileAndJurisdiction(
+    profileId: string,
+    jurisdictionId: string,
+    keyword?: string
+  ): Promise<GraphContext>;
+
+  /**
+   * Get neighbourhood of a node (1-2 hops)
+   */
+  getNeighbourhood(nodeId: string): Promise<GraphContext>;
+
+  /**
+   * Get mutual exclusions for a node
+   */
+  getMutualExclusions(nodeId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get timeline constraints for a node
+   */
+  getTimelines(nodeId: string): Promise<Timeline[]>;
+
+  /**
+   * Get cross-border slice for multiple jurisdictions
+   */
+  getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext>;
+
+  /**
+   * Execute raw Cypher query
+   */
+  executeCypher(query: string, params?: Record<string, unknown>): Promise<unknown>;
+}

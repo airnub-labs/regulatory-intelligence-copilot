@@ -1,0 +1,49 @@
+{
+  "name": "@reg-copilot/reg-intel-llm",
+  "version": "0.4.0",
+  "description": "LLM routing, providers, and egress guard for regulatory intelligence",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@redactpii/node": "^1.0.0"
+  },
+  "peerDependencies": {
+    "ai": "^5.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/groq": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    },
+    "@ai-sdk/openai": {
+      "optional": true
+    },
+    "@ai-sdk/groq": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
