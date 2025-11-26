@@ -10,6 +10,7 @@
 
 import { hasActiveSandbox, getMcpGatewayUrl, type GraphPatch } from '@reg-copilot/reg-intel-core';
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
+import { normalizeProfileType } from '@/lib/profiles';
 
 type WebSocketPairType = {
   0: WebSocket;
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-  const profileType = (searchParams.get('profileType') || 'single-director').replace('_', '-');
+  const profileType = normalizeProfileType(searchParams.get('profileType'));
 
   const filter = { jurisdictions, profileType } as const;
 

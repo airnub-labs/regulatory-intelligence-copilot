@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { DEFAULT_PROFILE_ID } from '@/lib/profiles';
 
 /**
  * User profile for regulatory context
@@ -60,7 +61,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null);
   const [profile, setProfile] = useState<UserProfile>({
-    personaType: 'single-director',
+    personaType: DEFAULT_PROFILE_ID,
     jurisdictions: ['IE'],
   });
 

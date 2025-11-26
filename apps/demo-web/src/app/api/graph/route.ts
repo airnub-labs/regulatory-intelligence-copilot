@@ -15,6 +15,7 @@ import {
   getMcpGatewayUrl,
   type GraphContext,
 } from '@reg-copilot/reg-intel-core';
+import { normalizeProfileType } from '@/lib/profiles';
 
 const MAX_INITIAL_NODES = 250;
 const MAX_INITIAL_EDGES = 500;
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
 
     // Get query parameters
     const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-    const profileType = (searchParams.get('profileType') || 'single-director').replace('_', '-');
+    const profileType = normalizeProfileType(searchParams.get('profileType'));
     const keyword = searchParams.get('keyword') || undefined;
 
     console.log('[API/graph] Fetching initial graph snapshot:', {

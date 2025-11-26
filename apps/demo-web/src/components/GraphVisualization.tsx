@@ -28,6 +28,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { DEFAULT_PROFILE_ID } from '@/lib/profiles';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
@@ -87,7 +88,7 @@ interface GraphVisualizationProps {
 
 export function GraphVisualization({
   jurisdictions = ['IE'],
-  profileType = 'single-director',
+  profileType = DEFAULT_PROFILE_ID,
   keyword,
 }: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });

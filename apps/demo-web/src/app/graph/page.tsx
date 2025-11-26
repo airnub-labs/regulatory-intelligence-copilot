@@ -6,6 +6,7 @@
  */
 
 import { GraphVisualization } from '@/components/GraphVisualization';
+import { DEFAULT_PROFILE_ID } from '@/lib/profiles';
 
 export default function GraphPage() {
   return (
@@ -20,7 +21,7 @@ export default function GraphPage() {
       <div className="flex-1 overflow-hidden">
         <GraphVisualization
           jurisdictions={['IE', 'UK', 'IM', 'EU']}
-          profileType="single-director"
+          profileType={DEFAULT_PROFILE_ID}
         />
       </div>
     </main>

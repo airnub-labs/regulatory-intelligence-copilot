@@ -13,6 +13,7 @@ import {
   type GraphContext,
   type GraphPatch,
 } from '@reg-copilot/reg-intel-core';
+import { normalizeProfileType } from './profiles';
 
 let detectorInstance: GraphChangeDetector | null = null;
 const MAX_PATCH_NODE_CHANGES = 250;
@@ -20,10 +21,6 @@ const MAX_PATCH_EDGE_CHANGES = 500;
 const MAX_PATCH_TOTAL_CHANGES = 700;
 const MIN_MS_BETWEEN_PATCHES = 750;
 const lastEmissionByFilter = new Map<string, number>();
-
-function normalizeProfileType(profileType?: string) {
-  return (profileType || 'single-director').replace('_', '-');
-}
 
 /**
  * Query function that fetches graph state based on filter criteria
