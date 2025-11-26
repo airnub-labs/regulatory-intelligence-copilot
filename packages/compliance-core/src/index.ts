@@ -113,6 +113,30 @@ export {
   type GraphChangeDetectorConfig,
 } from './graph/graphChangeDetector.js';
 
+// Graph Ingress Guard & Write Service
+export {
+  type GraphWriteContext,
+  type GraphIngressAspect,
+  composeIngressAspects,
+  schemaValidationAspect,
+  piiBlockingAspect,
+  propertyWhitelistAspect,
+  createBaselineAspects,
+} from './graph/graphIngressGuard.js';
+export {
+  GraphWriteService,
+  createGraphWriteService,
+  type GraphWriteServiceConfig,
+  type UpsertJurisdictionDto,
+  type UpsertRegionDto,
+  type UpsertStatuteDto,
+  type UpsertSectionDto,
+  type UpsertBenefitDto,
+  type UpsertReliefDto,
+  type UpsertTimelineDto,
+  type CreateRelationshipDto,
+} from './graph/graphWriteService.js';
+
 // LLM Client (legacy MCP-based)
 export {
   createLlmClient,

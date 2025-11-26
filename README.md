@@ -41,7 +41,7 @@ For the full concept, see:
 
 Comprehensive design documentation is available in the `docs/` directory.
 
-### Core Architecture
+### Core Architecture (v0.4)
 
 - **`docs/architecture_v_0_4.md`** – System components, data flow, packages, and how everything fits together.
 - **`docs/decisions_v_0_4.md`** – Architectural decision records (ADRs) and design rationale.
@@ -51,20 +51,20 @@ Comprehensive design documentation is available in the `docs/` directory.
 
 ### Agents, Prompts & Behaviour
 
-- **`AGENTS.md`** – Agent interfaces, orchestration, domain/jurisdiction-specific agents, and the Global Regulatory Compliance Agent.
+- **`AGENTS.md`** (v0.4) – Agent interfaces, orchestration, domain/jurisdiction-specific agents, and the Global Regulatory Compliance Agent.
 - **`PROMPTS.md`** – Coding-agent prompt for implementing and evolving the architecture.
 
 ### Graph, Algorithms & Timeline Modelling
 
 - **`docs/specs/graph_schema_v_0_4.md`** – Node/edge types, schema design, cross-jurisdiction modelling, and how rules are represented.
 - **`docs/specs/graph_schema_changelog_v_0_4.md`** – Schema evolution and breaking changes.
-- **`docs/specs/graph_algorithms_v_0_1.md`** – Graph algorithm choices (e.g. focused neighbourhood queries, optional Leiden community detection) and how they’re used.
+- **`docs/specs/graph_algorithms_v_0_1.md`** – Graph algorithm choices (e.g. focused neighbourhood queries, optional Leiden community detection) and how they're used.
 - **`docs/specs/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
 - **`docs/specs/special_jurisdictions_modelling_v_0_1.md`** – Special cases (IE/UK/NI/IM/GI/AD/CTA) modelling patterns.
 
 ### Privacy, Ingress & Egress Guards
 
-- **`docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can’t go into the global graph, and handling of user uploads.
+- **`docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
 - **`docs/specs/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
 - **`docs/specs/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
 
