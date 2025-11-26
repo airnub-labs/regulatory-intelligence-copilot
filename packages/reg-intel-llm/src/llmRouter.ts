@@ -7,6 +7,7 @@
  * - OpenAI (via AI SDK - handles Responses API automatically)
  * - Groq (via AI SDK)
  * - Anthropic (via AI SDK)
+ * - Google Gemini (via AI SDK)
  * - Local/OSS HTTP models (vLLM, Ollama, etc.)
  *
  * Routes based on:
@@ -343,6 +344,89 @@ export class AnthropicProviderClient implements LlmProviderClient {
 }
 
 /**
+ * Google Gemini provider client using Vercel AI SDK v5
+ *
+ * Handles Google Gemini models via AI SDK abstraction.
+ */
+export class GeminiProviderClient implements LlmProviderClient {
+  private google: any;
+
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createGoogleGenerativeAI } = require('@ai-sdk/google');
+      this.google = createGoogleGenerativeAI({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
+      throw new LlmError(
+        'Google Gemini provider requires AI SDK packages: npm install ai @ai-sdk/google'
+      );
+    }
+  }
+
+  async chat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): Promise<string> {
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.google(model),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        maxTokens: options?.maxTokens ?? 2048,
+      });
+
+      return result.text;
+    } catch (error) {
+      throw new LlmError(
+        `Google Gemini error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk> {
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.google(model),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        maxTokens: options?.maxTokens ?? 2048,
+      });
+
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
+      }
+
+      yield { type: 'done' };
+    } catch (error) {
+      yield {
+        type: 'error',
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`Google Gemini error: ${String(error)}`),
+      };
+    }
+  }
+}
+
+/**
  * Local/OSS HTTP model client (vLLM, Ollama, etc.)
  */
 export class LocalHttpLlmClient implements LlmProviderClient {
@@ -660,6 +744,7 @@ export interface LlmRouterConfig {
     openai?: ProviderConfig;
     groq?: ProviderConfig;
     anthropic?: ProviderConfig;
+    google?: ProviderConfig;
     local?: LocalProviderConfig;
     [key: string]: ProviderConfig | LocalProviderConfig | undefined;
   };
@@ -693,6 +778,7 @@ export interface LlmRouterConfig {
  *     openai: { apiKey: process.env.OPENAI_API_KEY! },
  *     groq: { apiKey: process.env.GROQ_API_KEY! },
  *     anthropic: { apiKey: process.env.ANTHROPIC_API_KEY! },
+ *     google: { apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! },
  *   },
  *   defaultProvider: 'groq',
  *   defaultModel: 'llama-3.1-70b-versatile',
@@ -739,6 +825,14 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
       providers.anthropic = new AnthropicProviderClient(
         configs.anthropic.apiKey,
         configs.anthropic.baseURL ? { baseURL: configs.anthropic.baseURL } : undefined
+      );
+    }
+
+    // Create Google Gemini provider
+    if (configs.google) {
+      providers.google = new GeminiProviderClient(
+        configs.google.apiKey,
+        configs.google.baseURL ? { baseURL: configs.google.baseURL } : undefined
       );
     }
 
