@@ -103,6 +103,8 @@ export function GraphVisualization({
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [showControls, setShowControls] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const initialSnapshotLoaded = useRef(false);
+  const pendingPatchesRef = useRef<GraphPatch[]>([]);
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -140,11 +142,90 @@ export function GraphVisualization({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Apply graph patch - this may be invoked immediately by the stream, so we queue
+  // patches until the initial REST snapshot has been loaded.
+  const applyPatch = useCallback(
+    (patch: GraphPatch, options?: { force?: boolean }) => {
+      if (!initialSnapshotLoaded.current && !options?.force) {
+        pendingPatchesRef.current.push(patch);
+        return;
+      }
+
+      if (paused && !options?.force) return; // Don't apply patches when paused
+
+      setGraphData((prev) => {
+        let newNodes = [...prev.nodes];
+        let newLinks = [...prev.links];
+
+        if (patch.nodes.removed.length > 0) {
+          const removedIds = new Set(patch.nodes.removed);
+          newNodes = newNodes.filter((n) => !removedIds.has(n.id));
+          newLinks = newLinks.filter(
+            (e) => !removedIds.has(e.source as string) && !removedIds.has(e.target as string)
+          );
+        }
+
+        if (patch.nodes.added.length > 0) {
+          for (const node of patch.nodes.added) {
+            if (!newNodes.find((n) => n.id === node.id)) {
+              newNodes.push(node);
+            }
+          }
+        }
+
+        if (patch.nodes.updated.length > 0) {
+          for (const update of patch.nodes.updated) {
+            const index = newNodes.findIndex((n) => n.id === update.id);
+            if (index !== -1) {
+              newNodes[index] = { ...newNodes[index], ...update };
+            }
+          }
+        }
+
+        if (patch.edges.removed.length > 0) {
+          for (const edge of patch.edges.removed) {
+            const index = newLinks.findIndex(
+              (e) => e.source === edge.source && e.target === edge.target && e.type === edge.type
+            );
+            if (index !== -1) {
+              newLinks.splice(index, 1);
+            }
+          }
+        }
+
+        if (patch.edges.added.length > 0) {
+          for (const edge of patch.edges.added) {
+            const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
+            if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
+              newLinks.push(edgeWithId);
+            }
+          }
+        }
+
+        if (patch.edges.updated.length > 0) {
+          for (const edge of patch.edges.updated) {
+            const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
+            const index = newLinks.findIndex((e) => (e as any).id === edgeWithId.id);
+            if (index !== -1) {
+              newLinks[index] = edgeWithId;
+            }
+          }
+        }
+
+        return { nodes: newNodes, links: newLinks };
+      });
+      setLastUpdate(patch.timestamp);
+    },
+    [paused]
+  );
+
   // Load initial graph snapshot
   const loadInitialGraph = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      initialSnapshotLoaded.current = false;
+      pendingPatchesRef.current = [];
 
       const params = new URLSearchParams({
         jurisdictions: jurisdictions.join(','),
@@ -174,81 +255,22 @@ export function GraphVisualization({
         links: transformedLinks,
       });
       setLastUpdate(data.timestamp);
+      initialSnapshotLoaded.current = true;
+
+      // Apply any queued patches that arrived before the initial snapshot completed
+      if (pendingPatchesRef.current.length > 0) {
+        for (const queuedPatch of pendingPatchesRef.current) {
+          applyPatch(queuedPatch, { force: true });
+        }
+        pendingPatchesRef.current = [];
+      }
       setLoading(false);
     } catch (err) {
       console.error('Error loading graph:', err);
       setError(err instanceof Error ? err.message : 'Failed to load graph');
       setLoading(false);
     }
-  }, [jurisdictions, profileType, keyword]);
-
-  // Apply graph patch
-  const applyPatch = useCallback((patch: GraphPatch) => {
-    if (paused) return; // Don't apply patches when paused
-
-    setGraphData((prev) => {
-      let newNodes = [...prev.nodes];
-      let newLinks = [...prev.links];
-
-      if (patch.nodes.removed.length > 0) {
-        const removedIds = new Set(patch.nodes.removed);
-        newNodes = newNodes.filter((n) => !removedIds.has(n.id));
-        newLinks = newLinks.filter(
-          (e) => !removedIds.has(e.source as string) && !removedIds.has(e.target as string)
-        );
-      }
-
-      if (patch.nodes.added.length > 0) {
-        for (const node of patch.nodes.added) {
-          if (!newNodes.find((n) => n.id === node.id)) {
-            newNodes.push(node);
-          }
-        }
-      }
-
-      if (patch.nodes.updated.length > 0) {
-        for (const update of patch.nodes.updated) {
-          const index = newNodes.findIndex((n) => n.id === update.id);
-          if (index !== -1) {
-            newNodes[index] = { ...newNodes[index], ...update };
-          }
-        }
-      }
-
-      if (patch.edges.removed.length > 0) {
-        for (const edge of patch.edges.removed) {
-          const index = newLinks.findIndex(
-            (e) => e.source === edge.source && e.target === edge.target && e.type === edge.type
-          );
-          if (index !== -1) {
-            newLinks.splice(index, 1);
-          }
-        }
-      }
-
-      if (patch.edges.added.length > 0) {
-        for (const edge of patch.edges.added) {
-          const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
-          if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
-            newLinks.push(edgeWithId);
-          }
-        }
-      }
-
-      if (patch.edges.updated.length > 0) {
-        for (const edge of patch.edges.updated) {
-          const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
-          const index = newLinks.findIndex((e) => (e as any).id === edgeWithId.id);
-          if (index !== -1) {
-            newLinks[index] = edgeWithId;
-          }
-        }
-      }
-
-      return { nodes: newNodes, links: newLinks };
-    });
-    setLastUpdate(patch.timestamp);
-  }, [paused]);
+  }, [jurisdictions, profileType, keyword, applyPatch]);
 
   // Apply filters and search to graph data
   useEffect(() => {
@@ -396,6 +418,9 @@ export function GraphVisualization({
 
   // Initialize
   useEffect(() => {
+    // Lifecycle: fetch a bounded initial snapshot over REST, then layer on live patches.
+    // Any patches that arrive before the initial load completes are queued and applied
+    // immediately after the snapshot to maintain ordering.
     loadInitialGraph();
     connectToStream();
 

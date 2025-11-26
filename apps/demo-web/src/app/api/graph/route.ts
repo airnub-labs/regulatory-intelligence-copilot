@@ -5,7 +5,7 @@
  * Used in conjunction with /api/graph/stream for incremental updates.
  *
  * Per v0.3 architecture (docs/architecture_v_0_3.md Section 9):
- * - REST endpoint returns initial snapshot
+ * - REST endpoint returns initial snapshot (bounded to avoid overwhelming the UI)
  * - WebSocket endpoint (/api/graph/stream) sends incremental patches
  */
 
@@ -13,7 +13,27 @@ import {
   createGraphClient,
   hasActiveSandbox,
   getMcpGatewayUrl,
+  type GraphContext,
 } from '@reg-copilot/reg-intel-core';
+
+const MAX_INITIAL_NODES = 250;
+const MAX_INITIAL_EDGES = 500;
+
+function boundGraphContext(graphContext: GraphContext) {
+  const boundedNodes = graphContext.nodes.slice(0, MAX_INITIAL_NODES);
+  const nodeSet = new Set(boundedNodes.map((node) => node.id));
+
+  const boundedEdges = graphContext.edges
+    .filter(
+      (edge) => nodeSet.has(edge.source as string) && nodeSet.has(edge.target as string)
+    )
+    .slice(0, MAX_INITIAL_EDGES);
+
+  const truncated =
+    boundedNodes.length < graphContext.nodes.length || boundedEdges.length < graphContext.edges.length;
+
+  return { boundedNodes, boundedEdges, truncated };
+}
 
 export async function GET(request: Request) {
   try {
@@ -86,8 +106,10 @@ export async function GET(request: Request) {
       graphContext.edges = mergedEdges;
     }
 
+    const { boundedNodes, boundedEdges, truncated } = boundGraphContext(graphContext);
+
     console.log(
-      `[API/graph] Returning snapshot: ${graphContext.nodes.length} nodes, ${graphContext.edges.length} edges`
+      `[API/graph] Returning snapshot: ${boundedNodes.length} nodes, ${boundedEdges.length} edges (truncated=${truncated})`
     );
 
     // Return v0.3 format snapshot
@@ -96,11 +118,16 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString(),
       jurisdictions,
       profileType,
-      nodes: graphContext.nodes,
-      edges: graphContext.edges,
+      nodes: boundedNodes,
+      edges: boundedEdges,
       metadata: {
-        nodeCount: graphContext.nodes.length,
-        edgeCount: graphContext.edges.length,
+        nodeCount: boundedNodes.length,
+        edgeCount: boundedEdges.length,
+        truncated,
+        limits: {
+          nodes: MAX_INITIAL_NODES,
+          edges: MAX_INITIAL_EDGES,
+        },
       },
     });
   } catch (error) {
