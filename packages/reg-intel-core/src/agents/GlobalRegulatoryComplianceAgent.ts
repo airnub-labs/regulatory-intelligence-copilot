@@ -15,7 +15,7 @@ import type {
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
-import { buildPromptWithAspects } from '../aspects/promptAspects.js';
+import { buildPromptWithAspects } from '@reg-copilot/reg-intel-prompts';
 import { SingleDirector_IE_SocialSafetyNet_Agent } from './SingleDirector_IE_SocialSafetyNet_Agent.js';
 
 const AGENT_ID = 'GlobalRegulatoryComplianceAgent';

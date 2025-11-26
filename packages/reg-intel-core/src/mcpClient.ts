@@ -4,8 +4,8 @@
 
 import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import type { MCPCallParams, MCPCallResponse } from './types.js';
-import { applyAspects, type Aspect } from './aspects/applyAspects.js';
-import { sanitizeObjectForEgress } from './aspects/egressGuard.js';
+import { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
+import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
 
 // MCP Gateway configuration - set once from the active sandbox
 let mcpGatewayUrl = '';
