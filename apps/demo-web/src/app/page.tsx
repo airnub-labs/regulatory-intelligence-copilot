@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { DEFAULT_PROFILE_ID } from '@/lib/profiles';
+import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core';
 
 /**
  * User profile for regulatory context

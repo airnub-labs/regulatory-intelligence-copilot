@@ -28,7 +28,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { DEFAULT_PROFILE_ID, type ProfileId } from '@/lib/profiles';
+import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {

@@ -13,9 +13,10 @@ import {
   createGraphClient,
   hasActiveSandbox,
   getMcpGatewayUrl,
+  normalizeProfileType,
   type GraphContext,
+  type ProfileId,
 } from '@reg-copilot/reg-intel-core';
-import { normalizeProfileType, type ProfileId } from '@/lib/profiles';
 
 const MAX_INITIAL_NODES = 250;
 const MAX_INITIAL_EDGES = 500;

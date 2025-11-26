@@ -13,7 +13,7 @@ import {
   type GraphContext,
   type GraphPatch,
 } from '@reg-copilot/reg-intel-core';
-import { normalizeProfileType, type ProfileId } from './profiles';
+import { normalizeProfileType, type ProfileId } from '@reg-copilot/reg-intel-core';
 
 let detectorInstance: GraphChangeDetector | null = null;
 const MAX_PATCH_NODE_CHANGES = 250;

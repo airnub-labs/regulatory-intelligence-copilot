@@ -11,11 +11,12 @@
 import {
   hasActiveSandbox,
   getMcpGatewayUrl,
+  normalizeProfileType,
   type ChangeFilter,
   type GraphPatch,
+  type ProfileId,
 } from '@reg-copilot/reg-intel-core';
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
-import { normalizeProfileType, type ProfileId } from '@/lib/profiles';
 
 type WebSocketPairType = {
   0: WebSocket;
