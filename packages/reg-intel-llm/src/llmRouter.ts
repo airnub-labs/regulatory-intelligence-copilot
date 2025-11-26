@@ -106,7 +106,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(`${this.baseUrl}/responses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,7 +114,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
       },
       body: JSON.stringify({
         model,
-        messages: messages.map(m => ({
+        input: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
@@ -126,7 +126,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     if (!response.ok) {
       const error = await response.text();
       throw new LlmError(
-        `OpenAI API error: ${error}`,
+        `OpenAI Responses API error: ${error}`,
         response.status
       );
     }
@@ -146,7 +146,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(`${this.baseUrl}/responses`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
       },
       body: JSON.stringify({
         model,
-        messages: messages.map(m => ({
+        input: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
@@ -168,7 +168,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
       const error = await response.text();
       yield {
         type: 'error',
-        error: new LlmError(`OpenAI API error: ${error}`, response.status),
+        error: new LlmError(`OpenAI Responses API error: ${error}`, response.status),
       };
       return;
     }
