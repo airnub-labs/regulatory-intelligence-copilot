@@ -4,7 +4,7 @@
   "description": "Demo web frontend for regulatory intelligence copilot",
   "private": true,
   "scripts": {
-    "predev": "pnpm --filter @reg-copilot/compliance-core build",
+    "predev": "pnpm --filter @reg-copilot/reg-intel-core build",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -15,7 +15,7 @@
     "@ai-sdk/groq": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0",
     "@e2b/code-interpreter": "^2.2.0",
-    "@reg-copilot/compliance-core": "workspace:*",
+    "@reg-copilot/reg-intel-core": "workspace:*",
     "ai": "^5.0.0",
     "force-graph": "^1.51.0",
     "next": "^16.0.0",

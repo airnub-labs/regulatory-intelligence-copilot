@@ -1,8 +1,8 @@
 /**
- * Main entry point for @reg-copilot/compliance-core
+ * Main entry point for @reg-copilot/reg-intel-core
  *
- * This package provides the core functionality for the Regulatory Intelligence Copilot,
- * including agents, graph operations, timeline engine, and egress guard.
+ * This package provides the core orchestration and agents for the Regulatory Intelligence Copilot.
+ * It re-exports focused packages for graph, LLM, and prompt operations.
  */
 
 // Types

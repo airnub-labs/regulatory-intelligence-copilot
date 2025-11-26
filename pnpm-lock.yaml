@@ -32,9 +32,9 @@ importers:
       '@e2b/code-interpreter':
         specifier: ^2.2.0
         version: 2.2.0
-      '@reg-copilot/compliance-core':
+      '@reg-copilot/reg-intel-core':
         specifier: workspace:*
-        version: link:../../packages/compliance-core
+        version: link:../../packages/reg-intel-core
       ai:
         specifier: ^5.0.0
         version: 5.0.101(zod@3.25.76)
@@ -76,7 +76,7 @@ importers:
         specifier: ^5.9.0
         version: 5.9.3
 
-  packages/compliance-core:
+  packages/reg-intel-core:
     dependencies:
       '@e2b/code-interpreter':
         specifier: ^2.2.0

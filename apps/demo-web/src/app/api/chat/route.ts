@@ -18,7 +18,7 @@ import {
   type UserProfile,
   type ChatMessage,
   type LlmStreamChunk,
-} from '@reg-copilot/compliance-core';
+} from '@reg-copilot/reg-intel-core';
 
 /**
  * Build system prompt using aspects

@@ -13,7 +13,7 @@ import {
   createGraphClient,
   hasActiveSandbox,
   getMcpGatewayUrl,
-} from '@reg-copilot/compliance-core';
+} from '@reg-copilot/reg-intel-core';
 
 export async function GET(request: Request) {
   try {
