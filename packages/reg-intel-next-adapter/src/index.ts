@@ -1,7 +1,5 @@
 import {
   NON_ADVICE_DISCLAIMER,
-  REGULATORY_COPILOT_SYSTEM_PROMPT,
-  buildPromptWithAspects,
   createComplianceEngine,
   createDefaultLlmRouter,
   createGraphClient,
@@ -32,10 +30,15 @@ class BasicEgressGuard implements EgressGuard {
 }
 
 function sanitizeMessages(messages: Array<{ role: string; content: string }>): ChatMessage[] {
-  return messages.map(message => ({
-    role: message.role as ChatMessage['role'],
-    content: message.role === 'user' ? sanitizeTextForEgress(message.content) : message.content,
-  }));
+  return messages.map(message => {
+    const role: ChatMessage['role'] =
+      message.role === 'assistant' || message.role === 'system' ? message.role : 'user';
+
+    return {
+      role,
+      content: role === 'user' ? sanitizeTextForEgress(message.content) : message.content,
+    } satisfies ChatMessage;
+  });
 }
 
 function buildMetadataChunk(args: {
@@ -96,7 +99,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     try {
       const body = await request.json();
       const { messages, profile } = body as {
-        messages: Array<{ role: string; content: string }>;
+        messages?: Array<{ role: string; content: string }>;
         profile?: UserProfile;
       };
 
@@ -105,33 +108,22 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       }
 
       const sanitizedMessages = sanitizeMessages(messages);
-      const jurisdictions = profile?.jurisdictions || ['IE'];
 
       const complianceResult = await complianceEngine.handleChat({
-        messages: [
-          {
-            role: 'system',
-            content: await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
-              jurisdictions,
-              profile,
-              includeDisclaimer: true,
-            }),
-          },
-          ...sanitizedMessages,
-        ],
+        messages: sanitizedMessages,
         profile,
         tenantId: options?.tenantId ?? 'default',
       });
 
       const metadata = buildMetadataChunk({
         agentId: complianceResult.agentUsed,
-        jurisdictions,
+        jurisdictions: complianceResult.jurisdictions,
         uncertaintyLevel: complianceResult.uncertaintyLevel,
         disclaimerKey: DEFAULT_DISCLAIMER_KEY,
         referencedNodes: complianceResult.referencedNodes,
       });
 
-      const answerWithDisclaimer = `${complianceResult.answer}\n\n${NON_ADVICE_DISCLAIMER}`;
+      const answerWithDisclaimer = `${complianceResult.answer}\n\n${complianceResult.disclaimer || NON_ADVICE_DISCLAIMER}`;
 
       const stream = new ReadableStream({
         start(controller) {
