@@ -28,7 +28,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core';
+import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core/client';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
@@ -45,6 +45,11 @@ interface GraphNode {
   label: string;
   type: string;
   properties: Record<string, unknown>;
+  // Force graph adds these coordinates dynamically
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
 }
 
 interface GraphEdge {
