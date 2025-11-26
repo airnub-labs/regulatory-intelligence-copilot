@@ -12,12 +12,9 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/groq": "^1.0.0",
-    "@ai-sdk/openai": "^1.0.0",
     "@e2b/code-interpreter": "^2.2.0",
     "@reg-copilot/reg-intel-next-adapter": "workspace:*",
     "@reg-copilot/reg-intel-core": "workspace:*",
-    "ai": "^5.0.0",
     "force-graph": "^1.51.0",
     "next": "^16.0.0",
     "react": "^19.0.0",
