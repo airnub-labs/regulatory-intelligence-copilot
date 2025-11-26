@@ -749,21 +749,24 @@ export class GraphChangeDetector {
 
   /**
    * Get unique key for a filter
+   * Includes jurisdiction, profileType, and keyword to ensure proper subscription isolation
    */
   private getFilterKey(filter: ChangeFilter): string {
     const jurisdictions = filter.jurisdictions?.sort().join(',') || '*';
     const profileType = filter.profileType || '*';
-    return `${jurisdictions}:${profileType}`;
+    const keyword = filter.keyword || '*';
+    return `${jurisdictions}:${profileType}:${keyword}`;
   }
 
   /**
    * Parse filter key back to filter object
    */
   private parseFilterKey(filterKey: string): ChangeFilter {
-    const [jurisdictionsStr, profileType] = filterKey.split(':');
+    const [jurisdictionsStr, profileType, keyword] = filterKey.split(':');
     return {
       jurisdictions: jurisdictionsStr === '*' ? undefined : jurisdictionsStr.split(','),
       profileType: profileType === '*' ? undefined : profileType,
+      keyword: keyword === '*' ? undefined : keyword,
     };
   }
 }

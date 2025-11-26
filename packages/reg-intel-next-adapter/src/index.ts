@@ -118,6 +118,8 @@ function buildMetadataChunk(args: {
 export interface ChatRouteHandlerOptions {
   /** Tenant identifier for multi-tenant deployments (default: 'default') */
   tenantId?: string;
+  /** Whether to include disclaimer in system prompt and response (default: true) */
+  includeDisclaimer?: boolean;
 }
 
 /**
@@ -192,23 +194,42 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
 
   return async function POST(request: Request) {
     try {
+      // Parse and validate request body
       const body = await request.json();
-      const { messages, profile } = body as {
-        messages?: Array<{ role: string; content: string }>;
-        profile?: UserProfile;
-      };
 
-      if (!messages || messages.length === 0) {
+      if (!body || typeof body !== 'object') {
+        return new Response('Invalid request body', { status: 400 });
+      }
+
+      const { messages, profile } = body;
+
+      // Validate messages array
+      if (!Array.isArray(messages) || messages.length === 0) {
         return new Response('No messages provided', { status: 400 });
       }
 
-      const sanitizedMessages = sanitizeMessages(messages);
+      // Validate message structure
+      for (const msg of messages) {
+        if (!msg || typeof msg !== 'object' ||
+            typeof msg.role !== 'string' ||
+            typeof msg.content !== 'string') {
+          return new Response('Invalid message format', { status: 400 });
+        }
+      }
+
+      // Validate profile if provided
+      if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
+        return new Response('Invalid profile format', { status: 400 });
+      }
+
+      const sanitizedMessages = sanitizeMessages(messages as Array<{ role: string; content: string }>);
       const jurisdictions = profile?.jurisdictions || ['IE'];
+      const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
 
       const systemPrompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
         jurisdictions,
         profile,
-        includeDisclaimer: true,
+        includeDisclaimer: shouldIncludeDisclaimer,
       });
 
       // For now, send metadata first (basic version - agent routing will be added later)
@@ -247,11 +268,16 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 writer.close();
                 return;
               } else if (chunk.type === 'done') {
-                // Send disclaimer after response
-                writer.send('message', { text: `\n\n${NON_ADVICE_DISCLAIMER}` });
+                // Send disclaimer after response (if configured)
+                if (shouldIncludeDisclaimer) {
+                  writer.send('message', { text: `\n\n${NON_ADVICE_DISCLAIMER}` });
+                }
                 writer.send('done', { status: 'ok' });
                 writer.close();
                 return;
+              } else {
+                // Log unexpected chunk type for debugging
+                console.warn('[Chat Handler] Unexpected chunk type:', chunk.type);
               }
             }
           } catch (error) {
