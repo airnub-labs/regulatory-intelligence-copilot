@@ -10,6 +10,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./public": {
+      "import": "./dist/public.js",
+      "types": "./dist/public.d.ts"
     }
   },
   "scripts": {

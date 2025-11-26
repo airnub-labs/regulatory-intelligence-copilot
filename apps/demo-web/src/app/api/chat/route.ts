@@ -5,6 +5,9 @@
  * Uses provider-agnostic ComplianceEngine via Next.js adapter.
  */
 
-import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
+export const dynamic = 'force-dynamic';
 
-export const POST = createChatRouteHandler();
+export async function POST(request: Request) {
+  const { createChatRouteHandler } = await import('@reg-copilot/reg-intel-next-adapter');
+  return createChatRouteHandler()(request);
+}

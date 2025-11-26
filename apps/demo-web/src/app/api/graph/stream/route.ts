@@ -111,9 +111,11 @@ function handleSse(
 }
 
 function handleWebSocket(filter: ChangeFilter) {
-  const { 0: client, 1: server } = new (globalThis as any).WebSocketPair() as WebSocketPairType;
+  const pair = new (globalThis as any).WebSocketPair() as WebSocketPairType;
+  const client = pair[0];
+  const server = pair[1] as WebSocket & { accept?: () => void };
 
-  server.accept();
+  server.accept?.();
 
   const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
     try {
