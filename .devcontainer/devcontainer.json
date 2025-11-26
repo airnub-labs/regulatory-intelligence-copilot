@@ -1,5 +1,5 @@
 {
-  "name": "E2B RFC/OWASP Auditor",
+  "name": "Regulatory Intelligence Copilot",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
   "workspaceFolder": "/workspaces/rfc-refactor",
   "customizations": {

@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'E2B RFC/OWASP Auditor',
-  description: 'Audit your HTTP APIs for RFC compliance and OWASP Top 10 security issues',
+  title: 'Regulatory Intelligence Copilot',
+  description: 'Chat-first, graph-powered regulatory research copilot for complex regulatory compliance.',
 }
 
 export default function RootLayout({
