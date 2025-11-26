@@ -20,7 +20,7 @@ export default function GraphPage() {
       <div className="flex-1 overflow-hidden">
         <GraphVisualization
           jurisdictions={['IE', 'UK', 'IM', 'EU']}
-          profileType="single_director"
+          profileType="single-director"
         />
       </div>
     </main>

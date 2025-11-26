@@ -21,6 +21,10 @@ const MAX_PATCH_TOTAL_CHANGES = 700;
 const MIN_MS_BETWEEN_PATCHES = 750;
 const lastEmissionByFilter = new Map<string, number>();
 
+function normalizeProfileType(profileType?: string) {
+  return (profileType || 'single-director').replace('_', '-');
+}
+
 /**
  * Query function that fetches graph state based on filter criteria
  */
@@ -32,7 +36,7 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
     ? filter.jurisdictions
     : ['IE'];
 
-  const profileType = filter.profileType || 'single-director';
+  const profileType = normalizeProfileType(filter.profileType);
 
   try {
     // Get rules for primary jurisdiction
@@ -94,7 +98,7 @@ async function queryGraphByTimestamp(
     ? filter.jurisdictions
     : ['IE'];
 
-  const profileType = filter.profileType || 'single-director';
+  const profileType = normalizeProfileType(filter.profileType);
 
   try {
     // Convert timestamp to ISO format for Cypher query
@@ -232,7 +236,7 @@ export function getGraphChangeDetector(config?: {
 
 function getFilterKey(filter: ChangeFilter): string {
   const jurisdictions = filter.jurisdictions?.slice().sort().join(',') || '*';
-  const profileType = filter.profileType || '*';
+  const profileType = normalizeProfileType(filter.profileType);
   return `${jurisdictions}:${profileType}`;
 }
 

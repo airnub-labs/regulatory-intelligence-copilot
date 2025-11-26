@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-  const profileType = searchParams.get('profileType') || 'single_director';
+  const profileType = (searchParams.get('profileType') || 'single-director').replace('_', '-');
 
   const filter = { jurisdictions, profileType } as const;
 

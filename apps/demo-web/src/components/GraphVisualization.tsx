@@ -87,7 +87,7 @@ interface GraphVisualizationProps {
 
 export function GraphVisualization({
   jurisdictions = ['IE'],
-  profileType = 'single_director',
+  profileType = 'single-director',
   keyword,
 }: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });

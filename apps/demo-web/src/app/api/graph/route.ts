@@ -57,7 +57,7 @@ export async function GET(request: Request) {
 
     // Get query parameters
     const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-    const profileType = searchParams.get('profileType') || 'single_director';
+    const profileType = (searchParams.get('profileType') || 'single-director').replace('_', '-');
     const keyword = searchParams.get('keyword') || undefined;
 
     console.log('[API/graph] Fetching initial graph snapshot:', {
