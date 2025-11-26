@@ -3,11 +3,18 @@
  *
  * LLM routing, providers, and egress control for regulatory intelligence.
  *
+ * Built on Vercel AI SDK v5 for consistent provider abstraction.
+ *
  * This package provides:
- * - LlmRouter (provider-agnostic routing)
- * - LLM providers (OpenAI, Groq, Local)
- * - AI SDK v5 adapters (optional)
+ * - LlmRouter (provider-agnostic routing with tenant policies)
+ * - LLM providers (OpenAI, Groq, Local) - all using AI SDK v5 under the hood
  * - Egress Guard (PII sanitization)
+ *
+ * AI SDK v5 handles:
+ * - OpenAI Responses API (automatic detection and usage)
+ * - Provider-specific API differences
+ * - Streaming and non-streaming modes
+ * - Consistent error handling
  */
 
 // LLM Router
@@ -22,9 +29,9 @@ export {
   type LlmTaskPolicy,
   type LlmPolicyStore,
   type LlmProviderRegistry,
-  // Provider implementations
-  OpenAiResponsesClient,
-  GroqLlmClient,
+  // Provider implementations (AI SDK v5 based)
+  OpenAiProviderClient,
+  GroqProviderClient,
   LocalHttpLlmClient,
 } from './llmRouter.js';
 
@@ -33,7 +40,7 @@ export {
   createDefaultLlmRouter,
 } from './llmRouterFactory.js';
 
-// AI SDK Providers (optional)
+// Legacy AI SDK Providers (deprecated - use main providers above)
 export {
   AiSdkOpenAIProvider,
   AiSdkGroqProvider,

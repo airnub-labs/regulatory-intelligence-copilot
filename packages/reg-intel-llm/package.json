@@ -20,23 +20,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@redactpii/node": "^1.0.0"
-  },
-  "peerDependencies": {
+    "@redactpii/node": "^1.0.0",
     "ai": "^5.0.0",
     "@ai-sdk/openai": "^1.0.0",
     "@ai-sdk/groq": "^1.0.0"
-  },
-  "peerDependenciesMeta": {
-    "ai": {
-      "optional": true
-    },
-    "@ai-sdk/openai": {
-      "optional": true
-    },
-    "@ai-sdk/groq": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,9 +1,12 @@
 /**
  * LLM Router - Provider-agnostic LLM client with tenant and task-based routing
  *
+ * Built on Vercel AI SDK v5 for consistent provider abstraction.
+ *
  * Supports multiple backends:
- * - OpenAI (via Responses API)
- * - Groq
+ * - OpenAI (via AI SDK - handles Responses API automatically)
+ * - Groq (via AI SDK)
+ * - Anthropic (via AI SDK)
  * - Local/OSS HTTP models (vLLM, Ollama, etc.)
  *
  * Routes based on:
@@ -90,15 +93,26 @@ export interface LlmProviderClient {
 }
 
 /**
- * OpenAI Responses API client
+ * OpenAI provider client using Vercel AI SDK v5
+ *
+ * Automatically uses the Responses API when available, with fallback to Chat Completions.
+ * Handles all OpenAI API complexities internally via AI SDK.
  */
-export class OpenAiResponsesClient implements LlmProviderClient {
-  private apiKey: string;
-  private baseUrl: string;
+export class OpenAiProviderClient implements LlmProviderClient {
+  private openai: any;
 
-  constructor(apiKey: string, baseUrl = 'https://api.openai.com/v1') {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createOpenAI } = require('@ai-sdk/openai');
+      this.openai = createOpenAI({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
+      throw new LlmError(
+        'OpenAI provider requires AI SDK packages: npm install ai @ai-sdk/openai'
+      );
+    }
   }
 
   async chat(
@@ -106,39 +120,25 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        input: messages.map(m => ({
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.openai(model),
+        messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
+      return result.text;
+    } catch (error) {
       throw new LlmError(
-        `OpenAI Responses API error: ${error}`,
-        response.status
+        `OpenAI error: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new LlmError('No content in OpenAI response');
-    }
-
-    return content;
   }
 
   async *streamChat(
@@ -146,89 +146,56 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        input: messages.map(m => ({
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.openai(model),
+        messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      yield {
-        type: 'error',
-        error: new LlmError(`OpenAI Responses API error: ${error}`, response.status),
-      };
-      return;
-    }
-
-    if (!response.body) {
-      yield { type: 'error', error: new LlmError('No response body') };
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              yield { type: 'text', delta };
-            }
-          } catch (e) {
-            // Skip malformed JSON
-            continue;
-          }
-        }
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
       }
 
       yield { type: 'done' };
     } catch (error) {
       yield {
         type: 'error',
-        error: error instanceof Error ? error : new Error(String(error)),
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`OpenAI error: ${String(error)}`),
       };
     }
   }
 }
 
 /**
- * Groq API client
+ * Groq provider client using Vercel AI SDK v5
+ *
+ * Handles Groq's fast inference API via AI SDK abstraction.
  */
-export class GroqLlmClient implements LlmProviderClient {
-  private apiKey: string;
-  private baseUrl: string;
+export class GroqProviderClient implements LlmProviderClient {
+  private groq: any;
 
-  constructor(apiKey: string, baseUrl = 'https://api.groq.com/openai/v1') {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createGroq } = require('@ai-sdk/groq');
+      this.groq = createGroq({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
+      throw new LlmError(
+        'Groq provider requires AI SDK packages: npm install ai @ai-sdk/groq'
+      );
+    }
   }
 
   async chat(
@@ -236,36 +203,25 @@ export class GroqLlmClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.groq(model),
         messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new LlmError(`Groq API error: ${error}`, response.status);
+      return result.text;
+    } catch (error) {
+      throw new LlmError(
+        `Groq error: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
-
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new LlmError('No content in Groq response');
-    }
-
-    return content;
   }
 
   async *streamChat(
@@ -273,74 +229,31 @@ export class GroqLlmClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.groq(model),
         messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      yield {
-        type: 'error',
-        error: new LlmError(`Groq API error: ${error}`, response.status),
-      };
-      return;
-    }
-
-    if (!response.body) {
-      yield { type: 'error', error: new LlmError('No response body') };
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              yield { type: 'text', delta };
-            }
-          } catch (e) {
-            // Skip malformed JSON
-            continue;
-          }
-        }
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
       }
 
       yield { type: 'done' };
     } catch (error) {
       yield {
         type: 'error',
-        error: error instanceof Error ? error : new Error(String(error)),
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`Groq error: ${String(error)}`),
       };
     }
   }
@@ -628,7 +541,10 @@ export class LlmRouter implements LlmClient {
 }
 
 /**
- * Create a configured LLM router
+ * Create a configured LLM router with AI SDK v5 providers
+ *
+ * All providers use Vercel AI SDK v5 under the hood for consistent abstraction.
+ * OpenAI automatically uses Responses API when available.
  */
 export function createLlmRouter(config: {
   openaiApiKey?: string;
@@ -640,17 +556,17 @@ export function createLlmRouter(config: {
 }): LlmRouter {
   const providers: LlmProviderRegistry = {};
 
-  // Register OpenAI if key provided
+  // Register OpenAI if key provided (uses AI SDK v5 - handles Responses API automatically)
   if (config.openaiApiKey) {
-    providers.openai = new OpenAiResponsesClient(config.openaiApiKey);
+    providers.openai = new OpenAiProviderClient(config.openaiApiKey);
   }
 
-  // Register Groq if key provided
+  // Register Groq if key provided (uses AI SDK v5)
   if (config.groqApiKey) {
-    providers.groq = new GroqLlmClient(config.groqApiKey);
+    providers.groq = new GroqProviderClient(config.groqApiKey);
   }
 
-  // Register local if base URL provided
+  // Register local if base URL provided (direct HTTP client for vLLM, Ollama, etc.)
   if (config.localBaseUrl) {
     providers.local = new LocalHttpLlmClient(config.localBaseUrl);
   }

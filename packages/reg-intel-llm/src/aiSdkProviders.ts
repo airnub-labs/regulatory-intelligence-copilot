@@ -1,8 +1,12 @@
 /**
  * AI SDK v5 Provider Adapters
  *
- * Alternative LLM provider implementations using Vercel AI SDK v5 under the hood.
- * These are optional and can be used instead of the direct HTTP providers.
+ * @deprecated These are legacy adapters. Use the main provider implementations instead:
+ * - OpenAiProviderClient (from llmRouter.ts)
+ * - GroqProviderClient (from llmRouter.ts)
+ *
+ * The main provider implementations now use AI SDK v5 under the hood by default.
+ * These legacy adapters are kept for backward compatibility only.
  *
  * Per v0.3 architecture decision D-023, AI SDK is used only as an implementation
  * detail at the edges, never in domain logic or agents.
