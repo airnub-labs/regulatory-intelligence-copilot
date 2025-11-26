@@ -84,12 +84,74 @@ importers:
       '@redactpii/node':
         specifier: ^1.0.0
         version: 1.0.11
+      '@reg-copilot/reg-intel-graph':
+        specifier: workspace:*
+        version: link:../reg-intel-graph
+      '@reg-copilot/reg-intel-llm':
+        specifier: workspace:*
+        version: link:../reg-intel-llm
+      '@reg-copilot/reg-intel-prompts':
+        specifier: workspace:*
+        version: link:../reg-intel-prompts
       eventsource-parser:
         specifier: ^3.0.6
         version: 3.0.6
       neo4j-driver:
         specifier: ^5.15.0
         version: 5.28.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.10.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@24.10.1)
+
+  packages/reg-intel-graph:
+    dependencies:
+      neo4j-driver:
+        specifier: ^5.15.0
+        version: 5.28.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.10.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@24.10.1)
+
+  packages/reg-intel-llm:
+    dependencies:
+      '@ai-sdk/groq':
+        specifier: ^1.0.0
+        version: 1.2.9(zod@3.25.76)
+      '@ai-sdk/openai':
+        specifier: ^1.0.0
+        version: 1.3.24(zod@3.25.76)
+      '@redactpii/node':
+        specifier: ^1.0.0
+        version: 1.0.11
+      ai:
+        specifier: ^5.0.0
+        version: 5.0.101(zod@3.25.76)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.10.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@24.10.1)
+
+  packages/reg-intel-prompts:
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
