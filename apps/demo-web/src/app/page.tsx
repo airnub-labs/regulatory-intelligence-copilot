@@ -1,7 +1,7 @@
 'use client';
 
-import { useChat } from 'ai/react';
-import { useRef, useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core';
 
 /**
  * User profile for regulatory context
@@ -11,19 +11,63 @@ interface UserProfile {
   jurisdictions: string[];
 }
 
-export default function Home() {
-  const [profile, setProfile] = useState<UserProfile>({
-    personaType: 'single-director',
-    jurisdictions: ['IE'],
-  });
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: '/api/chat',
-    body: { profile },
+interface ChatMetadata {
+  agentId: string;
+  jurisdictions: string[];
+  uncertaintyLevel: 'low' | 'medium' | 'high';
+  disclaimerKey: string;
+  referencedNodes: string[];
+}
+
+function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
+  const lines = eventBlock.split('\n');
+  let eventType = 'message';
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      eventType = line.replace('event:', '').trim();
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.replace('data:', '').trim());
+    }
+  }
+
+  if (!eventType && dataLines.length === 0) return null;
+
+  return {
+    type: eventType,
+    data: dataLines.join('\n'),
+  };
+}
+
+function parseJsonSafe(value: string) {
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn('Failed to parse SSE data', error);
+    return value;
+  }
+}
+
+export default function Home() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null);
+  const [profile, setProfile] = useState<UserProfile>({
+    personaType: DEFAULT_PROFILE_ID,
+    jurisdictions: ['IE'],
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -36,6 +80,106 @@ export default function Home() {
     }
     prevMessageCountRef.current = messages.length;
   }, [messages.length]);
+
+  const streamChatResponse = async (response: Response, assistantMessageId: string) => {
+    if (!response.body) {
+      throw new Error('Response stream missing');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const appendAssistantText = (delta: string) => {
+      setMessages(prev =>
+        prev.map(message =>
+          message.id === assistantMessageId ? { ...message, content: `${message.content}${delta}` } : message
+        )
+      );
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let boundaryIndex;
+      while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+        const rawEvent = buffer.slice(0, boundaryIndex).trim();
+        buffer = buffer.slice(boundaryIndex + 2);
+
+        if (!rawEvent) continue;
+        const parsedEvent = parseSseEvent(rawEvent);
+        if (!parsedEvent) continue;
+
+        const parsedData = parseJsonSafe(parsedEvent.data);
+
+        switch (parsedEvent.type) {
+          case 'metadata':
+            setChatMetadata(parsedData as ChatMetadata);
+            break;
+          case 'message': {
+            const textChunk = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? '';
+            appendAssistantText(textChunk);
+            break;
+          }
+          case 'error': {
+            const errorMessage = typeof parsedData === 'string' ? parsedData : parsedData?.message ?? 'Unknown error';
+            appendAssistantText(`Error: ${errorMessage}`);
+            return;
+          }
+          case 'done':
+            return;
+          default:
+            break;
+        }
+      }
+    }
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!input.trim()) return;
+
+    const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() };
+    const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' };
+
+    const outgoingMessages = [...messages, userMessage];
+
+    setMessages(prev => [...prev, userMessage, assistantMessage]);
+    setInput('');
+    setIsLoading(true);
+    setChatMetadata(null);
+
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: outgoingMessages.map(({ role, content }) => ({ role, content })), profile }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      await streamChatResponse(response, assistantMessage.id);
+    } catch (error) {
+      const fallback = error instanceof Error ? error.message : 'Unknown error';
+      setMessages(prev =>
+        prev.map(message =>
+          message.id === assistantMessage.id ? { ...message, content: `Error: ${fallback}` } : message
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-900 text-white">
@@ -101,6 +245,29 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {chatMetadata && (
+          <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-300 bg-gray-950/50">
+            <div className="flex flex-wrap gap-4">
+              <div>
+                <span className="text-gray-500">Agent:</span> {chatMetadata.agentId}
+              </div>
+              <div>
+                <span className="text-gray-500">Jurisdictions:</span> {chatMetadata.jurisdictions.join(', ')}
+              </div>
+              <div>
+                <span className="text-gray-500">Uncertainty:</span> {chatMetadata.uncertaintyLevel}
+              </div>
+              <div>
+                <span className="text-gray-500">Disclaimer:</span> {chatMetadata.disclaimerKey}
+              </div>
+              <div>
+                <span className="text-gray-500">Referenced Nodes:</span>{' '}
+                {chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.join(', ') : 'none'}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -174,7 +341,7 @@ export default function Home() {
             <input
               type="text"
               value={input}
-              onChange={handleInputChange}
+              onChange={(event) => setInput(event.target.value)}
               placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
               className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
               disabled={isLoading}

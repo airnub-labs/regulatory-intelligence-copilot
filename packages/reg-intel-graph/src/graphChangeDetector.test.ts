@@ -194,9 +194,9 @@ describe('GraphChangeDetector', () => {
       // Should have emitted a patch with node2 added
       expect(callback).toHaveBeenCalled();
       const patch = callback.mock.calls[callback.mock.calls.length - 1][0] as GraphPatch;
-      expect(patch.nodes_added).toBeDefined();
-      expect(patch.nodes_added?.length).toBe(1);
-      expect(patch.nodes_added?.[0].id).toBe('node2');
+      expect(patch.nodes.added.length).toBe(1);
+      expect(patch.nodes.added[0].id).toBe('node2');
+      expect(patch.meta.nodeChanges).toBe(1);
     });
 
     it('should detect updated nodes', async () => {
@@ -231,9 +231,8 @@ describe('GraphChangeDetector', () => {
 
       expect(callback).toHaveBeenCalled();
       const patch = callback.mock.calls[callback.mock.calls.length - 1][0] as GraphPatch;
-      expect(patch.nodes_updated).toBeDefined();
-      expect(patch.nodes_updated?.length).toBe(1);
-      expect(patch.nodes_updated?.[0].label).toBe('Node 1 Updated');
+      expect(patch.nodes.updated.length).toBe(1);
+      expect(patch.nodes.updated[0].label).toBe('Node 1 Updated');
     });
 
     it('should detect removed nodes', async () => {
@@ -271,9 +270,8 @@ describe('GraphChangeDetector', () => {
 
       expect(callback).toHaveBeenCalled();
       const patch = callback.mock.calls[callback.mock.calls.length - 1][0] as GraphPatch;
-      expect(patch.nodes_removed).toBeDefined();
-      expect(patch.nodes_removed?.length).toBe(1);
-      expect(patch.nodes_removed?.[0]).toBe('node2');
+      expect(patch.nodes.removed.length).toBe(1);
+      expect(patch.nodes.removed[0]).toBe('node2');
     });
 
     it('should detect added edges', async () => {
@@ -308,10 +306,9 @@ describe('GraphChangeDetector', () => {
 
       expect(callback).toHaveBeenCalled();
       const patch = callback.mock.calls[callback.mock.calls.length - 1][0] as GraphPatch;
-      expect(patch.edges_added).toBeDefined();
-      expect(patch.edges_added?.length).toBe(1);
-      expect(patch.edges_added?.[0].source).toBe('node1');
-      expect(patch.edges_added?.[0].target).toBe('node2');
+      expect(patch.edges.added.length).toBe(1);
+      expect(patch.edges.added[0].source).toBe('node1');
+      expect(patch.edges.added[0].target).toBe('node2');
     });
 
     it('should detect removed edges', async () => {
@@ -346,8 +343,7 @@ describe('GraphChangeDetector', () => {
 
       expect(callback).toHaveBeenCalled();
       const patch = callback.mock.calls[callback.mock.calls.length - 1][0] as GraphPatch;
-      expect(patch.edges_removed).toBeDefined();
-      expect(patch.edges_removed?.length).toBe(1);
+      expect(patch.edges.removed.length).toBe(1);
     });
   });
 

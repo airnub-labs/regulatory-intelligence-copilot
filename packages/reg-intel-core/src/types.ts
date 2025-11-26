@@ -72,11 +72,21 @@ export interface GraphContext {
 // User Profile Types
 // =============================================================================
 
+export const PROFILE_IDS = [
+  'self-employed',
+  'single-director',
+  'paye-employee',
+  'investor',
+  'advisor',
+] as const;
+
+export type ProfileId = (typeof PROFILE_IDS)[number];
+
 /**
  * User profile for context filtering
  */
 export interface UserProfile {
-  personaType: 'self-employed' | 'single-director' | 'paye-employee' | 'investor' | 'advisor';
+  personaType: ProfileId;
   jurisdictions: string[];
   ageBand?: '18-25' | '26-35' | '36-45' | '46-55' | '56-65' | '65+';
   hasCompany?: boolean;

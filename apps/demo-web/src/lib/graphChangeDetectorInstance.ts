@@ -11,9 +11,16 @@ import {
   type GraphChangeDetector,
   type ChangeFilter,
   type GraphContext,
+  type GraphPatch,
 } from '@reg-copilot/reg-intel-core';
+import { normalizeProfileType, type ProfileId } from '@reg-copilot/reg-intel-core';
 
 let detectorInstance: GraphChangeDetector | null = null;
+const MAX_PATCH_NODE_CHANGES = 250;
+const MAX_PATCH_EDGE_CHANGES = 500;
+const MAX_PATCH_TOTAL_CHANGES = 700;
+const MIN_MS_BETWEEN_PATCHES = 750;
+const lastEmissionByFilter = new Map<string, number>();
 
 /**
  * Query function that fetches graph state based on filter criteria
@@ -26,7 +33,7 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
     ? filter.jurisdictions
     : ['IE'];
 
-  const profileType = filter.profileType || 'single-director';
+  const profileType: ProfileId = normalizeProfileType(filter.profileType);
 
   try {
     // Get rules for primary jurisdiction
@@ -41,9 +48,9 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
       const crossBorderContext = await graphClient.getCrossBorderSlice(jurisdictions);
 
       // Merge contexts (deduplicate nodes and edges)
-      const nodeMap = new Map<string, typeof graphContext.nodes[0]>();
+      const nodeMap = new Map<string, GraphContext['nodes'][number]>();
       const edgeSet = new Set<string>();
-      const mergedEdges: typeof graphContext.edges = [];
+      const mergedEdges: GraphContext['edges'] = [];
 
       // Add nodes from both contexts
       for (const node of [...graphContext.nodes, ...crossBorderContext.nodes]) {
@@ -88,7 +95,7 @@ async function queryGraphByTimestamp(
     ? filter.jurisdictions
     : ['IE'];
 
-  const profileType = filter.profileType || 'single-director';
+  const profileType: ProfileId = normalizeProfileType(filter.profileType);
 
   try {
     // Convert timestamp to ISO format for Cypher query
@@ -181,14 +188,27 @@ export function getGraphChangeDetector(config?: {
   useTimestamps?: boolean;
   batchWindowMs?: number;
   enableBatching?: boolean;
+  maxNodesPerPatch?: number;
+  maxEdgesPerPatch?: number;
+  maxTotalChanges?: number;
 }): GraphChangeDetector {
   if (!detectorInstance) {
     console.log('[GraphChangeDetector] Creating new detector instance with config:', config);
 
     // Create detector with timestamp-based queries and change batching enabled
+    const mergedConfig = {
+      pollIntervalMs: config?.pollIntervalMs ?? 5000,
+      useTimestamps: config?.useTimestamps ?? true,
+      batchWindowMs: config?.batchWindowMs ?? 1000,
+      enableBatching: config?.enableBatching ?? true,
+      maxNodesPerPatch: config?.maxNodesPerPatch ?? MAX_PATCH_NODE_CHANGES,
+      maxEdgesPerPatch: config?.maxEdgesPerPatch ?? MAX_PATCH_EDGE_CHANGES,
+      maxTotalChanges: config?.maxTotalChanges ?? MAX_PATCH_TOTAL_CHANGES,
+    };
+
     detectorInstance = createGraphChangeDetector(
       queryGraphByFilter,
-      config,
+      mergedConfig,
       queryGraphByTimestamp
     );
 
@@ -211,6 +231,48 @@ export function getGraphChangeDetector(config?: {
   return detectorInstance;
 }
 
+function getFilterKey(filter: ChangeFilter): string {
+  const jurisdictions = filter.jurisdictions?.slice().sort().join(',') || '*';
+  const profileType: ProfileId = normalizeProfileType(filter.profileType);
+  return `${jurisdictions}:${profileType}`;
+}
+
+function shouldThrottlePatch(filter: ChangeFilter, patch: GraphPatch): boolean {
+  const filterKey = getFilterKey(filter);
+  if (patch.meta.truncated || patch.meta.totalChanges > MAX_PATCH_TOTAL_CHANGES) {
+    console.warn('[GraphChangeDetector] Dropping oversized patch', {
+      filter: filterKey,
+      meta: patch.meta,
+    });
+    return true;
+  }
+
+  const now = Date.now();
+  const lastEmission = lastEmissionByFilter.get(filterKey) ?? 0;
+  if (now - lastEmission < MIN_MS_BETWEEN_PATCHES) {
+    return true;
+  }
+
+  lastEmissionByFilter.set(filterKey, now);
+  return false;
+}
+
+export function subscribeToGraphPatches(
+  filter: ChangeFilter,
+  callback: (patch: GraphPatch) => void
+): { unsubscribe: () => void } {
+  const detector = getGraphChangeDetector();
+  const wrappedCallback = (patch: GraphPatch) => {
+    if (shouldThrottlePatch(filter, patch)) return;
+    callback(patch);
+  };
+
+  const subscription = detector.subscribe(filter, wrappedCallback);
+  return {
+    unsubscribe: () => subscription.unsubscribe(),
+  };
+}
+
 /**
  * Stop and reset the detector instance
  * (Mainly for testing purposes)
@@ -220,4 +282,5 @@ export function resetGraphChangeDetector(): void {
     detectorInstance.stop();
     detectorInstance = null;
   }
+  lastEmissionByFilter.clear();
 }
