@@ -29,9 +29,13 @@ export {
   type LlmTaskPolicy,
   type LlmPolicyStore,
   type LlmProviderRegistry,
+  type LlmRouterConfig,
+  type ProviderConfig,
+  type LocalProviderConfig,
   // Provider implementations (AI SDK v5 based)
   OpenAiProviderClient,
   GroqProviderClient,
+  AnthropicProviderClient,
   LocalHttpLlmClient,
 } from './llmRouter.js';
 
@@ -39,12 +43,6 @@ export {
 export {
   createDefaultLlmRouter,
 } from './llmRouterFactory.js';
-
-// Legacy AI SDK Providers (deprecated - use main providers above)
-export {
-  AiSdkOpenAIProvider,
-  AiSdkGroqProvider,
-} from './aiSdkProviders.js';
 
 // Egress Guard
 export {
