@@ -106,7 +106,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/responses`, {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -126,7 +126,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     if (!response.ok) {
       const error = await response.text();
       throw new LlmError(
-        `OpenAI Responses API error: ${error}`,
+        `OpenAI API error: ${error}`,
         response.status
       );
     }
@@ -146,7 +146,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/responses`, {
+    const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -168,7 +168,7 @@ export class OpenAiResponsesClient implements LlmProviderClient {
       const error = await response.text();
       yield {
         type: 'error',
-        error: new LlmError(`OpenAI Responses API error: ${error}`, response.status),
+        error: new LlmError(`OpenAI API error: ${error}`, response.status),
       };
       return;
     }
