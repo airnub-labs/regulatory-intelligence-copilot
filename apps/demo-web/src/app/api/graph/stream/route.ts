@@ -8,9 +8,14 @@
  * Patch format: { type: 'graph_patch', nodes: { added|updated|removed }, edges: { added|updated|removed }, meta }
  */
 
-import { hasActiveSandbox, getMcpGatewayUrl, type GraphPatch } from '@reg-copilot/reg-intel-core';
+import {
+  hasActiveSandbox,
+  getMcpGatewayUrl,
+  type ChangeFilter,
+  type GraphPatch,
+} from '@reg-copilot/reg-intel-core';
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
-import { normalizeProfileType } from '@/lib/profiles';
+import { normalizeProfileType, type ProfileId } from '@/lib/profiles';
 
 type WebSocketPairType = {
   0: WebSocket;
@@ -35,9 +40,9 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-  const profileType = normalizeProfileType(searchParams.get('profileType'));
+  const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
 
-  const filter = { jurisdictions, profileType } as const;
+  const filter: ChangeFilter = { jurisdictions, profileType };
 
   console.log('[API/graph/stream] Client connected:', filter);
 

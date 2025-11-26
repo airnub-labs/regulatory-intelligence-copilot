@@ -13,7 +13,7 @@ import {
   type GraphContext,
   type GraphPatch,
 } from '@reg-copilot/reg-intel-core';
-import { normalizeProfileType } from './profiles';
+import { normalizeProfileType, type ProfileId } from './profiles';
 
 let detectorInstance: GraphChangeDetector | null = null;
 const MAX_PATCH_NODE_CHANGES = 250;
@@ -33,7 +33,7 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
     ? filter.jurisdictions
     : ['IE'];
 
-  const profileType = normalizeProfileType(filter.profileType);
+  const profileType: ProfileId = normalizeProfileType(filter.profileType);
 
   try {
     // Get rules for primary jurisdiction
@@ -48,9 +48,9 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
       const crossBorderContext = await graphClient.getCrossBorderSlice(jurisdictions);
 
       // Merge contexts (deduplicate nodes and edges)
-      const nodeMap = new Map<string, typeof graphContext.nodes[0]>();
+      const nodeMap = new Map<string, GraphContext['nodes'][number]>();
       const edgeSet = new Set<string>();
-      const mergedEdges: typeof graphContext.edges = [];
+      const mergedEdges: GraphContext['edges'] = [];
 
       // Add nodes from both contexts
       for (const node of [...graphContext.nodes, ...crossBorderContext.nodes]) {
@@ -95,7 +95,7 @@ async function queryGraphByTimestamp(
     ? filter.jurisdictions
     : ['IE'];
 
-  const profileType = normalizeProfileType(filter.profileType);
+  const profileType: ProfileId = normalizeProfileType(filter.profileType);
 
   try {
     // Convert timestamp to ISO format for Cypher query
@@ -233,7 +233,7 @@ export function getGraphChangeDetector(config?: {
 
 function getFilterKey(filter: ChangeFilter): string {
   const jurisdictions = filter.jurisdictions?.slice().sort().join(',') || '*';
-  const profileType = normalizeProfileType(filter.profileType);
+  const profileType: ProfileId = normalizeProfileType(filter.profileType);
   return `${jurisdictions}:${profileType}`;
 }
 

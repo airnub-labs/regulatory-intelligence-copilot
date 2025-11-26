@@ -15,7 +15,7 @@ import {
   getMcpGatewayUrl,
   type GraphContext,
 } from '@reg-copilot/reg-intel-core';
-import { normalizeProfileType } from '@/lib/profiles';
+import { normalizeProfileType, type ProfileId } from '@/lib/profiles';
 
 const MAX_INITIAL_NODES = 250;
 const MAX_INITIAL_EDGES = 500;
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
 
     // Get query parameters
     const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-    const profileType = normalizeProfileType(searchParams.get('profileType'));
+    const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
     const keyword = searchParams.get('keyword') || undefined;
 
     console.log('[API/graph] Fetching initial graph snapshot:', {
@@ -83,9 +83,9 @@ export async function GET(request: Request) {
       const crossBorderContext = await graphClient.getCrossBorderSlice(jurisdictions);
 
       // Merge contexts (deduplicate nodes and edges)
-      const nodeMap = new Map<string, typeof graphContext.nodes[0]>();
+      const nodeMap = new Map<string, GraphContext['nodes'][number]>();
       const edgeSet = new Set<string>();
-      const mergedEdges: typeof graphContext.edges = [];
+      const mergedEdges: GraphContext['edges'] = [];
 
       // Add nodes from both contexts
       for (const node of [...graphContext.nodes, ...crossBorderContext.nodes]) {
