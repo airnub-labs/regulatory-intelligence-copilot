@@ -96,7 +96,7 @@ This makes it possible to answer:
 | **Graph algorithms layer**       | Optional Leiden communities, centrality, and helper nodes for GraphRAG‑style retrieval and explanation        |
 | **E2B MCP gateway**              | Choke‑point for MCP tools; all external MCP traffic passes through with an egress guard                        |
 | **MCP tools**                    | Legal & regulatory sources (Revenue, TAC, courts, EU, national authorities, etc.)                             |
-| **LLM Router + providers**       | Provider‑agnostic LLM layer using Vercel AI SDK v5 (OpenAI Responses incl. GPT‑OSS, Groq, Anthropic, Google Gemini, local/OSS models), behind Egress Guard |
+| **LLM Router + providers**       | Provider‑agnostic LLM layer - ALL providers use Vercel AI SDK v5 (OpenAI Responses incl. GPT‑OSS, Groq, Anthropic, Google Gemini, local/OSS models via OpenAI client with custom baseURL), behind Egress Guard |
 | **Egress Guard**                 | Aspect pipeline for **any outbound call** (LLM or HTTP/MCP), capable of AI‑driven PII/sensitive‑data stripping|
 | **ComplianceEngine**             | Core orchestration engine (chat, graph queries, timeline engine, agents)                                      |
 | **Expert agents**                | Pre‑configured domain/jurisdiction lenses on top of the engine                                                |

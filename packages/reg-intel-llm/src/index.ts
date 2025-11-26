@@ -7,12 +7,13 @@
  *
  * This package provides:
  * - LlmRouter (provider-agnostic routing with tenant policies)
- * - LLM providers (OpenAI, Groq, Anthropic, Google Gemini, Local) - all using AI SDK v5 under the hood
+ * - LLM providers (OpenAI, Groq, Anthropic, Google Gemini, Local) - ALL using AI SDK v5
  * - Egress Guard (PII sanitization)
  *
  * AI SDK v5 handles:
  * - OpenAI Responses API (automatic detection and usage)
- * - Provider-specific API differences
+ * - Provider-specific API differences (OpenAI, Groq, Anthropic, Google)
+ * - Local OpenAI-compatible endpoints (vLLM, Ollama, etc.) via OpenAI provider with custom baseURL
  * - Streaming and non-streaming modes
  * - Consistent error handling
  */
@@ -37,7 +38,6 @@ export {
   GroqProviderClient,
   AnthropicProviderClient,
   GeminiProviderClient,
-  LocalHttpLlmClient,
 } from './llmRouter.js';
 
 // Factory

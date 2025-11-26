@@ -112,8 +112,11 @@ Per `architecture_v_0_4.md` and D-020, the monorepo has been reorganized with cl
 
 - [x] `packages/reg-intel-llm` (v0.4.0) - **NEW PACKAGE**
   - LlmRouter (provider-agnostic routing)
-  - Provider clients built on AI SDK v5: OpenAiProviderClient, GroqProviderClient, AnthropicProviderClient, GeminiProviderClient
-  - LocalHttpLlmClient for OpenAI-compatible endpoints
+  - ALL provider clients built on AI SDK v5:
+    - OpenAiProviderClient (OpenAI, GPT-OSS, and local OpenAI-compatible endpoints via custom baseURL)
+    - GroqProviderClient (Groq models)
+    - AnthropicProviderClient (Claude models)
+    - GeminiProviderClient (Google Gemini models)
   - Egress Guard (PII sanitization)
   - LLM-related types and errors
 

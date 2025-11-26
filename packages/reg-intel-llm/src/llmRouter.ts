@@ -3,12 +3,12 @@
  *
  * Built on Vercel AI SDK v5 for consistent provider abstraction.
  *
- * Supports multiple backends:
- * - OpenAI (via AI SDK - handles Responses API automatically)
- * - Groq (via AI SDK)
- * - Anthropic (via AI SDK)
- * - Google Gemini (via AI SDK)
- * - Local/OSS HTTP models (vLLM, Ollama, etc.)
+ * ALL providers use AI SDK v5:
+ * - OpenAI (via @ai-sdk/openai - handles Responses API automatically)
+ * - Groq (via @ai-sdk/groq)
+ * - Anthropic (via @ai-sdk/anthropic)
+ * - Google Gemini (via @ai-sdk/google)
+ * - Local/OSS models (via @ai-sdk/openai with custom baseURL for vLLM, Ollama, etc.)
  *
  * Routes based on:
  * - Tenant policies
@@ -427,129 +427,6 @@ export class GeminiProviderClient implements LlmProviderClient {
 }
 
 /**
- * Local/OSS HTTP model client (vLLM, Ollama, etc.)
- */
-export class LocalHttpLlmClient implements LlmProviderClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
-  }
-
-  async chat(
-    messages: ChatMessage[],
-    model: string,
-    options?: { temperature?: number; maxTokens?: number }
-  ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content,
-        })),
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      throw new LlmError(`Local HTTP LLM error: ${error}`, response.status);
-    }
-
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new LlmError('No content in local LLM response');
-    }
-
-    return content;
-  }
-
-  async *streamChat(
-    messages: ChatMessage[],
-    model: string,
-    options?: { temperature?: number; maxTokens?: number }
-  ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content,
-        })),
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      yield {
-        type: 'error',
-        error: new LlmError(`Local HTTP LLM error: ${error}`, response.status),
-      };
-      return;
-    }
-
-    if (!response.body) {
-      yield { type: 'error', error: new LlmError('No response body') };
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              yield { type: 'text', delta };
-            }
-          } catch (e) {
-            // Skip malformed JSON
-            continue;
-          }
-        }
-      }
-
-      yield { type: 'done' };
-    } catch (error) {
-      yield {
-        type: 'error',
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
-  }
-}
-
-/**
  * Provider registry
  */
 export interface LlmProviderRegistry {
@@ -836,9 +713,12 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
       );
     }
 
-    // Create local provider
+    // Create local provider (using OpenAI-compatible endpoint)
     if (configs.local) {
-      providers.local = new LocalHttpLlmClient(configs.local.baseURL);
+      providers.local = new OpenAiProviderClient(
+        'not-needed', // Local providers typically don't validate API keys
+        { baseURL: configs.local.baseURL }
+      );
     }
   }
 

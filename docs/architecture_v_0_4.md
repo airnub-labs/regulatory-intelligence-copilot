@@ -341,13 +341,13 @@ This allows e.g.:
 
 ### 6.3 Vercel AI SDK v5 as Primary Provider Implementation
 
-All LLM providers (except local HTTP clients) use **Vercel AI SDK v5** as their primary implementation:
+**ALL LLM providers use Vercel AI SDK v5** as their primary implementation:
 
 - **OpenAI**: Uses `@ai-sdk/openai` (supports Responses API automatically, including GPT‑OSS models)
 - **Groq**: Uses `@ai-sdk/groq`
 - **Anthropic**: Uses `@ai-sdk/anthropic`
 - **Google Gemini**: Uses `@ai-sdk/google`
-- **Local HTTP**: Direct HTTP client for OpenAI‑compatible endpoints
+- **Local/OSS models**: Uses `@ai-sdk/openai` with custom `baseURL` (for vLLM, Ollama, and other OpenAI‑compatible endpoints)
 
 Benefits of AI SDK v5 as the primary layer:
 
