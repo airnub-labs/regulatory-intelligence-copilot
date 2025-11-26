@@ -46,25 +46,19 @@ const subscription = detector.subscribe(
     profileType: 'single-director'
   },
   (patch) => {
-    console.log('Graph changed!', patch);
+    console.log('Graph changed!', patch.meta);
 
-    if (patch.nodes_added) {
-      patch.nodes_added.forEach(node => {
-        console.log(`Added node: ${node.label}`);
-      });
-    }
+    patch.nodes.added.forEach(node => {
+      console.log(`Added node: ${node.label}`);
+    });
 
-    if (patch.nodes_updated) {
-      patch.nodes_updated.forEach(node => {
-        console.log(`Updated node: ${node.label}`);
-      });
-    }
+    patch.nodes.updated.forEach(node => {
+      console.log(`Updated node: ${node.label}`);
+    });
 
-    if (patch.nodes_removed) {
-      patch.nodes_removed.forEach(nodeId => {
-        console.log(`Removed node: ${nodeId}`);
-      });
-    }
+    patch.nodes.removed.forEach(nodeId => {
+      console.log(`Removed node: ${nodeId}`);
+    });
   }
 );
 
@@ -98,6 +92,9 @@ interface GraphChangeDetectorConfig {
   useTimestamps?: boolean;        // Default: true
   batchWindowMs?: number;         // Default: 1000
   enableBatching?: boolean;       // Default: true
+  maxNodesPerPatch?: number;      // Default: 500
+  maxEdgesPerPatch?: number;      // Default: 1000
+  maxTotalChanges?: number;       // Default: 1200
 }
 ```
 
@@ -109,11 +106,23 @@ interface GraphChangeDetectorConfig {
 interface GraphPatch {
   type: 'graph_patch';
   timestamp: string;
-  nodes_added?: GraphNode[];
-  nodes_updated?: GraphNode[];
-  nodes_removed?: string[];
-  edges_added?: GraphEdge[];
-  edges_removed?: GraphEdge[];
+  nodes: {
+    added: GraphNode[];
+    updated: GraphNode[];
+    removed: string[];
+  };
+  edges: {
+    added: GraphEdge[];
+    updated: GraphEdge[];
+    removed: GraphEdge[];
+  };
+  meta: {
+    nodeChanges: number;
+    edgeChanges: number;
+    totalChanges: number;
+    truncated?: boolean;
+    truncationReason?: string;
+  };
 }
 ```
 
@@ -404,7 +413,7 @@ describe('GraphChangeDetector', () => {
     await new Promise(resolve => setTimeout(resolve, 150));
 
     expect(callback).toHaveBeenCalled();
-    expect(callback.mock.calls[0][0].nodes_added).toHaveLength(1);
+    expect(callback.mock.calls[0][0].nodes.added).toHaveLength(1);
 
     detector.stop();
   });

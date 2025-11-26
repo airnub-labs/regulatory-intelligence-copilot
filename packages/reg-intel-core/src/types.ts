@@ -72,14 +72,36 @@ export interface GraphContext {
 // User Profile Types
 // =============================================================================
 
+export const PROFILE_IDS = [
+  'self-employed',
+  'single-director',
+  'paye-employee',
+  'investor',
+  'advisor',
+] as const;
+
+export type ProfileId = (typeof PROFILE_IDS)[number];
+
 /**
  * User profile for context filtering
+ *
+ * Note on naming: This interface uses 'personaType' for the profile identifier,
+ * while API/filter contexts may use 'profileType' or 'profileId'. All refer to
+ * the same ProfileId concept (e.g., 'self-employed', 'single-director').
  */
 export interface UserProfile {
-  personaType: 'self-employed' | 'single-director' | 'paye-employee' | 'investor' | 'advisor';
+  /**
+   * Profile/persona type identifier (e.g., 'self-employed', 'investor').
+   * Naming note: Called 'personaType' here, but may be 'profileType' or 'profileId' in other contexts.
+   */
+  personaType: ProfileId;
+  /** Jurisdictions relevant to this user (e.g., ['IE', 'UK']) */
   jurisdictions: string[];
+  /** Optional age band for age-specific rules */
   ageBand?: '18-25' | '26-35' | '36-45' | '46-55' | '56-65' | '65+';
+  /** Whether user operates a company (relevant for company tax rules) */
   hasCompany?: boolean;
+  /** Irish PRSI class if applicable (e.g., 'A', 'S') */
   prsiClass?: string;
 }
 

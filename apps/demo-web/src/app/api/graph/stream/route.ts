@@ -1,27 +1,27 @@
 /**
  * Graph Streaming API endpoint - Incremental patches
  *
- * Sends incremental graph patches using Server-Sent Events (SSE).
- * Clients should first load initial snapshot via GET /api/graph,
- * then subscribe to this endpoint for real-time updates.
+ * Sends incremental graph patches using Server-Sent Events (SSE) and WebSockets
+ * (when supported by the runtime). Clients should first load initial snapshot
+ * via GET /api/graph, then subscribe to this endpoint for real-time updates.
  *
- * Per v0.3 architecture (docs/architecture_v_0_3.md Section 9):
- * - WebSocket/SSE endpoint sends incremental graph patches
- * - Patch format: nodes_added, nodes_updated, nodes_removed, edges_added, edges_removed
- *
- * Note: Using SSE instead of WebSocket for better Next.js/Vercel compatibility
- * and simpler server-to-client streaming.
- *
- * Implementation: Uses GraphChangeDetector with polling-based change detection
- * to monitor Memgraph and emit incremental patches to connected clients.
+ * Patch format: { type: 'graph_patch', nodes: { added|updated|removed }, edges: { added|updated|removed }, meta }
  */
 
 import {
   hasActiveSandbox,
   getMcpGatewayUrl,
+  normalizeProfileType,
+  type ChangeFilter,
   type GraphPatch,
+  type ProfileId,
 } from '@reg-copilot/reg-intel-core';
-import { getGraphChangeDetector } from '@/lib/graphChangeDetectorInstance';
+import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
+
+type WebSocketPairType = {
+  0: WebSocket;
+  1: WebSocket;
+};
 
 /**
  * Connection confirmation message
@@ -33,7 +33,6 @@ interface ConnectionMessage {
 }
 
 export async function GET(request: Request) {
-  // Check if graph is available
   if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
     return new Response('Graph streaming unavailable: sandbox not active', {
       status: 503,
@@ -42,21 +41,31 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-  const profileType = searchParams.get('profileType') || 'single_director';
+  const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
+  const keyword = searchParams.get('keyword') || undefined;
 
-  console.log('[API/graph/stream] Client connected:', {
-    jurisdictions,
-    profileType,
-  });
+  const filter: ChangeFilter = { jurisdictions, profileType, keyword };
 
-  // Get the shared change detector instance
-  const detector = getGraphChangeDetector();
+  console.log('[API/graph/stream] Client connected:', filter);
 
-  // Set up SSE stream
+  const upgradeHeader = request.headers.get('upgrade');
+  const supportsWebSocket = typeof (globalThis as any).WebSocketPair !== 'undefined';
+
+  if (upgradeHeader?.toLowerCase() === 'websocket' && supportsWebSocket) {
+    return handleWebSocket(filter);
+  }
+
+  return handleSse(request, filter);
+}
+
+function handleSse(
+  request: Request,
+  filter: ChangeFilter
+): Response {
   const encoder = new TextEncoder();
+
   const stream = new ReadableStream({
     async start(controller) {
-      // Send initial connection confirmation
       const connectionMessage: ConnectionMessage = {
         type: 'connected',
         timestamp: new Date().toISOString(),
@@ -66,45 +75,24 @@ export async function GET(request: Request) {
         encoder.encode(`data: ${JSON.stringify(connectionMessage)}\n\n`)
       );
 
-      // Keep-alive interval to prevent connection timeout
       const keepAliveInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': keepalive\n\n'));
-        } catch (error) {
-          console.log('[API/graph/stream] Keep-alive failed, client disconnected');
+        } catch {
           clearInterval(keepAliveInterval);
         }
-      }, 30000); // Every 30 seconds
+      }, 30000);
 
-      // Subscribe to graph changes
-      const subscription = detector.subscribe(
-        {
-          jurisdictions,
-          profileType,
-        },
-        (patch: GraphPatch) => {
-          try {
-            // Send patch to client via SSE
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify(patch)}\n\n`)
-            );
-
-            console.log('[API/graph/stream] Sent patch to client:', {
-              nodesAdded: patch.nodes_added?.length || 0,
-              nodesUpdated: patch.nodes_updated?.length || 0,
-              nodesRemoved: patch.nodes_removed?.length || 0,
-              edgesAdded: patch.edges_added?.length || 0,
-              edgesRemoved: patch.edges_removed?.length || 0,
-            });
-          } catch (error) {
-            console.error('[API/graph/stream] Error sending patch:', error);
-          }
+      const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(patch)}\n\n`));
+          console.log('[API/graph/stream] Sent patch to SSE client:', patch.meta);
+        } catch (error) {
+          console.error('[API/graph/stream] Error sending patch:', error);
         }
-      );
+      });
 
-      // Clean up on connection close
       request.signal.addEventListener('abort', () => {
-        console.log('[API/graph/stream] Client disconnected');
         clearInterval(keepAliveInterval);
         subscription.unsubscribe();
         controller.close();
@@ -117,7 +105,38 @@ export async function GET(request: Request) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable nginx buffering
+      'X-Accel-Buffering': 'no',
     },
   });
+}
+
+function handleWebSocket(filter: ChangeFilter) {
+  const { 0: client, 1: server } = new (globalThis as any).WebSocketPair() as WebSocketPairType;
+
+  server.accept();
+
+  const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
+    try {
+      server.send(JSON.stringify(patch));
+    } catch (error) {
+      console.error('[API/graph/stream] WebSocket send failed:', error);
+      server.close();
+    }
+  });
+
+  const connectionMessage: ConnectionMessage = {
+    type: 'connected',
+    timestamp: new Date().toISOString(),
+    message: 'Graph WebSocket connected',
+  };
+
+  server.send(JSON.stringify(connectionMessage));
+
+  server.addEventListener('close', () => subscription.unsubscribe());
+  server.addEventListener('error', () => subscription.unsubscribe());
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  } as ResponseInit & { webSocket: WebSocket });
 }

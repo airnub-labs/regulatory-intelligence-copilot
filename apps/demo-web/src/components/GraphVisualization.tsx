@@ -28,6 +28,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
@@ -61,22 +62,33 @@ interface GraphData {
 interface GraphPatch {
   type: 'graph_patch';
   timestamp: string;
-  nodes_added?: GraphNode[];
-  nodes_updated?: GraphNode[];
-  nodes_removed?: string[];
-  edges_added?: GraphEdge[];
-  edges_removed?: Array<{ source: string; target: string; type: string }>;
+  nodes: {
+    added: GraphNode[];
+    updated: GraphNode[];
+    removed: string[];
+  };
+  edges: {
+    added: GraphEdge[];
+    updated: GraphEdge[];
+    removed: GraphEdge[];
+  };
+  meta?: {
+    totalChanges: number;
+    nodeChanges: number;
+    edgeChanges: number;
+    truncated?: boolean;
+  };
 }
 
 interface GraphVisualizationProps {
   jurisdictions?: string[];
-  profileType?: string;
+  profileType?: ProfileId;
   keyword?: string;
 }
 
 export function GraphVisualization({
   jurisdictions = ['IE'],
-  profileType = 'single_director',
+  profileType = DEFAULT_PROFILE_ID,
   keyword,
 }: GraphVisualizationProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
@@ -92,6 +104,8 @@ export function GraphVisualization({
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [showControls, setShowControls] = useState(true);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const initialSnapshotLoaded = useRef(false);
+  const pendingPatchesRef = useRef<GraphPatch[]>([]);
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -129,11 +143,90 @@ export function GraphVisualization({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Apply graph patch - this may be invoked immediately by the stream, so we queue
+  // patches until the initial REST snapshot has been loaded.
+  const applyPatch = useCallback(
+    (patch: GraphPatch, options?: { force?: boolean }) => {
+      if (!initialSnapshotLoaded.current && !options?.force) {
+        pendingPatchesRef.current.push(patch);
+        return;
+      }
+
+      if (paused && !options?.force) return; // Don't apply patches when paused
+
+      setGraphData((prev) => {
+        let newNodes = [...prev.nodes];
+        let newLinks = [...prev.links];
+
+        if (patch.nodes.removed.length > 0) {
+          const removedIds = new Set(patch.nodes.removed);
+          newNodes = newNodes.filter((n) => !removedIds.has(n.id));
+          newLinks = newLinks.filter(
+            (e) => !removedIds.has(e.source as string) && !removedIds.has(e.target as string)
+          );
+        }
+
+        if (patch.nodes.added.length > 0) {
+          for (const node of patch.nodes.added) {
+            if (!newNodes.find((n) => n.id === node.id)) {
+              newNodes.push(node);
+            }
+          }
+        }
+
+        if (patch.nodes.updated.length > 0) {
+          for (const update of patch.nodes.updated) {
+            const index = newNodes.findIndex((n) => n.id === update.id);
+            if (index !== -1) {
+              newNodes[index] = { ...newNodes[index], ...update };
+            }
+          }
+        }
+
+        if (patch.edges.removed.length > 0) {
+          for (const edge of patch.edges.removed) {
+            const index = newLinks.findIndex(
+              (e) => e.source === edge.source && e.target === edge.target && e.type === edge.type
+            );
+            if (index !== -1) {
+              newLinks.splice(index, 1);
+            }
+          }
+        }
+
+        if (patch.edges.added.length > 0) {
+          for (const edge of patch.edges.added) {
+            const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
+            if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
+              newLinks.push(edgeWithId);
+            }
+          }
+        }
+
+        if (patch.edges.updated.length > 0) {
+          for (const edge of patch.edges.updated) {
+            const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
+            const index = newLinks.findIndex((e) => (e as any).id === edgeWithId.id);
+            if (index !== -1) {
+              newLinks[index] = edgeWithId;
+            }
+          }
+        }
+
+        return { nodes: newNodes, links: newLinks };
+      });
+      setLastUpdate(patch.timestamp);
+    },
+    [paused]
+  );
+
   // Load initial graph snapshot
   const loadInitialGraph = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      initialSnapshotLoaded.current = false;
+      pendingPatchesRef.current = [];
 
       const params = new URLSearchParams({
         jurisdictions: jurisdictions.join(','),
@@ -163,76 +256,22 @@ export function GraphVisualization({
         links: transformedLinks,
       });
       setLastUpdate(data.timestamp);
+      initialSnapshotLoaded.current = true;
+
+      // Apply any queued patches that arrived before the initial snapshot completed
+      if (pendingPatchesRef.current.length > 0) {
+        for (const queuedPatch of pendingPatchesRef.current) {
+          applyPatch(queuedPatch, { force: true });
+        }
+        pendingPatchesRef.current = [];
+      }
       setLoading(false);
     } catch (err) {
       console.error('Error loading graph:', err);
       setError(err instanceof Error ? err.message : 'Failed to load graph');
       setLoading(false);
     }
-  }, [jurisdictions, profileType, keyword]);
-
-  // Apply graph patch
-  const applyPatch = useCallback((patch: GraphPatch) => {
-    if (paused) return; // Don't apply patches when paused
-
-    setGraphData((prev) => {
-      let newNodes = [...prev.nodes];
-      let newLinks = [...prev.links];
-
-      // Remove nodes (also removes associated edges)
-      if (patch.nodes_removed && patch.nodes_removed.length > 0) {
-        const removedIds = new Set(patch.nodes_removed);
-        newNodes = newNodes.filter((n) => !removedIds.has(n.id));
-        newLinks = newLinks.filter(
-          (e) => !removedIds.has(e.source as string) && !removedIds.has(e.target as string)
-        );
-      }
-
-      // Add nodes
-      if (patch.nodes_added && patch.nodes_added.length > 0) {
-        for (const node of patch.nodes_added) {
-          if (!newNodes.find((n) => n.id === node.id)) {
-            newNodes.push(node);
-          }
-        }
-      }
-
-      // Update nodes
-      if (patch.nodes_updated && patch.nodes_updated.length > 0) {
-        for (const update of patch.nodes_updated) {
-          const index = newNodes.findIndex((n) => n.id === update.id);
-          if (index !== -1) {
-            newNodes[index] = { ...newNodes[index], ...update };
-          }
-        }
-      }
-
-      // Remove edges
-      if (patch.edges_removed && patch.edges_removed.length > 0) {
-        for (const edge of patch.edges_removed) {
-          const index = newLinks.findIndex(
-            (e) => e.source === edge.source && e.target === edge.target && e.type === edge.type
-          );
-          if (index !== -1) {
-            newLinks.splice(index, 1);
-          }
-        }
-      }
-
-      // Add edges
-      if (patch.edges_added && patch.edges_added.length > 0) {
-        for (const edge of patch.edges_added) {
-          const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
-          if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
-            newLinks.push(edgeWithId);
-          }
-        }
-      }
-
-      return { nodes: newNodes, links: newLinks };
-    });
-    setLastUpdate(patch.timestamp);
-  }, [paused]);
+  }, [jurisdictions, profileType, keyword, applyPatch]);
 
   // Apply filters and search to graph data
   useEffect(() => {
@@ -380,6 +419,9 @@ export function GraphVisualization({
 
   // Initialize
   useEffect(() => {
+    // Lifecycle: fetch a bounded initial snapshot over REST, then layer on live patches.
+    // Any patches that arrive before the initial load completes are queued and applied
+    // immediately after the snapshot to maintain ordering.
     loadInitialGraph();
     connectToStream();
 

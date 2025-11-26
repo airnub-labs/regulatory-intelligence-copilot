@@ -20,6 +20,8 @@ export {
   DEFAULT_JURISDICTION,
   SUPPORTED_JURISDICTIONS,
 } from './constants.js';
+export { DEFAULT_PROFILE_ID, normalizeProfileType } from './profiles.js';
+export { PROFILE_IDS, type ProfileId } from './types.js';
 
 // Errors
 export {

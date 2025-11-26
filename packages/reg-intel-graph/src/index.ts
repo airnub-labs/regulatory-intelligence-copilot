@@ -65,6 +65,8 @@ export {
   createGraphChangeDetector,
   type GraphChangeDetectorConfig,
   type GraphPatch,
+  type GraphPatchMeta,
+  type GraphPatchSection,
   type ChangeFilter,
   type ChangeCallback,
   type ChangeSubscription,

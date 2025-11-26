@@ -199,7 +199,7 @@ function computeDiff(oldSnapshot, newSnapshot): GraphPatch {
 
 **Query Parameters:**
 - `jurisdictions`: Comma-separated list (e.g., `IE,UK,EU`)
-- `profileType`: Profile identifier (e.g., `single_director`)
+- `profileType`: Profile identifier (e.g., `single-director`)
 
 **Event Format:**
 
