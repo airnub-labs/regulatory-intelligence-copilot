@@ -2,6 +2,8 @@
 
 This document describes the ESLint rules configured to enforce v0.4 architecture patterns.
 
+**Configuration:** `eslint.config.mjs` (ESLint 9.x flat config format)
+
 ## Graph Write Discipline
 
 Per `docs/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go through `GraphWriteService`.
