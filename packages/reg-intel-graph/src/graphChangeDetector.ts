@@ -5,10 +5,10 @@
  * Uses a polling-based approach with timestamp tracking to detect changes in Memgraph.
  *
  * Per v0.3 architecture (docs/architecture_v_0_3.md Section 9):
- * - Detects nodes_added, nodes_updated, nodes_removed
- * - Detects edges_added, edges_removed
+ * - Detects nodes added/updated/removed
+ * - Detects edges added/updated/removed
  * - Filters changes by jurisdiction and profile
- * - Emits incremental graph patches for SSE streaming
+ * - Emits incremental graph patches for SSE/WebSocket streaming
  *
  * Enhancements:
  * - Timestamp-based queries: Only fetches nodes updated since last poll
@@ -21,14 +21,26 @@ import { LOG_PREFIX } from './constants.js';
 /**
  * Graph patch format per v0.3 spec
  */
+export interface GraphPatchSection<Added, Updated, Removed> {
+  added: Added[];
+  updated: Updated[];
+  removed: Removed[];
+}
+
+export interface GraphPatchMeta {
+  nodeChanges: number;
+  edgeChanges: number;
+  totalChanges: number;
+  truncated?: boolean;
+  truncationReason?: string;
+}
+
 export interface GraphPatch {
   type: 'graph_patch';
   timestamp: string;
-  nodes_added?: GraphNode[];
-  nodes_updated?: GraphNode[];
-  nodes_removed?: string[]; // Node IDs
-  edges_added?: GraphEdge[];
-  edges_removed?: GraphEdge[];
+  nodes: GraphPatchSection<GraphNode, GraphNode, string>;
+  edges: GraphPatchSection<GraphEdge, GraphEdge, GraphEdge>;
+  meta: GraphPatchMeta;
 }
 
 /**
@@ -72,6 +84,12 @@ export interface GraphChangeDetectorConfig {
   batchWindowMs?: number;
   /** Enable change batching (default: true) */
   enableBatching?: boolean;
+  /** Maximum node-level changes per emitted patch (default: 500) */
+  maxNodesPerPatch?: number;
+  /** Maximum edge-level changes per emitted patch (default: 1000) */
+  maxEdgesPerPatch?: number;
+  /** Maximum combined changes per emitted patch (default: 1200) */
+  maxTotalChanges?: number;
 }
 
 /**
@@ -126,6 +144,9 @@ export class GraphChangeDetector {
       useTimestamps: config?.useTimestamps ?? true,
       batchWindowMs: config?.batchWindowMs ?? 1000,
       enableBatching: config?.enableBatching ?? true,
+      maxNodesPerPatch: config?.maxNodesPerPatch ?? 500,
+      maxEdgesPerPatch: config?.maxEdgesPerPatch ?? 1000,
+      maxTotalChanges: config?.maxTotalChanges ?? 1200,
     };
   }
 
@@ -348,59 +369,39 @@ export class GraphChangeDetector {
    * Compute diff between two snapshots
    */
   private computeDiff(oldSnapshot: GraphSnapshot, newSnapshot: GraphSnapshot): GraphPatch {
-    const patch: GraphPatch = {
-      type: 'graph_patch',
-      timestamp: newSnapshot.timestamp.toISOString(),
-    };
+    const patch = this.createEmptyPatch(newSnapshot.timestamp.toISOString());
 
-    // Compute node changes
-    const nodesAdded: GraphNode[] = [];
-    const nodesUpdated: GraphNode[] = [];
-    const nodesRemoved: string[] = [];
-
-    // Find added and updated nodes
     for (const [id, newNode] of newSnapshot.nodes) {
       const oldNode = oldSnapshot.nodes.get(id);
       if (!oldNode) {
-        nodesAdded.push(newNode);
+        patch.nodes.added.push(newNode);
       } else if (this.nodeHasChanged(oldNode, newNode)) {
-        nodesUpdated.push(newNode);
+        patch.nodes.updated.push(newNode);
       }
     }
 
-    // Find removed nodes
     for (const [id] of oldSnapshot.nodes) {
       if (!newSnapshot.nodes.has(id)) {
-        nodesRemoved.push(id);
+        patch.nodes.removed.push(id);
       }
     }
 
-    // Compute edge changes
-    const edgesAdded: GraphEdge[] = [];
-    const edgesRemoved: GraphEdge[] = [];
-
-    // Find added edges
     for (const [key, newEdge] of newSnapshot.edges) {
-      if (!oldSnapshot.edges.has(key)) {
-        edgesAdded.push(newEdge);
+      const oldEdge = oldSnapshot.edges.get(key);
+      if (!oldEdge) {
+        patch.edges.added.push(newEdge);
+      } else if (this.edgeHasChanged(oldEdge, newEdge)) {
+        patch.edges.updated.push(newEdge);
       }
     }
 
-    // Find removed edges
     for (const [key, oldEdge] of oldSnapshot.edges) {
       if (!newSnapshot.edges.has(key)) {
-        edgesRemoved.push(oldEdge);
+        patch.edges.removed.push(oldEdge);
       }
     }
 
-    // Only include non-empty arrays
-    if (nodesAdded.length > 0) patch.nodes_added = nodesAdded;
-    if (nodesUpdated.length > 0) patch.nodes_updated = nodesUpdated;
-    if (nodesRemoved.length > 0) patch.nodes_removed = nodesRemoved;
-    if (edgesAdded.length > 0) patch.edges_added = edgesAdded;
-    if (edgesRemoved.length > 0) patch.edges_removed = edgesRemoved;
-
-    return patch;
+    return this.applyPatchCaps(patch);
   }
 
   /**
@@ -417,15 +418,27 @@ export class GraphChangeDetector {
   }
 
   /**
+   * Check if an edge has changed
+   */
+  private edgeHasChanged(oldEdge: GraphEdge, newEdge: GraphEdge): boolean {
+    if (oldEdge.type !== newEdge.type) return true;
+
+    const oldProps = JSON.stringify(oldEdge.properties ?? {});
+    const newProps = JSON.stringify(newEdge.properties ?? {});
+    return oldProps !== newProps;
+  }
+
+  /**
    * Check if patch has any changes
    */
   private hasChanges(patch: GraphPatch): boolean {
     return !!(
-      patch.nodes_added?.length ||
-      patch.nodes_updated?.length ||
-      patch.nodes_removed?.length ||
-      patch.edges_added?.length ||
-      patch.edges_removed?.length
+      patch.nodes.added.length ||
+      patch.nodes.updated.length ||
+      patch.nodes.removed.length ||
+      patch.edges.added.length ||
+      patch.edges.updated.length ||
+      patch.edges.removed.length
     );
   }
 
@@ -437,11 +450,13 @@ export class GraphChangeDetector {
     if (!listeners || listeners.size === 0) return;
 
     console.log(`${LOG_PREFIX.graph} Emitting patch for ${filterKey}:`, {
-      nodesAdded: patch.nodes_added?.length || 0,
-      nodesUpdated: patch.nodes_updated?.length || 0,
-      nodesRemoved: patch.nodes_removed?.length || 0,
-      edgesAdded: patch.edges_added?.length || 0,
-      edgesRemoved: patch.edges_removed?.length || 0,
+      nodesAdded: patch.nodes.added.length,
+      nodesUpdated: patch.nodes.updated.length,
+      nodesRemoved: patch.nodes.removed.length,
+      edgesAdded: patch.edges.added.length,
+      edgesUpdated: patch.edges.updated.length,
+      edgesRemoved: patch.edges.removed.length,
+      truncated: patch.meta.truncated,
     });
 
     for (const callback of listeners) {
@@ -501,36 +516,28 @@ export class GraphChangeDetector {
     }
 
     if (patches.length === 1) {
-      return patches[0];
+      return this.applyPatchCaps({ ...patches[0] });
     }
 
-    const merged: GraphPatch = {
-      type: 'graph_patch',
-      timestamp: new Date().toISOString(),
-      nodes_added: [],
-      nodes_updated: [],
-      nodes_removed: [],
-      edges_added: [],
-      edges_removed: [],
-    };
+    const merged = this.createEmptyPatch();
 
-    // Merge all patches
     for (const patch of patches) {
-      if (patch.nodes_added) merged.nodes_added!.push(...patch.nodes_added);
-      if (patch.nodes_updated) merged.nodes_updated!.push(...patch.nodes_updated);
-      if (patch.nodes_removed) merged.nodes_removed!.push(...patch.nodes_removed);
-      if (patch.edges_added) merged.edges_added!.push(...patch.edges_added);
-      if (patch.edges_removed) merged.edges_removed!.push(...patch.edges_removed);
+      merged.nodes.added.push(...patch.nodes.added);
+      merged.nodes.updated.push(...patch.nodes.updated);
+      merged.nodes.removed.push(...patch.nodes.removed);
+      merged.edges.added.push(...patch.edges.added);
+      merged.edges.updated.push(...patch.edges.updated);
+      merged.edges.removed.push(...patch.edges.removed);
     }
 
-    // Deduplicate nodes and edges
-    merged.nodes_added = this.deduplicateNodes(merged.nodes_added!);
-    merged.nodes_updated = this.deduplicateNodes(merged.nodes_updated!);
-    merged.nodes_removed = Array.from(new Set(merged.nodes_removed!));
-    merged.edges_added = this.deduplicateEdges(merged.edges_added!);
-    merged.edges_removed = this.deduplicateEdges(merged.edges_removed!);
+    merged.nodes.added = this.deduplicateNodes(merged.nodes.added);
+    merged.nodes.updated = this.deduplicateNodes(merged.nodes.updated);
+    merged.nodes.removed = Array.from(new Set(merged.nodes.removed));
+    merged.edges.added = this.deduplicateEdges(merged.edges.added);
+    merged.edges.updated = this.deduplicateEdges(merged.edges.updated);
+    merged.edges.removed = this.deduplicateEdges(merged.edges.removed);
 
-    return merged;
+    return this.applyPatchCaps(merged);
   }
 
   /**
@@ -541,38 +548,138 @@ export class GraphChangeDetector {
     recentChanges: GraphContext,
     currentSnapshot: GraphSnapshot
   ): GraphPatch {
-    const patch: GraphPatch = {
-      type: 'graph_patch',
-      timestamp: new Date().toISOString(),
-    };
+    const patch = this.createEmptyPatch();
 
-    const nodesAdded: GraphNode[] = [];
-    const nodesUpdated: GraphNode[] = [];
-
-    // All nodes from timestamp query are either added or updated
     for (const node of recentChanges.nodes) {
       if (currentSnapshot.nodes.has(node.id)) {
-        nodesUpdated.push(node);
+        patch.nodes.updated.push(node);
       } else {
-        nodesAdded.push(node);
+        patch.nodes.added.push(node);
       }
     }
 
-    const edgesAdded: GraphEdge[] = [];
-    // Edges from timestamp query are added
     for (const edge of recentChanges.edges) {
       const edgeKey = this.getEdgeKey(edge);
-      if (!currentSnapshot.edges.has(edgeKey)) {
-        edgesAdded.push(edge);
+      if (currentSnapshot.edges.has(edgeKey)) {
+        patch.edges.updated.push(edge);
+      } else {
+        patch.edges.added.push(edge);
       }
     }
 
-    // Only include non-empty arrays
-    if (nodesAdded.length > 0) patch.nodes_added = nodesAdded;
-    if (nodesUpdated.length > 0) patch.nodes_updated = nodesUpdated;
-    if (edgesAdded.length > 0) patch.edges_added = edgesAdded;
+    return this.applyPatchCaps(patch);
+  }
 
-    return patch;
+  private createEmptyPatch(timestamp: string = new Date().toISOString()): GraphPatch {
+    return {
+      type: 'graph_patch',
+      timestamp,
+      nodes: { added: [], updated: [], removed: [] },
+      edges: { added: [], updated: [], removed: [] },
+      meta: { nodeChanges: 0, edgeChanges: 0, totalChanges: 0 },
+    };
+  }
+
+  private applyPatchCaps(patch: GraphPatch): GraphPatch {
+    const recalculatedPatch = { ...patch, nodes: { ...patch.nodes }, edges: { ...patch.edges } };
+    const nodeTotals =
+      recalculatedPatch.nodes.added.length +
+      recalculatedPatch.nodes.updated.length +
+      recalculatedPatch.nodes.removed.length;
+    const edgeTotals =
+      recalculatedPatch.edges.added.length +
+      recalculatedPatch.edges.updated.length +
+      recalculatedPatch.edges.removed.length;
+
+    let truncated = false;
+    let truncationReason: string | undefined;
+
+    if (nodeTotals > this.config.maxNodesPerPatch) {
+      truncated = true;
+      truncationReason = 'node_change_limit';
+      recalculatedPatch.nodes = this.trimSection(
+        recalculatedPatch.nodes,
+        this.config.maxNodesPerPatch
+      );
+    }
+
+    const remainingBudgetAfterNodes = Math.max(
+      0,
+      this.config.maxTotalChanges -
+        (recalculatedPatch.nodes.added.length +
+          recalculatedPatch.nodes.updated.length +
+          recalculatedPatch.nodes.removed.length)
+    );
+
+    if (edgeTotals > this.config.maxEdgesPerPatch) {
+      truncated = true;
+      truncationReason = truncationReason ?? 'edge_change_limit';
+      recalculatedPatch.edges = this.trimSection(
+        recalculatedPatch.edges,
+        this.config.maxEdgesPerPatch
+      );
+    }
+
+    const trimmedEdgeBudget = Math.min(remainingBudgetAfterNodes, this.config.maxEdgesPerPatch);
+    const totalAfterSectionCaps =
+      recalculatedPatch.nodes.added.length +
+      recalculatedPatch.nodes.updated.length +
+      recalculatedPatch.nodes.removed.length +
+      recalculatedPatch.edges.added.length +
+      recalculatedPatch.edges.updated.length +
+      recalculatedPatch.edges.removed.length;
+
+    if (totalAfterSectionCaps > this.config.maxTotalChanges) {
+      truncated = true;
+      truncationReason = truncationReason ?? 'total_change_limit';
+      recalculatedPatch.edges = this.trimSection(
+        recalculatedPatch.edges,
+        trimmedEdgeBudget
+      );
+    }
+
+    const meta = this.recalculateMeta(recalculatedPatch);
+    recalculatedPatch.meta = {
+      ...meta,
+      truncated,
+      truncationReason,
+    };
+
+    return recalculatedPatch;
+  }
+
+  private recalculateMeta(patch: GraphPatch): GraphPatchMeta {
+    const nodeChanges =
+      patch.nodes.added.length + patch.nodes.updated.length + patch.nodes.removed.length;
+    const edgeChanges =
+      patch.edges.added.length + patch.edges.updated.length + patch.edges.removed.length;
+
+    const meta: GraphPatchMeta = {
+      nodeChanges,
+      edgeChanges,
+      totalChanges: nodeChanges + edgeChanges,
+      truncated: patch.meta.truncated,
+      truncationReason: patch.meta.truncationReason,
+    };
+
+    patch.meta = meta;
+    return meta;
+  }
+
+  private trimSection<TAdd, TUpdate, TRemove>(
+    section: GraphPatchSection<TAdd, TUpdate, TRemove>,
+    limit: number
+  ): GraphPatchSection<TAdd, TUpdate, TRemove> {
+    let remaining = limit;
+    const added = section.added.slice(0, remaining);
+    remaining -= added.length;
+
+    const updated = remaining > 0 ? section.updated.slice(0, remaining) : [];
+    remaining -= updated.length;
+
+    const removed = remaining > 0 ? section.removed.slice(0, remaining) : [];
+
+    return { added, updated, removed };
   }
 
   /**

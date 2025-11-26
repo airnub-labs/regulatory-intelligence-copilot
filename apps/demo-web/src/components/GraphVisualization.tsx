@@ -61,11 +61,22 @@ interface GraphData {
 interface GraphPatch {
   type: 'graph_patch';
   timestamp: string;
-  nodes_added?: GraphNode[];
-  nodes_updated?: GraphNode[];
-  nodes_removed?: string[];
-  edges_added?: GraphEdge[];
-  edges_removed?: Array<{ source: string; target: string; type: string }>;
+  nodes: {
+    added: GraphNode[];
+    updated: GraphNode[];
+    removed: string[];
+  };
+  edges: {
+    added: GraphEdge[];
+    updated: GraphEdge[];
+    removed: GraphEdge[];
+  };
+  meta?: {
+    totalChanges: number;
+    nodeChanges: number;
+    edgeChanges: number;
+    truncated?: boolean;
+  };
 }
 
 interface GraphVisualizationProps {
@@ -179,27 +190,24 @@ export function GraphVisualization({
       let newNodes = [...prev.nodes];
       let newLinks = [...prev.links];
 
-      // Remove nodes (also removes associated edges)
-      if (patch.nodes_removed && patch.nodes_removed.length > 0) {
-        const removedIds = new Set(patch.nodes_removed);
+      if (patch.nodes.removed.length > 0) {
+        const removedIds = new Set(patch.nodes.removed);
         newNodes = newNodes.filter((n) => !removedIds.has(n.id));
         newLinks = newLinks.filter(
           (e) => !removedIds.has(e.source as string) && !removedIds.has(e.target as string)
         );
       }
 
-      // Add nodes
-      if (patch.nodes_added && patch.nodes_added.length > 0) {
-        for (const node of patch.nodes_added) {
+      if (patch.nodes.added.length > 0) {
+        for (const node of patch.nodes.added) {
           if (!newNodes.find((n) => n.id === node.id)) {
             newNodes.push(node);
           }
         }
       }
 
-      // Update nodes
-      if (patch.nodes_updated && patch.nodes_updated.length > 0) {
-        for (const update of patch.nodes_updated) {
+      if (patch.nodes.updated.length > 0) {
+        for (const update of patch.nodes.updated) {
           const index = newNodes.findIndex((n) => n.id === update.id);
           if (index !== -1) {
             newNodes[index] = { ...newNodes[index], ...update };
@@ -207,9 +215,8 @@ export function GraphVisualization({
         }
       }
 
-      // Remove edges
-      if (patch.edges_removed && patch.edges_removed.length > 0) {
-        for (const edge of patch.edges_removed) {
+      if (patch.edges.removed.length > 0) {
+        for (const edge of patch.edges.removed) {
           const index = newLinks.findIndex(
             (e) => e.source === edge.source && e.target === edge.target && e.type === edge.type
           );
@@ -219,12 +226,21 @@ export function GraphVisualization({
         }
       }
 
-      // Add edges
-      if (patch.edges_added && patch.edges_added.length > 0) {
-        for (const edge of patch.edges_added) {
+      if (patch.edges.added.length > 0) {
+        for (const edge of patch.edges.added) {
           const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
           if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
             newLinks.push(edgeWithId);
+          }
+        }
+      }
+
+      if (patch.edges.updated.length > 0) {
+        for (const edge of patch.edges.updated) {
+          const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
+          const index = newLinks.findIndex((e) => (e as any).id === edgeWithId.id);
+          if (index !== -1) {
+            newLinks[index] = edgeWithId;
           }
         }
       }
