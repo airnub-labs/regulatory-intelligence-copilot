@@ -113,7 +113,10 @@ function handleSse(
 function handleWebSocket(filter: ChangeFilter) {
   const { 0: client, 1: server } = new (globalThis as any).WebSocketPair() as WebSocketPairType;
 
-  server.accept();
+  // accept() is specific to Cloudflare Workers WebSocket
+  if ('accept' in server && typeof (server as any).accept === 'function') {
+    (server as any).accept();
+  }
 
   const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
     try {

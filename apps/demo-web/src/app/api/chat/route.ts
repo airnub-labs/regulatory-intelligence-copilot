@@ -7,4 +7,7 @@
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
 
+// Mark route as dynamic (don't pre-render during build)
+export const dynamic = 'force-dynamic';
+
 export const POST = createChatRouteHandler();

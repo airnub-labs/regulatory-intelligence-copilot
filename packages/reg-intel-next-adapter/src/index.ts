@@ -183,16 +183,26 @@ class SseStreamWriter {
  * ```
  */
 export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
-  const llmRouter = createDefaultLlmRouter();
-  const llmClient = new LlmRouterClientAdapter(llmRouter);
-  const complianceEngine: ComplianceEngine = createComplianceEngine({
-    llmClient: llmClient,
-    graphClient: createGraphClient(),
-    timelineEngine: createTimelineEngine(),
-    egressGuard: new BasicEgressGuard(),
-  });
+  // Lazy initialization - only create these when a request is made
+  let llmRouter: LlmRouter | null = null;
+  let complianceEngine: ComplianceEngine | null = null;
+
+  function ensureInitialized() {
+    if (!llmRouter) {
+      llmRouter = createDefaultLlmRouter();
+      const llmClient = new LlmRouterClientAdapter(llmRouter);
+      complianceEngine = createComplianceEngine({
+        llmClient: llmClient,
+        graphClient: createGraphClient(),
+        timelineEngine: createTimelineEngine(),
+        egressGuard: new BasicEgressGuard(),
+      });
+    }
+    return { llmRouter, complianceEngine: complianceEngine! };
+  }
 
   return async function POST(request: Request) {
+    const { llmRouter, complianceEngine } = ensureInitialized();
     try {
       // Parse and validate request body
       const body = await request.json();

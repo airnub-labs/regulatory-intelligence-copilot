@@ -28,7 +28,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core';
+import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core/client';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
@@ -348,8 +348,10 @@ export function GraphVisualization({
 
   // Memoized focus on node callback
   const focusOnNode = useCallback((node: GraphNode) => {
-    if (fgRef.current && node.x !== undefined && node.y !== undefined) {
-      fgRef.current.centerAt(node.x, node.y, 1000);
+    // Force-graph adds x,y coordinates dynamically
+    const nodeWithCoords = node as GraphNode & { x?: number; y?: number };
+    if (fgRef.current && nodeWithCoords.x !== undefined && nodeWithCoords.y !== undefined) {
+      fgRef.current.centerAt(nodeWithCoords.x, nodeWithCoords.y, 1000);
       fgRef.current.zoom(3, 1000);
     }
   }, []);
