@@ -1,251 +1,220 @@
 # Regulatory Intelligence Copilot – Architecture (v0.4)
 
-> **Goal:** A chat‑driven, graph‑backed regulatory copilot that helps users and advisors explore how tax, social welfare, pensions, CGT and EU rules interact – without ever giving formal legal / tax advice or leaking sensitive data. The system is EU‑first, privacy‑conscious, and designed to be reused inside other Next.js/Supabase SaaS products.
+> **Goal:** A chat‑first, graph‑backed regulatory research copilot that helps users and advisors explore how tax, social welfare, pensions, CGT and EU rules interact – without ever giving formal legal/tax advice or leaking sensitive data.
 >
-> **This version (v0.4)** updates v0.3 to:
-> - Make the **Egress Guard** a first‑class, aspect‑based pipeline symmetrical with the Graph Ingress Guard.
-> - Formalise the **EgressClient** as the *only* way to call external LLMs/MCP tools/HTTP services.
-> - Clarify how **AI policy agents** can be implemented as ingress and egress aspects.
-> - Ensure architecture, privacy boundaries, and LLM routing are aligned with:
->   - `graph_ingress_guard_v_0_1.md`
->   - `egress_guard_v_0_2.md`
->   - `data_privacy_and_architecture_boundaries_v_0_1.md`.
+> **Scope of v0.4:** Aligns the architecture with the latest decisions on:
+> - Node/TS/Next.js/React/Tailwind baselines.
+> - Provider‑agnostic LLM routing (incl. OpenAI Responses + GPT‑OSS, Groq, local OSS models).
+> - Aspect‑based **Egress Guard** and **Graph Ingress Guard** (with optional AI aspects).
+> - Memgraph as a **single shared Rules Graph** (rules‑only, no user PII).
+> - Optional, non‑breaking **graph algorithms** (Leiden, centrality, bounded traversals).
+> - WebSocket graph streaming and reusable engine packages.
 
-## Normative References
+---
+
+## 0. Normative References
+
+This architecture sits on top of, and must remain consistent with, the following specs:
 
 - `docs/specs/graph_schema_v_0_3.md`
-- `docs/specs/timeline_engine_v_0_2.md`
-- `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
-- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
-- `docs/specs/graph_ingress_guard_v_0_1.md` – aspect‑based guard for all Memgraph writes
-- `docs/specs/egress_guard_v_0_2.md` – aspect‑based guard for all external LLM/MCP/HTTP calls
-
-For architectural intent and design trade‑offs, see also:
-
-- `docs/decisions_v_0_3.md`
 - `docs/specs/graph_schema_changelog_v_0_3.md`
+- `docs/specs/graph_algorithms_v_0_1.md`
 - `docs/specs/timeline_engine_v_0_2.md`
 - `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
-- `docs/node_24_lts_rationale.md`
-
----
-
-## 1. High‑Level Overview
-
-The system is a **chat‑centric web app + reusable engine** that:
-
-1. Runs a **Next.js 16** front‑end (`apps/demo-web`) with **React 19**, **Tailwind CSS 4**, and shadcn/ui.
-2. Talks primarily to a single backend endpoint: **`POST /api/chat`**.
-3. Delegates all regulatory reasoning to a **Compliance Engine** defined in reusable packages (e.g. `reg-intel-core`, `reg-intel-graph`, `reg-intel-llm`, `reg-intel-prompts`).
-4. Uses **Memgraph** as a regulatory knowledge graph for:
-   - Statutes, sections, benefits, reliefs, timelines, cases, guidance, EU instruments.
-   - Mutual exclusions, lookback windows, lock‑ins, profile tags.
-   - Cross‑jurisdiction interactions (IE, EU, MT, IM, UK/NI, GI, AD, CTA).
-5. Uses a **provider‑agnostic LLM router** (`LlmRouter`) plus tenant/task policies to:
-   - Route tasks like `main-chat`, `egress-guard`, `pii-sanitizer` to different models/providers.
-   - Support **OpenAI Responses API**, **Groq**, and **local/OSS models** (including GPT‑OSS) running in EU‑controlled infra.
-   - Allow fine‑grained per‑tenant and per‑task control of models and egress.
-6. Applies an aspect‑based **Egress Guard** (via `EgressClient`) before any outbound LLM/tool/HTTP call to prevent PII and sensitive financial data from leaking and to enforce provider/jurisdiction policies.
-7. Uses an aspect‑based **Graph Ingress Guard** (via `GraphWriteService`) for all writes to the global Memgraph instance, ensuring only public rule data is persisted.
-8. Optionally uses an **E2B sandbox** + MCP gateway for:
-   - Heavy or untrusted code execution (e.g. complex scenario simulations or ingestion jobs).
-   - Access to external sources via MCP tools when needed, always behind the Egress Guard.
-9. Uses **WebSocket‑based graph streaming** with incremental patches so the UI can maintain a live view of the relevant regulatory graph without reloading full snapshots.
-
-At every layer, the architecture is designed to be:
-
-- **Graph‑first** – rules and relationships live in Memgraph.
-- **Agentic** – separate agents for global reasoning and domain/jurisdiction‑specific lenses.
-- **Prompt‑disciplined** – all prompts are built through a composable **prompt aspect** system.
-- **Guarded** – all Memgraph writes go through a Graph Ingress Guard; all external calls go through an Egress Guard.
-- **Provider‑agnostic & EU‑friendly** – easy to run entirely on local models for strict data residency.
-- **Reusable** – engine packages can be imported into other Next.js/Supabase apps.
-- **Future‑proof** – aligned with Node 24 LTS, modern React, Tailwind 4, and Vercel AI SDK v5.
-
----
-
-## 1.1 Data & Privacy Boundaries
-
-The high-level system architecture is constrained by the data privacy boundaries defined in:
-
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-
-In particular, the global regulatory graph is **public and rule-only**: it may only store public regulatory data (jurisdictions, regions, agreements, regimes, rules, benefits, timelines) and document metadata, and must never store user or tenant-specific data, PII, or uploaded document contents. User profile and scenario data live outside the graph in per-tenant storage and in-memory session context.
-
-**Key constraints:**
-
-- **Graph (Memgraph):** Public regulatory data only. No PII, no user scenarios, no tenant-specific data.
-- **E2B sandboxes:** Short-lived execution environments. By default, uploaded files and their contents are not persisted beyond the sandbox lifetime unless a tenant explicitly opts into persistent storage.
-- **Per-tenant storage:** User scenarios, uploaded documents (if retained), and derived metrics are stored separately from the graph, with appropriate access controls.
-- **In-memory context:** User profile and scenario context passed to agents during request handling, never persisted in the graph.
-
-See the normative spec above for full details, rationale, and any future refinements to these boundaries.
-
-### 1.2 Graph Ingress Guard
-
-All writes to the global Memgraph instance are routed through a
-`GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
-specified in:
-
 - `docs/specs/graph_ingress_guard_v_0_1.md`
-
-No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
-against Memgraph.
-
-The ingress guard enforces that:
-
-- Only schema‑approved node and relationship types (see `graph_schema_v_0_3.md`)
-  are persisted.
-- Only whitelisted properties for those types are allowed.
-- No user/tenant data, PII, or scenario‑specific text is ever written to the
-  global graph.
-
-The guard is implemented as a composable *aspect pipeline*:
-
-- **Baseline ingress aspects** (non‑removable): schema/type enforcement, property whitelisting, tenant/PII rejection, source attribution.
-- **Custom ingress aspects** (configurable): audit tagging, domain‑specific classification, optional **AI policy agents** that analyse proposed writes and can veto or annotate them.
-
-Custom behaviour is layered on top of the baseline aspects and may not weaken the core invariants. AI‑based ingress aspects always operate on *rule‑only* payloads (no user/tenant data).
-
-### 1.3 Egress Guard
-
-All outbound calls to external systems (LLMs, MCP tools, generic HTTP services) are routed through an `EgressClient` that applies an aspect‑based **Egress Guard** as specified in:
-
 - `docs/specs/egress_guard_v_0_2.md`
 
-No other component is allowed to call provider SDKs (OpenAI, Groq, Docker MCP, HTTP clients) directly.
+And the project‑level docs:
 
-The Egress Guard:
+- `docs/decisions_v_0_3.md`
+- `docs/roadmap_v_0_2.md`
+- `docs/node_24_lts_rationale.md`
 
-- Receives an `EgressGuardContext` describing the target (`llm`/`mcp`/`http`), provider, endpoint, and request payload.
-- Applies a pipeline of **baseline egress aspects**:
-  - Provider/endpoint whitelisting (including enforcement that all MCP calls go via the configured E2B/Docker MCP gateways).
-  - PII/sensitive data scrubbing, populating `sanitizedRequest`.
-  - Jurisdictional routing (e.g. blocking non‑EU providers for EU‑strict tenants).
-  - Minimal structured logging/audit without content leaks.
-- Optionally applies **custom egress aspects**:
-  - Prompt shaping and jurisdictional context.
-  - Regulatory context injection.
-  - Optional **AI policy agent** that reviews a sanitised summary of the outbound request and can block or patch requests before they leave.
+Where there is ambiguity, these specs take precedence over this document.
 
-As with ingress, custom aspects must not weaken the baseline guarantees. AI‑based egress aspects should prefer local/OSS models for policy decisions, and any external policy calls must themselves go through a tightly‑scoped egress path.
+---
+
+## 1. High‑Level Architecture
+
+### 1.1 System Overview
+
+The system consists of:
+
+1. **Web app** (`apps/demo-web`)
+   - Next.js 16 (App Router), React 19, Tailwind CSS v4, shadcn/ui.
+   - Primary UX is a chat interface plus a live regulatory graph view.
+
+2. **Compliance Engine** (reusable packages)
+   - Core logic in packages like `reg-intel-core`, `reg-intel-graph`, `reg-intel-llm`, `reg-intel-prompts`.
+   - Implements the regulatory copilot behaviour and is designed to be imported into other Next.js/Supabase SaaS apps.
+
+3. **Shared Rules Graph (Memgraph)**
+   - Memgraph Community + MAGE used as a **single global regulatory knowledge graph**.
+   - Stores public rules, relationships, timelines, jurisdictions – **never tenant/user PII**.
+
+4. **LLM + Tooling Layer**
+   - `LlmRouter` with pluggable providers:
+     - OpenAI Responses API (incl. GPT‑OSS models).
+     - Groq (e.g. LLaMA 3 models).
+     - Local/OSS models running in EU‑controlled infra.
+   - All outbound calls (LLM, MCP, HTTP) go through **EgressClient** and the **Egress Guard**.
+
+5. **Graph Ingress & Ingestion**
+   - `GraphClient` + `GraphWriteService` (with **Graph Ingress Guard**) mediate all writes to Memgraph.
+   - Ingestion agents use MCP/E2B/etc. but must upsert rules via this path only.
+
+6. **Optional E2B + MCP Gateway**
+   - For sandboxed execution and access to external MCP tools.
+   - All egress from sandboxes is still funneled through the Egress Guard.
+
+7. **Storage Layer (Host App)**
+   - Supabase (or similar) provides multi‑tenant user/accounts/projects/storage.
+   - Holds user profiles, scenarios, uploaded documents (if retained) – separate from Memgraph.
+
+
+### 1.2 Privacy & Data Boundaries (Summary)
+
+From `data_privacy_and_architecture_boundaries_v_0_1.md`:
+
+- **Memgraph (Rules Graph)**
+  - Stores only *public regulatory knowledge*:
+    - Jurisdictions, regions, treaties, regimes, rules, benefits, timelines, case law, guidance, and their relationships.
+  - **MUST NOT** store:
+    - User PII, tenant PII, personal financial data, individual scenarios, or uploaded file contents.
+
+- **Supabase / App DB**
+  - Multi‑tenant application data: accounts, subscriptions, settings, saved scenarios.
+  - Can hold references to graph nodes (by IDs) but not vice‑versa.
+
+- **E2B Sandboxes**
+  - Transient execution environments for code and document processing.
+  - User documents (e.g. trade histories) are processed here and **deleted with the sandbox**, unless user explicitly opts into persistent storage.
+
+- **Egress Guard**
+  - All outbound calls (LLM, MCP, HTTP) pass through `EgressClient` → aspect pipeline.
+  - Responsible for PII/sensitive‑data stripping and enforcing provider/jurisdiction policies.
+
+- **Graph Ingress Guard**
+  - All Memgraph writes pass through `GraphWriteService` → aspect pipeline.
+  - Ensures only rule‑level data is upserted, never PII.
+
+These boundaries are non‑negotiable and must be preserved in all future refactors.
 
 ---
 
 ## 2. Platform & Runtime Baselines
 
-To reduce tech drift and unlock modern capabilities, the architecture commits to:
+To keep the stack modern and consistent:
 
-- **Node.js:** Minimum **24.x LTS** for all backend services and tools.
-  - `"engines": { "node": ">=24.0.0" }` in relevant `package.json` files.
-  - CI and devcontainers standardise on Node 24.
-- **TypeScript:** Use the latest **TS 5.x** compatible with Node 24 (currently TS 5.9+).
-- **Next.js:** Minimum **v16** for all Next-based web apps.
-- **React:** Minimum **v19**.
-- **Tailwind CSS:** Minimum **v4.0**.
+- **Node.js**: minimum **v24.x LTS**
+  - Set in `"engines"` fields and CI.
+  - Motivated in `docs/node_24_lts_rationale.md` (security, performance, newer language features).
 
-These baselines apply to **all new code** and guide upgrades of existing code.
+- **TypeScript**: latest Node‑24 compatible (TS 5.9+).
 
----
+- **Next.js**: minimum **v16**.
 
-## 3. Request Flow (End‑to‑End)
+- **React**: minimum **v19**.
 
-1. **User sends a message** in the chat UI.
-2. **Next.js API route** (`POST /api/chat`) receives:
-   - Chat messages.
-   - A `UserProfileContext` (persona, jurisdictions, tenantId, locale).
-3. The API route delegates to the **Compliance Engine** (`reg-intel-core`):
-   - Normalises the message.
-   - Uses simple routing to select an agent (global vs domain/jurisdiction‑specific).
-   - Passes the request to the selected agent along with graph and LLM clients.
-4. The Compliance Engine calls into:
-   - **GraphClient** to fetch relevant rules, relationships, and timelines.
-   - **Timeline Engine** to compute time‑based constraints (lookback, lock‑in, deadlines).
-   - **LlmRouter** to generate an answer using the appropriate model for the `main-chat` task.
-   - **Prompt Aspects** to build a jurisdiction‑aware, persona‑aware, safety‑aware system prompt.
-5. The LLM’s draft answer is post‑processed to:
-   - Attach references to relevant nodes/sections/cases.
-   - Attach a non‑advice disclaimer.
-   - Compute a simple uncertainty level flag.
-6. The Compliance Engine returns a **ChatResponse** to `/api/chat`.
-7. The API route streams the response to the frontend as assistant messages.
-8. In parallel, graph updates (from ingestion jobs or external updates) are pushed via **WebSocket graph patches** so the live graph can update incrementally.
+- **Tailwind CSS**: minimum **v4.0**.
 
-Optional:
-
-- For heavy computations or untrusted transformations, the Compliance Engine can spin up an **E2B sandbox session** and run part of the workflow inside the sandbox, still using GraphClient, LlmRouter, and the Egress Guard abstractions.
+All new code and future upgrades should target these versions at a minimum.
 
 ---
 
-## 4. Frontend – `apps/demo-web`
+## 3. Frontend – `apps/demo-web`
 
-### 4.1 Chat UI
+### 3.1 Chat UI
 
-The web frontend is intentionally minimal and reusable:
-
-- Single chat page (`/`) powered by **Next.js 16 (App Router)**, **React 19**, **Tailwind 4**, shadcn/ui.
-- Conversation view:
+- Single chat page (e.g. `/`) that talks to a single endpoint, `POST /api/chat`.
+- Uses streaming responses (via fetch + ReadableStream or compatible SSE wrapper) to show partial model output.
+- Displays:
   - User messages.
-  - Assistant messages with optional metadata (agent name, jurisdictions considered, rules referenced, uncertainty level).
-- Input box at the bottom:
-  - Free‑text input.
-  - Optional quick actions that prefill typical questions.
+  - Assistant messages.
+  - Optional metadata: jurisdictions considered, high‑level rule references, uncertainty level.
 
-The chat UI is **not tied** to any specific LLM provider or graph; it only knows about `/api/chat`.
+The chat UI is **intentionally thin** and does not know about:
 
-### 4.2 Profile & Context
+- LLM providers
+- Graph details
+- E2B/MCP internals
 
-A lightweight profile sidebar or settings panel allows the user to set:
+It only cares about the shape of `/api/chat` input/output.
 
-- Persona: `single-director`, `contractor`, `employee`, `advisor`, `investor`, etc.
-- Jurisdictions of interest: e.g. `['IE', 'EU', 'MT', 'IM', 'UK', 'NI']`.
-- Locale (for UI and explanation style): e.g. `en-IE`.
+### 3.2 Profile & Jurisdiction Context
 
-The frontend includes only **coarse, non‑PII info** and sends this as `UserProfileContext` in each `/api/chat` call. Any richer data, if ever used, is processed through the egress guard before leaving backend boundaries.
+- Lightweight settings or profile panel:
+  - Persona: `single-director`, `advisor`, `employee`, `investor`, etc.
+  - Jurisdictions of interest: e.g. `['IE', 'EU', 'UK', 'NI', 'IM']`.
+  - Locale: e.g. `en-IE`.
+- This context is sent as a `UserProfileContext` on each `/api/chat` call.
+- It must be **coarse‑grained and non‑PII**.
 
-### 4.3 Live Graph UI
+### 3.3 Live Graph UI
 
-The graph UI displays a subgraph relevant to the current question or profile:
+- On initial load:
+  - Calls `GET /api/graph` with filters (jurisdictions, profile tag) to fetch a relevant subgraph snapshot.
+- Then:
+  - Connects to `ws://.../api/graph/stream` to receive **incremental updates** (patches) only.
 
-- On initial load, it calls `GET /api/graph` with filters (jurisdictions, profile tag) to get a **snapshot** of the relevant subgraph.
-- It then connects to `ws://.../api/graph/stream` to receive **incremental graph patches**.
-- Only changes (added/updated/removed nodes/edges) are sent over WS, not the full graph.
+Design constraints:
 
-This enables a responsive, scalable visualisation of the regulatory graph that can evolve over time as ingestion and case‑law updates occur.
+- WebSocket messages must carry only **changes** (added/removed/updated nodes/edges) and associated metadata.
+- The full graph is **not** resent on each update; full reload is a rare, explicit action.
+- SSE may still be used in other places (e.g. chat streaming) where one‑way streaming is sufficient.
+
+The live graph UI is scoped to **rule graph data only**; it never renders user scenarios or private documents.
 
 ---
 
-## 5. Backend – `/api/chat` and Compliance Engine
+## 4. API Layer – `/api/chat` & `/api/graph`
 
-### 5.1 Next.js API Route
+### 4.1 `/api/chat`
 
-The main backend HTTP API is `POST /api/chat` (App Router route handler).
+- Next.js App Router handler.
+- Responsibilities:
+  - Validate request body.
+  - Build `UserProfileContext` from request + auth/session.
+  - Call `ComplianceEngine.handleChat(request)`.
+  - Stream `ChatResponse` back to the browser.
 
-Responsibilities:
+The handler itself:
 
-- Parse and validate the incoming payload.
-- Extract or construct a `UserProfileContext`:
-  - `tenantId`
-  - `persona`
-  - `jurisdictions[]`
-  - `locale`
-- Call the **Compliance Engine** with:
-  - `messages`
-  - `profile`
-- Stream the resulting `ChatResponse` back to the client.
+- Does not call LLMs or Memgraph directly.
+- Uses DI to get a `ComplianceEngine` instance (e.g. from a shared `reg-intel-core` package).
 
-The route handler itself is intentionally thin so it can be easily re‑used (or re‑created) in other Next.js apps via a small adapter package.
+### 4.2 `/api/graph`
 
-### 5.2 Compliance Engine
+Two primary endpoints:
 
-The **Compliance Engine** lives in `reg-intel-core` and exposes something like:
+1. `GET /api/graph`
+   - Accepts filters (jurisdictions, profile tag, optional focus nodes).
+   - Uses `GraphClient` to fetch a snapshot subgraph.
+
+2. `WS /api/graph/stream`
+   - Upgrades to WebSocket.
+   - Pushes incremental changes (graph patches) as ingestion jobs or rule updates occur.
+
+These endpoints are **read‑only** views into the Rules Graph.
+
+---
+
+## 5. Compliance Engine
+
+The Compliance Engine is the backend orchestration layer that turns chat + profile context into answers.
+
+### 5.1 Interfaces
+
+Conceptual interfaces (exact types may differ):
 
 ```ts
 interface UserProfileContext {
   tenantId: string;
-  persona: string;
-  jurisdictions: string[];
-  locale?: string;
+  persona: string;              // e.g. "single-director"
+  jurisdictions: string[];      // e.g. ["IE", "EU", "UK"]
+  locale?: string;              // e.g. "en-IE"
 }
 
 interface ChatRequest {
@@ -255,10 +224,10 @@ interface ChatRequest {
 
 interface ChatResponse {
   answer: string;
-  referencedNodes: string[];
-  jurisdictions: string[];
+  referencedNodes: string[];    // IDs of rules/benefits/etc.
+  jurisdictions: string[];      // considered jurisdictions
   uncertaintyLevel: 'low' | 'medium' | 'high';
-  disclaimerKey: string;
+  disclaimerKey: string;        // e.g. "non_advice_general"
 }
 
 interface ComplianceEngine {
@@ -269,34 +238,40 @@ function createComplianceEngine(deps: {
   llm: LlmClient;
   graph: GraphClient;
   timeline: TimelineEngine;
-  egressGuard: EgressClient;
+  egress: EgressClient;
 }): ComplianceEngine;
 ```
 
-Responsibilities:
+### 5.2 Responsibilities
 
-- **Intent routing**:
-  - Decide whether to use the `GlobalRegulatoryComplianceAgent` or a domain/jurisdiction‑specific agent.
-  - Use persona + jurisdictions + message content for routing.
-- **Agent orchestration**:
+- **Intent routing**
+  - Use profile + message content to decide whether to:
+    - Use the global copilot agent, or
+    - Call a domain/jurisdiction‑specific expert agent.
+
+- **Agent orchestration**
   - Build an `AgentContext` with LLM, graph, timeline, profile.
-  - Delegate to the chosen agent’s `run(context)`.
-- **Safety wrapping**:
-  - Ensure every LLM call uses prompt aspects (disclaimer, jurisdiction, profile context).
-  - Ensure outputs include disclaimers and do not cross the “advice” line.
-- **Abstraction from infra**:
-  - The engine does *not* know whether LLMs and GraphClient are backed by MCP, direct HTTP, or local services.
-  - This makes it portable across environments and host apps.
+  - Delegate to the selected agent’s `run()` method.
+
+- **Use of Prompt Aspects**
+  - All system prompts are built via the prompt aspect pipeline (see §7).
+  - Agents must never manually concatenate prompts.
+
+- **Safety & disclaimers**
+  - All answers include a non‑advice disclaimer.
+  - The engine never instructs users to take specific legal/tax steps; it provides research and explanations.
+
+- **Isolation from infra**
+  - The engine does not know *how* LLMs or Memgraph are hosted.
+  - It only knows about `LlmClient` and `GraphClient` abstractions.
 
 ---
 
-## 6. LLM Layer – Router, Providers, Tasks & Egress
+## 6. LLM Layer – Router, Providers & Egress
 
-### 6.1 LlmClient, LlmRouter & Provider Interface
+### 6.1 LlmClient & LlmRouter
 
-The LLM layer is designed to be **provider‑agnostic** and configurable per task and per tenant.
-
-Core abstractions:
+Core types:
 
 ```ts
 interface LlmMessage {
@@ -305,8 +280,8 @@ interface LlmMessage {
 }
 
 interface LlmCompletionOptions {
-  model: string;    // e.g. "openai:gpt-4.1", "groq:llama-3-70b", "local:llama-3-8b"
-  task?: string;    // e.g. "main-chat", "egress-guard", "pii-sanitizer"
+  model: string;           // e.g. "openai:gpt-4.1", "groq:llama3-70b", "local:llama3-8b"
+  task?: string;           // e.g. "main-chat", "egress-guard", "pii-sanitizer"
   temperature?: number;
   maxTokens?: number;
 }
@@ -326,22 +301,21 @@ interface LlmClient {
 }
 ```
 
-The **LlmRouter** implements `LlmClient` and:
+`LlmRouter` implements `LlmClient` and:
 
-- Maintains a registry of `LlmProvider` instances (OpenAI, Groq, local/OSS).
-- Resolves which provider/model to use based on **tenant policy + task**.
-- Calls `provider.stream(...)` and exposes a unified stream to callers.
-- Delegates all actual outbound calls to the **EgressClient**, which applies the Egress Guard aspects before contacting the provider.
+- Maintains a registry of `LlmProvider`s (OpenAI, Groq, local, etc.).
+- Uses tenant‑level and task‑level policy to decide which provider/model to call.
+- Delegates the actual outbound call to `EgressClient` so all provider usage is guarded.
 
-### 6.2 Tenant and Task Policies
+### 6.2 Tenant & Task Policies
 
-A policy layer defines what each tenant is allowed to use:
+From the decisions docs, policies are per‑tenant and per‑task:
 
 ```ts
 interface LlmTaskPolicy {
-  task: string;           // e.g. "main-chat", "egress-guard"
-  model: string;          // e.g. "openai:gpt-4.1", "local:llama-3-8b"
-  provider: string;       // e.g. "openai", "groq", "local"
+  task: string;          // e.g. "main-chat", "egress-guard"
+  model: string;
+  provider: string;      // e.g. "openai", "groq", "local"
 }
 
 interface TenantLlmPolicy {
@@ -353,79 +327,80 @@ interface TenantLlmPolicy {
 }
 ```
 
-The router:
+Behaviour:
 
-- Looks up the tenant’s policy from a store (DB/config).
-- If `options.task` is specified, applies the corresponding `LlmTaskPolicy`.
-- Otherwise, falls back to the default model/provider.
-- Works in tandem with the **Egress Guard**:
-  - If `allowRemoteEgress = false`, remote providers (OpenAI, Groq, etc.) are blocked at the guard layer.
-  - Local/OSS providers can be used exclusively for sensitive tenants.
+- If a `task` is provided, the router uses the matching `LlmTaskPolicy`.
+- Otherwise, falls back to `defaultModel` / `defaultProvider`.
+- If `allowRemoteEgress = false`, the Egress Guard blocks remote providers and enforces local/OSS models.
 
-This enables **fine‑grained control** so that, for example:
+This allows e.g.:
 
-- `main-chat` uses a mid‑size Groq or OpenAI model.
-- `egress-guard` uses a small, cheap local model.
-- `pii-sanitizer` uses a tiny local model designed for PII detection.
+- `main-chat` → Groq / OpenAI mid‑size model.
+- `egress-guard` → small local model.
+- `pii-sanitizer` → tiny specialised local model.
 
-### 6.3 Vercel AI SDK v5 as Edge Implementation Detail
+### 6.3 Vercel AI SDK v5 as Implementation Detail
 
-To avoid coupling the core engine to any specific SDK while still benefiting from solid provider support and streaming primitives, we:
+- For providers like OpenAI and Groq, a `LlmProvider` may internally use **Vercel AI SDK v5** (`streamText`, `generateText`).
+- The SDK is **not** imported or referenced from core engine code; it lives in adapter modules only.
+- OpenAI usage must target the **Responses API** (including GPT‑OSS) rather than legacy Chat Completions.
 
-- Use **Vercel AI SDK v5** **only** inside provider adapters that implement `LlmProvider` (e.g. `AiSdkOpenAIProvider`, `AiSdkGroqProvider`).
-- In those adapters, we call `streamText` / `generateText` with the appropriate provider (OpenAI, Groq, etc.), then adapt the result into the `AsyncIterable` format expected by `LlmRouter`.
-- The rest of the system (Compliance Engine, agents, frontend) **never imports or depends on** AI SDK directly.
-
-When the **OpenAI provider** is selected, we must use **OpenAI’s Responses API**, not the legacy `/v1/chat/completions`. The AI SDK OpenAI adapter is configured accordingly.
-
-This preserves the ability to:
-
-- Swap AI SDK out later if necessary.
-- Add non‑AI‑SDK providers (custom HTTP clients, local inference servers) alongside AI SDK providers.
+This keeps the engine decoupled from any specific SDK while still benefiting from the convenience of Vercel AI SDK v5.
 
 ### 6.4 EgressClient & Egress Guard
 
-The **EgressClient** is the single choke‑point for external calls:
+The **EgressClient** is the single choke‑point for:
 
-- Implements methods like `callLlm`, `callMcp`, `callHttp`.
-- Internally builds an `EgressGuardContext` and passes it through the aspect pipeline defined in `egress_guard_v_0_2.md`.
-- The terminal step in the pipeline is the only place that:
-  - Translates `sanitizedRequest` into concrete provider SDK calls.
-  - Executes the outbound request and attaches the raw response to `ctx.metadata`.
+- LLM calls (from `LlmRouter`).
+- MCP/tool calls.
+- Arbitrary HTTP client calls (e.g. fetching docs, RSS feeds).
 
-All other layers (LlmRouter, agents, ingestion jobs) **must** call external systems via `EgressClient` rather than directly using provider SDKs.
+It:
+
+1. Constructs an `EgressGuardContext` (target type, provider, endpoint, payload, tenantId, jurisdictions…).
+2. Passes this through the **Egress Guard aspect pipeline** defined in `egress_guard_v_0_2.md`.
+3. The final aspect executes the actual outbound call using the provider SDK/HTTP client and attaches the raw response back onto the context.
+
+Egress aspects can:
+
+- Enforce provider/endpoint whitelists.
+- Remove or mask sensitive data.
+- Inject or modify prompts.
+- Use **AI policy agents** (small local models) to review requests and veto/block if necessary.
+
+All MCP calls (including Memgraph MCP if used) must go through this path.
 
 ---
 
-## 7. Prompt Aspects & Jurisdiction‑Neutral System Prompts
+## 7. Prompt Aspects & System Prompts
 
-### 7.1 System Prompts
+### 7.1 Jurisdiction‑Neutral Base Prompts
 
-Core system prompts are **jurisdiction‑neutral**:
+Base system prompts such as:
 
 - `REGULATORY_COPILOT_SYSTEM_PROMPT`
 - `GLOBAL_SYSTEM_PROMPT`
-- The base `SYSTEM_PROMPT` used by `/api/chat`
+- The `/api/chat` base `SYSTEM_PROMPT`
 
-They describe:
+…are kept **jurisdiction‑neutral**, describing only:
 
-- The role of the assistant as a **regulatory research copilot**.
-- Strong safety and non‑advice constraints.
-- How to use graph context and timelines.
+- The assistant’s high‑level role.
+- Safety and non‑advice constraints.
+- General expectations about using graph/timeline evidence.
 
-Jurisdiction and persona specifics are injected via **prompt aspects**, not hardcoded into these base prompts.
+Specific jurisdictions and personas are injected via aspects.
 
-### 7.2 Prompt Aspects
+### 7.2 Prompt Aspect Pipeline
 
-Prompt building uses an aspect/interceptor pattern (in `reg-intel-prompts`), roughly:
+Prompt aspects (implemented in `reg-intel-prompts`) include:
 
-- `jurisdictionAspect` – adds jurisdiction context based on `profile.jurisdictions`.
-- `agentContextAspect` – adds agent identity and domain description.
-- `profileContextAspect` – adds persona info (e.g. single director, advisor).
-- `disclaimerAspect` – ensures non‑advice disclaimer and safety language is always present.
-- `additionalContextAspect` – optional extra hints or context.
+- `jurisdictionAspect`
+- `agentContextAspect`
+- `profileContextAspect`
+- `disclaimerAspect`
+- `additionalContextAspect`
 
-APIs:
+API examples:
 
 ```ts
 const prompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
@@ -445,29 +420,27 @@ const result = await customBuilder({
 });
 ```
 
-All agents and LLM calls **must** use these builders instead of hand‑concatenating system prompts.
+All LLM calls must use these builders; no agent should hand‑craft system prompts.
 
 ### 7.3 Dynamic Profile Tags
 
-Profile tags are constructed dynamically from persona and jurisdiction, e.g.:
+Profile tags are derived dynamically:
 
-- `PROFILE_SINGLE_DIRECTOR_IE`
-- `PROFILE_SINGLE_DIRECTOR_MT`
+- e.g. `PROFILE_SINGLE_DIRECTOR_IE`, `PROFILE_SINGLE_DIRECTOR_MT`, etc.
 
-`getProfileTagId()` encapsulates this logic, ensuring:
+`getProfileTagId()` encapsulates this logic and is used consistently across:
 
-- No hardcoded `PROFILE_SINGLE_DIRECTOR_IE` assumption.
-- Easy extension to new personas and jurisdictions.
-
-These tags are used in the graph (e.g. `:ProfileTag` nodes) and in routing logic.
+- Graph schema (profile tag nodes).
+- Routing logic.
+- Prompt aspects.
 
 ---
 
-## 8. Graph Layer – Memgraph & GraphRAG
+## 8. Graph Layer – Memgraph Rules Graph
 
-### 8.1 GraphClient Abstraction
+### 8.1 GraphClient & GraphWriteService
 
-The app talks to Memgraph through a **typed GraphClient**:
+- **GraphClient** provides typed queries for read operations:
 
 ```ts
 interface GraphClient {
@@ -477,172 +450,139 @@ interface GraphClient {
   getTimelines(...): Promise<...>;
   getCrossBorderSlice(...): Promise<...>;
 }
-
-function createMemgraphGraphClient(config: {
-  uri: string;
-  username?: string;
-  password?: string;
-}): GraphClient;
 ```
 
-This client uses Memgraph’s Bolt/HTTP interface directly. Memgraph MCP may still wrap Memgraph for certain LLM tool‑calling scenarios, but **core app graph queries use GraphClient directly**.
+- **GraphWriteService** provides writes via the Graph Ingress Guard:
 
-### 8.2 Schema Overview (Summary)
-
-The graph schema (see `graph_schema_v_0_3.md`) includes:
-
-- Node labels like `:Statute`, `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Timeline`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:ProfileTag`, `:Jurisdiction`, and nodes that model social welfare, pensions, CGT, and cross‑border coordination.
-- Edge types like `CITES`, `REFERENCES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, and cross‑border relationships linking domestic and EU instruments and special jurisdictions (NI/IE/UK/IM/GI/AD/CTA) as per `special_jurisdictions_modelling_v_0_1.md`.
-
-### 8.3 Jurisdictions & Cross-Border Modelling
-
-Special cases (IE/UK/NI/IM/GI/AD and CTA/Windsor/NI Protocol) must follow `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
-
-The graph is designed so that:
-
-- Users with primary jurisdiction IE but cross‑border exposure (e.g. working in NI/UK) can see how EU, UK, and CTA rules interact.
-- Mutual exclusions and lookback rules can be expressed across jurisdictions (e.g. claiming a benefit in one regime affecting eligibility in another).
-
-### 8.4 GraphRAG Retrieval
-
-Agents use a GraphRAG‑style flow:
-
-1. Build queries based on:
-   - Jurisdictions.
-   - Profile tags.
-   - Keywords/entities extracted from the user question.
-2. Retrieve a subgraph of relevant rules, benefits, reliefs, and cases.
-3. Compress that subgraph into a structured representation passed to the LLM.
-4. Use the LLM to explain the interactions and implications.
-
-The graph is **seeded** from static ingestion jobs and **enriched on demand** when agents find gaps.
-
----
-
-## 9. WebSocket Graph Streaming
-
-To support a live, scalable graph UI:
-
-- A REST endpoint (e.g. `GET /api/graph`) returns an initial subgraph snapshot.
-- A WebSocket endpoint (e.g. `GET /api/graph/stream`) sends **incremental graph patches**.
-
-Patch format (conceptual):
-
-```json
-{
-  "type": "graph_patch",
-  "timestamp": "2025-11-24T12:00:00Z",
-  "nodes_added": [...],
-  "nodes_updated": [...],
-  "nodes_removed": [...],
-  "edges_added": [...],
-  "edges_removed": [...]
+```ts
+interface GraphWriteService {
+  upsertRule(...): Promise<void>;
+  upsertRelationship(...): Promise<void>;
+  upsertTimelineEdge(...): Promise<void>;
+  // etc.
 }
 ```
 
-The frontend:
+All writes must go through `GraphWriteService`, which applies the ingress aspect pipeline (`graph_ingress_guard_v_0_1.md`) before issuing Cypher `MERGE`/`CREATE`.
 
-- Loads the initial snapshot via REST.
-- Subscribes to WS patches and applies them in memory.
-- Filters patches based on current view (jurisdictions, profile) to avoid clutter.
+### 8.2 Schema Overview (Summary)
 
-This design keeps bandwidth and memory usage manageable as the graph grows.
+Full details are in `graph_schema_v_0_3.md`; in brief:
 
----
+- **Key node labels**:
+  - `:Jurisdiction`, `:Region`, `:Agreement`, `:Treaty`
+  - `:Regime`, `:Rule`, `:Section`, `:Benefit`, `:Relief`
+  - `:TimelineConstraint`, `:Event`, `:CaseLaw`, `:Guidance`
+  - `:ProfileTag`, `:Community` (optional, for algorithms)
 
-## 10. Timeline & Exclusion Engine
+- **Key relationship types** (non‑exhaustive):
+  - `APPLIES_IN`, `PART_OF_REGIME`, `CITES`, `REFERENCES`
+  - `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`
+  - `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`
+  - `COORDINATED_WITH`, `TREATY_LINKED_TO`
+  - `INTERPRETS` (case law/guidance → rule)
+  - `HAS_PROFILE_TAG` (rule/benefit ← profile tags)
+  - `CONTAINS` (community → member nodes)
 
-A timeline/exclusion utility module (used by agents via `TimelineEngine`) provides:
+These encode the semantics needed for:
 
-- Date arithmetic helpers.
-- Conversion of `:Timeline` nodes and properties (e.g. `{ years: 4 }`) into concrete date ranges.
-- Convenience helpers, e.g.:
-  - `isWithinLookback(transactionDate, lookbackNode, now)`
-  - `lockInEndDate(lockInNode, triggeringEventDate)`
+- Mutual exclusions, eligibility chains, and conflicts.
+- Timeline/lock‑in/lookback reasoning.
+- Cross‑border interactions (IE/UK/NI/EU/IM/GI/AD/CTA).
 
-Agents rely on this to answer questions like:
+### 8.3 Graph Algorithms (Optional, Non‑Breaking)
 
-- “If I claim X now, which other reliefs become unavailable, and for how long?”
-- “If I delay until next year, what changes?”
+As per `graph_algorithms_v_0_1.md`:
 
-The LLM is instructed (via prompt aspects) to:
+- Core behaviour relies on **explicit edges + Cypher path queries**.
+- Optional algorithms include:
+  - **Leiden community detection** on snapshots to assign `community_id` and build `:Community` nodes.
+  - **Centrality (PageRank/betweenness)** within communities to identify anchor rules.
+  - **Bounded multi‑hop traversals** for impact analysis.
 
-- Always mention relevant time windows and mutual exclusions when they exist in the graph.
-- Avoid making prescriptive recommendations about exact timing.
+Invariants:
 
----
-
-## 11. MCP, E2B & External Data Ingestion
-
-### 11.1 MCP Gateway & E2B Usage
-
-MCP remains part of the ecosystem, mainly for **external data and tools**, not for core graph queries:
-
-- `legal-search-mcp` – wraps external legal/document search APIs (Revenue, gov.ie, eur-lex, etc.).
-- `llm-mcp` – optional wrapper around certain LLM providers if needed.
-- `memgraph-mcp` – may be used for ad‑hoc LLM tool‑calling scenarios, but not the main path.
-
-E2B sandboxes can host ingestion or simulation processes that:
-
-- Call MCP tools to fetch or parse external data.
-- Upsert new nodes/edges into Memgraph via GraphClient or Memgraph MCP.
-
-All MCP calls and LLM calls from sandboxes must still go through the **Egress Guard** (via EgressClient) to respect tenant policies, PII scrubbing, and jurisdictional routing.
-
-### 11.2 Ingestion & Change Tracking
-
-Ingestion flows:
-
-- **Initial seeding** – parse key statutes, welfare rules, EU instruments, and guidance into Memgraph.
-- **On‑demand enrichment** – when queries reveal gaps, use MCP tools to fetch relevant docs and extend the graph.
-- **Change monitoring** – background processes watch:
-  - Finance Acts, Revenue eBriefs, DSP updates.
-  - Pensions Authority guidance, TAC/Court decisions.
-  - EU regulations and CJEU cases.
-
-Each detected change is mapped into new/updated nodes and edges with links to affected rules and profile tags. Notifications can be generated by matching affected nodes against user/tenant profiles.
+- Disabling Leiden/centrality must not break any existing behaviour.
+- Algorithms are used for ranking, grouping, and GraphRAG context selection only.
 
 ---
 
-## 12. Privacy, Non‑Advice & Compliance
+## 9. Timeline Engine
 
-The architecture enforces a strict **research‑only, non‑advice** stance and is designed for EU privacy expectations:
+The **Timeline Engine** (`timeline_engine_v_0_2.md`) handles time‑based reasoning:
 
-- **Non‑advice**:
-  - Prompts and responses always emphasize that the system is informational only.
-  - Agents recommend consulting Revenue, DSP, Pensions Authority, or qualified advisors.
-- **Data protection**:
-  - Egress Guard redacts PII and sensitive financial figures before leaving platform boundaries.
-  - Memgraph stores **rules and relationships**, not user identities or scenarios.
-  - Chat logs and profiles, if stored, reside in the host app’s data layer (e.g. Supabase) with its own access controls and auditing.
-- **LLM egress control**:
-  - Tenant policies (`allowRemoteEgress`) define whether external LLM APIs may be used.
-  - For strict tenants, all LLM calls use local/OSS models inside EU‑controlled infra.
-- **Auditability**:
-  - Ingress and egress guards emit structured logs and metrics about allowed/blocked operations without logging sensitive content.
+- Consumes `LOOKBACK_WINDOW` and `LOCKS_IN_FOR_PERIOD` edges from the graph.
+- Given a scenario (e.g. sequence of events, dates, actions), computes:
+  - Whether a rule applies at a given date.
+  - When lock‑in periods expire.
+  - How lookbacks affect eligibility.
 
-This makes the engine safe to embed in EU‑oriented SaaS products aiming for GDPR and SOC2 alignment.
+The Compliance Engine:
+
+- Calls `TimelineEngine` when a question involves timing (e.g. CGT wash rules, PRSI contribution windows).
+- Uses the output as evidence in LLM prompts and in explanations.
 
 ---
 
-## 13. Extensibility & Reuse
+## 10. Special Jurisdictions & Cross‑Border Design
 
-The architecture is intentionally modular so it can be reused and extended:
+Special modelling for IE/UK/NI/EU/IM/GI/AD/CTA is captured in:
 
-- **Engine vs demo app**:
-  - `apps/demo-web` – a reference Next.js UI for chat and graph visualisation.
-  - `packages/reg-intel-*` – engine packages that can be imported into other projects.
-- **New domains & jurisdictions**:
-  - Add new agents (e.g. `MT_Tax_Agent`, `DE_SocialSecurity_Agent`).
-  - Extend graph schema with new node/edge types as needed.
-  - Ingest new data sources and connect them via MCP/ingestion jobs.
-- **Host app integration**:
-  - Other Next.js/Supabase apps instantiate a `ComplianceEngine` and mount their own `/api/reg-intel` endpoint using a small adapter.
-  - They can reuse or customise LlmRouter, GraphClient, and ingress/egress guards.
+- `special_jurisdictions_modelling_v_0_1.md`
+- Seed examples such as `graph_seed_ni_uk_ie_eu.cypher`
 
-At its core, the system remains:
+The architecture must:
 
-- **One chat interface** for users and advisors.
-- **One regulatory graph** that encodes complex rule interactions.
-- **One composable engine** that can be dropped into multiple EU‑focused compliance products aligned with modern Node 24 / Next 16 / React 19 / Tailwind 4 / AI SDK v5 baselines and guarded by symmetric ingress/egress pipelines.
+- Allow nodes to belong to multiple overlapping regimes (e.g. NI under UK and covered by certain EU rules via the Withdrawal Agreement).
+- Represent the **Common Travel Area** and its implications as first‑class graph relationships.
+- Support queries like:
+  - "I live in IE, work in NI, and have a company in IM – what rules interact here?"
+
+This is expressed entirely in the graph schema and seed data; the engine and UI need only respect jurisdiction filters and profile context.
+
+---
+
+## 11. Reusability & Integration with Other SaaS Apps
+
+Key goal: the regulatory engine must be reusable inside other Next.js/Supabase SaaS platforms.
+
+Design choices:
+
+- **Engine as libraries**
+  - Compliance Engine, GraphClient, LlmRouter, Prompt Aspects, Ingress/Egress Guards are packaged as libraries.
+  - The demo app is just one host; other apps can:
+    - Import the engine.
+    - Provide their own `/api/chat` routes.
+    - Plug in their own auth, billing, and UI.
+
+- **Clear interfaces**
+  - All boundaries (LLM, graph, storage, E2B) are abstracted through interfaces and adapters.
+  - Host apps can replace implementations without touching core logic.
+
+- **Multi‑tenant awareness**
+  - Tenant IDs are propagated through LLM policies and egress/ingress guards.
+  - Memgraph remains a shared Rules Graph; multi‑tenancy is enforced in app storage and LLM policies.
+
+This makes it feasible later to offer the **Regulatory Intelligence Copilot** as:
+
+- A standalone SaaS product.
+- A managed shared Memgraph‑as‑a‑service with this engine on top.
+- An embeddable cog in other EU‑first compliance platforms.
+
+---
+
+## 12. Non‑Goals (v0.4)
+
+To keep scope sane, v0.4 explicitly does **not** attempt to:
+
+- Implement Memgraph multi‑tenant isolation (one shared rules graph is sufficient; multi‑tenant Memgraph is a future, separate project).
+- Provide legal/tax advice; the system is strictly a research and explanation tool.
+- Model every country globally; initial focus is IE/EU/UK/NI/IM/GI/AD and nearby interactions.
+- Optimise for ultra‑low latency – correctness, safety, and clarity are prioritised over a few extra milliseconds.
+
+Future versions (v0.5+) may extend the architecture in these directions once the core is stable.
+
+---
+
+**Status:** Architecture v0.4 – updated to incorporate all recent decisions on Node 24 baseline, LLM routing, ingress/egress guards, graph algorithms, and special jurisdiction modelling.
 
