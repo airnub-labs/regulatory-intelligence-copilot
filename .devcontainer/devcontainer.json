@@ -1,7 +1,7 @@
 {
   "name": "Regulatory Intelligence Copilot",
   "image": "mcr.microsoft.com/devcontainers/typescript-node:20",
-  "workspaceFolder": "/workspaces/rfc-refactor",
+  "workspaceFolder": "/workspaces/regulatory-intelligence-copilot",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -34,7 +34,7 @@
     }
   },
   "postCreateCommand": "corepack enable pnpm && pnpm install",
-  "postStartCommand": "docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp && cd apps/web && pnpm dev -- --hostname 0.0.0.0 --port 3000",
+  "postStartCommand": "docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp && cd apps/demo-web && pnpm dev -- --hostname 0.0.0.0 --port 3000",
   "remoteEnv": {
     "NODE_ENV": "development",
     "E2B_API_KEY": "${localEnv:E2B_API_KEY}",
