@@ -60,11 +60,20 @@ export default tseslint.config(
     },
   },
 
-  // Warning only: test-graph-changes.ts (DELETE operations documented)
+  // Warning only: Scripts with DELETE operations (not yet in GraphWriteService API)
   {
-    files: ['scripts/test-graph-changes.ts'],
+    files: ['scripts/test-graph-changes.ts', 'scripts/seed-graph.ts'],
     rules: {
       'no-restricted-syntax': 'warn',
+    },
+  },
+
+  // Allow dynamic require() for optional peer dependencies
+  {
+    files: ['packages/reg-intel-llm/src/aiSdkProviders.ts'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-explicit-any': 'off', // Optional peer deps use any
     },
   },
 
