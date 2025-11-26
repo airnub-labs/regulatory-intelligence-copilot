@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { GraphChangeDetector, type GraphPatch, type ChangeFilter } from './graphChangeDetector.js';
-import type { GraphContext, GraphNode, GraphEdge } from '../types.js';
+import type { GraphContext, GraphNode, GraphEdge } from './types.js';
 
 describe('GraphChangeDetector', () => {
   // Mock graph query function

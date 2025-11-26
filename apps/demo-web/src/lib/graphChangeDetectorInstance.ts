@@ -11,7 +11,7 @@ import {
   type GraphChangeDetector,
   type ChangeFilter,
   type GraphContext,
-} from '@reg-copilot/compliance-core';
+} from '@reg-copilot/reg-intel-core';
 
 let detectorInstance: GraphChangeDetector | null = null;
 

@@ -1,8 +1,8 @@
 /**
- * Main entry point for @reg-copilot/compliance-core
+ * Main entry point for @reg-copilot/reg-intel-core
  *
- * This package provides the core functionality for the Regulatory Intelligence Copilot,
- * including agents, graph operations, timeline engine, and egress guard.
+ * This package provides the core orchestration and agents for the Regulatory Intelligence Copilot.
+ * It re-exports focused packages for graph, LLM, and prompt operations.
  */
 
 // Types
@@ -35,14 +35,14 @@ export {
   getErrorMessage,
 } from './errors.js';
 
-// Aspects
-export { applyAspects, type Aspect } from './aspects/applyAspects.js';
+// Aspects - Re-exported from reg-intel-prompts and reg-intel-llm
+export { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
 export {
   sanitizeTextForEgress,
   sanitizeObjectForEgress,
   isSensitiveHeader,
   SENSITIVE_HEADERS,
-} from './aspects/egressGuard.js';
+} from '@reg-copilot/reg-intel-llm';
 export {
   buildPromptWithAspects,
   createPromptBuilder,
@@ -56,7 +56,7 @@ export {
   type PromptContext,
   type BuiltPrompt,
   type PromptAspect,
-} from './aspects/promptAspects.js';
+} from '@reg-copilot/reg-intel-prompts';
 
 // E2B Client
 export {
@@ -94,15 +94,19 @@ export {
   isLockInActive,
 } from './timeline/timelineEngine.js';
 
-// Graph Client
-export { createGraphClient } from './graph/graphClient.js'; // Legacy MCP-based
+// Graph Client - Re-exported from reg-intel-graph
+export { createGraphClient } from './graph/graphClient.js'; // Legacy MCP-based (still local, depends on MCP)
 export {
   BoltGraphClient,
   createBoltGraphClient,
   type BoltGraphClientConfig,
-} from './graph/boltGraphClient.js'; // Direct Bolt connection
+  type GraphClient,
+  type GraphContext,
+  type GraphNode,
+  type GraphEdge,
+} from '@reg-copilot/reg-intel-graph';
 
-// Graph Change Detection
+// Graph Change Detection - Re-exported from reg-intel-graph
 export {
   GraphChangeDetector,
   createGraphChangeDetector,
@@ -111,7 +115,31 @@ export {
   type ChangeCallback,
   type ChangeSubscription,
   type GraphChangeDetectorConfig,
-} from './graph/graphChangeDetector.js';
+} from '@reg-copilot/reg-intel-graph';
+
+// Graph Ingress Guard & Write Service - Re-exported from reg-intel-graph
+export {
+  type GraphWriteContext,
+  type GraphIngressAspect,
+  composeIngressAspects,
+  schemaValidationAspect,
+  piiBlockingAspect,
+  propertyWhitelistAspect,
+  createBaselineAspects,
+  GraphWriteService,
+  createGraphWriteService,
+  type GraphWriteServiceConfig,
+  type UpsertJurisdictionDto,
+  type UpsertRegionDto,
+  type UpsertStatuteDto,
+  type UpsertSectionDto,
+  type UpsertBenefitDto,
+  type UpsertReliefDto,
+  type UpsertTimelineDto,
+  type UpsertAgreementDto,
+  type UpsertRegimeDto,
+  type CreateRelationshipDto,
+} from '@reg-copilot/reg-intel-graph';
 
 // LLM Client (legacy MCP-based)
 export {
@@ -122,9 +150,8 @@ export {
   REGULATORY_COPILOT_SYSTEM_PROMPT,
 } from './llm/llmClient.js';
 
-// LLM Router (provider-agnostic)
+// LLM Router (provider-agnostic) - Re-exported from reg-intel-llm
 export {
-  // Note: LlmClient is NOT exported from llmRouter to avoid conflict with types.ts
   type LlmCompletionOptions,
   type LlmStreamChunk,
   type LlmTaskPolicy,
@@ -138,15 +165,14 @@ export {
   LocalHttpLlmClient,
   InMemoryPolicyStore,
   createLlmRouter,
-} from './llm/llmRouter.js';
-export { createDefaultLlmRouter } from './llm/llmRouterFactory.js';
+  createDefaultLlmRouter,
+} from '@reg-copilot/reg-intel-llm';
 
-// AI SDK v5 Provider Adapters (optional)
+// AI SDK v5 Provider Adapters (optional) - Re-exported from reg-intel-llm
 export {
   AiSdkOpenAIProvider,
   AiSdkGroqProvider,
-  createAiSdkProviders,
-} from './llm/aiSdkProviders.js';
+} from '@reg-copilot/reg-intel-llm';
 
 // Compliance Engine (Orchestrator)
 export {

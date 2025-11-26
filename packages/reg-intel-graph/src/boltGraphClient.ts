@@ -12,9 +12,9 @@ import type {
   GraphNode,
   GraphEdge,
   Timeline,
-} from '../types.js';
-import { GraphError } from '../errors.js';
-import { LOG_PREFIX } from '../constants.js';
+} from './types.js';
+import { GraphError } from './errors.js';
+import { LOG_PREFIX } from './constants.js';
 
 /**
  * Configuration for Bolt GraphClient

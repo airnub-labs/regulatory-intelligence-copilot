@@ -12,8 +12,8 @@
  * - Egress control settings
  */
 
-import type { ChatMessage } from '../types.js';
-import { LlmError } from '../errors.js';
+import type { ChatMessage } from './types.js';
+import { LlmError } from './errors.js';
 
 /**
  * LLM completion options
@@ -584,7 +584,7 @@ export class LlmRouter implements LlmClient {
     // Determine provider and model
     let provider = this.defaultProvider;
     let model = this.defaultModel;
-    let taskOptions: { temperature?: number; maxTokens?: number } = {
+    const taskOptions: { temperature?: number; maxTokens?: number } = {
       temperature: options?.temperature,
       maxTokens: options?.maxTokens,
     };

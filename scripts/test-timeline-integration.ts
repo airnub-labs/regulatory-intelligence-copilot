@@ -13,12 +13,12 @@
  *   npx tsx scripts/test-timeline-integration.ts
  */
 
-import { createBoltGraphClient } from '../packages/compliance-core/src/graph/boltGraphClient.js';
+import { createBoltGraphClient } from '../packages/reg-intel-core/src/graph/boltGraphClient.js';
 import {
   computeLookbackRange,
   computeLockInEnd,
   isWithinLookback,
-} from '../packages/compliance-core/src/timeline/timelineEngine.js';
+} from '../packages/reg-intel-core/src/timeline/timelineEngine.js';
 
 async function testTimelineIntegration() {
   console.log('🧪 Testing Timeline Engine integration with seeded graph data\n');

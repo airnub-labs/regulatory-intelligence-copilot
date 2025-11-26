@@ -20,7 +20,7 @@ import {
   hasActiveSandbox,
   getMcpGatewayUrl,
   type GraphPatch,
-} from '@reg-copilot/compliance-core';
+} from '@reg-copilot/reg-intel-core';
 import { getGraphChangeDetector } from '@/lib/graphChangeDetectorInstance';
 
 /**

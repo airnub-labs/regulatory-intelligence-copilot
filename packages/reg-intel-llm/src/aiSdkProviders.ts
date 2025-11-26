@@ -8,9 +8,9 @@
  * detail at the edges, never in domain logic or agents.
  */
 
-import type { ChatMessage } from '../types.js';
+import type { ChatMessage } from './types.js';
 import type { LlmProviderClient, LlmStreamChunk } from './llmRouter.js';
-import { LlmError } from '../errors.js';
+import { LlmError } from './errors.js';
 
 /**
  * AI SDK v5 OpenAI provider adapter
@@ -24,7 +24,6 @@ export class AiSdkOpenAIProvider implements LlmProviderClient {
   constructor(apiKey: string) {
     // Dynamic import to avoid hard dependency on AI SDK
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { createOpenAI } = require('@ai-sdk/openai');
       this.openai = createOpenAI({ apiKey });
     } catch (error) {
@@ -40,7 +39,6 @@ export class AiSdkOpenAIProvider implements LlmProviderClient {
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { generateText } = require('ai');
 
       const result = await generateText({
@@ -67,7 +65,6 @@ export class AiSdkOpenAIProvider implements LlmProviderClient {
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { streamText } = require('ai');
 
       const result = await streamText({
@@ -109,7 +106,6 @@ export class AiSdkGroqProvider implements LlmProviderClient {
   constructor(apiKey: string) {
     // Dynamic import to avoid hard dependency on AI SDK
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { createGroq } = require('@ai-sdk/groq');
       this.groq = createGroq({ apiKey });
     } catch (error) {
@@ -125,7 +121,6 @@ export class AiSdkGroqProvider implements LlmProviderClient {
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { generateText } = require('ai');
 
       const result = await generateText({
@@ -152,7 +147,6 @@ export class AiSdkGroqProvider implements LlmProviderClient {
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { streamText } = require('ai');
 
       const result = await streamText({

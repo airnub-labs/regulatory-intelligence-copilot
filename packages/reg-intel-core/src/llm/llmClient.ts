@@ -8,7 +8,7 @@
 import type { LlmClient, LlmChatRequest, LlmChatResponse } from '../types.js';
 import { callPerplexityMcp } from '../mcpClient.js';
 import { DEFAULT_GROQ_MODEL, DEFAULT_LLM_TEMPERATURE, DEFAULT_MAX_TOKENS } from '../constants.js';
-import { buildPromptWithAspects, type PromptContext } from '../aspects/promptAspects.js';
+import { buildPromptWithAspects, type PromptContext } from '@reg-copilot/reg-intel-prompts';
 
 /**
  * Base system prompt for regulatory copilot (jurisdiction-neutral)

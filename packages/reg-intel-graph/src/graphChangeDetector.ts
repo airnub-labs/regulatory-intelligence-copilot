@@ -15,8 +15,8 @@
  * - Change batching: Collects changes over a time window before emitting
  */
 
-import type { GraphNode, GraphEdge, GraphContext } from '../types.js';
-import { LOG_PREFIX } from '../constants.js';
+import type { GraphNode, GraphEdge, GraphContext } from './types.js';
+import { LOG_PREFIX } from './constants.js';
 
 /**
  * Graph patch format per v0.3 spec

@@ -16,7 +16,7 @@ import type {
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
-import { buildPromptWithAspects } from '../aspects/promptAspects.js';
+import { buildPromptWithAspects } from '@reg-copilot/reg-intel-prompts';
 import { computeLookbackRange, computeLockInEnd } from '../timeline/timelineEngine.js';
 
 const AGENT_ID = 'SingleDirector_IE_SocialSafetyNet_Agent';

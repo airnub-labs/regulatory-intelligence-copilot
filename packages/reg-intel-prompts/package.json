@@ -1,7 +1,7 @@
 {
-  "name": "@reg-copilot/compliance-core",
-  "version": "0.1.0",
-  "description": "Core compliance library for regulatory intelligence copilot",
+  "name": "@reg-copilot/reg-intel-prompts",
+  "version": "0.4.0",
+  "description": "Jurisdiction-neutral prompts and aspect system for regulatory intelligence",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -18,12 +18,6 @@
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@e2b/code-interpreter": "^2.2.0",
-    "@redactpii/node": "^1.0.0",
-    "eventsource-parser": "^3.0.6",
-    "neo4j-driver": "^5.15.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

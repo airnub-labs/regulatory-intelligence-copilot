@@ -1,0 +1,39 @@
+{
+  "name": "@reg-copilot/reg-intel-core",
+  "version": "0.4.0",
+  "description": "Core orchestration and agents for regulatory intelligence copilot",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@e2b/code-interpreter": "^2.2.0",
+    "@redactpii/node": "^1.0.0",
+    "@reg-copilot/reg-intel-graph": "workspace:*",
+    "@reg-copilot/reg-intel-llm": "workspace:*",
+    "@reg-copilot/reg-intel-prompts": "workspace:*",
+    "eventsource-parser": "^3.0.6",
+    "neo4j-driver": "^5.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

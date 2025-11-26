@@ -7,7 +7,7 @@
  */
 
 import { applyAspects, type Aspect } from './applyAspects.js';
-import { NON_ADVICE_DISCLAIMER } from '../constants.js';
+import { NON_ADVICE_DISCLAIMER } from './constants.js';
 
 /**
  * Prompt context that flows through aspects
