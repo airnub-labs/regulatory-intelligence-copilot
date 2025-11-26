@@ -38,9 +38,6 @@ importers:
 
   apps/demo-web:
     dependencies:
-      '@e2b/code-interpreter':
-        specifier: ^2.2.0
-        version: 2.2.0
       '@reg-copilot/reg-intel-core':
         specifier: workspace:*
         version: link:../../packages/reg-intel-core

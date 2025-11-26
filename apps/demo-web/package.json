@@ -12,7 +12,6 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@e2b/code-interpreter": "^2.2.0",
     "@reg-copilot/reg-intel-core": "workspace:*",
     "@reg-copilot/reg-intel-next-adapter": "workspace:*",
     "force-graph": "^1.51.0",

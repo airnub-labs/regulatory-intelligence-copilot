@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: [
-    '@e2b/code-interpreter',
     '@reg-copilot/reg-intel-core',
     '@reg-copilot/reg-intel-graph',
     '@reg-copilot/reg-intel-llm',
