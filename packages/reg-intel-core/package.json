@@ -11,9 +11,9 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./public": {
-      "import": "./dist/public.js",
-      "types": "./dist/public.d.ts"
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
     }
   },
   "scripts": {

@@ -6,7 +6,7 @@
  */
 
 import { GraphVisualization } from '@/components/GraphVisualization';
-import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core/public';
+import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core/client';
 
 export default function GraphPage() {
   return (
