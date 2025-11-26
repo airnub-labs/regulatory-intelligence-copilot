@@ -22,6 +22,7 @@ export interface PromptContext {
     jurisdictions?: string[];
   };
   additionalContext?: string[];
+  includeDisclaimer?: boolean;
 }
 
 /**
@@ -172,7 +173,20 @@ export async function buildPromptWithAspects(
   basePrompt: string,
   options: Omit<PromptContext, 'basePrompt'> = {}
 ): Promise<string> {
-  const result = await defaultPromptBuilder({
+  // Create builder with or without disclaimer based on option
+  const aspects = [
+    jurisdictionAspect,
+    agentContextAspect,
+    profileContextAspect,
+    additionalContextAspect,
+  ];
+
+  if (options.includeDisclaimer) {
+    aspects.push(disclaimerAspect);
+  }
+
+  const builder = createPromptBuilder(aspects);
+  const result = await builder({
     basePrompt,
     ...options,
   });

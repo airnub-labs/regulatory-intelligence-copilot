@@ -45,10 +45,22 @@ export interface GraphPatch {
 
 /**
  * Filter criteria for change detection
+ *
+ * Note on naming: This interface uses 'profileType' to align with API layer conventions,
+ * while GraphClient uses 'profileId'. Both refer to ProfileId values (e.g., 'self-employed').
+ * The type is kept as string for maximum flexibility at the API boundary.
  */
 export interface ChangeFilter {
+  /** Jurisdictions to filter by (e.g., ['IE', 'UK']) */
   jurisdictions?: string[];
+  /**
+   * Profile type/persona identifier (e.g., 'self-employed', 'investor', 'single-director').
+   * Accepts string for API flexibility but typically receives ProfileId values.
+   * Naming note: Called 'profileType' here but 'profileId' in GraphClient - same concept.
+   */
   profileType?: string;
+  /** Keyword to filter nodes/edges by name or content */
+  keyword?: string;
 }
 
 /**

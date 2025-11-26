@@ -50,6 +50,14 @@ export interface GraphContext {
 export interface GraphClient {
   /**
    * Get rules matching profile and jurisdiction with optional keyword
+   *
+   * @param profileId - Profile identifier (e.g., 'self-employed', 'single-director').
+   *   Accepts string for flexibility but typically receives ProfileId values from upper layers.
+   *   Note: Parameter is named 'profileId' at the graph layer, but may be called 'profileType'
+   *   in API/filter contexts - both refer to the same ProfileId concept.
+   * @param jurisdictionId - Jurisdiction code (e.g., 'IE', 'UK')
+   * @param keyword - Optional keyword filter for nodes/edges
+   * @returns Graph context containing matching nodes and edges
    */
   getRulesForProfileAndJurisdiction(
     profileId: string,

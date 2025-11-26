@@ -45,6 +45,10 @@ class LlmRouterClientAdapter implements LlmClient {
   }
 }
 
+/**
+ * Basic egress guard implementation that sanitizes data before sending to external LLM providers.
+ * Removes sensitive information and ensures compliance with data protection requirements.
+ */
 class BasicEgressGuard implements EgressGuard {
   redact(input: unknown): RedactedPayload {
     return {
@@ -59,6 +63,15 @@ class BasicEgressGuard implements EgressGuard {
   }
 }
 
+/**
+ * Sanitizes and validates incoming chat messages from the client.
+ * - Normalizes role to valid ChatMessage roles (user, assistant, system)
+ * - Sanitizes user message content to prevent PII/sensitive data egress
+ * - Preserves assistant and system messages as-is
+ *
+ * @param messages - Raw messages from the API request
+ * @returns Sanitized and typed ChatMessage array
+ */
 function sanitizeMessages(messages: Array<{ role: string; content: string }>): ChatMessage[] {
   return messages.map(message => {
     const role: ChatMessage['role'] =
@@ -71,6 +84,18 @@ function sanitizeMessages(messages: Array<{ role: string; content: string }>): C
   });
 }
 
+/**
+ * Builds metadata object for chat response SSE stream.
+ * Includes agent information, jurisdiction context, confidence level, and referenced knowledge graph nodes.
+ *
+ * @param args - Metadata parameters
+ * @param args.agentId - Identifier of the compliance agent that handled the query
+ * @param args.jurisdictions - List of jurisdiction codes (e.g., ['IE', 'UK'])
+ * @param args.uncertaintyLevel - Confidence level of the response (default: 'medium')
+ * @param args.disclaimerKey - Key for the disclaimer to display (default: 'non_advice_research_tool')
+ * @param args.referencedNodes - Graph nodes referenced in the response
+ * @returns Formatted metadata object for SSE transmission
+ */
 function buildMetadataChunk(args: {
   agentId: string;
   jurisdictions: string[];
@@ -87,10 +112,26 @@ function buildMetadataChunk(args: {
   };
 }
 
+/**
+ * Configuration options for the chat route handler
+ */
 export interface ChatRouteHandlerOptions {
+  /** Tenant identifier for multi-tenant deployments (default: 'default') */
   tenantId?: string;
 }
 
+/**
+ * Helper class for writing Server-Sent Events (SSE) to a ReadableStream.
+ * Follows the standard SSE format with event names and data payloads.
+ *
+ * @example
+ * ```typescript
+ * const writer = new SseStreamWriter(controller);
+ * writer.send('message', { text: 'Hello' });
+ * writer.send('done', { status: 'ok' });
+ * writer.close();
+ * ```
+ */
 class SseStreamWriter {
   private controller: ReadableStreamDefaultController;
   private encoder = new TextEncoder();
@@ -99,23 +140,46 @@ class SseStreamWriter {
     this.controller = controller;
   }
 
+  /**
+   * Send an SSE event with the specified type and data
+   *
+   * @param event - Event type name
+   * @param data - Event payload (will be JSON stringified if not a string)
+   */
   send(event: 'message' | 'metadata' | 'error' | 'done', data: unknown) {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
     this.controller.enqueue(this.encoder.encode(chunk));
   }
 
+  /**
+   * Close the SSE stream
+   */
   close() {
     this.controller.close();
   }
 }
 
-function* chunkText(answer: string, chunkSize = 400): Generator<string> {
-  for (let i = 0; i < answer.length; i += chunkSize) {
-    yield answer.slice(i, i + chunkSize);
-  }
-}
-
+/**
+ * Creates a Next.js API route handler for the regulatory compliance chat endpoint.
+ *
+ * The handler:
+ * - Validates and sanitizes incoming messages
+ * - Streams responses using Server-Sent Events (SSE)
+ * - Includes metadata about agent, jurisdictions, and confidence levels
+ * - Applies egress guards to prevent sensitive data leakage
+ * - Returns incremental LLM tokens for real-time user experience
+ *
+ * @param options - Configuration options for the handler
+ * @returns Next.js route handler function that accepts POST requests
+ *
+ * @example
+ * ```typescript
+ * // app/api/chat/route.ts
+ * import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
+ * export const POST = createChatRouteHandler();
+ * ```
+ */
 export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   const llmRouter = createDefaultLlmRouter();
   const llmClient = new LlmRouterClientAdapter(llmRouter);
@@ -144,33 +208,58 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       const systemPrompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
         jurisdictions,
         profile,
+        includeDisclaimer: true,
       });
 
-      const complianceResult = await complianceEngine.handleChat({
-        messages: [{ role: 'system', content: systemPrompt }, ...sanitizedMessages],
-        profile,
-        tenantId: options?.tenantId ?? 'default',
-      });
-
+      // For now, send metadata first (basic version - agent routing will be added later)
       const metadata = buildMetadataChunk({
-        agentId: complianceResult.agentUsed,
-        jurisdictions: complianceResult.jurisdictions,
-        uncertaintyLevel: complianceResult.uncertaintyLevel,
+        agentId: 'GlobalRegulatoryComplianceAgent', // Default agent
+        jurisdictions,
+        uncertaintyLevel: 'medium',
         disclaimerKey: DEFAULT_DISCLAIMER_KEY,
-        referencedNodes: complianceResult.referencedNodes,
+        referencedNodes: [],
       });
 
-      const answerWithDisclaimer = `${complianceResult.answer}\n\n${complianceResult.disclaimer || NON_ADVICE_DISCLAIMER}`;
+      const allMessages: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        ...sanitizedMessages,
+      ];
 
       const stream = new ReadableStream({
-        start(controller) {
+        async start(controller) {
           const writer = new SseStreamWriter(controller);
-          writer.send('metadata', metadata);
-          for (const delta of chunkText(answerWithDisclaimer)) {
-            writer.send('message', { text: delta });
+
+          try {
+            // Send metadata first
+            writer.send('metadata', metadata);
+
+            // Stream incremental tokens from LLM
+            for await (const chunk of llmRouter.streamChat(allMessages, {
+              temperature: 0.3,
+              maxTokens: 2048,
+              tenantId: options?.tenantId ?? 'default',
+              task: 'main-chat',
+            })) {
+              if (chunk.type === 'text' && chunk.delta) {
+                writer.send('message', { text: chunk.delta });
+              } else if (chunk.type === 'error') {
+                writer.send('error', { message: chunk.error?.message || 'Unknown error' });
+                writer.close();
+                return;
+              } else if (chunk.type === 'done') {
+                // Send disclaimer after response
+                writer.send('message', { text: `\n\n${NON_ADVICE_DISCLAIMER}` });
+                writer.send('done', { status: 'ok' });
+                writer.close();
+                return;
+              }
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            writer.send('error', { message });
+            writer.send('done', { status: 'error' });
+            writer.close();
           }
-          writer.send('done', { status: 'ok' });
-          writer.close();
         },
       });
 

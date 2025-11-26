@@ -42,8 +42,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
   const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
+  const keyword = searchParams.get('keyword') || undefined;
 
-  const filter: ChangeFilter = { jurisdictions, profileType };
+  const filter: ChangeFilter = { jurisdictions, profileType, keyword };
 
   console.log('[API/graph/stream] Client connected:', filter);
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
 
 function handleSse(
   request: Request,
-  filter: { jurisdictions: string[]; profileType: string }
+  filter: ChangeFilter
 ): Response {
   const encoder = new TextEncoder();
 
@@ -109,7 +110,7 @@ function handleSse(
   });
 }
 
-function handleWebSocket(filter: { jurisdictions: string[]; profileType: string }) {
+function handleWebSocket(filter: ChangeFilter) {
   const { 0: client, 1: server } = new (globalThis as any).WebSocketPair() as WebSocketPairType;
 
   server.accept();
