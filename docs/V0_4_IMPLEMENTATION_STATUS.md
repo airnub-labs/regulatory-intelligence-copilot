@@ -45,9 +45,10 @@ This document tracks the implementation of the v0.4 architecture as defined in:
   - Components are now available for import by other packages
 
 #### 3. LLM Layer Verification
-- [x] Verified LLM Router uses OpenAI Responses API (D-017)
-  - `OpenAiResponsesClient` uses `/v1/responses` endpoint (not legacy `/v1/chat/completions`)
-  - Supports streaming via Responses API
+- [x] Verified LLM Router uses AI SDK v5 for all providers (D-017, D-023)
+  - `OpenAiProviderClient` uses AI SDK v5 (automatically handles Responses API)
+  - All providers built on AI SDK v5: OpenAI, Groq, Anthropic, Google Gemini
+  - Supports streaming via AI SDK's `streamText()` and `generateText()`
   - Provider-agnostic routing via `LlmRouter`
   - Task-based policies (`main-chat`, `egress-guard`, `pii-sanitizer`)
   - Tenant-level `allowRemoteEgress` control
@@ -111,8 +112,8 @@ Per `architecture_v_0_4.md` and D-020, the monorepo has been reorganized with cl
 
 - [x] `packages/reg-intel-llm` (v0.4.0) - **NEW PACKAGE**
   - LlmRouter (provider-agnostic routing)
-  - Providers: OpenAiResponsesClient, GroqLlmClient, LocalHttpLlmClient
-  - AI SDK v5 adapters (optional peer dependencies)
+  - Provider clients built on AI SDK v5: OpenAiProviderClient, GroqProviderClient, AnthropicProviderClient, GeminiProviderClient
+  - LocalHttpLlmClient for OpenAI-compatible endpoints
   - Egress Guard (PII sanitization)
   - LLM-related types and errors
 

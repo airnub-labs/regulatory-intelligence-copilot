@@ -339,13 +339,24 @@ This allows e.g.:
 - `egress-guard` → small local model.
 - `pii-sanitizer` → tiny specialised local model.
 
-### 6.3 Vercel AI SDK v5 as Implementation Detail
+### 6.3 Vercel AI SDK v5 as Primary Provider Implementation
 
-- For providers like OpenAI and Groq, a `LlmProvider` may internally use **Vercel AI SDK v5** (`streamText`, `generateText`).
-- The SDK is **not** imported or referenced from core engine code; it lives in adapter modules only.
-- OpenAI usage must target the **Responses API** (including GPT‑OSS) rather than legacy Chat Completions.
+All LLM providers (except local HTTP clients) use **Vercel AI SDK v5** as their primary implementation:
 
-This keeps the engine decoupled from any specific SDK while still benefiting from the convenience of Vercel AI SDK v5.
+- **OpenAI**: Uses `@ai-sdk/openai` (supports Responses API automatically, including GPT‑OSS models)
+- **Groq**: Uses `@ai-sdk/groq`
+- **Anthropic**: Uses `@ai-sdk/anthropic`
+- **Google Gemini**: Uses `@ai-sdk/google`
+- **Local HTTP**: Direct HTTP client for OpenAI‑compatible endpoints
+
+Benefits of AI SDK v5 as the primary layer:
+
+- **Unified interface**: Consistent `generateText()` / `streamText()` APIs across all providers
+- **Automatic protocol handling**: AI SDK handles provider‑specific differences (e.g., OpenAI Responses API vs Chat Completions)
+- **Built‑in streaming**: Consistent streaming support across all providers
+- **Error handling**: Standardized error types and retry logic
+
+The engine remains decoupled from AI SDK v5 specifics through the `LlmProviderClient` interface, but internally all provider implementations leverage AI SDK v5 for reliable, consistent LLM interactions.
 
 ### 6.4 EgressClient & Egress Guard
 
