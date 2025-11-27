@@ -13,6 +13,7 @@ import type {
   Timeline,
 } from '../types.js';
 import { callMemgraphMcp } from '../mcpClient.js';
+import { ensureMcpGatewayConfigured } from '../sandboxManager.js';
 import { LOG_PREFIX } from '../constants.js';
 
 /**
@@ -111,6 +112,11 @@ function parseTimelineResult(result: unknown): Timeline[] {
   return timelines;
 }
 
+async function runMemgraphQuery(query: string): Promise<unknown> {
+  await ensureMcpGatewayConfigured();
+  return callMemgraphMcp(query);
+}
+
 /**
  * Create a GraphClient instance
  */
@@ -141,7 +147,7 @@ export function createGraphClient(): GraphClient {
       `;
 
       console.log(`${LOG_PREFIX.graph} Querying rules for profile ${profileId} in ${jurisdictionId}`);
-      const result = await callMemgraphMcp(query);
+      const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
 
@@ -158,7 +164,7 @@ export function createGraphClient(): GraphClient {
       `;
 
       console.log(`${LOG_PREFIX.graph} Getting neighbourhood for ${nodeId}`);
-      const result = await callMemgraphMcp(query);
+      const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
 
@@ -173,7 +179,7 @@ export function createGraphClient(): GraphClient {
       `;
 
       console.log(`${LOG_PREFIX.graph} Getting mutual exclusions for ${nodeId}`);
-      const result = await callMemgraphMcp(query);
+      const result = await runMemgraphQuery(query);
       const context = parseGraphResult(result);
       return context.nodes;
     },
@@ -189,7 +195,7 @@ export function createGraphClient(): GraphClient {
       `;
 
       console.log(`${LOG_PREFIX.graph} Getting timelines for ${nodeId}`);
-      const result = await callMemgraphMcp(query);
+      const result = await runMemgraphQuery(query);
       return parseTimelineResult(result);
     },
 
@@ -211,7 +217,7 @@ export function createGraphClient(): GraphClient {
       `;
 
       console.log(`${LOG_PREFIX.graph} Getting cross-border slice for ${jurisdictionIds.join(', ')}`);
-      const result = await callMemgraphMcp(query);
+      const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
 
@@ -220,7 +226,7 @@ export function createGraphClient(): GraphClient {
      */
     async executeCypher(query: string): Promise<unknown> {
       console.log(`${LOG_PREFIX.graph} Executing Cypher query`);
-      return callMemgraphMcp(query);
+      return runMemgraphQuery(query);
     },
   };
 }
