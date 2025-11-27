@@ -69,27 +69,8 @@ export async function createSandbox(options?: {
     };
   }
 
-  // Parse Memgraph connection details from MEMGRAPH_URI or separate env vars
-  let memgraphUrl = '';
-  let memgraphHost = process.env.MEMGRAPH_HOST;
-
-  if (process.env.MEMGRAPH_URI) {
-    // Parse MEMGRAPH_URI (e.g., bolt://localhost:7687)
-    try {
-      const uri = new URL(process.env.MEMGRAPH_URI);
-      memgraphHost = uri.hostname;
-      memgraphUrl = process.env.MEMGRAPH_URI;
-    } catch (error) {
-      console.warn('[E2B] Failed to parse MEMGRAPH_URI:', error);
-    }
-  } else if (memgraphHost) {
-    // Build URL from separate MEMGRAPH_HOST and MEMGRAPH_PORT
-    const port = process.env.MEMGRAPH_PORT || '7687';
-    memgraphUrl = `bolt://${memgraphHost}:${port}`;
-  }
-
   // Configure Memgraph MCP using custom server pattern from GitHub
-  if (memgraphHost) {
+  if (process.env.MEMGRAPH_HOST) {
     mcpConfig['github/memgraph/ai-toolkit'] = {
       installCmd: 'cd integrations/mcp-memgraph && pip install .',
       runCmd: 'MCP_TRANSPORT=stdio mcp-memgraph',
@@ -101,7 +82,9 @@ export async function createSandbox(options?: {
     timeoutMs: options?.timeoutMs || DEFAULT_SANDBOX_TIMEOUT_MS,
     envs: {
       PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY || '',
-      MEMGRAPH_URL: memgraphUrl,
+      MEMGRAPH_URL: process.env.MEMGRAPH_HOST
+        ? `bolt://${process.env.MEMGRAPH_HOST}:${process.env.MEMGRAPH_PORT || '7687'}`
+        : '',
       MEMGRAPH_USER: process.env.MEMGRAPH_USER || 'memgraph',
       MEMGRAPH_PASSWORD: process.env.MEMGRAPH_PASSWORD || '',
       MCP_READ_ONLY: process.env.MCP_READ_ONLY || 'false',
