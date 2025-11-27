@@ -194,8 +194,8 @@ graph LR
         DetectAPI -->|Yes| ResponsesAPI[POST /v1/responses<br/>✅ Modern API<br/>✅ Reasoning tokens<br/>✅ Structured outputs]
         DetectAPI -->|No| ChatAPI[POST /v1/chat/completions<br/>✅ Legacy compatible<br/>⚠️ No reasoning tokens]
 
-        ResponsesAPI -->|Response| Stream1[Stream chunks<br/>{text, reasoning}]
-        ChatAPI -->|Response| Stream2[Stream chunks<br/>{text}]
+        ResponsesAPI -->|Response| Stream1[Stream chunks<br/>text, reasoning]
+        ChatAPI -->|Response| Stream2[Stream chunks<br/>text only]
     end
 
     style ResponsesAPI fill:#90EE90
@@ -292,7 +292,7 @@ graph TB
         TimestampQuery --> Memgraph
 
         Detector -->|Compute diff| DiffEngine[Diff Engine<br/>Compare snapshots]
-        DiffEngine -->|Generate| Patch[GraphPatch<br/>{nodes_added, edges_updated, etc}]
+        DiffEngine -->|Generate| Patch[GraphPatch<br/>nodes_added, edges_updated, etc]
     end
 
     subgraph "Subscription Management"
@@ -344,15 +344,15 @@ graph LR
     subgraph "GraphPatch Structure"
         Patch[GraphPatch]
 
-        Patch --> NodesAdded[nodes_added: Node[]]
-        Patch --> NodesUpdated[nodes_updated: Node[]]
-        Patch --> NodesRemoved[nodes_removed: string[]]
+        Patch --> NodesAdded[nodes_added: Node array]
+        Patch --> NodesUpdated[nodes_updated: Node array]
+        Patch --> NodesRemoved[nodes_removed: string array]
 
-        Patch --> EdgesAdded[edges_added: Edge[]]
-        Patch --> EdgesUpdated[edges_updated: Edge[]]
-        Patch --> EdgesRemoved[edges_removed: string[]]
+        Patch --> EdgesAdded[edges_added: Edge array]
+        Patch --> EdgesUpdated[edges_updated: Edge array]
+        Patch --> EdgesRemoved[edges_removed: string array]
 
-        Patch --> Meta[meta: {<br/>  timestamp,<br/>  totalChanges,<br/>  truncated<br/>}]
+        Patch --> Meta[meta:<br/>timestamp,<br/>totalChanges,<br/>truncated]
     end
 
     subgraph "Size Limits"
