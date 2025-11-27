@@ -7,8 +7,8 @@ import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
 import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
 
-// MCP Gateway configuration - set once from the active sandbox
-let mcpGatewayUrl = '';
+// MCP Gateway configuration - set once from the active sandbox or from env var
+let mcpGatewayUrl = process.env.MCP_GATEWAY_URL || '';
 let mcpGatewayToken = '';
 
 function persistMcpGatewayConfig(url: string, token: string): void {
@@ -26,7 +26,14 @@ export function configureMcpGateway(url: string, token: string): void {
   }
 
   persistMcpGatewayConfig(url, token);
-  console.log('[MCP] Gateway configured - Perplexity and Memgraph tools available');
+  console.log('[MCP] Gateway configured via E2B sandbox - Perplexity and Memgraph tools available');
+}
+
+/**
+ * Log MCP gateway initialization status on module load
+ */
+if (mcpGatewayUrl) {
+  console.log(`[MCP] Using local gateway at ${mcpGatewayUrl}`);
 }
 
 /**
@@ -180,11 +187,13 @@ export const mcpCall = applyAspects(baseMcpCall, [
 
 /**
  * Call Perplexity MCP for spec discovery
- * Uses perplexity_ask tool from E2B's built-in MCP gateway
+ * Uses perplexity_ask tool from E2B's built-in MCP gateway or local MCP gateway
  */
 export async function callPerplexityMcp(query: string): Promise<string> {
   if (!mcpGatewayUrl) {
-    throw new Error('MCP gateway not configured. Run an audit to initialize the E2B sandbox.');
+    throw new Error(
+      'MCP gateway not configured. Set MCP_GATEWAY_URL env var for local gateway, or run an audit to initialize E2B sandbox.'
+    );
   }
 
   const response = await mcpCall({
@@ -204,7 +213,9 @@ export async function callPerplexityMcp(query: string): Promise<string> {
  */
 export async function callMemgraphMcp(cypherQuery: string): Promise<unknown> {
   if (!mcpGatewayUrl) {
-    throw new Error('MCP gateway not configured. Run an audit to initialize the E2B sandbox.');
+    throw new Error(
+      'MCP gateway not configured. Set MCP_GATEWAY_URL env var for local gateway, or run an audit to initialize E2B sandbox.'
+    );
   }
 
   const response = await mcpCall({
@@ -224,7 +235,9 @@ export async function callMemgraphMcp(cypherQuery: string): Promise<unknown> {
  */
 export async function getMemgraphSchema(): Promise<unknown> {
   if (!mcpGatewayUrl) {
-    throw new Error('MCP gateway not configured. Run an audit to initialize the E2B sandbox.');
+    throw new Error(
+      'MCP gateway not configured. Set MCP_GATEWAY_URL env var for local gateway, or run an audit to initialize E2B sandbox.'
+    );
   }
 
   const response = await mcpCall({
