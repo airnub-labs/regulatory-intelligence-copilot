@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useChat, type UIMessage } from '@ai-sdk/react';
 import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core/client';
 import {
   Bell,
@@ -42,12 +43,6 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 interface UserProfile {
   personaType: 'self-employed' | 'single-director' | 'paye-employee' | 'investor' | 'advisor';
   jurisdictions: string[];
-}
-
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
 }
 
 interface ChatMetadata {
@@ -128,25 +123,63 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 export default function Home() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null);
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PROFILE_ID,
     jurisdictions: ['IE'],
   });
+  const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null);
   const { theme, toggleTheme } = useThemeToggle();
 
+  const { messages, status, sendMessage, setMessages } = useChat({
+    api: '/api/chat',
+    body: { profile },
+    fetch: async (input, init) => {
+      const response = await fetch(input, init);
+      const clone = response.clone();
+
+      if (clone.body) {
+        // Tap the Vercel AI SSE stream for out-of-band metadata without interrupting the UI helpers
+        (async () => {
+          const reader = clone.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            let boundaryIndex;
+            while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+              const rawEvent = buffer.slice(0, boundaryIndex).trim();
+              buffer = buffer.slice(boundaryIndex + 2);
+
+              if (!rawEvent) continue;
+              const parsedEvent = parseSseEvent(rawEvent);
+              if (!parsedEvent) continue;
+
+              if (parsedEvent.type === 'metadata') {
+                const parsedData = parseJsonSafe(parsedEvent.data);
+                setChatMetadata(parsedData as ChatMetadata);
+              }
+            }
+          }
+        })();
+      }
+
+      return response;
+    },
+  });
+
+  const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Only scroll when a new message is added
   useEffect(() => {
     if (messages.length > prevMessageCountRef.current) {
       scrollToBottom();
@@ -154,104 +187,22 @@ export default function Home() {
     prevMessageCountRef.current = messages.length;
   }, [messages.length]);
 
-  const streamChatResponse = async (response: Response, assistantMessageId: string) => {
-    if (!response.body) {
-      throw new Error('Response stream missing');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    const appendAssistantText = (delta: string) => {
-      setMessages(prev =>
-        prev.map(message =>
-          message.id === assistantMessageId ? { ...message, content: `${message.content}${delta}` } : message
-        )
-      );
-    };
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      let boundaryIndex;
-      while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-        const rawEvent = buffer.slice(0, boundaryIndex).trim();
-        buffer = buffer.slice(boundaryIndex + 2);
-
-        if (!rawEvent) continue;
-        const parsedEvent = parseSseEvent(rawEvent);
-        if (!parsedEvent) continue;
-
-        const parsedData = parseJsonSafe(parsedEvent.data);
-
-        switch (parsedEvent.type) {
-          case 'metadata':
-            setChatMetadata(parsedData as ChatMetadata);
-            break;
-          case 'message': {
-            const textChunk = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? '';
-            appendAssistantText(textChunk);
-            break;
-          }
-          case 'error': {
-            const errorMessage = typeof parsedData === 'string' ? parsedData : parsedData?.message ?? 'Unknown error';
-            appendAssistantText(`Error: ${errorMessage}`);
-            return;
-          }
-          case 'done':
-            return;
-          default:
-            break;
-        }
-      }
-    }
-  };
-
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!input.trim()) return;
 
-    const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() };
-    const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' };
+    sendMessage({ text: input.trim(), data: { profile } });
 
-    const outgoingMessages = [...messages, userMessage];
-
-    setMessages(prev => [...prev, userMessage, assistantMessage]);
     setInput('');
-    setIsLoading(true);
     setChatMetadata(null);
-
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: outgoingMessages.map(({ role, content }) => ({ role, content })), profile }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
-      }
-
-      await streamChatResponse(response, assistantMessage.id);
-    } catch (error) {
-      const fallback = error instanceof Error ? error.message : 'Unknown error';
-      setMessages(prev =>
-        prev.map(message =>
-          message.id === assistantMessage.id ? { ...message, content: `Error: ${fallback}` } : message
-        )
-      );
-    } finally {
-      setIsLoading(false);
-    }
   };
+
+  const isLoading = status === 'submitted' || status === 'streaming';
+
+  const renderMessageText = (message: UIMessage) =>
+    message.parts
+      .filter(part => part.type === 'text')
+      .map(part => ('text' in part ? part.text : ''))
+      .join('');
 
   const personaLabel = useMemo(() => {
     switch (profile.personaType) {
@@ -478,11 +429,11 @@ export default function Home() {
                   </ChatWelcome>
                 ) : (
                   <>
-                    {messages.map((message) => (
+                    {messages.map(message => (
                       <Message
                         key={message.id}
                         role={message.role}
-                        content={message.content}
+                        content={renderMessageText(message)}
                       />
                     ))}
                     {isLoading && <MessageLoading />}
