@@ -347,13 +347,16 @@ This allows e.g.:
 - **Groq**: Uses `@ai-sdk/groq`
 - **Anthropic**: Uses `@ai-sdk/anthropic`
 - **Google Gemini**: Uses `@ai-sdk/google`
-- **Local/OSS models**: Uses `@ai-sdk/openai` with custom `baseURL` and forced **Chat Completions API** (`/v1/chat/completions`)
-  - vLLM, Ollama, and other OpenAI-compatible local endpoints only support the older Chat Completions API
+- **Local/OSS models**: Uses `@ai-sdk/openai` with custom `baseURL` (automatically uses **Chat Completions API** `/v1/chat/completions`)
+  - vLLM, Ollama, and other OpenAI-compatible local endpoints only support the Chat Completions API
+  - AI SDK auto-detects non-OpenAI endpoints and uses appropriate API
   - Configuration supports optional API key for authenticated local endpoints
 
-**Important API distinction:**
-- OpenAI provider → Responses API (modern, supports structured outputs)
-- Local providers → Chat Completions API (widely compatible with OSS models)
+**Important API distinction (auto-detected by AI SDK):**
+- OpenAI endpoints (api.openai.com) → Responses API (modern, supports structured outputs)
+- Local providers (custom baseURL) → Chat Completions API (widely compatible with OSS models)
+
+The AI SDK v5 automatically detects the appropriate endpoint based on the baseURL configuration.
 
 Benefits of AI SDK v5 as the primary layer:
 
