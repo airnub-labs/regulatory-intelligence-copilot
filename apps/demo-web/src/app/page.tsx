@@ -9,6 +9,13 @@ import { Separator } from '@/components/ui/separator';
 import { Message, MessageLoading } from '@/components/chat/message';
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container';
 import { PromptInput } from '@/components/chat/prompt-input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 /**
  * User profile for regulatory context
@@ -209,17 +216,23 @@ export default function Home() {
         <div className="border-b bg-card p-4 flex flex-wrap gap-4 items-center">
           <div className="flex gap-2 items-center">
             <label className="text-sm text-muted-foreground font-medium">Persona:</label>
-            <select
+            <Select
               value={profile.personaType}
-              onChange={(e) => setProfile({ ...profile, personaType: e.target.value as UserProfile['personaType'] })}
-              className="bg-background border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              onValueChange={(value) =>
+                setProfile({ ...profile, personaType: value as UserProfile['personaType'] })
+              }
             >
-              <option value="single-director">Single Director Company (IE)</option>
-              <option value="self-employed">Self-Employed</option>
-              <option value="paye-employee">PAYE Employee</option>
-              <option value="investor">Investor (CGT)</option>
-              <option value="advisor">Tax/Welfare Advisor</option>
-            </select>
+              <SelectTrigger className="w-[260px]">
+                <SelectValue placeholder="Choose persona" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="single-director">Single Director Company (IE)</SelectItem>
+                <SelectItem value="self-employed">Self-Employed</SelectItem>
+                <SelectItem value="paye-employee">PAYE Employee</SelectItem>
+                <SelectItem value="investor">Investor (CGT)</SelectItem>
+                <SelectItem value="advisor">Tax/Welfare Advisor</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <Separator orientation="vertical" className="h-6" />
