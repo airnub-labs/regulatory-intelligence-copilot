@@ -10,6 +10,7 @@ import { callPerplexityMcp } from '../mcpClient.js';
 import { DEFAULT_GROQ_MODEL, DEFAULT_LLM_TEMPERATURE, DEFAULT_MAX_TOKENS } from '../constants.js';
 import { buildPromptWithAspects, type PromptContext } from '@reg-copilot/reg-intel-prompts';
 import { createLogger } from '../logger.js';
+import { startSpan } from '../observability/spanLogger.js';
 
 const logger = createLogger({ component: 'LLMClient' });
 
@@ -90,14 +91,28 @@ export function createLlmClient(): LlmClient {
         }
       }
 
+      const span = startSpan({
+        name: 'llm.call',
+        provider: 'perplexity',
+        model: DEFAULT_GROQ_MODEL,
+        task: request.task,
+        attributes: { messageCount: request.messages.length },
+      });
+
       logger.info('Calling legacy MCP LLM');
 
       // Call Perplexity MCP
-      const result = await callPerplexityMcp(query);
+      try {
+        const result = await callPerplexityMcp(query);
+        span.end();
 
-      return {
-        content: typeof result === 'string' ? result : JSON.stringify(result),
-      };
+        return {
+          content: typeof result === 'string' ? result : JSON.stringify(result),
+        };
+      } catch (error) {
+        span.error(error);
+        throw error;
+      }
     },
   };
 }
