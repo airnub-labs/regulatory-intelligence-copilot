@@ -57,11 +57,19 @@ interface GraphEdge {
   target: string;
   type: string;
   properties?: Record<string, unknown>;
+  id?: string; // Added for tracking edge identity
 }
 
 interface GraphData {
   nodes: GraphNode[];
   links: GraphEdge[]; // ForceGraph2D expects 'links' not 'edges'
+}
+
+// ForceGraph2D ref methods (from react-force-graph-2d)
+interface ForceGraphRef {
+  zoomToFit(duration?: number): void;
+  centerAt(x: number, y: number, duration?: number): void;
+  zoom(scale: number, duration?: number): void;
 }
 
 interface GraphPatch {
@@ -111,6 +119,8 @@ export function GraphVisualization({
   const eventSourceRef = useRef<EventSource | null>(null);
   const initialSnapshotLoaded = useRef(false);
   const pendingPatchesRef = useRef<GraphPatch[]>([]);
+  // ForceGraph2D ref - using ForceGraphRef for methods, but component expects different type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -202,7 +212,7 @@ export function GraphVisualization({
         if (patch.edges.added.length > 0) {
           for (const edge of patch.edges.added) {
             const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
-            if (!newLinks.find((e) => (e as any).id === edgeWithId.id)) {
+            if (!newLinks.find((e) => e.id === edgeWithId.id)) {
               newLinks.push(edgeWithId);
             }
           }
@@ -211,7 +221,7 @@ export function GraphVisualization({
         if (patch.edges.updated.length > 0) {
           for (const edge of patch.edges.updated) {
             const edgeWithId = { ...edge, id: `${edge.source}-${edge.type}-${edge.target}` };
-            const index = newLinks.findIndex((e) => (e as any).id === edgeWithId.id);
+            const index = newLinks.findIndex((e) => e.id === edgeWithId.id);
             if (index !== -1) {
               newLinks[index] = edgeWithId;
             }
@@ -580,6 +590,7 @@ export function GraphVisualization({
         )}
 
         {/* Graph */}
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <ForceGraph2D
           ref={fgRef}
           graphData={filteredData}
@@ -588,7 +599,7 @@ export function GraphVisualization({
           nodeLabel={(node: any) => `${node.label || node.id}\n(${node.type})`}
           nodeColor={(node: any) => getNodeColor(node)}
           nodeRelSize={6}
-          nodeCanvasObject={(node: any, ctx, globalScale) => {
+          nodeCanvasObject={(node: any, ctx: any, globalScale: number) => {
             const label = node.label || node.id;
             const fontSize = 12 / globalScale;
             const isSelected = selectedNode?.id === node.id;
