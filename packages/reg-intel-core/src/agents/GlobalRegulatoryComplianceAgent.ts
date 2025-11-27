@@ -11,7 +11,9 @@ import type {
   AgentInput,
   AgentContext,
   AgentResult,
+  AgentStreamResult,
   GraphContext,
+  LlmStreamChunk,
 } from '../types.js';
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
@@ -160,6 +162,94 @@ Please provide a comprehensive response considering all relevant regulatory doma
         'Are there specific benefits or reliefs you want to explore?',
         'Do you need information about time constraints or deadlines?',
       ],
+    };
+  },
+
+  async handleStream(input: AgentInput, ctx: AgentContext): Promise<AgentStreamResult> {
+    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} processing streaming request`);
+
+    // Try to find a specialized domain agent with streaming support
+    for (const agent of DOMAIN_AGENTS) {
+      try {
+        const canHandle = await agent.canHandle(input);
+        if (canHandle && agent.handleStream) {
+          console.log(`${LOG_PREFIX.agent} Delegating to ${agent.id} (streaming)`);
+          return agent.handleStream(input, ctx);
+        }
+      } catch (error) {
+        console.log(`${LOG_PREFIX.agent} Error checking ${agent.id}:`, error);
+      }
+    }
+
+    // No specialized agent matched, handle globally with streaming
+    console.log(`${LOG_PREFIX.agent} No specialized agent matched, handling globally with streaming`);
+
+    // Get cross-border context if multiple jurisdictions
+    const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
+    let graphContext: GraphContext = { nodes: [], edges: [] };
+
+    try {
+      if (jurisdictions.length > 1) {
+        graphContext = await ctx.graphClient.getCrossBorderSlice(jurisdictions);
+      } else {
+        // Just get general rules for the main jurisdiction
+        graphContext = await ctx.graphClient.getRulesForProfileAndJurisdiction(
+          getProfileTagId(input),
+          jurisdictions[0],
+          undefined
+        );
+      }
+    } catch (error) {
+      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+    }
+
+    // Format context
+    const contextSummary = graphContext.nodes.length > 0
+      ? `Found ${graphContext.nodes.length} relevant rules and ${graphContext.edges.length} relationships.`
+      : 'No specific rules found in the graph. Response based on general knowledge.';
+
+    // Build prompt
+    const prompt = `User Question: ${input.question}
+
+Graph Context: ${contextSummary}
+${graphContext.nodes.slice(0, 5).map(n => `- ${n.label} (${n.type})`).join('\n')}
+
+Please provide a comprehensive response considering all relevant regulatory domains.`;
+
+    // Build system prompt using aspects
+    const systemPrompt = await buildGlobalSystemPrompt(jurisdictions, input.profile);
+
+    // Build referenced nodes metadata
+    const referencedNodes = graphContext.nodes.slice(0, 10).map(n => ({
+      id: n.id,
+      label: n.label,
+      type: n.type,
+    }));
+
+    // Check if LLM client supports streaming
+    if (!ctx.llmClient.streamChat) {
+      throw new Error('LLM client does not support streaming');
+    }
+
+    // Stream LLM response with jurisdiction-aware prompt
+    const stream = ctx.llmClient.streamChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...(input.conversationHistory || []),
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    return {
+      agentId: AGENT_ID,
+      referencedNodes,
+      uncertaintyLevel: graphContext.nodes.length > 0 ? 'medium' : 'high',
+      followUps: [
+        'Would you like me to focus on a specific area (tax, welfare, pensions)?',
+        'Are there specific benefits or reliefs you want to explore?',
+        'Do you need information about time constraints or deadlines?',
+      ],
+      stream,
     };
   },
 };
