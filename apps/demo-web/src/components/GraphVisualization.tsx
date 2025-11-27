@@ -112,6 +112,7 @@ export function GraphVisualization({
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [paused, setPaused] = useState(false);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -271,6 +272,7 @@ export function GraphVisualization({
         links: transformedLinks,
       });
       setLastUpdate(data.timestamp);
+      setEmptyMessage(data.metadata?.message || null);
       initialSnapshotLoaded.current = true;
 
       // Apply any queued patches that arrived before the initial snapshot completed
@@ -481,14 +483,9 @@ export function GraphVisualization({
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">📊</div>
           <h3 className="text-xl font-semibold mb-2">Graph is Empty</h3>
-          <p className="text-gray-600 mb-4">
-            The regulatory knowledge graph has no data yet. To populate it:
+          <p className="text-gray-600">
+            {emptyMessage || 'The regulatory knowledge graph has no data yet.'}
           </p>
-          <ol className="text-left text-sm text-gray-700 space-y-2 mb-4">
-            <li>1. Start Memgraph: <code className="bg-gray-100 px-1">docker run -p 7687:7687 memgraph/memgraph-platform</code></li>
-            <li>2. Seed the graph: <code className="bg-gray-100 px-1">pnpm seed:all</code></li>
-            <li>3. Refresh this page</li>
-          </ol>
         </div>
       </div>
     );
