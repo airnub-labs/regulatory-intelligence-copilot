@@ -116,7 +116,10 @@ Per decisions D-016, D-023, D-029:
 
 - LLM usage (for explaining graph queries, ranking results, generating natural language) is routed via `LlmRouter`.
 - Agents call logical tasks (e.g. `"main-chat"`, `"egress-guard"`), not specific models.
-- **Vercel AI SDK v5** is used **only inside LLM provider adapters** (`AiSdkOpenAIProvider`, `AiSdkGroqProvider`), never in agents or graph logic.
+- **Vercel AI SDK v5** is the **primary implementation layer** for ALL LLM provider clients:
+  - `OpenAiProviderClient` (OpenAI, GPT-OSS, and local OpenAI-compatible endpoints via custom baseURL)
+  - `GroqProviderClient`, `AnthropicProviderClient`, `GeminiProviderClient`
+  - Local/OSS providers (vLLM, Ollama) use OpenAI client with custom `baseURL`
 - **Egress Guard** applies PII redaction and policy enforcement before any external LLM call.
 
 **No schema impact**, but query/reasoning patterns are now decoupled from LLM provider details.

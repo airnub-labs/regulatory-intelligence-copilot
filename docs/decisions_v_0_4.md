@@ -58,7 +58,7 @@ All outbound payloads leaving the app’s trust boundary (remote LLMs, search MC
 
 Tenants with `allowRemoteEgress = false` must be served **only** via local/OSS models.
 
-D-029 clarifies that all outbound calls go through `EgressClient` and that AI SDK v5 is strictly an implementation detail in provider adapters.
+D-029 clarifies that all outbound calls go through `EgressClient` and that AI SDK v5 is used as the primary implementation layer within LLM provider clients.
 
 ---
 
@@ -273,26 +273,40 @@ To keep the frontend aligned with modern capabilities and reduce tech drift, we 
 
 ---
 
-## D-023 – Vercel AI SDK v5 as Edge Implementation Detail
+## D-023 – Vercel AI SDK v5 as Primary Provider Implementation
 
-**Status:** Accepted (unchanged)
+**Status:** Accepted (updated in Dec 2024)
 
 ### Context
 
-We want the benefits of Vercel AI SDK v5 (multi-provider support, Responses API integration, solid streaming primitives) without coupling the core engine’s design to any specific SDK.
+We want the benefits of Vercel AI SDK v5 (multi-provider support, Responses API integration, solid streaming primitives) without coupling the core engine's design to any specific SDK.
 
 ### Decision
 
-- The **core engine** (LlmRouter, agents, Compliance Engine) remains SDK-agnostic and is defined in terms of an internal `LlmProvider` interface.
-- **Vercel AI SDK v5** is used as an implementation detail at the edges:
-  - In Next.js API routes (e.g. `/api/chat`) and/or
-  - Inside provider adapters in `reg-intel-llm` that implement `LlmProvider` using `streamText` / `generateText`.
-- The rest of the system **must not** depend directly on AI SDK types or APIs.
+- The **core engine** (LlmRouter, agents, Compliance Engine) remains SDK-agnostic and is defined in terms of an internal `LlmProviderClient` interface.
+- **Vercel AI SDK v5** is the **primary implementation** for all major LLM providers:
+  - `OpenAiProviderClient` uses `@ai-sdk/openai` (handles Responses API automatically)
+  - `GroqProviderClient` uses `@ai-sdk/groq`
+  - `AnthropicProviderClient` uses `@ai-sdk/anthropic`
+  - `GeminiProviderClient` uses `@ai-sdk/google`
+  - `LocalHttpLlmClient` uses direct HTTP for local/OSS models (vLLM, Ollama)
+- **All providers implement `LlmProviderClient`** - the SDK is an internal implementation detail
+- The rest of the system **must not** depend directly on AI SDK types or APIs
+
+### Evolution from v0.3
+
+Previously, AI SDK providers were "optional adapters" (`AiSdkOpenAIProvider`, `AiSdkGroqProvider`) alongside manual fetch-based implementations. As of Dec 2024:
+
+- ✅ **Removed:** Separate `aiSdkProviders.ts` file with optional adapters
+- ✅ **Unified:** All providers now use AI SDK v5 by default (except local HTTP clients)
+- ✅ **Benefits:** Consistent error handling, automatic Responses API support, better streaming
 
 ### Consequences
 
-- We can swap Vercel AI SDK out later if needed without changing the public engine surface.
-- Multiple providers (OpenAI, Groq, OSS) can be wired through AI SDK or via custom HTTP clients as needed.
+- We can swap Vercel AI SDK out later if needed without changing the public engine surface
+- All major cloud providers (OpenAI, Groq, Anthropic, Google) handled consistently via AI SDK
+- Local/OSS models still use direct HTTP for maximum control
+- Adding new AI SDK providers (Cohere, Mistral, etc.) requires no changes to `createLlmRouter`
 
 ---
 
@@ -467,8 +481,8 @@ We want:
   - LLM calls (OpenAI, Groq, OSS, local models).
   - MCP HTTP calls.
   - Any other external HTTP egress.
-- AI SDK v5 is an **implementation detail** inside `LlmProvider` adapters only.
-  - No direct `streamText`/`generateText` in agents, route handlers, or engine modules.
+- AI SDK v5 is the **primary implementation layer** inside all `LlmProviderClient` implementations (OpenAI, Groq, Anthropic, Google Gemini).
+  - No direct `streamText`/`generateText` in agents, route handlers, or engine modules - only within provider client implementations.
 - The standard call chain is:
   - Agent → LlmRouter → EgressClient (egress aspects) → Provider (AI SDK or other).
 

@@ -72,7 +72,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
     - [ ] Local/OSS HTTP providers.
   - [ ] Ensure all OpenAI calls use **Responses API**, not legacy chat completions.
   - [ ] Implement/verify `TenantLlmPolicy` (per‑tenant & per‑task provider/model and `allowRemoteEgress`).
-  - [ ] Ensure AI SDK v5 usage is confined to provider adapters.
+  - [ ] Ensure AI SDK v5 is used as the primary implementation for all LLM providers (OpenAI, Groq, Anthropic, Google Gemini).
 - [ ] Prompt aspects (jurisdiction‑neutral core):
   - [ ] Confirm `buildPromptWithAspects`/`createPromptBuilder` are used for all system prompts.
   - [ ] Verify aspects: jurisdiction, agent context, profile context, disclaimers, custom context.

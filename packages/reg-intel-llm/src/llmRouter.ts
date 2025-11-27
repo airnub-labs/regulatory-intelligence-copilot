@@ -1,10 +1,18 @@
 /**
  * LLM Router - Provider-agnostic LLM client with tenant and task-based routing
  *
- * Supports multiple backends:
- * - OpenAI (via Responses API)
- * - Groq
- * - Local/OSS HTTP models (vLLM, Ollama, etc.)
+ * Built on Vercel AI SDK v5 for consistent provider abstraction.
+ *
+ * ALL providers use AI SDK v5:
+ * - OpenAI (via @ai-sdk/openai - uses Responses API automatically)
+ * - Groq (via @ai-sdk/groq)
+ * - Anthropic (via @ai-sdk/anthropic)
+ * - Google Gemini (via @ai-sdk/google)
+ * - Local/OSS models (via @ai-sdk/openai with custom baseURL and forced /chat/completions API)
+ *
+ * Important API distinction:
+ * - OpenAI provider: Uses modern Responses API (/v1/responses)
+ * - Local providers: Uses Chat Completions API (/v1/chat/completions) - vLLM, Ollama, etc. only support this
  *
  * Routes based on:
  * - Tenant policies
@@ -90,145 +98,26 @@ export interface LlmProviderClient {
 }
 
 /**
- * OpenAI Responses API client
+ * OpenAI provider client using Vercel AI SDK v5
+ *
+ * Automatically uses the Responses API when available, with fallback to Chat Completions.
+ * Handles all OpenAI API complexities internally via AI SDK.
  */
-export class OpenAiResponsesClient implements LlmProviderClient {
-  private apiKey: string;
-  private baseUrl: string;
+export class OpenAiProviderClient implements LlmProviderClient {
+  private openai: any;
 
-  constructor(apiKey: string, baseUrl = 'https://api.openai.com/v1') {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
-  }
-
-  async chat(
-    messages: ChatMessage[],
-    model: string,
-    options?: { temperature?: number; maxTokens?: number }
-  ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content,
-        })),
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createOpenAI } = require('@ai-sdk/openai');
+      this.openai = createOpenAI({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
       throw new LlmError(
-        `OpenAI Responses API error: ${error}`,
-        response.status
+        'OpenAI provider requires AI SDK packages: npm install ai @ai-sdk/openai'
       );
     }
-
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new LlmError('No content in OpenAI response');
-    }
-
-    return content;
-  }
-
-  async *streamChat(
-    messages: ChatMessage[],
-    model: string,
-    options?: { temperature?: number; maxTokens?: number }
-  ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content,
-        })),
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      yield {
-        type: 'error',
-        error: new LlmError(`OpenAI Responses API error: ${error}`, response.status),
-      };
-      return;
-    }
-
-    if (!response.body) {
-      yield { type: 'error', error: new LlmError('No response body') };
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              yield { type: 'text', delta };
-            }
-          } catch (e) {
-            // Skip malformed JSON
-            continue;
-          }
-        }
-      }
-
-      yield { type: 'done' };
-    } catch (error) {
-      yield {
-        type: 'error',
-        error: error instanceof Error ? error : new Error(String(error)),
-      };
-    }
-  }
-}
-
-/**
- * Groq API client
- */
-export class GroqLlmClient implements LlmProviderClient {
-  private apiKey: string;
-  private baseUrl: string;
-
-  constructor(apiKey: string, baseUrl = 'https://api.groq.com/openai/v1') {
-    this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
   }
 
   async chat(
@@ -236,36 +125,25 @@ export class GroqLlmClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.openai(model),
         messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new LlmError(`Groq API error: ${error}`, response.status);
+      return result.text;
+    } catch (error) {
+      throw new LlmError(
+        `OpenAI error: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
-
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new LlmError('No content in Groq response');
-    }
-
-    return content;
   }
 
   async *streamChat(
@@ -273,87 +151,56 @@ export class GroqLlmClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.openai(model),
         messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      yield {
-        type: 'error',
-        error: new LlmError(`Groq API error: ${error}`, response.status),
-      };
-      return;
-    }
-
-    if (!response.body) {
-      yield { type: 'error', error: new LlmError('No response body') };
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              yield { type: 'text', delta };
-            }
-          } catch (e) {
-            // Skip malformed JSON
-            continue;
-          }
-        }
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
       }
 
       yield { type: 'done' };
     } catch (error) {
       yield {
         type: 'error',
-        error: error instanceof Error ? error : new Error(String(error)),
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`OpenAI error: ${String(error)}`),
       };
     }
   }
 }
 
 /**
- * Local/OSS HTTP model client (vLLM, Ollama, etc.)
+ * Groq provider client using Vercel AI SDK v5
+ *
+ * Handles Groq's fast inference API via AI SDK abstraction.
  */
-export class LocalHttpLlmClient implements LlmProviderClient {
-  private baseUrl: string;
+export class GroqProviderClient implements LlmProviderClient {
+  private groq: any;
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createGroq } = require('@ai-sdk/groq');
+      this.groq = createGroq({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
+      throw new LlmError(
+        'Groq provider requires AI SDK packages: npm install ai @ai-sdk/groq'
+      );
+    }
   }
 
   async chat(
@@ -361,35 +208,25 @@ export class LocalHttpLlmClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.groq(model),
         messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new LlmError(`Local HTTP LLM error: ${error}`, response.status);
+      return result.text;
+    } catch (error) {
+      throw new LlmError(
+        `Groq error: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
-
-    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new LlmError('No content in local LLM response');
-    }
-
-    return content;
   }
 
   async *streamChat(
@@ -397,73 +234,197 @@ export class LocalHttpLlmClient implements LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk> {
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.groq(model),
         messages: messages.map(m => ({
           role: m.role,
           content: m.content,
         })),
         temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 2048,
-        stream: true,
-      }),
-    });
+        maxTokens: options?.maxTokens ?? 2048,
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      yield {
-        type: 'error',
-        error: new LlmError(`Local HTTP LLM error: ${error}`, response.status),
-      };
-      return;
-    }
-
-    if (!response.body) {
-      yield { type: 'error', error: new LlmError('No response body') };
-      return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === 'data: [DONE]') continue;
-          if (!trimmed.startsWith('data: ')) continue;
-
-          try {
-            const json = JSON.parse(trimmed.slice(6));
-            const delta = json.choices?.[0]?.delta?.content;
-            if (delta) {
-              yield { type: 'text', delta };
-            }
-          } catch (e) {
-            // Skip malformed JSON
-            continue;
-          }
-        }
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
       }
 
       yield { type: 'done' };
     } catch (error) {
       yield {
         type: 'error',
-        error: error instanceof Error ? error : new Error(String(error)),
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`Groq error: ${String(error)}`),
+      };
+    }
+  }
+}
+
+/**
+ * Anthropic provider client using Vercel AI SDK v5
+ *
+ * Handles Anthropic Claude models via AI SDK abstraction.
+ */
+export class AnthropicProviderClient implements LlmProviderClient {
+  private anthropic: any;
+
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createAnthropic } = require('@ai-sdk/anthropic');
+      this.anthropic = createAnthropic({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
+      throw new LlmError(
+        'Anthropic provider requires AI SDK packages: npm install ai @ai-sdk/anthropic'
+      );
+    }
+  }
+
+  async chat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): Promise<string> {
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.anthropic(model),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        maxTokens: options?.maxTokens ?? 2048,
+      });
+
+      return result.text;
+    } catch (error) {
+      throw new LlmError(
+        `Anthropic error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk> {
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.anthropic(model),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        maxTokens: options?.maxTokens ?? 2048,
+      });
+
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
+      }
+
+      yield { type: 'done' };
+    } catch (error) {
+      yield {
+        type: 'error',
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`Anthropic error: ${String(error)}`),
+      };
+    }
+  }
+}
+
+/**
+ * Google Gemini provider client using Vercel AI SDK v5
+ *
+ * Handles Google Gemini models via AI SDK abstraction.
+ */
+export class GeminiProviderClient implements LlmProviderClient {
+  private google: any;
+
+  constructor(apiKey: string, config?: { baseURL?: string }) {
+    try {
+      const { createGoogleGenerativeAI } = require('@ai-sdk/google');
+      this.google = createGoogleGenerativeAI({
+        apiKey,
+        baseURL: config?.baseURL,
+      });
+    } catch (error) {
+      throw new LlmError(
+        'Google Gemini provider requires AI SDK packages: npm install ai @ai-sdk/google'
+      );
+    }
+  }
+
+  async chat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): Promise<string> {
+    try {
+      const { generateText } = require('ai');
+
+      const result = await generateText({
+        model: this.google(model),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        maxTokens: options?.maxTokens ?? 2048,
+      });
+
+      return result.text;
+    } catch (error) {
+      throw new LlmError(
+        `Google Gemini error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  async *streamChat(
+    messages: ChatMessage[],
+    model: string,
+    options?: { temperature?: number; maxTokens?: number }
+  ): AsyncIterable<LlmStreamChunk> {
+    try {
+      const { streamText } = require('ai');
+
+      const result = await streamText({
+        model: this.google(model),
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        temperature: options?.temperature ?? 0.3,
+        maxTokens: options?.maxTokens ?? 2048,
+      });
+
+      for await (const chunk of result.textStream) {
+        yield { type: 'text', delta: chunk };
+      }
+
+      yield { type: 'done' };
+    } catch (error) {
+      yield {
+        type: 'error',
+        error:
+          error instanceof Error
+            ? error
+            : new Error(`Google Gemini error: ${String(error)}`),
       };
     }
   }
@@ -628,36 +589,155 @@ export class LlmRouter implements LlmClient {
 }
 
 /**
- * Create a configured LLM router
+ * Provider configuration interface
  */
-export function createLlmRouter(config: {
-  openaiApiKey?: string;
-  groqApiKey?: string;
-  localBaseUrl?: string;
+export interface ProviderConfig {
+  apiKey: string;
+  baseURL?: string;
+}
+
+/**
+ * Local provider configuration
+ *
+ * For OpenAI-compatible local endpoints (vLLM, Ollama, etc.)
+ * Uses /v1/chat/completions API (NOT Responses API)
+ */
+export interface LocalProviderConfig {
+  baseURL: string;
+  apiKey?: string; // Optional - some local setups require authentication
+}
+
+/**
+ * LLM Router configuration
+ *
+ * Two ways to configure providers:
+ * 1. Pass pre-configured providers directly via `providers`
+ * 2. Pass provider configs via `providerConfigs` (easier, more flexible)
+ */
+export interface LlmRouterConfig {
+  /**
+   * Pre-configured provider instances (most flexible)
+   * Use this if you need custom provider implementations
+   */
+  providers?: LlmProviderRegistry;
+
+  /**
+   * Provider configurations (easier, recommended)
+   * Automatically creates provider instances from configs
+   */
+  providerConfigs?: {
+    openai?: ProviderConfig;
+    groq?: ProviderConfig;
+    anthropic?: ProviderConfig;
+    google?: ProviderConfig;
+    local?: LocalProviderConfig;
+    [key: string]: ProviderConfig | LocalProviderConfig | undefined;
+  };
+
+  /**
+   * Policy store for tenant-based routing
+   */
   policyStore?: LlmPolicyStore;
+
+  /**
+   * Default provider to use (defaults to first available)
+   */
   defaultProvider?: string;
+
+  /**
+   * Default model to use
+   */
   defaultModel?: string;
-}): LlmRouter {
-  const providers: LlmProviderRegistry = {};
+}
 
-  // Register OpenAI if key provided
-  if (config.openaiApiKey) {
-    providers.openai = new OpenAiResponsesClient(config.openaiApiKey);
+/**
+ * Create a configured LLM router with AI SDK v5 providers
+ *
+ * Supports flexible provider configuration - add any AI SDK provider without changing this function!
+ *
+ * @example
+ * ```typescript
+ * // Easy way - using provider configs
+ * const router = createLlmRouter({
+ *   providerConfigs: {
+ *     openai: { apiKey: process.env.OPENAI_API_KEY! },
+ *     groq: { apiKey: process.env.GROQ_API_KEY! },
+ *     anthropic: { apiKey: process.env.ANTHROPIC_API_KEY! },
+ *     google: { apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! },
+ *   },
+ *   defaultProvider: 'groq',
+ *   defaultModel: 'llama-3.1-70b-versatile',
+ * });
+ *
+ * // Advanced way - pre-configured providers
+ * const router = createLlmRouter({
+ *   providers: {
+ *     openai: new OpenAiProviderClient(apiKey),
+ *     custom: new MyCustomProvider(),
+ *   },
+ * });
+ * ```
+ */
+export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
+  let providers: LlmProviderRegistry = {};
+
+  // Option 1: Use pre-configured providers if provided
+  if (config.providers) {
+    providers = { ...config.providers };
+  }
+  // Option 2: Create providers from configs
+  else if (config.providerConfigs) {
+    const configs = config.providerConfigs;
+
+    // Create OpenAI provider
+    if (configs.openai) {
+      providers.openai = new OpenAiProviderClient(
+        configs.openai.apiKey,
+        configs.openai.baseURL ? { baseURL: configs.openai.baseURL } : undefined
+      );
+    }
+
+    // Create Groq provider
+    if (configs.groq) {
+      providers.groq = new GroqProviderClient(
+        configs.groq.apiKey,
+        configs.groq.baseURL ? { baseURL: configs.groq.baseURL } : undefined
+      );
+    }
+
+    // Create Anthropic provider
+    if (configs.anthropic) {
+      providers.anthropic = new AnthropicProviderClient(
+        configs.anthropic.apiKey,
+        configs.anthropic.baseURL ? { baseURL: configs.anthropic.baseURL } : undefined
+      );
+    }
+
+    // Create Google Gemini provider
+    if (configs.google) {
+      providers.google = new GeminiProviderClient(
+        configs.google.apiKey,
+        configs.google.baseURL ? { baseURL: configs.google.baseURL } : undefined
+      );
+    }
+
+    // Create local provider (using OpenAI-compatible /v1/chat/completions endpoint)
+    // Note: Local models automatically use chat completions API when using custom baseURL
+    // AI SDK v5 auto-detects and uses /v1/chat/completions for non-OpenAI endpoints
+    if (configs.local) {
+      providers.local = new OpenAiProviderClient(
+        configs.local.apiKey || '', // Empty string if no API key (some local endpoints don't require auth)
+        { baseURL: configs.local.baseURL }
+      );
+    }
   }
 
-  // Register Groq if key provided
-  if (config.groqApiKey) {
-    providers.groq = new GroqLlmClient(config.groqApiKey);
-  }
-
-  // Register local if base URL provided
-  if (config.localBaseUrl) {
-    providers.local = new LocalHttpLlmClient(config.localBaseUrl);
-  }
+  // Determine default provider (first available if not specified)
+  const availableProviders = Object.keys(providers);
+  const defaultProvider = config.defaultProvider ?? availableProviders[0] ?? 'groq';
+  const defaultModel = config.defaultModel ?? 'llama-3.1-70b-versatile';
 
   const policyStore = config.policyStore ?? new InMemoryPolicyStore();
-  const defaultProvider = config.defaultProvider ?? 'groq';
-  const defaultModel = config.defaultModel ?? 'llama-3-70b';
 
   return new LlmRouter(providers, policyStore, defaultProvider, defaultModel);
 }

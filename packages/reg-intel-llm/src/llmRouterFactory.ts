@@ -2,36 +2,71 @@
  * Factory for creating pre-configured LLM router instances
  */
 
-import { createLlmRouter, InMemoryPolicyStore, type TenantLlmPolicy } from './llmRouter.js';
+import { createLlmRouter, InMemoryPolicyStore, type TenantLlmPolicy, type ProviderConfig, type LocalProviderConfig } from './llmRouter.js';
 
 /**
  * Create default LLM router with sensible defaults
  *
- * Reads API keys from environment and sets up a basic policy
+ * Reads API keys from environment and sets up a basic policy.
+ * Supports: OpenAI, Groq, Anthropic, Google Gemini, and local models.
  */
 export function createDefaultLlmRouter() {
   const groqApiKey = process.env.GROQ_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY;
+  const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const localBaseUrl = process.env.LOCAL_LLM_BASE_URL;
 
-  if (!groqApiKey && !openaiApiKey && !localBaseUrl) {
+  if (!groqApiKey && !openaiApiKey && !anthropicApiKey && !googleApiKey && !localBaseUrl) {
     throw new Error(
-      'No LLM provider configured. Set GROQ_API_KEY, OPENAI_API_KEY, or LOCAL_LLM_BASE_URL'
+      'No LLM provider configured. Set GROQ_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or LOCAL_LLM_BASE_URL'
     );
   }
 
-  // Prefer Groq if available, fallback to OpenAI, then local
-  const defaultProvider = groqApiKey ? 'groq' : openaiApiKey ? 'openai' : 'local';
+  // Build provider configs
+  const providerConfigs: {
+    openai?: ProviderConfig;
+    groq?: ProviderConfig;
+    anthropic?: ProviderConfig;
+    google?: ProviderConfig;
+    local?: LocalProviderConfig;
+  } = {};
+
+  if (openaiApiKey) {
+    providerConfigs.openai = { apiKey: openaiApiKey };
+  }
+  if (groqApiKey) {
+    providerConfigs.groq = { apiKey: groqApiKey };
+  }
+  if (anthropicApiKey) {
+    providerConfigs.anthropic = { apiKey: anthropicApiKey };
+  }
+  if (googleApiKey) {
+    providerConfigs.google = { apiKey: googleApiKey };
+  }
+  if (localBaseUrl) {
+    providerConfigs.local = { baseURL: localBaseUrl };
+  }
+
+  // Prefer Groq if available, fallback to Google, Anthropic, OpenAI, then local
+  const defaultProvider = groqApiKey ? 'groq'
+    : googleApiKey ? 'google'
+    : anthropicApiKey ? 'anthropic'
+    : openaiApiKey ? 'openai'
+    : 'local';
+
   const defaultModel = defaultProvider === 'groq'
     ? 'llama-3.1-70b-versatile'
+    : defaultProvider === 'google'
+    ? 'gemini-2.0-flash-exp'
+    : defaultProvider === 'anthropic'
+    ? 'claude-3-5-sonnet-20241022'
     : defaultProvider === 'openai'
-    ? 'gpt-4'
+    ? 'gpt-4o'
     : 'llama-3-8b';
 
   const router = createLlmRouter({
-    groqApiKey,
-    openaiApiKey,
-    localBaseUrl,
+    providerConfigs,
     defaultProvider,
     defaultModel,
   });
