@@ -69,10 +69,12 @@ interface GraphData {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ForceGraphRef = any;
 
-// ForceGraph2D extends our GraphNode/GraphEdge types with additional properties at runtime
-// Using intersection types to represent this without losing type safety
-type ForceGraphNode = GraphNode & { x?: number; y?: number; vx?: number; vy?: number };
-type ForceGraphLink = GraphEdge & { source: string | ForceGraphNode; target: string | ForceGraphNode };
+// ForceGraph2D node/link types - using any for compatibility with library internals
+// The library adds x, y, vx, vy properties at runtime
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ForceGraphNode = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ForceGraphLink = any;
 
 interface GraphPatch {
   type: 'graph_patch';
@@ -593,17 +595,16 @@ export function GraphVisualization({
           width={dimensions.width}
           height={dimensions.height}
           nodeLabel={(node: ForceGraphNode) => `${node.label || node.id}\n(${node.type})`}
-          nodeColor={(node: ForceGraphNode) => getNodeColor(node as ForceGraphNode)}
+          nodeColor={(node: ForceGraphNode) => getNodeColor(node)}
           nodeRelSize={6}
           nodeCanvasObject={(node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            const typedNode = node as ForceGraphNode;
-            const label = typedNode.label || typedNode.id;
+            const label = node.label || node.id;
             const fontSize = 12 / globalScale;
-            const isSelected = selectedNode?.id === typedNode.id;
+            const isSelected = selectedNode?.id === node.id;
 
             // Ensure x and y are defined (they should be by the time rendering happens)
-            const x = typedNode.x ?? 0;
-            const y = typedNode.y ?? 0;
+            const x = node.x ?? 0;
+            const y = node.y ?? 0;
 
             ctx.font = `${fontSize}px Sans-Serif`;
             ctx.textAlign = 'center';
@@ -619,7 +620,7 @@ export function GraphVisualization({
             }
 
             // Draw node circle
-            ctx.fillStyle = getNodeColor(typedNode);
+            ctx.fillStyle = getNodeColor(node);
             ctx.beginPath();
             ctx.arc(x, y, 6, 0, 2 * Math.PI);
             ctx.fill();
@@ -629,7 +630,7 @@ export function GraphVisualization({
             ctx.font = isSelected ? `bold ${fontSize}px Sans-Serif` : `${fontSize}px Sans-Serif`;
             ctx.fillText(label, x, y + 12);
           }}
-          linkLabel={(link: ForceGraphLink) => (link as ForceGraphLink).type}
+          linkLabel={(link: ForceGraphLink) => link.type}
           linkColor={() => '#94a3b8'}
           linkWidth={1.5}
           linkDirectionalArrowLength={4}
