@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 /**
  * User profile for regulatory context
@@ -192,12 +196,9 @@ export default function Home() {
               Graph-powered regulatory research for tax, welfare, pensions, and EU rules
             </p>
           </div>
-          <a
-            href="/graph"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors"
-          >
-            View Graph
-          </a>
+          <Button asChild>
+            <a href="/graph">View Graph</a>
+          </Button>
         </div>
       </header>
 
@@ -220,10 +221,10 @@ export default function Home() {
           </div>
 
           <div className="flex gap-2 items-center">
-            <label className="text-sm text-gray-400">Jurisdictions:</label>
+            <label className="text-sm text-muted-foreground">Jurisdictions:</label>
             <div className="flex gap-1">
               {['IE', 'EU', 'MT', 'IM'].map((jur) => (
-                <button
+                <Badge
                   key={jur}
                   onClick={() => {
                     const current = profile.jurisdictions;
@@ -233,14 +234,11 @@ export default function Home() {
                       setProfile({ ...profile, jurisdictions: [...current, jur] });
                     }
                   }}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    profile.jurisdictions.includes(jur)
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                  }`}
+                  variant={profile.jurisdictions.includes(jur) ? "default" : "outline"}
+                  className="cursor-pointer"
                 >
                   {jur}
-                </button>
+                </Badge>
               ))}
             </div>
           </div>
@@ -272,28 +270,36 @@ export default function Home() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && (
-            <div className="text-center text-gray-400 mt-8 space-y-4">
+            <div className="text-center text-muted-foreground mt-8 space-y-4">
               <p className="text-lg">Welcome to the Regulatory Intelligence Copilot!</p>
               <p className="text-sm">Ask questions about:</p>
-              <div className="grid grid-cols-2 gap-2 max-w-2xl mx-auto text-left">
-                <div className="p-3 bg-gray-800 rounded">
-                  <p className="font-semibold text-blue-400">Tax & Company Law</p>
-                  <p className="text-xs text-gray-500">Corporation tax, CGT, R&D credits, director obligations</p>
-                </div>
-                <div className="p-3 bg-gray-800 rounded">
-                  <p className="font-semibold text-green-400">Social Welfare</p>
-                  <p className="text-xs text-gray-500">PRSI, benefits, entitlements, contributions</p>
-                </div>
-                <div className="p-3 bg-gray-800 rounded">
-                  <p className="font-semibold text-purple-400">Pensions</p>
-                  <p className="text-xs text-gray-500">State pension, occupational, personal pensions</p>
-                </div>
-                <div className="p-3 bg-gray-800 rounded">
-                  <p className="font-semibold text-yellow-400">EU & Cross-Border</p>
-                  <p className="text-xs text-gray-500">Social security coordination, EU regulations</p>
-                </div>
+              <div className="grid grid-cols-2 gap-3 max-w-2xl mx-auto text-left">
+                <Card>
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-base text-blue-400">Tax & Company Law</CardTitle>
+                    <CardDescription className="text-xs">Corporation tax, CGT, R&D credits, director obligations</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-base text-green-400">Social Welfare</CardTitle>
+                    <CardDescription className="text-xs">PRSI, benefits, entitlements, contributions</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-base text-purple-400">Pensions</CardTitle>
+                    <CardDescription className="text-xs">State pension, occupational, personal pensions</CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card>
+                  <CardHeader className="p-4">
+                    <CardTitle className="text-base text-yellow-400">EU & Cross-Border</CardTitle>
+                    <CardDescription className="text-xs">Social security coordination, EU regulations</CardDescription>
+                  </CardHeader>
+                </Card>
               </div>
-              <p className="text-xs text-gray-500 mt-6">
+              <p className="text-xs text-muted-foreground mt-6">
                 ⚠️ This is a research tool, not legal/tax advice. Always verify with qualified professionals.
               </p>
             </div>
@@ -336,23 +342,23 @@ export default function Home() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-gray-800 p-4">
+        <div className="border-t border-border p-4">
           <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
+            <Input
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
               disabled={isLoading}
+              className="flex-1 h-10"
             />
-            <button
+            <Button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed px-6 py-3 rounded-lg transition-colors font-medium"
+              size="lg"
             >
               {isLoading ? 'Thinking...' : 'Send'}
-            </button>
+            </Button>
           </form>
           <p className="text-xs text-gray-500 mt-2 text-center">
             Research assistance only • Not legal, tax, or welfare advice • Verify with qualified professionals
