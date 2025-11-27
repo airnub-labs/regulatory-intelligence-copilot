@@ -595,10 +595,10 @@ export function GraphVisualization({
           graphData={filteredData}
           width={dimensions.width}
           height={dimensions.height}
-          nodeLabel={(node: any) => `${node.label || node.id}\n(${node.type})`}
-          nodeColor={(node: any) => getNodeColor(node as ForceGraphNode)}
+          nodeLabel={(node: ForceGraphNode) => `${node.label || node.id}\n(${node.type})`}
+          nodeColor={(node: ForceGraphNode) => getNodeColor(node as ForceGraphNode)}
           nodeRelSize={6}
-          nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+          nodeCanvasObject={(node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
             const typedNode = node as ForceGraphNode;
             const label = typedNode.label || typedNode.id;
             const fontSize = 12 / globalScale;
@@ -632,7 +632,7 @@ export function GraphVisualization({
             ctx.font = isSelected ? `bold ${fontSize}px Sans-Serif` : `${fontSize}px Sans-Serif`;
             ctx.fillText(label, x, y + 12);
           }}
-          linkLabel={(link: any) => (link as ForceGraphLink).type}
+          linkLabel={(link: ForceGraphLink) => (link as ForceGraphLink).type}
           linkColor={() => '#94a3b8'}
           linkWidth={1.5}
           linkDirectionalArrowLength={4}
@@ -641,7 +641,7 @@ export function GraphVisualization({
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.3}
           cooldownTicks={100}
-          onNodeClick={(node: any) => {
+          onNodeClick={(node: ForceGraphNode) => {
             setSelectedNode(node as GraphNode);
           }}
           onBackgroundClick={() => setSelectedNode(null)}
