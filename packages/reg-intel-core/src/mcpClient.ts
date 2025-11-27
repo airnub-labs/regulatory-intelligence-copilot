@@ -9,6 +9,7 @@ import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from './logger.js';
 import { getContext } from './observability/requestContext.js';
 import { MCP_DEBUG_ENABLED, logMcpDebug } from './observability/mcpDebugLogger.js';
+import { startSpan } from './observability/spanLogger.js';
 
 const logger = createLogger({ component: 'MCPClient' });
 
@@ -189,10 +190,8 @@ const mcpSanitizationAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req
  * MCP logging aspect - logs tool calls without exposing payloads
  */
 const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, next) => {
-  const start = Date.now();
-
   const { correlationId } = getContext();
-
+  const start = Date.now();
   // Friendly names for demo visibility
   const toolDisplayName = req.toolName.includes('perplexity')
     ? 'Perplexity (spec discovery)'
@@ -202,16 +201,25 @@ const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, nex
 
   const log = logger.childWithContext({ toolName: req.toolName, correlationId });
 
+  const span = startSpan({
+    name: 'mcp.tool',
+    provider: 'mcp',
+    toolName: req.toolName,
+    attributes: { toolDisplayName, url: mcpGatewayUrl },
+  });
+
   log.info('Calling MCP tool', { toolDisplayName, correlationId });
 
   try {
     const result = await next(req);
     const duration = Date.now() - start;
     log.info('MCP tool completed', { toolDisplayName, durationMs: duration, correlationId });
+    span.end({ durationMs: duration });
     return result;
   } catch (error) {
     const duration = Date.now() - start;
     log.error('MCP tool failed', { toolDisplayName, durationMs: duration, correlationId, error });
+    span.error(error, { durationMs: duration });
     throw error;
   }
 };

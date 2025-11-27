@@ -188,6 +188,11 @@ export {
   getContext,
   type RequestContext,
 } from './observability/requestContext.js';
+export {
+  startSpan,
+  type SpanOptions,
+  type SpanHandle,
+} from './observability/spanLogger.js';
 
 // Agents
 export { SingleDirector_IE_SocialSafetyNet_Agent } from './agents/SingleDirector_IE_SocialSafetyNet_Agent.js';

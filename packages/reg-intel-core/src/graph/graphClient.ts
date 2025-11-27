@@ -17,6 +17,7 @@ import { callMemgraphMcp } from '../mcpClient.js';
 import { ensureMcpGatewayConfigured } from '../sandboxManager.js';
 import { createLogger } from '../logger.js';
 import { getContext } from '../observability/requestContext.js';
+import { startSpan } from '../observability/spanLogger.js';
 
 const logger = createLogger({ component: 'GraphClient' });
 
@@ -154,6 +155,12 @@ async function runMemgraphQuery(query: string): Promise<unknown> {
   const sanitizedQuery = sanitizeQuerySnippet(query);
   const toolName = 'memgraph_mcp.run_query';
   const log = logger.childWithContext({ correlationId, toolName });
+  const span = startSpan({
+    name: 'memgraph.query',
+    provider: 'memgraph',
+    toolName,
+    attributes: { query: sanitizedQuery },
+  });
 
   if (shouldSample(MEMGRAPH_QUERY_LOG_SAMPLE_RATE)) {
     log.info('Executing Memgraph query', { query: sanitizedQuery });
@@ -171,6 +178,7 @@ async function runMemgraphQuery(query: string): Promise<unknown> {
       correlationId,
       query: sanitizedQuery,
     });
+    span.end({ durationMs, resultSize });
 
     if (resultSize === 0 && shouldSample(MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE)) {
       log.warn('Memgraph query returned no results', {
@@ -200,6 +208,7 @@ async function runMemgraphQuery(query: string): Promise<unknown> {
       query: sanitizedQuery,
       error,
     });
+    span.error(error, { durationMs });
 
     throw error;
   }
