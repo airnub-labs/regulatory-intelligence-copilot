@@ -22,6 +22,7 @@
 
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
+import { startSpan } from './observability/spanLogger.js';
 
 /**
  * LLM completion options
@@ -487,14 +488,35 @@ export class LlmRouter implements LlmClient {
   ): Promise<string> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
+    const span = startSpan({
+      name: 'llm.router',
+      provider,
+      model,
+      task: options?.task,
+      attributes: {
+        tenantId: options?.tenantId ?? 'default',
+        streaming: false,
+        messageCount: messages.length,
+      },
+    });
+
     // Get provider client
     const providerClient = this.providers[provider];
     if (!providerClient) {
-      throw new LlmError(`Unknown provider: ${provider}`);
+      const error = new LlmError(`Unknown provider: ${provider}`);
+      span.error(error);
+      throw error;
     }
 
     // Call provider
-    return providerClient.chat(messages, model, taskOptions);
+    try {
+      const result = await providerClient.chat(messages, model, taskOptions);
+      span.end();
+      return result;
+    } catch (error) {
+      span.error(error);
+      throw error;
+    }
   }
 
   async *streamChat(
@@ -503,27 +525,49 @@ export class LlmRouter implements LlmClient {
   ): AsyncIterable<LlmStreamChunk> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
+    const span = startSpan({
+      name: 'llm.router',
+      provider,
+      model,
+      task: options?.task,
+      attributes: {
+        tenantId: options?.tenantId ?? 'default',
+        streaming: true,
+        messageCount: messages.length,
+      },
+    });
+
     // Get provider client
     const providerClient = this.providers[provider];
     if (!providerClient) {
-      yield {
-        type: 'error',
-        error: new LlmError(`Unknown provider: ${provider}`),
-      };
+      const error = new LlmError(`Unknown provider: ${provider}`);
+      span.error(error);
+      yield { type: 'error', error };
       return;
     }
 
     // Check if provider supports streaming
     if (!providerClient.streamChat) {
-      yield {
-        type: 'error',
-        error: new LlmError(`Provider ${provider} does not support streaming`),
-      };
+      const error = new LlmError(`Provider ${provider} does not support streaming`);
+      span.error(error);
+      yield { type: 'error', error };
       return;
     }
 
-    // Stream from provider
-    yield* providerClient.streamChat(messages, model, taskOptions);
+    try {
+      for await (const chunk of providerClient.streamChat(messages, model, taskOptions)) {
+        if (chunk.type === 'error') {
+          span.error(chunk.error);
+        }
+        if (chunk.type === 'done') {
+          span.end();
+        }
+        yield chunk;
+      }
+    } catch (error) {
+      span.error(error);
+      throw error;
+    }
   }
 
   /**

@@ -200,3 +200,4 @@ export {
   GlobalRegulatoryComplianceAgent,
   createComplianceOrchestrator,
 } from './agents/GlobalRegulatoryComplianceAgent.js';
+import './observability/configureLlmSpanContext.js';

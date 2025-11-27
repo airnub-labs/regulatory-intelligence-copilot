@@ -43,6 +43,14 @@ export {
   GeminiProviderClient,
 } from './llmRouter.js';
 
+// Observability
+export {
+  startSpan as startLlmSpan,
+  setSpanContextResolver,
+  type SpanHandle as LlmSpanHandle,
+  type SpanOptions as LlmSpanOptions,
+} from './observability/spanLogger.js';
+
 // Factory
 export {
   createDefaultLlmRouter,
