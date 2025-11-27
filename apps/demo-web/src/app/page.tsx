@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_PROFILE_ID } from '@reg-copilot/reg-intel-core/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Message, MessageLoading } from '@/components/chat/message';
+import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container';
+import { PromptInput } from '@/components/chat/prompt-input';
 
 /**
  * User profile for regulatory context
@@ -142,8 +145,7 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSubmit = async () => {
     if (!input.trim()) return;
 
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() };
@@ -186,13 +188,13 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-gray-900 text-white">
+    <main className="flex min-h-screen flex-col">
       {/* Header */}
-      <header className="border-b border-gray-800 p-4">
+      <header className="border-b bg-card p-4">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">Regulatory Intelligence Copilot 🧭</h1>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-muted-foreground">
               Graph-powered regulatory research for tax, welfare, pensions, and EU rules
             </p>
           </div>
@@ -204,13 +206,13 @@ export default function Home() {
 
       <div className="flex-1 flex flex-col max-w-5xl w-full mx-auto">
         {/* Profile Selector */}
-        <div className="border-b border-gray-800 p-4 flex gap-4 items-center">
+        <div className="border-b bg-card p-4 flex flex-wrap gap-4 items-center">
           <div className="flex gap-2 items-center">
-            <label className="text-sm text-gray-400">Persona:</label>
+            <label className="text-sm text-muted-foreground font-medium">Persona:</label>
             <select
               value={profile.personaType}
               onChange={(e) => setProfile({ ...profile, personaType: e.target.value as UserProfile['personaType'] })}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-1 text-sm focus:outline-none focus:border-blue-500"
+              className="bg-background border border-input rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="single-director">Single Director Company (IE)</option>
               <option value="self-employed">Self-Employed</option>
@@ -220,9 +222,11 @@ export default function Home() {
             </select>
           </div>
 
+          <Separator orientation="vertical" className="h-6" />
+
           <div className="flex gap-2 items-center">
-            <label className="text-sm text-muted-foreground">Jurisdictions:</label>
-            <div className="flex gap-1">
+            <label className="text-sm text-muted-foreground font-medium">Jurisdictions:</label>
+            <div className="flex gap-1.5">
               {['IE', 'EU', 'MT', 'IM'].map((jur) => (
                 <Badge
                   key={jur}
@@ -235,7 +239,7 @@ export default function Home() {
                     }
                   }}
                   variant={profile.jurisdictions.includes(jur) ? "default" : "outline"}
-                  className="cursor-pointer"
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
                 >
                   {jur}
                 </Badge>
@@ -245,122 +249,105 @@ export default function Home() {
         </div>
 
         {chatMetadata && (
-          <div className="border-b border-gray-800 px-4 py-3 text-sm text-gray-300 bg-gray-950/50">
-            <div className="flex flex-wrap gap-4">
+          <div className="border-b bg-muted/50 px-4 py-3 text-sm">
+            <div className="flex flex-wrap gap-4 items-center">
               <div>
-                <span className="text-gray-500">Agent:</span> {chatMetadata.agentId}
+                <span className="text-muted-foreground font-medium">Agent:</span>{' '}
+                <span className="text-foreground">{chatMetadata.agentId}</span>
               </div>
+              <Separator orientation="vertical" className="h-4" />
               <div>
-                <span className="text-gray-500">Jurisdictions:</span> {chatMetadata.jurisdictions.join(', ')}
+                <span className="text-muted-foreground font-medium">Jurisdictions:</span>{' '}
+                <span className="text-foreground">{chatMetadata.jurisdictions.join(', ')}</span>
               </div>
+              <Separator orientation="vertical" className="h-4" />
               <div>
-                <span className="text-gray-500">Uncertainty:</span> {chatMetadata.uncertaintyLevel}
+                <span className="text-muted-foreground font-medium">Uncertainty:</span>{' '}
+                <Badge variant={chatMetadata.uncertaintyLevel === 'high' ? 'destructive' : 'secondary'} className="ml-1">
+                  {chatMetadata.uncertaintyLevel}
+                </Badge>
               </div>
+              <Separator orientation="vertical" className="h-4" />
               <div>
-                <span className="text-gray-500">Disclaimer:</span> {chatMetadata.disclaimerKey}
-              </div>
-              <div>
-                <span className="text-gray-500">Referenced Nodes:</span>{' '}
-                {chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.join(', ') : 'none'}
+                <span className="text-muted-foreground font-medium">Referenced Nodes:</span>{' '}
+                <span className="text-foreground">
+                  {chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.length : 'none'}
+                </span>
               </div>
             </div>
           </div>
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length === 0 && (
-            <div className="text-center text-muted-foreground mt-8 space-y-4">
-              <p className="text-lg">Welcome to the Regulatory Intelligence Copilot!</p>
-              <p className="text-sm">Ask questions about:</p>
-              <div className="grid grid-cols-2 gap-3 max-w-2xl mx-auto text-left">
+        <ChatContainer className="flex-1">
+          {messages.length === 0 ? (
+            <ChatWelcome>
+              <h2 className="text-xl font-semibold">Welcome to the Regulatory Intelligence Copilot!</h2>
+              <p className="text-sm text-muted-foreground">Ask questions about:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto w-full">
                 <Card>
                   <CardHeader className="p-4">
-                    <CardTitle className="text-base text-blue-400">Tax & Company Law</CardTitle>
-                    <CardDescription className="text-xs">Corporation tax, CGT, R&D credits, director obligations</CardDescription>
+                    <CardTitle className="text-base text-blue-500">Tax & Company Law</CardTitle>
+                    <CardDescription className="text-xs">
+                      Corporation tax, CGT, R&D credits, director obligations
+                    </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="p-4">
-                    <CardTitle className="text-base text-green-400">Social Welfare</CardTitle>
-                    <CardDescription className="text-xs">PRSI, benefits, entitlements, contributions</CardDescription>
+                    <CardTitle className="text-base text-green-500">Social Welfare</CardTitle>
+                    <CardDescription className="text-xs">
+                      PRSI, benefits, entitlements, contributions
+                    </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="p-4">
-                    <CardTitle className="text-base text-purple-400">Pensions</CardTitle>
-                    <CardDescription className="text-xs">State pension, occupational, personal pensions</CardDescription>
+                    <CardTitle className="text-base text-purple-500">Pensions</CardTitle>
+                    <CardDescription className="text-xs">
+                      State pension, occupational, personal pensions
+                    </CardDescription>
                   </CardHeader>
                 </Card>
                 <Card>
                   <CardHeader className="p-4">
-                    <CardTitle className="text-base text-yellow-400">EU & Cross-Border</CardTitle>
-                    <CardDescription className="text-xs">Social security coordination, EU regulations</CardDescription>
+                    <CardTitle className="text-base text-yellow-500">EU & Cross-Border</CardTitle>
+                    <CardDescription className="text-xs">
+                      Social security coordination, EU regulations
+                    </CardDescription>
                   </CardHeader>
                 </Card>
               </div>
-              <p className="text-xs text-muted-foreground mt-6">
+              <p className="text-xs text-muted-foreground max-w-md">
                 ⚠️ This is a research tool, not legal/tax advice. Always verify with qualified professionals.
               </p>
-            </div>
+            </ChatWelcome>
+          ) : (
+            <>
+              {messages.map((message) => (
+                <Message
+                  key={message.id}
+                  role={message.role}
+                  content={message.content}
+                />
+              ))}
+              {isLoading && <MessageLoading />}
+            </>
           )}
-
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
-            >
-              <div
-                className={`max-w-[85%] rounded-lg p-4 ${
-                  message.role === 'user'
-                    ? 'bg-blue-600'
-                    : 'bg-gray-800 border border-gray-700'
-                }`}
-              >
-                <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
-                  {message.content}
-                </pre>
-              </div>
-            </div>
-          ))}
-
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                </div>
-              </div>
-            </div>
-          )}
-
           <div ref={messagesEndRef} />
-        </div>
+        </ChatContainer>
 
         {/* Input */}
-        <div className="border-t border-border p-4">
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <Input
-              type="text"
-              value={input}
-              onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
-              disabled={isLoading}
-              className="flex-1 h-10"
-            />
-            <Button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              size="lg"
-            >
-              {isLoading ? 'Thinking...' : 'Send'}
-            </Button>
-          </form>
-          <p className="text-xs text-gray-500 mt-2 text-center">
+        <div className="border-t bg-card p-4">
+          <PromptInput
+            value={input}
+            onChange={setInput}
+            onSubmit={handleSubmit}
+            placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
+            disabled={isLoading}
+            isLoading={isLoading}
+          />
+          <p className="text-xs text-muted-foreground mt-2 text-center">
             Research assistance only • Not legal, tax, or welfare advice • Verify with qualified professionals
           </p>
         </div>
