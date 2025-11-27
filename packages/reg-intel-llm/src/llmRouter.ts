@@ -593,10 +593,14 @@ export interface ProviderConfig {
 }
 
 /**
- * Local provider configuration (no API key needed)
+ * Local provider configuration
+ *
+ * For OpenAI-compatible local endpoints (vLLM, Ollama, etc.)
+ * Uses /v1/chat/completions API (NOT Responses API)
  */
 export interface LocalProviderConfig {
   baseURL: string;
+  apiKey?: string; // Optional - some local setups require authentication
 }
 
 /**
@@ -713,11 +717,16 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
       );
     }
 
-    // Create local provider (using OpenAI-compatible endpoint)
+    // Create local provider (using OpenAI-compatible /v1/chat/completions endpoint)
+    // Note: Local models use the older chat completions API, NOT the Responses API
     if (configs.local) {
       providers.local = new OpenAiProviderClient(
-        'not-needed', // Local providers typically don't validate API keys
-        { baseURL: configs.local.baseURL }
+        configs.local.apiKey ?? 'not-needed', // Optional API key for authenticated local endpoints
+        {
+          baseURL: configs.local.baseURL,
+          // Force compatibility mode to use /v1/chat/completions instead of Responses API
+          compatibility: 'compatible' as any
+        }
       );
     }
   }
