@@ -595,13 +595,18 @@ export function GraphVisualization({
           graphData={filteredData}
           width={dimensions.width}
           height={dimensions.height}
-          nodeLabel={(node: ForceGraphNode) => `${node.label || node.id}\n(${node.type})`}
-          nodeColor={(node: ForceGraphNode) => getNodeColor(node)}
+          nodeLabel={(node: any) => `${node.label || node.id}\n(${node.type})`}
+          nodeColor={(node: any) => getNodeColor(node as ForceGraphNode)}
           nodeRelSize={6}
-          nodeCanvasObject={(node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            const label = node.label || node.id;
+          nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+            const typedNode = node as ForceGraphNode;
+            const label = typedNode.label || typedNode.id;
             const fontSize = 12 / globalScale;
-            const isSelected = selectedNode?.id === node.id;
+            const isSelected = selectedNode?.id === typedNode.id;
+
+            // Ensure x and y are defined (they should be by the time rendering happens)
+            const x = typedNode.x ?? 0;
+            const y = typedNode.y ?? 0;
 
             ctx.font = `${fontSize}px Sans-Serif`;
             ctx.textAlign = 'center';
@@ -612,22 +617,22 @@ export function GraphVisualization({
               ctx.strokeStyle = '#3b82f6';
               ctx.lineWidth = 2;
               ctx.beginPath();
-              ctx.arc(node.x, node.y, 9, 0, 2 * Math.PI);
+              ctx.arc(x, y, 9, 0, 2 * Math.PI);
               ctx.stroke();
             }
 
             // Draw node circle
-            ctx.fillStyle = getNodeColor(node);
+            ctx.fillStyle = getNodeColor(typedNode);
             ctx.beginPath();
-            ctx.arc(node.x, node.y, 6, 0, 2 * Math.PI);
+            ctx.arc(x, y, 6, 0, 2 * Math.PI);
             ctx.fill();
 
             // Draw label
             ctx.fillStyle = isSelected ? '#3b82f6' : '#333';
             ctx.font = isSelected ? `bold ${fontSize}px Sans-Serif` : `${fontSize}px Sans-Serif`;
-            ctx.fillText(label, node.x, node.y + 12);
+            ctx.fillText(label, x, y + 12);
           }}
-          linkLabel={(link: ForceGraphLink) => link.type}
+          linkLabel={(link: any) => (link as ForceGraphLink).type}
           linkColor={() => '#94a3b8'}
           linkWidth={1.5}
           linkDirectionalArrowLength={4}
@@ -636,7 +641,7 @@ export function GraphVisualization({
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.3}
           cooldownTicks={100}
-          onNodeClick={(node: ForceGraphNode) => {
+          onNodeClick={(node: any) => {
             setSelectedNode(node as GraphNode);
           }}
           onBackgroundClick={() => setSelectedNode(null)}

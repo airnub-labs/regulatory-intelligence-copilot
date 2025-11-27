@@ -337,10 +337,71 @@ http://localhost:3000
 
 You should see the chat UI. Try questions like:
 
-- “I’m a single director of an Irish limited company. What should I understand about PRSI and Illness Benefit?”
-- “If I sell shares at a loss and buy back within a short period, how might that affect CGT loss relief eligibility?”
+- "I'm a single director of an Irish limited company. What should I understand about PRSI and Illness Benefit?"
+- "If I sell shares at a loss and buy back within a short period, how might that affect CGT loss relief eligibility?"
 
 (Answers will depend on how much law and guidance you've already ingested into Memgraph.)
+
+### 6. Development Tools
+
+#### Memgraph Lab UI
+
+**Memgraph Lab** is a web-based interface for managing and exploring your Memgraph database:
+
+- **URL**: `http://localhost:7444/`
+- **Features**:
+  - Visual graph exploration and querying
+  - Query editor with syntax highlighting
+  - Database schema visualization
+  - Performance monitoring
+  - MAGE algorithm integration
+
+Use Memgraph Lab to:
+- Inspect nodes and relationships
+- Run Cypher queries interactively
+- Debug graph structure
+- Monitor query performance
+
+#### Supabase Local Development
+
+For local Supabase development (multi-tenant storage, auth, and API):
+
+1. **Install Supabase CLI**:
+
+```bash
+# macOS
+brew install supabase/tap/supabase
+
+# Linux
+curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install.sh | sh
+
+# Windows (PowerShell)
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+```
+
+2. **Initialize Supabase** (if not already done):
+
+```bash
+supabase init
+```
+
+3. **Start local Supabase stack**:
+
+```bash
+supabase start
+```
+
+This starts PostgreSQL, PostgREST, GoTrue (auth), Realtime, Storage, and Studio locally.
+
+4. **Access Supabase Studio**:
+
+- **URL**: `http://localhost:54323` (default)
+- Manage tables, auth, storage, and run SQL queries
+
+For comprehensive local development setup including environment configuration, database migrations, and advanced workflows, see:
+
+- 📄 **`docs/LOCAL_DEVELOPMENT.md`** – Complete local development guide
 
 ---
 
