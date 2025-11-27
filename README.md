@@ -313,11 +313,11 @@ Keep all secrets **out of source control**.
 With Docker installed, bring up the graph DB and MCP gateway stack:
 
 ```bash
-# Start Memgraph (with MAGE included) and Memgraph MCP server
+# Start Memgraph (with Lab UI and MAGE included) and Memgraph MCP server
 docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
 ```
 
-The `memgraph` service uses `memgraph/memgraph-mage:latest` which includes both the Memgraph database and MAGE (Memgraph Advanced Graph Extensions) in a single container.
+The `memgraph` service uses `memgraph/memgraph-platform:latest` which includes the Memgraph database, Memgraph Lab (web UI), and MAGE (Memgraph Advanced Graph Extensions) in a single container.
 
 Ensure:
 

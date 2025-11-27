@@ -1,16 +1,17 @@
 name: rfc-refactor
 
 services:
-  # Memgraph database with schema info enabled (required for MCP)
+  # Memgraph database with Lab UI and MAGE, schema info enabled (required for MCP)
   memgraph:
-    image: memgraph/memgraph-mage:latest
+    image: memgraph/memgraph-platform:latest
     ports:
       - "7687:7687"
       - "7444:7444"
     volumes:
       - memgraph_data:/var/lib/memgraph
       - memgraph_log:/var/log/memgraph
-    command: ["--schema-info-enabled=True"]
+    environment:
+      - MEMGRAPH="--schema-info-enabled=true"
     healthcheck:
       test: ["CMD-SHELL", "echo 'RETURN 1;' | mgconsole || exit 1"]
       interval: 10s
