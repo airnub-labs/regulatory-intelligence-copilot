@@ -23,6 +23,15 @@ type WebSocketPairType = {
   1: WebSocket;
 };
 
+// Cloudflare Workers global types
+interface CloudflareGlobalThis {
+  WebSocketPair?: new () => WebSocketPairType;
+}
+
+interface CloudflareWebSocket extends WebSocket {
+  accept(): void;
+}
+
 /**
  * Connection confirmation message
  */
@@ -49,7 +58,7 @@ export async function GET(request: Request) {
   console.log('[API/graph/stream] Client connected:', filter);
 
   const upgradeHeader = request.headers.get('upgrade');
-  const supportsWebSocket = typeof (globalThis as any).WebSocketPair !== 'undefined';
+  const supportsWebSocket = typeof (globalThis as CloudflareGlobalThis).WebSocketPair !== 'undefined';
 
   if (upgradeHeader?.toLowerCase() === 'websocket' && supportsWebSocket) {
     return handleWebSocket(filter);
@@ -111,10 +120,14 @@ function handleSse(
 }
 
 function handleWebSocket(filter: ChangeFilter) {
-  const { 0: client, 1: server } = new (globalThis as any).WebSocketPair() as WebSocketPairType;
+  const WebSocketPair = (globalThis as CloudflareGlobalThis).WebSocketPair;
+  if (!WebSocketPair) {
+    throw new Error('WebSocketPair not available');
+  }
+  const { 0: client, 1: server } = new WebSocketPair();
 
   // Cloudflare Workers WebSocket has accept() method
-  (server as any).accept();
+  (server as CloudflareWebSocket).accept();
 
   const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
     try {

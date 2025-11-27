@@ -131,8 +131,8 @@ async function queryGraphByTimestamp(
 
     if (result && Array.isArray(result)) {
       for (const row of result) {
-        // Process nodes
-        for (const [key, value] of Object.entries(row)) {
+        // Process nodes - iterate over values only
+        for (const value of Object.values(row)) {
           if (value && typeof value === 'object') {
             const v = value as Record<string, unknown>;
 
