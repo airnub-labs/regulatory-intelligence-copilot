@@ -12,11 +12,21 @@ import type {
   GraphEdge,
   Timeline,
 } from '../types.js';
+import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
 import { callMemgraphMcp } from '../mcpClient.js';
 import { ensureMcpGatewayConfigured } from '../sandboxManager.js';
 import { createLogger } from '../logger.js';
+import { getContext } from '../observability/requestContext.js';
 
 const logger = createLogger({ component: 'GraphClient' });
+
+const MEMGRAPH_QUERY_LOG_SAMPLE_RATE = Number.parseFloat(
+  process.env.MEMGRAPH_QUERY_LOG_SAMPLE_RATE ?? '0.35'
+);
+const MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE = Number.parseFloat(
+  process.env.MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE ?? '1'
+);
+const MEMGRAPH_LOG_MAX_CHARS = Number.parseInt(process.env.MEMGRAPH_LOG_MAX_CHARS ?? '640', 10);
 
 /**
  * Escape string for Cypher query
@@ -114,9 +124,85 @@ function parseTimelineResult(result: unknown): Timeline[] {
   return timelines;
 }
 
+function shouldSample(sampleRate: number): boolean {
+  if (Number.isNaN(sampleRate) || sampleRate <= 0) return false;
+  if (sampleRate >= 1) return true;
+  return Math.random() < sampleRate;
+}
+
+function sanitizeQuerySnippet(query: string): string {
+  const sanitized = sanitizeObjectForEgress(query);
+  const normalized = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
+  if (!normalized) return '';
+  return normalized.length > MEMGRAPH_LOG_MAX_CHARS
+    ? `${normalized.slice(0, MEMGRAPH_LOG_MAX_CHARS)}…`
+    : normalized;
+}
+
+function getResultSize(result: unknown): number {
+  if (!result) return 0;
+  if (Array.isArray(result)) return result.length;
+  if (typeof result === 'object') return Object.keys(result as Record<string, unknown>).length;
+  return 1;
+}
+
 async function runMemgraphQuery(query: string): Promise<unknown> {
   await ensureMcpGatewayConfigured();
-  return callMemgraphMcp(query);
+
+  const { correlationId } = getContext();
+  const start = Date.now();
+  const sanitizedQuery = sanitizeQuerySnippet(query);
+  const toolName = 'memgraph_mcp.run_query';
+  const log = logger.childWithContext({ correlationId, toolName });
+
+  if (shouldSample(MEMGRAPH_QUERY_LOG_SAMPLE_RATE)) {
+    log.info('Executing Memgraph query', { query: sanitizedQuery });
+  }
+
+  try {
+    const result = await callMemgraphMcp(query);
+    const durationMs = Date.now() - start;
+    const resultSize = getResultSize(result);
+
+    log.info('Memgraph query completed', {
+      toolName,
+      durationMs,
+      resultSize,
+      correlationId,
+      query: sanitizedQuery,
+    });
+
+    if (resultSize === 0 && shouldSample(MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE)) {
+      log.warn('Memgraph query returned no results', {
+        toolName,
+        durationMs,
+        correlationId,
+        query: sanitizedQuery,
+      });
+    }
+
+    if (result === null || result === undefined) {
+      log.warn('Memgraph query returned an empty payload', {
+        toolName,
+        durationMs,
+        correlationId,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    const durationMs = Date.now() - start;
+
+    log.error('Memgraph query failed', {
+      toolName,
+      durationMs,
+      correlationId,
+      query: sanitizedQuery,
+      error,
+    });
+
+    throw error;
+  }
 }
 
 /**
