@@ -84,6 +84,7 @@ export {
   getOrCreateActiveSandbox,
   hasActiveSandbox,
   getActiveSandboxId,
+  getSandboxStatus,
   resetActiveSandbox,
 } from './sandboxManager.js';
 
