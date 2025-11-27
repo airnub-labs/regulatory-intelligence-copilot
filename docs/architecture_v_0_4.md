@@ -343,11 +343,17 @@ This allows e.g.:
 
 **ALL LLM providers use Vercel AI SDK v5** as their primary implementation:
 
-- **OpenAI**: Uses `@ai-sdk/openai` (supports Responses API automatically, including GPT‑OSS models)
+- **OpenAI**: Uses `@ai-sdk/openai` (automatically uses **Responses API** for OpenAI models and GPT‑OSS)
 - **Groq**: Uses `@ai-sdk/groq`
 - **Anthropic**: Uses `@ai-sdk/anthropic`
 - **Google Gemini**: Uses `@ai-sdk/google`
-- **Local/OSS models**: Uses `@ai-sdk/openai` with custom `baseURL` (for vLLM, Ollama, and other OpenAI‑compatible endpoints)
+- **Local/OSS models**: Uses `@ai-sdk/openai` with custom `baseURL` and forced **Chat Completions API** (`/v1/chat/completions`)
+  - vLLM, Ollama, and other OpenAI-compatible local endpoints only support the older Chat Completions API
+  - Configuration supports optional API key for authenticated local endpoints
+
+**Important API distinction:**
+- OpenAI provider → Responses API (modern, supports structured outputs)
+- Local providers → Chat Completions API (widely compatible with OSS models)
 
 Benefits of AI SDK v5 as the primary layer:
 

@@ -11,11 +11,14 @@
  * - Egress Guard (PII sanitization)
  *
  * AI SDK v5 handles:
- * - OpenAI Responses API (automatic detection and usage)
+ * - OpenAI Responses API (automatic for OpenAI provider - /v1/responses)
+ * - Chat Completions API (forced for local providers - /v1/chat/completions)
  * - Provider-specific API differences (OpenAI, Groq, Anthropic, Google)
  * - Local OpenAI-compatible endpoints (vLLM, Ollama, etc.) via OpenAI provider with custom baseURL
  * - Streaming and non-streaming modes
  * - Consistent error handling
+ *
+ * Important: OpenAI uses Responses API, local models use Chat Completions API
  */
 
 // LLM Router

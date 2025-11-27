@@ -4,11 +4,15 @@
  * Built on Vercel AI SDK v5 for consistent provider abstraction.
  *
  * ALL providers use AI SDK v5:
- * - OpenAI (via @ai-sdk/openai - handles Responses API automatically)
+ * - OpenAI (via @ai-sdk/openai - uses Responses API automatically)
  * - Groq (via @ai-sdk/groq)
  * - Anthropic (via @ai-sdk/anthropic)
  * - Google Gemini (via @ai-sdk/google)
- * - Local/OSS models (via @ai-sdk/openai with custom baseURL for vLLM, Ollama, etc.)
+ * - Local/OSS models (via @ai-sdk/openai with custom baseURL and forced /chat/completions API)
+ *
+ * Important API distinction:
+ * - OpenAI provider: Uses modern Responses API (/v1/responses)
+ * - Local providers: Uses Chat Completions API (/v1/chat/completions) - vLLM, Ollama, etc. only support this
  *
  * Routes based on:
  * - Tenant policies
