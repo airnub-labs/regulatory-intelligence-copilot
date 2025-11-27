@@ -18,7 +18,10 @@ import { LOG_PREFIX } from '../constants.js';
 /**
  * Escape string for Cypher query
  */
-function escapeCypher(value: string): string {
+function escapeCypher(value: string | undefined | null): string {
+  if (!value) {
+    return '';
+  }
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
