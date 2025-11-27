@@ -42,12 +42,6 @@ interface ConnectionMessage {
 }
 
 export async function GET(request: Request) {
-  if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
-    return new Response('Graph streaming unavailable: sandbox not active', {
-      status: 503,
-    });
-  }
-
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
   const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
@@ -92,18 +86,25 @@ function handleSse(
         }
       }, 30000);
 
-      const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
-        try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(patch)}\n\n`));
-          console.log('[API/graph/stream] Sent patch to SSE client:', patch.meta);
-        } catch (error) {
-          console.error('[API/graph/stream] Error sending patch:', error);
-        }
-      });
+      // Only subscribe to patches if sandbox is active
+      let subscription: { unsubscribe: () => void } | null = null;
+
+      if (hasActiveSandbox() && getMcpGatewayUrl()) {
+        subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(patch)}\n\n`));
+            console.log('[API/graph/stream] Sent patch to SSE client:', patch.meta);
+          } catch (error) {
+            console.error('[API/graph/stream] Error sending patch:', error);
+          }
+        });
+      } else {
+        console.log('[API/graph/stream] No active sandbox - streaming keepalive only');
+      }
 
       request.signal.addEventListener('abort', () => {
         clearInterval(keepAliveInterval);
-        subscription.unsubscribe();
+        subscription?.unsubscribe();
         controller.close();
       });
     },
@@ -129,14 +130,21 @@ function handleWebSocket(filter: ChangeFilter) {
   // Cloudflare Workers WebSocket has accept() method
   (server as CloudflareWebSocket).accept();
 
-  const subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
-    try {
-      server.send(JSON.stringify(patch));
-    } catch (error) {
-      console.error('[API/graph/stream] WebSocket send failed:', error);
-      server.close();
-    }
-  });
+  // Only subscribe to patches if sandbox is active
+  let subscription: { unsubscribe: () => void } | null = null;
+
+  if (hasActiveSandbox() && getMcpGatewayUrl()) {
+    subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
+      try {
+        server.send(JSON.stringify(patch));
+      } catch (error) {
+        console.error('[API/graph/stream] WebSocket send failed:', error);
+        server.close();
+      }
+    });
+  } else {
+    console.log('[API/graph/stream] No active sandbox - WebSocket keepalive only');
+  }
 
   const connectionMessage: ConnectionMessage = {
     type: 'connected',
@@ -146,8 +154,8 @@ function handleWebSocket(filter: ChangeFilter) {
 
   server.send(JSON.stringify(connectionMessage));
 
-  server.addEventListener('close', () => subscription.unsubscribe());
-  server.addEventListener('error', () => subscription.unsubscribe());
+  server.addEventListener('close', () => subscription?.unsubscribe());
+  server.addEventListener('error', () => subscription?.unsubscribe());
 
   return new Response(null, {
     status: 101,
