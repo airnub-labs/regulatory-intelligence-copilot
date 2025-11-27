@@ -18,7 +18,7 @@ import neo4j, { Driver } from 'neo4j-driver';
 import {
   createGraphWriteService,
   type GraphWriteService,
-} from '../packages/reg-intel-core/src/index.js';
+} from '../packages/reg-intel-graph/src/index.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
