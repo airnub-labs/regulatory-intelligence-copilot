@@ -310,17 +310,20 @@ Keep all secrets **out of source control**.
 
 ### 4. Start Infra (Memgraph + MCP Gateway)
 
-With Docker installed, bring up the graph DB and MCP gateway stack. For example:
+With Docker installed, bring up the graph DB and MCP gateway stack:
 
 ```bash
-# Example – adjust to match your docker-compose.yml
-docker compose up memgraph mcp-gateway
+# Start Memgraph (with MAGE included) and Memgraph MCP server
+docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
 ```
+
+The `memgraph` service uses `memgraph/memgraph-mage:latest` which includes both the Memgraph database and MAGE (Memgraph Advanced Graph Extensions) in a single container.
 
 Ensure:
 
-- Memgraph is reachable at the configured `MEMGRAPH_URI`.
-- The MCP gateway exposes the tools you expect (e.g. Memgraph MCP, legal-search MCP, LLM MCPs).
+- Memgraph is reachable at the configured `MEMGRAPH_URI` (default: `bolt://localhost:7687`).
+- Memgraph Lab UI is available at `http://localhost:7444`.
+- The Memgraph MCP server exposes tools at `http://localhost:8001`.
 
 ### 5. Run the Dev Server
 
