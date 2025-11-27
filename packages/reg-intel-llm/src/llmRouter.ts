@@ -722,15 +722,12 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
     }
 
     // Create local provider (using OpenAI-compatible /v1/chat/completions endpoint)
-    // Note: Local models use the older chat completions API, NOT the Responses API
+    // Note: Local models automatically use chat completions API when using custom baseURL
+    // AI SDK v5 auto-detects and uses /v1/chat/completions for non-OpenAI endpoints
     if (configs.local) {
       providers.local = new OpenAiProviderClient(
         configs.local.apiKey || '', // Empty string if no API key (some local endpoints don't require auth)
-        {
-          baseURL: configs.local.baseURL,
-          // Force compatibility mode to use /v1/chat/completions instead of Responses API
-          compatibility: 'compatible' as any
-        }
+        { baseURL: configs.local.baseURL }
       );
     }
   }
