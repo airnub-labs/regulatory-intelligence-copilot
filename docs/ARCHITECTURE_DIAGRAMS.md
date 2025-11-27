@@ -59,13 +59,13 @@ graph TB
     end
 
     subgraph "Primitives Layer"
-        RadixUI[Radix UI Primitives<br/>@radix-ui/*]
+        RadixUI[Radix UI Primitives<br/>radix-ui/*]
 
-        RadixSlot[@radix-ui/react-slot<br/>Slot primitive]
-        RadixScroll[@radix-ui/react-scroll-area<br/>Scroll primitive]
-        RadixAvatar[@radix-ui/react-avatar<br/>Avatar primitive]
-        RadixSeparator[@radix-ui/react-separator<br/>Separator primitive]
-        RadixLabel[@radix-ui/react-label<br/>Label primitive]
+        RadixSlot[radix-ui/react-slot<br/>Slot primitive]
+        RadixScroll[radix-ui/react-scroll-area<br/>Scroll primitive]
+        RadixAvatar[radix-ui/react-avatar<br/>Avatar primitive]
+        RadixSeparator[radix-ui/react-separator<br/>Separator primitive]
+        RadixLabel[radix-ui/react-label<br/>Label primitive]
 
         RadixUI --> RadixSlot
         RadixUI --> RadixScroll
@@ -77,8 +77,8 @@ graph TB
     subgraph "Design System Layer"
         Tailwind[Tailwind CSS v4<br/>src/app/globals.css]
 
-        Theme[@theme blocks<br/>CSS variables]
-        DarkMode[Dark mode<br/>.dark, @media]
+        Theme[theme blocks<br/>CSS variables]
+        DarkMode[Dark mode<br/>.dark, media queries]
         Utilities[Utility classes<br/>bg-, text-, flex-]
 
         Tailwind --> Theme
@@ -208,11 +208,11 @@ graph TB
 ```mermaid
 graph LR
     subgraph "globals.css"
-        Import[@import "tailwindcss"]
+        Import[import tailwindcss]
     end
 
     subgraph "Light Mode Theme"
-        LightTheme[@theme]
+        LightTheme[theme block]
 
         LBG[--color-background: 0 0% 100%]
         LFG[--color-foreground: 240 10% 3.9%]
@@ -226,8 +226,8 @@ graph LR
     end
 
     subgraph "Dark Mode Theme"
-        DarkClass[.dark, [data-theme='dark']]
-        DarkTheme[@theme]
+        DarkClass[.dark, data-theme='dark']
+        DarkTheme[theme block]
 
         DBG[--color-background: 240 10% 3.9%]
         DFG[--color-foreground: 0 0% 98%]
@@ -240,9 +240,9 @@ graph LR
     end
 
     subgraph "Auto Dark Mode"
-        MediaQuery[@media prefers-color-scheme: dark]
+        MediaQuery[media prefers-color-scheme: dark]
         AutoDark[:root:not(.light)]
-        AutoTheme[@theme]
+        AutoTheme[theme block]
 
         MediaQuery --> AutoDark
         AutoDark --> AutoTheme
