@@ -280,7 +280,7 @@ export function GraphVisualization({
 
   // Apply filters and search to graph data
   useEffect(() => {
-    let filtered = { ...graphData };
+    const filtered = { ...graphData };
 
     // Filter by node types
     if (selectedTypes.size > 0) {
