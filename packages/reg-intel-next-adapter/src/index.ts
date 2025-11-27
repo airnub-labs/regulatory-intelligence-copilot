@@ -4,7 +4,6 @@ import {
   createDefaultLlmRouter,
   createGraphClient,
   createTimelineEngine,
-  runWithContext,
   sanitizeObjectForEgress,
   sanitizeTextForEgress,
   type ChatMessage,
@@ -16,7 +15,6 @@ import {
   type RedactedPayload,
 } from '@reg-copilot/reg-intel-core';
 import type { LlmRouter, LlmCompletionOptions } from '@reg-copilot/reg-intel-llm';
-import { randomUUID } from 'node:crypto';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -216,8 +214,6 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
 
   return async function POST(request: Request) {
     const { complianceEngine } = getOrCreateEngine();
-    const correlationId = request.headers.get('x-correlation-id') || randomUUID();
-
     try {
       // Parse and validate request body
       const body = await request.json();
@@ -249,69 +245,60 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
 
       const sanitizedMessages = sanitizeMessages(messages as Array<{ role: string; content: string }>);
       const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
-      const tenantId = options?.tenantId ?? 'default';
-      const context = {
-        correlationId,
-        tenantId,
-        profileType: profile?.personaType ?? profile?.profileType,
-        jurisdictions: profile?.jurisdictions,
-      };
 
-      return runWithContext(context, async () => {
-        const stream = new ReadableStream({
-          async start(controller) {
-            const writer = new SseStreamWriter(controller);
+      const stream = new ReadableStream({
+        async start(controller) {
+          const writer = new SseStreamWriter(controller);
 
-            try {
-              // Use ComplianceEngine to handle chat with streaming
-              // This ensures proper agent routing and graph querying
-              for await (const chunk of complianceEngine.handleChatStream({
-                messages: sanitizedMessages,
-                profile,
-                tenantId,
-              })) {
-                if (chunk.type === 'metadata') {
-                  // Send metadata with agent info, jurisdictions, and referenced nodes
-                  const metadata = buildMetadataChunk({
-                    agentId: chunk.metadata!.agentUsed,
-                    jurisdictions: chunk.metadata!.jurisdictions,
-                    uncertaintyLevel: chunk.metadata!.uncertaintyLevel,
-                    disclaimerKey: DEFAULT_DISCLAIMER_KEY,
-                    referencedNodes: chunk.metadata!.referencedNodes,
-                  });
-                  writer.send('metadata', metadata);
-                } else if (chunk.type === 'text' && chunk.delta) {
-                  writer.send('message', { text: chunk.delta });
-                } else if (chunk.type === 'error') {
-                  writer.send('error', { message: chunk.error || 'Unknown error' });
-                  writer.close();
-                  return;
-                } else if (chunk.type === 'done') {
-                  // Send disclaimer after response (if configured)
-                  if (shouldIncludeDisclaimer && chunk.disclaimer) {
-                    writer.send('message', { text: `\n\n${chunk.disclaimer}` });
-                  }
-                  writer.send('done', { status: 'ok' });
-                  writer.close();
-                  return;
+          try {
+            // Use ComplianceEngine to handle chat with streaming
+            // This ensures proper agent routing and graph querying
+            for await (const chunk of complianceEngine.handleChatStream({
+              messages: sanitizedMessages,
+              profile,
+              tenantId: options?.tenantId ?? 'default',
+            })) {
+              if (chunk.type === 'metadata') {
+                // Send metadata with agent info, jurisdictions, and referenced nodes
+                const metadata = buildMetadataChunk({
+                  agentId: chunk.metadata!.agentUsed,
+                  jurisdictions: chunk.metadata!.jurisdictions,
+                  uncertaintyLevel: chunk.metadata!.uncertaintyLevel,
+                  disclaimerKey: DEFAULT_DISCLAIMER_KEY,
+                  referencedNodes: chunk.metadata!.referencedNodes,
+                });
+                writer.send('metadata', metadata);
+              } else if (chunk.type === 'text' && chunk.delta) {
+                writer.send('message', { text: chunk.delta });
+              } else if (chunk.type === 'error') {
+                writer.send('error', { message: chunk.error || 'Unknown error' });
+                writer.close();
+                return;
+              } else if (chunk.type === 'done') {
+                // Send disclaimer after response (if configured)
+                if (shouldIncludeDisclaimer && chunk.disclaimer) {
+                  writer.send('message', { text: `\n\n${chunk.disclaimer}` });
                 }
+                writer.send('done', { status: 'ok' });
+                writer.close();
+                return;
               }
-            } catch (error) {
-              const message = error instanceof Error ? error.message : 'Unknown error';
-              writer.send('error', { message });
-              writer.send('done', { status: 'error' });
-              writer.close();
             }
-          },
-        });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            writer.send('error', { message });
+            writer.send('done', { status: 'error' });
+            writer.close();
+          }
+        },
+      });
 
-        return new Response(stream, {
-          headers: {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            Connection: 'keep-alive',
-            'Cache-Control': 'no-cache, no-transform',
-          },
-        });
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream; charset=utf-8',
+          Connection: 'keep-alive',
+          'Cache-Control': 'no-cache, no-transform',
+        },
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

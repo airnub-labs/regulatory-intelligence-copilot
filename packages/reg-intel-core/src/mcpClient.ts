@@ -6,9 +6,6 @@ import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
 import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
-import { createLogger } from './logger.js';
-
-const logger = createLogger({ component: 'MCPClient' });
 
 // MCP Gateway configuration - set once from the active sandbox
 let mcpGatewayUrl = '';
@@ -29,7 +26,7 @@ export function configureMcpGateway(url: string, token: string): void {
   }
 
   persistMcpGatewayConfig(url, token);
-  logger.info('MCP gateway configured');
+  console.log('[MCP] Gateway configured - Perplexity and Memgraph tools available');
 }
 
 /**
@@ -159,18 +156,16 @@ const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, nex
       ? 'Memgraph (knowledge graph)'
       : req.toolName;
 
-  const log = logger.childWithContext({ toolName: req.toolName });
-
-  log.info('Calling MCP tool', { toolDisplayName });
+  console.log(`[MCP] Calling ${toolDisplayName}...`);
 
   try {
     const result = await next(req);
     const duration = Date.now() - start;
-    log.info('MCP tool completed', { toolDisplayName, durationMs: duration });
+    console.log(`[MCP] ${toolDisplayName} completed in ${duration}ms`);
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    log.error('MCP tool failed', { toolDisplayName, durationMs: duration });
+    console.error(`[MCP] ${toolDisplayName} failed after ${duration}ms`);
     throw error;
   }
 };

@@ -15,13 +15,10 @@ import type {
   GraphContext,
   LlmStreamChunk,
 } from '../types.js';
-import { DEFAULT_JURISDICTION } from '../constants.js';
+import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 import { buildPromptWithAspects } from '@reg-copilot/reg-intel-prompts';
 import { SingleDirector_IE_SocialSafetyNet_Agent } from './SingleDirector_IE_SocialSafetyNet_Agent.js';
-import { createLogger } from '../logger.js';
-
-const logger = createLogger({ component: 'GlobalRegulatoryComplianceAgent' });
 
 const AGENT_ID = 'GlobalRegulatoryComplianceAgent';
 const AGENT_NAME = 'Global Regulatory Compliance Agent';
@@ -83,23 +80,23 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
   },
 
   async handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult> {
-    logger.info('Processing request', { agentId: AGENT_ID });
+    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} processing request`);
 
     // Try to find a specialized domain agent
     for (const agent of DOMAIN_AGENTS) {
       try {
         const canHandle = await agent.canHandle(input);
         if (canHandle) {
-          logger.info('Delegating to domain agent', { targetAgent: agent.id });
+          console.log(`${LOG_PREFIX.agent} Delegating to ${agent.id}`);
           return agent.handle(input, ctx);
         }
       } catch (error) {
-        logger.error('Error during canHandle check', { targetAgent: agent.id, error: error as Error });
+        console.log(`${LOG_PREFIX.agent} Error checking ${agent.id}:`, error);
       }
     }
 
     // No specialized agent matched, handle globally
-    logger.info('No specialized agent matched, handling globally', { agentId: AGENT_ID });
+    console.log(`${LOG_PREFIX.agent} No specialized agent matched, handling globally`);
 
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
@@ -117,7 +114,7 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
         );
       }
     } catch (error) {
-      logger.error('Graph query error', { error: error as Error });
+      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
     }
 
     // Format context
@@ -169,23 +166,23 @@ Please provide a comprehensive response considering all relevant regulatory doma
   },
 
   async handleStream(input: AgentInput, ctx: AgentContext): Promise<AgentStreamResult> {
-    logger.info('Processing streaming request', { agentId: AGENT_ID });
+    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} processing streaming request`);
 
     // Try to find a specialized domain agent with streaming support
     for (const agent of DOMAIN_AGENTS) {
       try {
         const canHandle = await agent.canHandle(input);
         if (canHandle && agent.handleStream) {
-          logger.info('Delegating to domain agent (streaming)', { targetAgent: agent.id });
+          console.log(`${LOG_PREFIX.agent} Delegating to ${agent.id} (streaming)`);
           return agent.handleStream(input, ctx);
         }
       } catch (error) {
-        logger.error('Error during streaming canHandle check', { targetAgent: agent.id, error: error as Error });
+        console.log(`${LOG_PREFIX.agent} Error checking ${agent.id}:`, error);
       }
     }
 
     // No specialized agent matched, handle globally with streaming
-    logger.info('No specialized agent matched, handling globally with streaming', { agentId: AGENT_ID });
+    console.log(`${LOG_PREFIX.agent} No specialized agent matched, handling globally with streaming`);
 
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
@@ -203,7 +200,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
         );
       }
     } catch (error) {
-      logger.error('Graph query error (streaming)', { error: error as Error });
+      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
     }
 
     // Format context
