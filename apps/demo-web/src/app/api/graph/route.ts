@@ -14,9 +14,11 @@ import {
   hasActiveSandbox,
   getMcpGatewayUrl,
   normalizeProfileType,
+  runWithContext,
   type GraphContext,
   type ProfileId,
 } from '@reg-copilot/reg-intel-core';
+import { randomUUID } from 'node:crypto';
 
 const MAX_INITIAL_NODES = 250;
 const MAX_INITIAL_EDGES = 500;
@@ -38,115 +40,123 @@ function boundGraphContext(graphContext: GraphContext) {
 }
 
 export async function GET(request: Request) {
-  try {
-    // Check if MCP gateway is configured (only available after sandbox is active)
-    if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
-      // Return empty graph - this is normal before first interaction
+  const { searchParams } = new URL(request.url);
+  const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
+  const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
+  const keyword = searchParams.get('keyword') || undefined;
+  const correlationId = request.headers.get('x-correlation-id') || randomUUID();
+
+  const context = {
+    correlationId,
+    tenantId: 'default',
+    profileType,
+    jurisdictions,
+  };
+
+  return runWithContext(context, async () => {
+    try {
+      // Check if MCP gateway is configured (only available after sandbox is active)
+      if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
+        // Return empty graph - this is normal before first interaction
+        return Response.json({
+          type: 'graph_snapshot',
+          timestamp: new Date().toISOString(),
+          nodes: [],
+          edges: [],
+          metadata: {
+            nodeCount: 0,
+            edgeCount: 0,
+            message: 'Graph is empty. Interact with the chat to populate the knowledge graph.',
+          },
+        });
+      }
+
+      console.log('[API/graph] Fetching initial graph snapshot:', {
+        jurisdictions,
+        profileType,
+        keyword,
+      });
+
+      // Create graph client
+      const graphClient = createGraphClient();
+
+      // Build profile-based query - get rules for the primary jurisdiction
+      const primaryJurisdiction = jurisdictions[0];
+      const graphContext = await graphClient.getRulesForProfileAndJurisdiction(
+        profileType,
+        primaryJurisdiction,
+        keyword
+      );
+
+      // If multiple jurisdictions, also get cross-border slice
+      if (jurisdictions.length > 1) {
+        const crossBorderContext = await graphClient.getCrossBorderSlice(jurisdictions);
+
+        // Merge contexts (deduplicate nodes and edges)
+        const nodeMap = new Map<string, GraphContext['nodes'][number]>();
+        const edgeSet = new Set<string>();
+        const mergedEdges: GraphContext['edges'] = [];
+
+        // Add nodes from both contexts
+        for (const node of [...graphContext.nodes, ...crossBorderContext.nodes]) {
+          if (!nodeMap.has(node.id)) {
+            nodeMap.set(node.id, node);
+          }
+        }
+
+        // Add edges from both contexts
+        for (const edge of [...graphContext.edges, ...crossBorderContext.edges]) {
+          const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
+          if (!edgeSet.has(edgeKey)) {
+            edgeSet.add(edgeKey);
+            mergedEdges.push(edge);
+          }
+        }
+
+        graphContext.nodes = Array.from(nodeMap.values());
+        graphContext.edges = mergedEdges;
+      }
+
+      const { boundedNodes, boundedEdges, truncated } = boundGraphContext(graphContext);
+
+      console.log(
+        `[API/graph] Returning snapshot: ${boundedNodes.length} nodes, ${boundedEdges.length} edges (truncated=${truncated})`
+      );
+
+      // Return v0.3 format snapshot
       return Response.json({
         type: 'graph_snapshot',
         timestamp: new Date().toISOString(),
-        nodes: [],
-        edges: [],
+        jurisdictions,
+        profileType,
+        nodes: boundedNodes,
+        edges: boundedEdges,
         metadata: {
-          nodeCount: 0,
-          edgeCount: 0,
-          message: 'Graph is empty. Interact with the chat to populate the knowledge graph.',
+          nodeCount: boundedNodes.length,
+          edgeCount: boundedEdges.length,
+          truncated,
+          limits: {
+            nodes: MAX_INITIAL_NODES,
+            edges: MAX_INITIAL_EDGES,
+          },
         },
       });
-    }
+    } catch (error) {
+      console.error('[API/graph] Error:', error);
+      let errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
-    const { searchParams } = new URL(request.url);
-
-    // Get query parameters
-    const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-    const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
-    const keyword = searchParams.get('keyword') || undefined;
-
-    console.log('[API/graph] Fetching initial graph snapshot:', {
-      jurisdictions,
-      profileType,
-      keyword,
-    });
-
-    // Create graph client
-    const graphClient = createGraphClient();
-
-    // Build profile-based query - get rules for the primary jurisdiction
-    const primaryJurisdiction = jurisdictions[0];
-    const graphContext = await graphClient.getRulesForProfileAndJurisdiction(
-      profileType,
-      primaryJurisdiction,
-      keyword
-    );
-
-    // If multiple jurisdictions, also get cross-border slice
-    if (jurisdictions.length > 1) {
-      const crossBorderContext = await graphClient.getCrossBorderSlice(jurisdictions);
-
-      // Merge contexts (deduplicate nodes and edges)
-      const nodeMap = new Map<string, GraphContext['nodes'][number]>();
-      const edgeSet = new Set<string>();
-      const mergedEdges: GraphContext['edges'] = [];
-
-      // Add nodes from both contexts
-      for (const node of [...graphContext.nodes, ...crossBorderContext.nodes]) {
-        if (!nodeMap.has(node.id)) {
-          nodeMap.set(node.id, node);
-        }
+      if (errorMessage.toLowerCase().includes('sandbox')) {
+        errorMessage =
+          'Knowledge graph sandbox is unavailable or expired. Interact with the chat to rehydrate Memgraph.';
       }
 
-      // Add edges from both contexts
-      for (const edge of [...graphContext.edges, ...crossBorderContext.edges]) {
-        const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
-        if (!edgeSet.has(edgeKey)) {
-          edgeSet.add(edgeKey);
-          mergedEdges.push(edge);
-        }
-      }
-
-      graphContext.nodes = Array.from(nodeMap.values());
-      graphContext.edges = mergedEdges;
-    }
-
-    const { boundedNodes, boundedEdges, truncated } = boundGraphContext(graphContext);
-
-    console.log(
-      `[API/graph] Returning snapshot: ${boundedNodes.length} nodes, ${boundedEdges.length} edges (truncated=${truncated})`
-    );
-
-    // Return v0.3 format snapshot
-    return Response.json({
-      type: 'graph_snapshot',
-      timestamp: new Date().toISOString(),
-      jurisdictions,
-      profileType,
-      nodes: boundedNodes,
-      edges: boundedEdges,
-      metadata: {
-        nodeCount: boundedNodes.length,
-        edgeCount: boundedEdges.length,
-        truncated,
-        limits: {
-          nodes: MAX_INITIAL_NODES,
-          edges: MAX_INITIAL_EDGES,
+      return Response.json(
+        {
+          type: 'error',
+          error: errorMessage,
         },
-      },
-    });
-  } catch (error) {
-    console.error('[API/graph] Error:', error);
-    let errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-    if (errorMessage.toLowerCase().includes('sandbox')) {
-      errorMessage =
-        'Knowledge graph sandbox is unavailable or expired. Interact with the chat to rehydrate Memgraph.';
+        { status: 500 }
+      );
     }
-
-    return Response.json(
-      {
-        type: 'error',
-        error: errorMessage,
-      },
-      { status: 500 }
-    );
-  }
+  });
 }

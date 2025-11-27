@@ -12,9 +12,22 @@ import type {
   GraphEdge,
   Timeline,
 } from '../types.js';
+import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
 import { callMemgraphMcp } from '../mcpClient.js';
 import { ensureMcpGatewayConfigured } from '../sandboxManager.js';
-import { LOG_PREFIX } from '../constants.js';
+import { createLogger } from '../logger.js';
+import { getContext } from '../observability/requestContext.js';
+import { startSpan } from '../observability/spanLogger.js';
+
+const logger = createLogger({ component: 'GraphClient' });
+
+const MEMGRAPH_QUERY_LOG_SAMPLE_RATE = Number.parseFloat(
+  process.env.MEMGRAPH_QUERY_LOG_SAMPLE_RATE ?? '0.35'
+);
+const MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE = Number.parseFloat(
+  process.env.MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE ?? '1'
+);
+const MEMGRAPH_LOG_MAX_CHARS = Number.parseInt(process.env.MEMGRAPH_LOG_MAX_CHARS ?? '640', 10);
 
 /**
  * Escape string for Cypher query
@@ -112,9 +125,93 @@ function parseTimelineResult(result: unknown): Timeline[] {
   return timelines;
 }
 
+function shouldSample(sampleRate: number): boolean {
+  if (Number.isNaN(sampleRate) || sampleRate <= 0) return false;
+  if (sampleRate >= 1) return true;
+  return Math.random() < sampleRate;
+}
+
+function sanitizeQuerySnippet(query: string): string {
+  const sanitized = sanitizeObjectForEgress(query);
+  const normalized = typeof sanitized === 'string' ? sanitized : JSON.stringify(sanitized);
+  if (!normalized) return '';
+  return normalized.length > MEMGRAPH_LOG_MAX_CHARS
+    ? `${normalized.slice(0, MEMGRAPH_LOG_MAX_CHARS)}…`
+    : normalized;
+}
+
+function getResultSize(result: unknown): number {
+  if (!result) return 0;
+  if (Array.isArray(result)) return result.length;
+  if (typeof result === 'object') return Object.keys(result as Record<string, unknown>).length;
+  return 1;
+}
+
 async function runMemgraphQuery(query: string): Promise<unknown> {
   await ensureMcpGatewayConfigured();
-  return callMemgraphMcp(query);
+
+  const { correlationId } = getContext();
+  const start = Date.now();
+  const sanitizedQuery = sanitizeQuerySnippet(query);
+  const toolName = 'memgraph_mcp.run_query';
+  const log = logger.childWithContext({ correlationId, toolName });
+  const span = startSpan({
+    name: 'memgraph.query',
+    provider: 'memgraph',
+    toolName,
+    attributes: { query: sanitizedQuery },
+  });
+
+  if (shouldSample(MEMGRAPH_QUERY_LOG_SAMPLE_RATE)) {
+    log.info('Executing Memgraph query', { query: sanitizedQuery });
+  }
+
+  try {
+    const result = await callMemgraphMcp(query);
+    const durationMs = Date.now() - start;
+    const resultSize = getResultSize(result);
+
+    log.info('Memgraph query completed', {
+      toolName,
+      durationMs,
+      resultSize,
+      correlationId,
+      query: sanitizedQuery,
+    });
+    span.end({ durationMs, resultSize });
+
+    if (resultSize === 0 && shouldSample(MEMGRAPH_ZERO_RESULT_LOG_SAMPLE_RATE)) {
+      log.warn('Memgraph query returned no results', {
+        toolName,
+        durationMs,
+        correlationId,
+        query: sanitizedQuery,
+      });
+    }
+
+    if (result === null || result === undefined) {
+      log.warn('Memgraph query returned an empty payload', {
+        toolName,
+        durationMs,
+        correlationId,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    const durationMs = Date.now() - start;
+
+    log.error('Memgraph query failed', {
+      toolName,
+      durationMs,
+      correlationId,
+      query: sanitizedQuery,
+      error,
+    });
+    span.error(error, { durationMs });
+
+    throw error;
+  }
 }
 
 /**
@@ -146,7 +243,7 @@ export function createGraphClient(): GraphClient {
         LIMIT 100
       `;
 
-      console.log(`${LOG_PREFIX.graph} Querying rules for profile ${profileId} in ${jurisdictionId}`);
+      logger.info('Querying rules for profile and jurisdiction', { profileId, jurisdictionId });
       const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
@@ -163,7 +260,7 @@ export function createGraphClient(): GraphClient {
         LIMIT 500
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting neighbourhood for ${nodeId}`);
+      logger.info('Getting neighbourhood', { nodeId });
       const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
@@ -178,7 +275,7 @@ export function createGraphClient(): GraphClient {
         RETURN m
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting mutual exclusions for ${nodeId}`);
+      logger.info('Getting mutual exclusions', { nodeId });
       const result = await runMemgraphQuery(query);
       const context = parseGraphResult(result);
       return context.nodes;
@@ -194,7 +291,7 @@ export function createGraphClient(): GraphClient {
         RETURN t
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting timelines for ${nodeId}`);
+      logger.info('Getting timelines', { nodeId });
       const result = await runMemgraphQuery(query);
       return parseTimelineResult(result);
     },
@@ -216,7 +313,7 @@ export function createGraphClient(): GraphClient {
         RETURN n, r, m
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting cross-border slice for ${jurisdictionIds.join(', ')}`);
+      logger.info('Getting cross-border slice', { jurisdictions: jurisdictionIds });
       const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
@@ -225,7 +322,7 @@ export function createGraphClient(): GraphClient {
      * Execute raw Cypher query
      */
     async executeCypher(query: string): Promise<unknown> {
-      console.log(`${LOG_PREFIX.graph} Executing Cypher query`);
+      logger.info('Executing custom Cypher query');
       return runMemgraphQuery(query);
     },
   };

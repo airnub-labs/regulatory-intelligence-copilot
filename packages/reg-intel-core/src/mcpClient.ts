@@ -6,10 +6,18 @@ import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
 import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
+import { createLogger } from './logger.js';
+import { getContext } from './observability/requestContext.js';
+import { MCP_DEBUG_ENABLED, logMcpDebug } from './observability/mcpDebugLogger.js';
+import { startSpan } from './observability/spanLogger.js';
+
+const logger = createLogger({ component: 'MCPClient' });
 
 // MCP Gateway configuration - set once from the active sandbox
 let mcpGatewayUrl = '';
 let mcpGatewayToken = '';
+
+const MCP_DEBUG_MAX_RESPONSE_BYTES = Number.parseInt(process.env.MCP_DEBUG_BYTES ?? '2048', 10);
 
 function persistMcpGatewayConfig(url: string, token: string): void {
   mcpGatewayUrl = url;
@@ -26,7 +34,7 @@ export function configureMcpGateway(url: string, token: string): void {
   }
 
   persistMcpGatewayConfig(url, token);
-  console.log('[MCP] Gateway configured - Perplexity and Memgraph tools available');
+  logger.info('MCP gateway configured');
 }
 
 /**
@@ -47,6 +55,17 @@ export function getMcpGatewayUrl(): string {
  * Base MCP call function using JSON-RPC format
  */
 async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
+  const start = Date.now();
+
+  if (MCP_DEBUG_ENABLED) {
+    await logMcpDebug({
+      event: 'mcp_call_start',
+      url: mcpGatewayUrl,
+      toolName: params.toolName,
+      args: params.params,
+    });
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'Accept': 'application/json, text/event-stream',
@@ -74,19 +93,34 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
     body: JSON.stringify(jsonRpcRequest),
   });
 
+  const contentType = response.headers.get('content-type') || '';
+  const rawBody = await response.text();
+  const responseSnippet = rawBody.slice(0, MCP_DEBUG_MAX_RESPONSE_BYTES);
+  const duration = Date.now() - start;
+
+  if (MCP_DEBUG_ENABLED) {
+    await logMcpDebug({
+      event: 'mcp_call_response',
+      url: mcpGatewayUrl,
+      toolName: params.toolName,
+      status: response.status,
+      ok: response.ok,
+      durationMs: duration,
+      contentType,
+      responseBytes: rawBody.length,
+      responseSnippet,
+    });
+  }
+
   if (!response.ok) {
-    const errorText = await response.text();
     return {
       result: null,
-      error: `MCP call failed: ${response.status} - ${errorText}`,
+      error: `MCP call failed: ${response.status} - ${responseSnippet || rawBody}`,
     };
   }
 
-  const contentType = response.headers.get('content-type') || '';
-
   // Handle SSE response using eventsource-parser
   if (contentType.includes('text/event-stream')) {
-    const text = await response.text();
     let result: unknown = null;
 
     const parser = createParser({
@@ -109,16 +143,25 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
       },
     });
 
-    parser.feed(text);
+    parser.feed(rawBody);
 
     return { result };
   }
 
   // Handle JSON response
-  const jsonRpcResponse = await response.json() as {
-    result?: unknown;
-    error?: { message?: string; code?: number };
-  };
+  let jsonRpcResponse: { result?: unknown; error?: { message?: string; code?: number } };
+
+  try {
+    jsonRpcResponse = JSON.parse(rawBody) as {
+      result?: unknown;
+      error?: { message?: string; code?: number };
+    };
+  } catch (error) {
+    return {
+      result: null,
+      error: `MCP response parse error: ${(error as Error).message}`,
+    };
+  }
 
   if (jsonRpcResponse.error) {
     return {
@@ -147,8 +190,8 @@ const mcpSanitizationAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req
  * MCP logging aspect - logs tool calls without exposing payloads
  */
 const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, next) => {
+  const { correlationId } = getContext();
   const start = Date.now();
-
   // Friendly names for demo visibility
   const toolDisplayName = req.toolName.includes('perplexity')
     ? 'Perplexity (spec discovery)'
@@ -156,16 +199,27 @@ const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, nex
       ? 'Memgraph (knowledge graph)'
       : req.toolName;
 
-  console.log(`[MCP] Calling ${toolDisplayName}...`);
+  const log = logger.childWithContext({ toolName: req.toolName, correlationId });
+
+  const span = startSpan({
+    name: 'mcp.tool',
+    provider: 'mcp',
+    toolName: req.toolName,
+    attributes: { toolDisplayName, url: mcpGatewayUrl },
+  });
+
+  log.info('Calling MCP tool', { toolDisplayName, correlationId });
 
   try {
     const result = await next(req);
     const duration = Date.now() - start;
-    console.log(`[MCP] ${toolDisplayName} completed in ${duration}ms`);
+    log.info('MCP tool completed', { toolDisplayName, durationMs: duration, correlationId });
+    span.end({ durationMs: duration });
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`[MCP] ${toolDisplayName} failed after ${duration}ms`);
+    log.error('MCP tool failed', { toolDisplayName, durationMs: duration, correlationId, error });
+    span.error(error, { durationMs: duration });
     throw error;
   }
 };

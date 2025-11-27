@@ -22,6 +22,9 @@ import type {
 import { GlobalRegulatoryComplianceAgent } from '../agents/GlobalRegulatoryComplianceAgent.js';
 import { NON_ADVICE_DISCLAIMER } from '../constants.js';
 import { ComplianceError } from '../errors.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger({ component: 'ComplianceEngine' });
 
 /**
  * Request to the compliance engine
@@ -100,6 +103,12 @@ export class ComplianceEngine {
   async handleChat(request: ComplianceRequest): Promise<ComplianceResponse> {
     const { messages, profile } = request;
 
+    logger.info('Handling chat request', {
+      messageCount: messages?.length,
+      profileType: profile?.personaType,
+      jurisdictions: profile?.jurisdictions,
+    });
+
     if (!messages || messages.length === 0) {
       throw new ComplianceError('No messages provided');
     }
@@ -157,6 +166,12 @@ export class ComplianceEngine {
    */
   async *handleChatStream(request: ComplianceRequest): AsyncGenerator<ComplianceStreamChunk> {
     const { messages, profile } = request;
+
+    logger.info('Handling streaming chat request', {
+      messageCount: messages?.length,
+      profileType: profile?.personaType,
+      jurisdictions: profile?.jurisdictions,
+    });
 
     if (!messages || messages.length === 0) {
       yield { type: 'error', error: 'No messages provided' };

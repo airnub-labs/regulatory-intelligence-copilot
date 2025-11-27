@@ -84,6 +84,7 @@ export {
   getOrCreateActiveSandbox,
   hasActiveSandbox,
   getActiveSandboxId,
+  getSandboxStatus,
   resetActiveSandbox,
 } from './sandboxManager.js';
 
@@ -176,6 +177,22 @@ export {
   type ComplianceStreamChunk,
   type ComplianceEngineDeps,
 } from './orchestrator/complianceEngine.js';
+
+// Observability
+export {
+  createLogger,
+  type Logger,
+} from './logger.js';
+export {
+  runWithContext,
+  getContext,
+  type RequestContext,
+} from './observability/requestContext.js';
+export {
+  startSpan,
+  type SpanOptions,
+  type SpanHandle,
+} from './observability/spanLogger.js';
 
 // Agents
 export { SingleDirector_IE_SocialSafetyNet_Agent } from './agents/SingleDirector_IE_SocialSafetyNet_Agent.js';
