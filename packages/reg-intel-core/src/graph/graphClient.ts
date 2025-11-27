@@ -117,6 +117,14 @@ async function runMemgraphQuery(query: string): Promise<unknown> {
   return callMemgraphMcp(query);
 }
 
+function warnIfEmptyResult(result: unknown, context: string): void {
+  if (Array.isArray(result) && result.length === 0) {
+    console.warn(
+      `${LOG_PREFIX.graph} ${context} returned no records. If this is a new sandbox, run pnpm seed:all (or the seed scripts) to populate Memgraph.`
+    );
+  }
+}
+
 /**
  * Create a GraphClient instance
  */
@@ -148,6 +156,7 @@ export function createGraphClient(): GraphClient {
 
       console.log(`${LOG_PREFIX.graph} Querying rules for profile ${profileId} in ${jurisdictionId}`);
       const result = await runMemgraphQuery(query);
+      warnIfEmptyResult(result, 'getRulesForProfileAndJurisdiction');
       return parseGraphResult(result);
     },
 
@@ -165,6 +174,7 @@ export function createGraphClient(): GraphClient {
 
       console.log(`${LOG_PREFIX.graph} Getting neighbourhood for ${nodeId}`);
       const result = await runMemgraphQuery(query);
+      warnIfEmptyResult(result, 'getNeighbourhood');
       return parseGraphResult(result);
     },
 
@@ -180,6 +190,7 @@ export function createGraphClient(): GraphClient {
 
       console.log(`${LOG_PREFIX.graph} Getting mutual exclusions for ${nodeId}`);
       const result = await runMemgraphQuery(query);
+      warnIfEmptyResult(result, 'getMutualExclusions');
       const context = parseGraphResult(result);
       return context.nodes;
     },
@@ -196,6 +207,7 @@ export function createGraphClient(): GraphClient {
 
       console.log(`${LOG_PREFIX.graph} Getting timelines for ${nodeId}`);
       const result = await runMemgraphQuery(query);
+      warnIfEmptyResult(result, 'getTimelines');
       return parseTimelineResult(result);
     },
 
@@ -218,6 +230,7 @@ export function createGraphClient(): GraphClient {
 
       console.log(`${LOG_PREFIX.graph} Getting cross-border slice for ${jurisdictionIds.join(', ')}`);
       const result = await runMemgraphQuery(query);
+      warnIfEmptyResult(result, 'getCrossBorderSlice');
       return parseGraphResult(result);
     },
 
@@ -226,7 +239,9 @@ export function createGraphClient(): GraphClient {
      */
     async executeCypher(query: string): Promise<unknown> {
       console.log(`${LOG_PREFIX.graph} Executing Cypher query`);
-      return runMemgraphQuery(query);
+      const result = await runMemgraphQuery(query);
+      warnIfEmptyResult(result, 'executeCypher');
+      return result;
     },
   };
 }

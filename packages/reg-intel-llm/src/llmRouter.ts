@@ -666,7 +666,7 @@ export interface LlmRouterConfig {
  *     google: { apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! },
  *   },
  *   defaultProvider: 'groq',
- *   defaultModel: 'llama-3.1-70b-versatile',
+ *   defaultModel: 'llama-3.3-70b-versatile',
  * });
  *
  * // Advanced way - pre-configured providers
@@ -735,7 +735,7 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
   // Determine default provider (first available if not specified)
   const availableProviders = Object.keys(providers);
   const defaultProvider = config.defaultProvider ?? availableProviders[0] ?? 'groq';
-  const defaultModel = config.defaultModel ?? 'llama-3.1-70b-versatile';
+  const defaultModel = config.defaultModel ?? 'llama-3.3-70b-versatile';
 
   const policyStore = config.policyStore ?? new InMemoryPolicyStore();
 
