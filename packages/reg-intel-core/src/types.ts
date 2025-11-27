@@ -148,6 +148,31 @@ export interface AgentResult {
 }
 
 /**
+ * Streaming chunk from LLM
+ */
+export interface LlmStreamChunk {
+  type: 'text' | 'error' | 'done';
+  delta?: string;
+  error?: Error;
+}
+
+/**
+ * Streaming result from an agent
+ * Contains metadata immediately, then streams the LLM response
+ */
+export interface AgentStreamResult {
+  agentId: string;
+  referencedNodes: Array<{
+    id: string;
+    label: string;
+    type: string;
+  }>;
+  uncertaintyLevel?: 'low' | 'medium' | 'high';
+  followUps?: string[];
+  stream: AsyncIterable<LlmStreamChunk>;
+}
+
+/**
  * Agent interface that all domain agents must implement
  */
 export interface Agent {
@@ -156,6 +181,7 @@ export interface Agent {
   description: string;
   canHandle(input: AgentInput): Promise<boolean>;
   handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult>;
+  handleStream?(input: AgentInput, ctx: AgentContext): Promise<AgentStreamResult>;
 }
 
 // =============================================================================
@@ -317,6 +343,7 @@ export interface LlmChatResponse {
  */
 export interface LlmClient {
   chat(request: LlmChatRequest): Promise<LlmChatResponse>;
+  streamChat?(request: LlmChatRequest): AsyncIterable<LlmStreamChunk>;
 }
 
 // =============================================================================

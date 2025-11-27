@@ -162,18 +162,9 @@ export {
   type LlmProviderRegistry,
   type LlmPolicyStore,
   LlmRouter,
-  OpenAiResponsesClient,
-  GroqLlmClient,
-  LocalHttpLlmClient,
   InMemoryPolicyStore,
   createLlmRouter,
   createDefaultLlmRouter,
-} from '@reg-copilot/reg-intel-llm';
-
-// AI SDK v5 Provider Adapters (optional) - Re-exported from reg-intel-llm
-export {
-  AiSdkOpenAIProvider,
-  AiSdkGroqProvider,
 } from '@reg-copilot/reg-intel-llm';
 
 // Compliance Engine (Orchestrator)
@@ -182,6 +173,7 @@ export {
   createComplianceEngine,
   type ComplianceRequest,
   type ComplianceResponse,
+  type ComplianceStreamChunk,
   type ComplianceEngineDeps,
 } from './orchestrator/complianceEngine.js';
 

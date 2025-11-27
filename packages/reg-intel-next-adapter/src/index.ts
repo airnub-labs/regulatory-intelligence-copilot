@@ -1,7 +1,5 @@
 import {
   NON_ADVICE_DISCLAIMER,
-  REGULATORY_COPILOT_SYSTEM_PROMPT,
-  buildPromptWithAspects,
   createComplianceEngine,
   createDefaultLlmRouter,
   createGraphClient,
@@ -15,7 +13,6 @@ import {
   type LlmChatRequest,
   type LlmChatResponse,
   type RedactedPayload,
-  type UserProfile,
 } from '@reg-copilot/reg-intel-core';
 import type { LlmRouter, LlmCompletionOptions } from '@reg-copilot/reg-intel-llm';
 
@@ -42,6 +39,20 @@ class LlmRouterClientAdapter implements LlmClient {
       content: result,
       usage: undefined, // LlmRouter doesn't return usage stats
     };
+  }
+
+  async *streamChat(request: LlmChatRequest): AsyncIterable<{ type: 'text' | 'error' | 'done'; delta?: string; error?: Error }> {
+    const options: LlmCompletionOptions = {
+      temperature: request.temperature,
+      maxTokens: request.max_tokens,
+      tenantId: 'default',
+      task: 'main-chat',
+    };
+
+    // Stream from LlmRouter
+    for await (const chunk of this.router.streamChat(request.messages, options)) {
+      yield chunk;
+    }
   }
 }
 
@@ -202,7 +213,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   };
 
   return async function POST(request: Request) {
-    const { llmRouter, complianceEngine } = getOrCreateEngine();
+    const { complianceEngine } = getOrCreateEngine();
     try {
       // Parse and validate request body
       const body = await request.json();
@@ -233,61 +244,44 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       }
 
       const sanitizedMessages = sanitizeMessages(messages as Array<{ role: string; content: string }>);
-      const jurisdictions = profile?.jurisdictions || ['IE'];
       const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
-
-      const systemPrompt = await buildPromptWithAspects(REGULATORY_COPILOT_SYSTEM_PROMPT, {
-        jurisdictions,
-        profile,
-        includeDisclaimer: shouldIncludeDisclaimer,
-      });
-
-      // For now, send metadata first (basic version - agent routing will be added later)
-      const metadata = buildMetadataChunk({
-        agentId: 'GlobalRegulatoryComplianceAgent', // Default agent
-        jurisdictions,
-        uncertaintyLevel: 'medium',
-        disclaimerKey: DEFAULT_DISCLAIMER_KEY,
-        referencedNodes: [],
-      });
-
-      const allMessages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...sanitizedMessages,
-      ];
 
       const stream = new ReadableStream({
         async start(controller) {
           const writer = new SseStreamWriter(controller);
 
           try {
-            // Send metadata first
-            writer.send('metadata', metadata);
-
-            // Stream incremental tokens from LLM
-            for await (const chunk of llmRouter.streamChat(allMessages, {
-              temperature: 0.3,
-              maxTokens: 2048,
+            // Use ComplianceEngine to handle chat with streaming
+            // This ensures proper agent routing and graph querying
+            for await (const chunk of complianceEngine.handleChatStream({
+              messages: sanitizedMessages,
+              profile,
               tenantId: options?.tenantId ?? 'default',
-              task: 'main-chat',
             })) {
-              if (chunk.type === 'text' && chunk.delta) {
+              if (chunk.type === 'metadata') {
+                // Send metadata with agent info, jurisdictions, and referenced nodes
+                const metadata = buildMetadataChunk({
+                  agentId: chunk.metadata!.agentUsed,
+                  jurisdictions: chunk.metadata!.jurisdictions,
+                  uncertaintyLevel: chunk.metadata!.uncertaintyLevel,
+                  disclaimerKey: DEFAULT_DISCLAIMER_KEY,
+                  referencedNodes: chunk.metadata!.referencedNodes,
+                });
+                writer.send('metadata', metadata);
+              } else if (chunk.type === 'text' && chunk.delta) {
                 writer.send('message', { text: chunk.delta });
               } else if (chunk.type === 'error') {
-                writer.send('error', { message: chunk.error?.message || 'Unknown error' });
+                writer.send('error', { message: chunk.error || 'Unknown error' });
                 writer.close();
                 return;
               } else if (chunk.type === 'done') {
                 // Send disclaimer after response (if configured)
-                if (shouldIncludeDisclaimer) {
-                  writer.send('message', { text: `\n\n${NON_ADVICE_DISCLAIMER}` });
+                if (shouldIncludeDisclaimer && chunk.disclaimer) {
+                  writer.send('message', { text: `\n\n${chunk.disclaimer}` });
                 }
                 writer.send('done', { status: 'ok' });
                 writer.close();
                 return;
-              } else {
-                // Log unexpected chunk type for debugging
-                console.warn('[Chat Handler] Unexpected chunk type:', chunk.type);
               }
             }
           } catch (error) {

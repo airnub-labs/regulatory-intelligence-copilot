@@ -50,6 +50,31 @@ export interface ComplianceResponse {
 }
 
 /**
+ * Streaming chunk from compliance engine
+ */
+export interface ComplianceStreamChunk {
+  type: 'metadata' | 'text' | 'done' | 'error';
+  // Metadata (sent first)
+  metadata?: {
+    agentUsed: string;
+    jurisdictions: string[];
+    uncertaintyLevel?: 'low' | 'medium' | 'high';
+    referencedNodes: Array<{
+      id: string;
+      label: string;
+      type: string;
+    }>;
+  };
+  // Text delta (streamed during response)
+  delta?: string;
+  // Final data (sent at end)
+  followUps?: string[];
+  disclaimer?: string;
+  // Error
+  error?: string;
+}
+
+/**
  * Dependencies for ComplianceEngine
  */
 export interface ComplianceEngineDeps {
@@ -122,6 +147,90 @@ export class ComplianceEngine {
       followUps: agentResult.followUps,
       disclaimer: NON_ADVICE_DISCLAIMER,
     };
+  }
+
+  /**
+   * Handle a chat request with streaming response
+   *
+   * This method provides the same agent routing and graph querying as handleChat(),
+   * but streams the LLM response in real-time for better UX.
+   */
+  async *handleChatStream(request: ComplianceRequest): AsyncGenerator<ComplianceStreamChunk> {
+    const { messages, profile } = request;
+
+    if (!messages || messages.length === 0) {
+      yield { type: 'error', error: 'No messages provided' };
+      return;
+    }
+
+    // Get the last user message as the question
+    const lastMessage = messages.filter(m => m.role === 'user').pop();
+    if (!lastMessage) {
+      yield { type: 'error', error: 'No user message found' };
+      return;
+    }
+
+    try {
+      // Build agent input
+      const agentInput: AgentInput = {
+        question: lastMessage.content,
+        profile,
+        conversationHistory: messages.slice(0, -1), // All messages except the last
+        now: new Date(),
+      };
+
+      // Build agent context with streaming-capable LLM client
+      const agentContext: AgentContext = {
+        graphClient: this.deps.graphClient,
+        timeline: this.deps.timelineEngine,
+        egressGuard: this.deps.egressGuard,
+        llmClient: this.deps.llmClient,
+        now: new Date(),
+        profile,
+      };
+
+      // Use GlobalRegulatoryComplianceAgent to handle the request
+      // This will query the graph and route to specialized agents
+      if (!GlobalRegulatoryComplianceAgent.handleStream) {
+        throw new ComplianceError('Agent does not support streaming');
+      }
+      const agentResult = await GlobalRegulatoryComplianceAgent.handleStream(
+        agentInput,
+        agentContext
+      );
+
+      // Yield metadata first
+      const jurisdictions = profile?.jurisdictions || ['IE'];
+      yield {
+        type: 'metadata',
+        metadata: {
+          agentUsed: agentResult.agentId,
+          jurisdictions,
+          uncertaintyLevel: agentResult.uncertaintyLevel,
+          referencedNodes: agentResult.referencedNodes,
+        },
+      };
+
+      // Stream the LLM response
+      for await (const chunk of agentResult.stream) {
+        if (chunk.type === 'text' && chunk.delta) {
+          yield { type: 'text', delta: chunk.delta };
+        } else if (chunk.type === 'error') {
+          yield { type: 'error', error: chunk.error?.message || 'Unknown error' };
+          return;
+        }
+      }
+
+      // Yield done with follow-ups and disclaimer
+      yield {
+        type: 'done',
+        followUps: agentResult.followUps,
+        disclaimer: NON_ADVICE_DISCLAIMER,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      yield { type: 'error', error: message };
+    }
   }
 }
 

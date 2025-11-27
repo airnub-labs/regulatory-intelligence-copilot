@@ -44,6 +44,43 @@ export default tseslint.config(
           message:
             'Direct executeCypher() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/graph_ingress_guard_v_0_1.md',
         },
+        // ComplianceEngine Bypass Prevention (Phase 3 Architecture)
+        {
+          selector:
+            "CallExpression[callee.object.name='llmRouter'][callee.property.name='streamChat']",
+          message:
+            'Direct llmRouter.streamChat() calls are prohibited in application code. Use ComplianceEngine.handleChatStream() to ensure proper agent routing and graph querying. See docs/architecture_v_0_4.md',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='llmRouter'][callee.property.name='chat']",
+          message:
+            'Direct llmRouter.chat() calls are prohibited in application code. Use ComplianceEngine.handleChat() to ensure proper agent routing and graph querying. See docs/architecture_v_0_4.md',
+        },
+      ],
+    },
+  },
+
+  // Application layer: Restrict direct LlmRouter imports
+  {
+    files: [
+      'apps/demo-web/**/*.ts',
+      'apps/demo-web/**/*.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          name: '@reg-copilot/reg-intel-llm',
+          message:
+            'Application layer should not import from reg-intel-llm directly. Use ComplianceEngine from reg-intel-core instead. This ensures proper agent routing and graph querying.',
+        },
+        {
+          name: '@reg-copilot/reg-intel-llm',
+          importNames: ['LlmRouter', 'createLlmRouter', 'createDefaultLlmRouter'],
+          message:
+            'Direct LlmRouter usage is prohibited in application code. Use ComplianceEngine.handleChat() or ComplianceEngine.handleChatStream() instead. See docs/architecture_v_0_4.md',
+        },
       ],
     },
   },
@@ -57,6 +94,30 @@ export default tseslint.config(
     ],
     rules: {
       'no-restricted-syntax': 'off',
+    },
+  },
+
+  // Exemptions: LlmRouterClientAdapter can use llmRouter (it's the adapter layer)
+  {
+    files: [
+      'packages/reg-intel-next-adapter/src/index.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        // Keep graph write restrictions, but allow llmRouter usage in adapter
+        {
+          selector:
+            "CallExpression[callee.property.name='run'] > MemberExpression[object.name='session']",
+          message:
+            'Direct session.run() calls are prohibited. Use GraphWriteService for all graph writes.',
+        },
+        {
+          selector: "CallExpression[callee.name='executeCypher']",
+          message:
+            'Direct executeCypher() calls are prohibited. Use GraphWriteService for all graph writes.',
+        },
+      ],
     },
   },
 
