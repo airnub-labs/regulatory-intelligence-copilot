@@ -14,7 +14,9 @@ import type {
 } from '../types.js';
 import { callMemgraphMcp } from '../mcpClient.js';
 import { ensureMcpGatewayConfigured } from '../sandboxManager.js';
-import { LOG_PREFIX } from '../constants.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger({ component: 'GraphClient' });
 
 /**
  * Escape string for Cypher query
@@ -146,7 +148,7 @@ export function createGraphClient(): GraphClient {
         LIMIT 100
       `;
 
-      console.log(`${LOG_PREFIX.graph} Querying rules for profile ${profileId} in ${jurisdictionId}`);
+      logger.info('Querying rules for profile and jurisdiction', { profileId, jurisdictionId });
       const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
@@ -163,7 +165,7 @@ export function createGraphClient(): GraphClient {
         LIMIT 500
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting neighbourhood for ${nodeId}`);
+      logger.info('Getting neighbourhood', { nodeId });
       const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
@@ -178,7 +180,7 @@ export function createGraphClient(): GraphClient {
         RETURN m
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting mutual exclusions for ${nodeId}`);
+      logger.info('Getting mutual exclusions', { nodeId });
       const result = await runMemgraphQuery(query);
       const context = parseGraphResult(result);
       return context.nodes;
@@ -194,7 +196,7 @@ export function createGraphClient(): GraphClient {
         RETURN t
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting timelines for ${nodeId}`);
+      logger.info('Getting timelines', { nodeId });
       const result = await runMemgraphQuery(query);
       return parseTimelineResult(result);
     },
@@ -216,7 +218,7 @@ export function createGraphClient(): GraphClient {
         RETURN n, r, m
       `;
 
-      console.log(`${LOG_PREFIX.graph} Getting cross-border slice for ${jurisdictionIds.join(', ')}`);
+      logger.info('Getting cross-border slice', { jurisdictions: jurisdictionIds });
       const result = await runMemgraphQuery(query);
       return parseGraphResult(result);
     },
@@ -225,7 +227,7 @@ export function createGraphClient(): GraphClient {
      * Execute raw Cypher query
      */
     async executeCypher(query: string): Promise<unknown> {
-      console.log(`${LOG_PREFIX.graph} Executing Cypher query`);
+      logger.info('Executing custom Cypher query');
       return runMemgraphQuery(query);
     },
   };

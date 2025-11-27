@@ -177,6 +177,17 @@ export {
   type ComplianceEngineDeps,
 } from './orchestrator/complianceEngine.js';
 
+// Observability
+export {
+  createLogger,
+  type Logger,
+} from './logger.js';
+export {
+  runWithContext,
+  getContext,
+  type RequestContext,
+} from './observability/requestContext.js';
+
 // Agents
 export { SingleDirector_IE_SocialSafetyNet_Agent } from './agents/SingleDirector_IE_SocialSafetyNet_Agent.js';
 export {
