@@ -1,8 +1,8 @@
-# DECISIONS (v0.4)
+# DECISIONS (v0.3)
 
 > Architectural & product decisions for the **regulatory-intelligence-copilot** fork.
 >
-> **v0.4 extends v0.3** with: clarified engine/host separation, explicit Memgraph MCP read-only policy, stricter graph write discipline via `GraphWriteService`, egress guard + AI SDK discipline, and a formalised GraphRAG / Leiden community detection strategy on top of Memgraph Community + MAGE.
+> v0.3 extends v0.2 with: Node 24 LTS baseline, modern web stack baselines (Next 16 / React 19 / Tailwind 4), Vercel AI SDK v5 as an edge implementation detail, and refined LLM routing.
 >
 > Legacy decisions from the original `rfc-refactor` (HTTP/RFC/OWASP auditor) remain **superseded** unless explicitly revived here.
 
@@ -30,7 +30,7 @@ The product is **chat-first**. All capabilities flow through a single HTTP endpo
 
 Memgraph is the primary source of truth for regulatory rules and relationships. The graph encodes statutes, benefits, conditions, timelines, case law, EU instruments, jurisdictions, and cross-border relationships. LLMs explain the graph; they do not own the rules.
 
-(See `docs/specs/graph_schema_v_0_3.md` and `graph_schema_changelog_v_0_3.md`.)
+(See `docs/specs/graph-schema/versions/graph_schema_v_0_3.md` and `graph_schema_changelog_v_0_3.md`.)
 
 ---
 
@@ -49,7 +49,7 @@ External legal/search APIs *may* be accessed via MCP tools, but this is not a bl
 
 ## D-005 – Egress Guard & Privacy
 
-**Status:** Accepted (unchanged, refined by D-029)
+**Status:** Accepted (unchanged)
 
 All outbound payloads leaving the app’s trust boundary (remote LLMs, search MCPs) must pass through an **egress guard** that:
 - Redacts PII (names, PPSNs, IBANs, phones, emails, addresses, etc.)
@@ -57,8 +57,6 @@ All outbound payloads leaving the app’s trust boundary (remote LLMs, search MC
 - Focuses prompts on rules, relationships, and abstract scenarios
 
 Tenants with `allowRemoteEgress = false` must be served **only** via local/OSS models.
-
-D-029 clarifies that all outbound calls go through `EgressClient` and that AI SDK v5 is used as the primary implementation layer within LLM provider clients.
 
 ---
 
@@ -88,7 +86,7 @@ Core prompts are **jurisdiction-neutral**; agents + prompt aspects inject jurisd
 
 All time-based logic (lookbacks, lock-ins, effective dates, etc.) is centralised in a **Timeline Engine**. It consumes graph timeline nodes/edges and returns machine-friendly results plus human-readable explanations.
 
-(See `docs/specs/timeline_engine_v_0_2.md`.)
+(See `docs/specs/timeline-engine/timeline_engine_v_0_2.md`.)
 
 ---
 
@@ -136,7 +134,7 @@ We keep infra‑agnostic pieces from `rfc-refactor` (E2B integration, MCP gatewa
 
 **Status:** Superseded by D-021 / D-022
 
-Earlier we simply committed to TS + Next.js + Memgraph + MCP/E2B. v0.3+ refines these into concrete version/policy baselines; see D‑021 and D‑022.
+Earlier we simply committed to TS + Next.js + Memgraph + MCP/E2B. v0.3 refines these into concrete version/policy baselines; see D‑021 and D‑022.
 
 ---
 
@@ -189,21 +187,17 @@ When the OpenAI provider is selected, we must use **OpenAI’s Responses API**, 
 
 ## D-018 – Direct Memgraph GraphClient for Core Queries (No Memgraph MCP in Hot Path)
 
-**Status:** Accepted (unchanged, clarified by D-028)
+**Status:** Accepted (unchanged)
 
 Core app code uses a typed **GraphClient** that talks directly to Memgraph. Memgraph MCP is optional for LLM tool-calling experiments, not the main production path.
-
-D-028 further constrains Memgraph MCP to **read-only usage** and formalises `GraphWriteService` as the only write gate.
 
 ---
 
 ## D-019 – WebSocket Graph Streaming with Incremental Patches
 
-**Status:** Accepted (unchanged, clarified by D-031)
+**Status:** Accepted (unchanged)
 
 The UI loads an initial subgraph via REST, then subscribes to a WebSocket endpoint for **incremental graph patches** (add/update/remove nodes/edges). Only deltas are sent over WS; full snapshots must not be streamed repeatedly.
-
-D-031 clarifies that SSE is used where more appropriate (e.g. chat streaming) and that graph streaming is patch-based but transport-agnostic.
 
 ---
 
@@ -225,13 +219,13 @@ Other projects can import these packages to mount their own `reg-intel` endpoint
 
 ## D-021 – Node 24 LTS as Minimum Runtime
 
-**Status:** Accepted (unchanged)
+**Status:** Accepted (new)
 
 ### Context
 
 Node.js 24 has just entered Active LTS and provides significant security and performance benefits over Node 20/22, including:
 - Mature **permission model** (`--permission`) for locking down FS/env/network/child processes
-- Newer V8 with better performance and features for heavy text/graph workloads
+- Newer V8 (13.6) with better performance and features for heavy text/graph workloads
 - Improved **AsyncLocalStorage** for per-request/per-tenant context
 - Updated HTTP/fetch stack and OpenSSL for a more secure default platform
 
@@ -252,7 +246,7 @@ Node.js 24 has just entered Active LTS and provides significant security and per
 
 ## D-022 – Web App Stack Baselines (Next 16, React 19, Tailwind 4)
 
-**Status:** Accepted (unchanged)
+**Status:** Accepted (new)
 
 ### Context
 
@@ -263,7 +257,7 @@ To keep the frontend aligned with modern capabilities and reduce tech drift, we 
 - **Next.js:** Minimum **v16** for all Next-based web apps.
 - **React:** Minimum **v19**.
 - **Tailwind CSS:** Minimum **v4.0**.
-- **TypeScript:** Track the latest TypeScript 5.x that is compatible with Node 24, used across the monorepo.
+- **TypeScript:** Track the latest TypeScript 5.x that is compatible with Node 24 (currently TS 5.9.x), used across the monorepo.
 
 ### Consequences
 
@@ -273,46 +267,32 @@ To keep the frontend aligned with modern capabilities and reduce tech drift, we 
 
 ---
 
-## D-023 – Vercel AI SDK v5 as Primary Provider Implementation
+## D-023 – Vercel AI SDK v5 as Edge Implementation Detail
 
-**Status:** Accepted (updated in Dec 2024)
+**Status:** Accepted (new)
 
 ### Context
 
-We want the benefits of Vercel AI SDK v5 (multi-provider support, Responses API integration, solid streaming primitives) without coupling the core engine's design to any specific SDK.
+We want the benefits of Vercel AI SDK v5 (multi-provider support, Responses API integration, solid streaming primitives) without coupling the core engine’s design to any specific SDK.
 
 ### Decision
 
-- The **core engine** (LlmRouter, agents, Compliance Engine) remains SDK-agnostic and is defined in terms of an internal `LlmProviderClient` interface.
-- **Vercel AI SDK v5** is the **primary implementation** for all major LLM providers:
-  - `OpenAiProviderClient` uses `@ai-sdk/openai` (handles Responses API automatically)
-  - `GroqProviderClient` uses `@ai-sdk/groq`
-  - `AnthropicProviderClient` uses `@ai-sdk/anthropic`
-  - `GeminiProviderClient` uses `@ai-sdk/google`
-  - `LocalHttpLlmClient` uses direct HTTP for local/OSS models (vLLM, Ollama)
-- **All providers implement `LlmProviderClient`** - the SDK is an internal implementation detail
-- The rest of the system **must not** depend directly on AI SDK types or APIs
-
-### Evolution from v0.3
-
-Previously, AI SDK providers were "optional adapters" (`AiSdkOpenAIProvider`, `AiSdkGroqProvider`) alongside manual fetch-based implementations. As of Dec 2024:
-
-- ✅ **Removed:** Separate `aiSdkProviders.ts` file with optional adapters
-- ✅ **Unified:** All providers now use AI SDK v5 by default (except local HTTP clients)
-- ✅ **Benefits:** Consistent error handling, automatic Responses API support, better streaming
+- The **core engine** (LlmRouter, agents, Compliance Engine) remains SDK-agnostic and is defined in terms of an internal `LlmProvider` interface.
+- **Vercel AI SDK v5** is used as an implementation detail at the edges:
+  - In Next.js API routes (e.g. `/api/chat`) and/or
+  - Inside provider adapters in `reg-intel-llm` that implement `LlmProvider` using `streamText` / `generateText`.
+- The rest of the system **must not** depend directly on AI SDK types or APIs.
 
 ### Consequences
 
-- We can swap Vercel AI SDK out later if needed without changing the public engine surface
-- All major cloud providers (OpenAI, Groq, Anthropic, Google) handled consistently via AI SDK
-- Local/OSS models still use direct HTTP for maximum control
-- Adding new AI SDK providers (Cohere, Mistral, etc.) requires no changes to `createLlmRouter`
+- We can swap Vercel AI SDK out later if needed without changing the public engine surface.
+- Multiple providers (OpenAI, Groq, OSS) can be wired through AI SDK or via custom HTTP clients as needed.
 
 ---
 
 ## D-024 – MCP/E2B/Memgraph Kept Outside AI SDK Tool Layer
 
-**Status:** Accepted (unchanged)
+**Status:** Accepted (new)
 
 ### Context
 
@@ -333,7 +313,7 @@ We use E2B sandboxes, MCP servers, and Memgraph as core execution and data layer
 
 ## D-025 – Data Privacy & Graph Boundaries (Normative)
 
-**Status:** Accepted (unchanged)
+**Status:** Accepted (new)
 
 ### Context
 
@@ -368,9 +348,9 @@ See `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` for full cont
 
 ---
 
-## D-026 – Aspect-Based Graph Ingress Guard for Memgraph (Normative)
+## D-026 – Aspect-based graph ingress guard for Memgraph (normative)
 
-**Status:** Accepted (unchanged, refined)
+**Status:** Accepted (new)
 
 ### Context
 
@@ -380,7 +360,7 @@ To enforce the data privacy and schema guarantees defined in D-025 and related s
 
 - All writes to the global Memgraph instance must go through a dedicated
   `GraphWriteService` that applies an ordered chain of **Graph Ingress
-  Aspects`.
+  Aspects**.
 - Baseline aspects (schema validation, property whitelisting, static PII /
   tenant checks) are non‑removable and encode the guarantees from
   `data_privacy_and_architecture_boundaries_v_0_1.md` and
@@ -392,7 +372,7 @@ To enforce the data privacy and schema guarantees defined in D-025 and related s
   `MERGE`, `SET` on new nodes/relationships) directly against Memgraph outside
   the GraphWriteService.
 
-See `docs/specs/graph_ingress_guard_v_0_1.md` for the detailed design of the
+See `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md` for the detailed design of the
 aspect pattern and the baseline/custom aspect split.
 
 ### Consequences
@@ -404,158 +384,5 @@ aspect pattern and the baseline/custom aspect split.
 
 ---
 
-## D-027 – Engine Integration & Host Separation
-
-**Status:** Accepted (new)
-
-### Context
-
-We want to be able to:
-- Swap or add frontends (different Next.js apps, other frameworks) without touching core engine code.
-- Expose the engine as a service (e.g. `Memgraph + Copilot as a service`) with a stable, minimal integration surface.
-
-### Decision
-
-- Treat `ComplianceEngine.handleChat(...)` (TypeScript interface) as the **canonical in-process interface**.
-- Treat `POST /v1/chat` (HTTP) as the **canonical network interface**.
-- `apps/demo-web` and `/api/chat` are **thin adapters** that:
-  - Accept HTTP requests,
-  - Translate to `ComplianceEngine.handleChat(...)`,
-  - Stream responses back to the client.
-
-### Consequences
-
-- Swapping the Next.js frontend (or adding others) does not require refactoring engine or agents.
-- The engine can later be hosted as an independent service and consumed by other apps using `/v1/chat`.
-- Supports the future story of "Memgraph + Copilot as a service" with minimal coupling.
-
----
-
-## D-028 – Graph Write Discipline & Memgraph MCP Read-Only
-
-**Status:** Accepted (new)
-
-### Context
-
-We already have:
-- D-018: direct `GraphClient` for core queries.
-- D-025 & D-026: privacy boundaries and graph ingress guard.
-
-We now make Memgraph MCP’s role explicit and tie it into ingress discipline.
-
-### Decision
-
-- **Memgraph MCP is read-only.** It may be used by agents/tools for:
-  - Inspecting the shared Regulatory Rules Graph.
-  - Running read-only Cypher queries.
-  - Powering GraphRAG-style retrieval in tools.
-- All graph writes must go through `GraphWriteService`:
-  - `GraphWriteService → GraphIngressGuard (aspects) → Memgraph`.
-- No direct `CREATE`/`MERGE` from:
-  - MCP tools,
-  - Agents,
-  - UI,
-  - Ad-hoc scripts that aren’t using `GraphWriteService`.
-
-### Consequences
-
-- The "no user PII in global graph" invariant is protected by design.
-- The ingress guard aspects remain authoritative for all writes.
-- Memgraph MCP can safely be exposed to LLM tool-calling for **reads** without risk of bypassing write policies.
-
----
-
-## D-029 – Egress Guard + AI SDK Discipline
-
-**Status:** Accepted (new)
-
-### Context
-
-We want:
-- A single place to enforce egress policies and PII stripping.
-- The freedom to use Vercel AI SDK v5 (or any future SDK) behind the scenes without leaking SDK details into the engine.
-
-### Decision
-
-- `EgressClient` is the **single choke point** for all outbound calls:
-  - LLM calls (OpenAI, Groq, OSS, local models).
-  - MCP HTTP calls.
-  - Any other external HTTP egress.
-- AI SDK v5 is the **primary implementation layer** inside all `LlmProviderClient` implementations (OpenAI, Groq, Anthropic, Google Gemini).
-  - No direct `streamText`/`generateText` in agents, route handlers, or engine modules - only within provider client implementations.
-- The standard call chain is:
-  - Agent → LlmRouter → EgressClient (egress aspects) → Provider (AI SDK or other).
-
-### Consequences
-
-- The egress guard stays the "bouncer at the door" for everything leaving the system.
-- We can swap SDKs or adjust provider usage without touching agent/engine code.
-- Easier to enforce tenant/jurisdiction-specific egress policies.
-
----
-
-## D-030 – GraphRAG & Memgraph Algorithms (Leiden as Optional Add-On)
-
-**Status:** Accepted (new)
-
-### Context
-
-We want GraphRAG-style behaviour on top of Memgraph without:
-- Locking into Memgraph Enterprise features.
-- Breaking existing direct-path Cypher reasoning or mutual exclusion detection.
-
-We also want to be able to experiment with Leiden community detection and centrality while keeping them optional and easily disabled.
-
-### Decision
-
-- The **primary reasoning mode** remains:
-  - Explicit graph edges modelling rules, exclusions, timelines, and cross-border relationships.
-  - Targeted Cypher traversals for queries like "mutual exclusions" and "impact of rule X".
-- Graph algorithms are **optional enhancers**, configured and documented in `docs/specs/graph_algorithms_v_0_1.md`:
-  - Community detection (e.g. Leiden via MAGE) on static snapshots to assign `community_id` and create `:Community` nodes.
-  - Centrality metrics (PageRank/betweenness) within communities to identify anchor rules.
-  - Bounded multi-hop traversals for impact analysis.
-- These algorithms:
-  - Must be disable-able without breaking any core functionality.
-  - May be used to improve GraphRAG retrieval (e.g. sampling representative nodes from communities).
-  - Are implemented on Memgraph Community + MAGE only (no Enterprise dependency for v0.4).
-
-### Consequences
-
-- We preserve the power of the existing direct-path queries for uncovering hidden interactions and mutual exclusions.
-- Leiden/centrality can be added as "seasoning" – if they don’t add value or are too expensive, they can be turned off with minimal impact.
-- GraphRAG behaviour is defined by our schema + algorithms, not tied to any particular vendor implementation.
-
----
-
-## D-031 – Streaming Strategy (WS for Graph Patches, SSE for Chat)
-
-**Status:** Accepted (new)
-
-### Context
-
-We currently:
-- Use WebSockets for incremental graph updates.
-- Use streaming for chat responses.
-
-We want to formalise this so architecture diagrams and future work are aligned.
-
-### Decision
-
-- **Graph streaming:**
-  - The graph UI loads an initial snapshot via REST.
-  - Incremental changes (add/update/remove nodes/edges) are sent as **patches**.
-  - WebSocket is the default transport, but the design is patch-based and transport-agnostic (could be migrated to SSE or other mechanisms later).
-- **Chat streaming:**
-  - SSE or compatible streaming (via fetch streams) is used for chat responses where a simple one-way stream is sufficient.
-
-### Consequences
-
-- Clear mental model: graph = patch stream; chat = token stream.
-- We avoid repeatedly sending full graph snapshots.
-- We keep flexibility to swap transports without changing higher-level behaviour.
-
----
-
-These decisions define the **current desired state (v0.4)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-032, D-033, …) as the system evolves.
+These decisions define the **current desired state (v0.3)** of the `regulatory-intelligence-copilot` architecture. New ADRs/decisions should be appended here with incremental IDs (D-027, D-028, …) as the system evolves.
 

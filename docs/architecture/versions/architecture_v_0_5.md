@@ -18,15 +18,15 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 ### Core Architecture (from v0.4)
 
 - `docs/architecture_v_0_4.md`
-- `docs/specs/graph_schema_v_0_4.md`
-- `docs/specs/graph_schema_changelog_v_0_4.md`
+- `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
+- `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
 - `docs/specs/graph_algorithms_v_0_1.md`
-- `docs/specs/timeline_engine_v_0_2.md`
-- `docs/specs/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/specs/graph_ingress_guard_v_0_1.md`
-- `docs/specs/egress_guard_v_0_2.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/egress_guard_v_0_2.md`
 
 ### Project-Level Docs
 

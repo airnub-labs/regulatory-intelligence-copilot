@@ -55,7 +55,7 @@ pnpm test:changes:remove      # Remove a test node
 
 ### 5. Comprehensive Documentation
 
-**File:** `docs/graph_change_detection.md`
+**File:** `docs/change-detection/graph_change_detection_v_0_6.md`
 
 **Sections:**
 - Architecture overview with diagrams
@@ -272,7 +272,7 @@ export {
 - `packages/compliance-core/src/graph/graphChangeDetector.ts`
 - `apps/demo-web/src/lib/graphChangeDetectorInstance.ts`
 - `scripts/test-graph-changes.ts`
-- `docs/graph_change_detection.md`
+- `docs/change-detection/graph_change_detection_v_0_6.md`
 - `docs/IMPLEMENTATION_SUMMARY.md` (this file)
 
 ### Modified
@@ -292,7 +292,7 @@ export {
 - **Core implementation:** ~450 lines (graphChangeDetector.ts)
 - **Singleton manager:** ~100 lines (graphChangeDetectorInstance.ts)
 - **Test utility:** ~350 lines (test-graph-changes.ts)
-- **Documentation:** ~600 lines (graph_change_detection.md)
+- **Documentation:** ~600 lines (`change-detection/graph_change_detection_v_0_6.md`)
 - **Total:** ~1,500 lines
 
 ## Conclusion

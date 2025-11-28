@@ -810,7 +810,7 @@ Per active filter:
 
 ## Related Documentation
 
-- [Architecture Overview](../graph_change_detection.md)
+- [Architecture Overview](../change-detection/graph_change_detection_v_0_6.md)
 - [Enhancement Details](../graph_change_detection_enhancements.md)
 - [Usage Guide](./graph_change_detector_usage.md)
 - [Testing Guide](./graph_change_detector_testing.md)

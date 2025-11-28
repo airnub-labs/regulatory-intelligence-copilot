@@ -328,7 +328,7 @@ blocks; they simply query the relevant neighbourhood.
 
 ## 8. Timeline Integration
 
-Timeline nodes (as per `timeline_engine_v_0_2.md`) should be attached to
+Timeline nodes (as per `docs/specs/timeline-engine/timeline_engine_v_0_2.md`) should be attached to
 Agreements and Regimes to express:
 
 - When a protocol or framework came into force.
@@ -377,7 +377,7 @@ legal/tax/welfare advice.
 
 - Any future changes to how these are modelled must:
   1. Update this document (or a v0.2 successor), and
-  2. Update `graph_schema_v_0_3.md` (or later version) and the graph
+  2. Update `docs/specs/graph-schema/versions/graph_schema_v_0_3.md` (or later version) and the graph
      changelog.
 
 - The example Cypher seed file `docs/graph_seed_ni_uk_ie_eu.cypher` provides a

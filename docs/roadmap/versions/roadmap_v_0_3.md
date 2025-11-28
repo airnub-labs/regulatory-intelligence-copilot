@@ -8,8 +8,8 @@
 > See also:
 > - `docs/architecture_v_0_3.md`
 > - `docs/decisions_v_0_3.md`
-> - `docs/specs/graph_schema_v_0_3.md`
-> - `docs/specs/timeline_engine_v_0_2.md`
+> - `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
 > - `docs/node_24_lts_rationale.md`
 
 The goal is to reach a **credible, useful v1** focused on Ireland/EU first, while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for multi‑jurisdiction expansion and optional Microsoft GraphRAG integration.

@@ -1,7 +1,7 @@
 # Graph Schema Spec v0.6 – Regulatory Intelligence Copilot
 
 > **Status:** Draft v0.6  
-> **Supersedes:** `graph_schema_v_0_4.md` (internally still labelled v0.3)  
+> **Supersedes:** `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` (internally still labelled v0.3)  
 > **Scope:** Core Memgraph rules graph for the Regulatory Intelligence Copilot (IE / UK / EU focus, extensible to other domains)
 
 This document is the **single source of truth** for how regulatory rules, benefits, and related entities are represented in **Memgraph**.
@@ -11,7 +11,7 @@ It is aligned with:
 - `architecture_v_0_6.md` (overall system architecture)
 - `data_privacy_and_architecture_boundaries_v_0_1.md` (what must *never* go into Memgraph)
 - `graph_ingress_guard_v_0_1.md` (write‑side validation and safety)
-- `graph_change_detection.md` and `graph_change_detection_enhancements.md` (patch/streaming behaviour)
+- `change-detection/graph_change_detection_v_0_6.md` and the archived v0.3 docs (patch/streaming behaviour)
 - `graph_algorithms_v_0_1.md` (optional derived metadata)
 - `special_jurisdictions_modelling_v_0_1.md` (NI/UK/IE/EU/IM/CTA and similar)
 - `concept_capture_from_main_chat_v_0_1.md` (SKOS‑inspired concept capture and self‑population)
@@ -534,7 +534,7 @@ Subsequent questions about VRT/import duties can then be answered using both the
 ## 6. Versioning & Evolution
 
 - This is **v0.6** of the graph schema.
-- Changes from the previous published schema (`graph_schema_v_0_4.md`, internally v0.3):
+- Changes from the previous published schema (`docs/specs/graph-schema/versions/graph_schema_v_0_4.md`, internally v0.3):
   - Added `pref_label` and `alt_labels` properties on `:Benefit` and `:Relief` to support SKOS‑style labels.
   - Introduced `:Concept` and `:Label` node labels, plus `HAS_ALT_LABEL`, `ALIGNS_WITH`, and `DERIVED_FROM` relationships, to integrate with `concept_capture_from_main_chat_v_0_1.md`.
   - Clarified that **conversation context** and scenarios live in Supabase, not in Memgraph, consistent with `conversation_context_spec_v_0_1.md`.

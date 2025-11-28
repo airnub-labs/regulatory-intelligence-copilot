@@ -37,12 +37,12 @@ export default tseslint.config(
           selector:
             "CallExpression[callee.property.name='run'] > MemberExpression[object.name='session']",
           message:
-            'Direct session.run() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/graph_ingress_guard_v_0_1.md',
+            'Direct session.run() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/safety-guards/graph_ingress_guard_v_0_1.md',
         },
         {
           selector: "CallExpression[callee.name='executeCypher']",
           message:
-            'Direct executeCypher() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/graph_ingress_guard_v_0_1.md',
+            'Direct executeCypher() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/safety-guards/graph_ingress_guard_v_0_1.md',
         },
         // ComplianceEngine Bypass Prevention (Phase 3 Architecture)
         {

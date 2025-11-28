@@ -637,7 +637,7 @@ Repeat until performance targets are met.
 - [API Reference](./graph_change_detector_api.md)
 - [Usage Guide](./graph_change_detector_usage.md)
 - [Testing Guide](./graph_change_detector_testing.md)
-- [Architecture Overview](../graph_change_detection.md)
+- [Architecture Overview](../change-detection/graph_change_detection_v_0_6.md)
 - [Enhancements](../graph_change_detection_enhancements.md)
 
 ---

@@ -19,21 +19,21 @@ This architecture sits on top of, and must remain consistent with, the following
 
 ### Core Graph & Engine Specs
 
-- `docs/specs/graph_schema_v_0_4.md`
-- `docs/specs/graph_schema_changelog_v_0_4.md`
+- `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
+- `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
 - `docs/specs/graph_algorithms_v_0_1.md`
-- `docs/specs/timeline_engine_v_0_2.md`
-- `docs/specs/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/specs/graph_ingress_guard_v_0_1.md`
-- `docs/specs/egress_guard_v_0_2.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/egress_guard_v_0_2.md`
 
 ### New / Refined Specs Introduced by v0.6
 
-- `docs/specs/concept_capture_from_main_chat_v_0_1.md`  
+- `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
   (SKOS‑inspired concept capture via LLM tools and self‑population of the rules graph.)
-- `docs/specs/conversation_context_spec_v_0_1.md`  
+- `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
   (Conversation‑level context, active graph node IDs, and how they are persisted and applied.)
 - `docs/specs/scenario_engine_v_0_1.md`  
   (Initial design for a Scenario / What‑If Engine built on top of the rules graph + timeline.)
@@ -347,7 +347,7 @@ This design ensures:
 
 ### 7.1 Timeline Engine (Unchanged in Scope)
 
-- The **Timeline Engine** (`timeline_engine_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
+- The **Timeline Engine** (`docs/specs/timeline-engine/timeline_engine_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
 - Given a scenario (sequence of events + dates), it can answer:
   - Whether a rule applies at a given date.
   - When lock‑in periods expire.

@@ -80,7 +80,7 @@ It explicitly **does not**:
 
 ### 2.3 Timeline Engine
 
-- Performs date arithmetic and temporal reasoning (see `timeline_engine_v_0_2`).
+- Performs date arithmetic and temporal reasoning (see `docs/specs/timeline-engine/timeline_engine_v_0_2.md`).
 - Scenario Engine calls Timeline Engine functions when rules have `:Timeline` attachments, e.g.:
   - `isWithinLookback(...)` for contribution windows.
   - `isLockInActive(...)` for lock‑ins.

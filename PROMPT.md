@@ -34,11 +34,11 @@ You must treat the project docs as **source of truth** and avoid inventing new a
 For any non‑trivial task, mentally load these files first (from `docs/` and `docs/specs/`):
 
 1. **Core concept & architecture**
-   - `docs/architecture_v_0_6.md`
-   - `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`
+   - `docs/architecture/architecture_v_0_6.md`
+   - `docs/specs/concept/regulatory_graph_copilot_concept_v_0_6.md`
 
 2. **Graph schema & changelog**
-   - `docs/specs/graph_schema_v_0_6.md`
+   - `docs/specs/graph-schema/graph_schema_v_0_6.md`
    - `docs/specs/graph_schema_changelog_v_0_6.md`
 
 3. **Agents & prompts**
@@ -46,20 +46,20 @@ For any non‑trivial task, mentally load these files first (from `docs/` and `d
    - `PROMPT_v_0_6.md` (this file – keep yourself aligned)
 
 4. **Key cross‑cutting specs**
-   - `docs/specs/timeline_engine_v_0_2.md`
+   - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
    - `docs/specs/graph_algorithms_v_0_1.md`
    - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-   - `docs/specs/graph_ingress_guard_v_0_1.md`
-   - `docs/specs/egress_guard_v_0_2.md`
+   - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+   - `docs/specs/safety-guards/egress_guard_v_0_2.md`
 
 5. **New v0.6 features**
-   - `docs/specs/concept_capture_from_main_chat_v_0_1.md`
-   - `docs/specs/conversation_context_spec_v_0_1.md`
+   - `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`
+   - `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`
    - `docs/specs/scenario_engine_v_0_1.md` (if scenario/what‑if related)
 
 6. **Roadmap & decisions**
-   - `docs/decisions_v_0_6.md`
-   - `docs/roadmap_v_0_6.md`
+   - `docs/decisions/decisions_v_0_6.md`
+   - `docs/roadmap/roadmap_v_0_6.md`
 
 If you are unsure how to implement something, prefer **checking these docs again** over improvising a new design.
 
