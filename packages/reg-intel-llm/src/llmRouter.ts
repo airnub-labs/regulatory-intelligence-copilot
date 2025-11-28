@@ -22,6 +22,7 @@
 
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
+import { EgressClient, type EgressClientConfig } from './egressClient.js';
 
 /**
  * LLM completion options
@@ -584,17 +585,21 @@ export class LlmRouter implements LlmClient {
   private policyStore: LlmPolicyStore;
   private defaultProvider: string;
   private defaultModel: string;
+  private egressClient: EgressClient;
 
   constructor(
     providers: LlmProviderRegistry,
     policyStore: LlmPolicyStore,
     defaultProvider: string,
-    defaultModel: string
+    defaultModel: string,
+    egressClient?: EgressClient
   ) {
     this.providers = providers;
     this.policyStore = policyStore;
     this.defaultProvider = defaultProvider;
     this.defaultModel = defaultModel;
+    this.egressClient =
+      egressClient ?? new EgressClient({ allowedProviders: Object.keys(providers) });
   }
 
   async chat(
@@ -603,6 +608,22 @@ export class LlmRouter implements LlmClient {
   ): Promise<string> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
+    const sanitized = await this.egressClient.guard({
+      target: 'llm',
+      providerId: provider,
+      endpointId: 'chat',
+      request: { messages, model, options: taskOptions, task: options?.task },
+      tenantId: options?.tenantId,
+      task: options?.task,
+    });
+
+    const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+      messages: ChatMessage[];
+      model: string;
+      options?: typeof taskOptions;
+      task?: string;
+    };
+
     // Get provider client
     const providerClient = this.providers[provider];
     if (!providerClient) {
@@ -610,7 +631,11 @@ export class LlmRouter implements LlmClient {
     }
 
     // Call provider
-    return providerClient.chat(messages, model, taskOptions);
+    return providerClient.chat(
+      payload.messages,
+      payload.model,
+      payload.options ?? taskOptions
+    );
   }
 
   async *streamChat(
@@ -618,6 +643,22 @@ export class LlmRouter implements LlmClient {
     options?: LlmCompletionOptions
   ): AsyncIterable<LlmStreamChunk> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
+
+    const sanitized = await this.egressClient.guard({
+      target: 'llm',
+      providerId: provider,
+      endpointId: 'chat',
+      request: { messages, model, options: taskOptions, task: options?.task },
+      tenantId: options?.tenantId,
+      task: options?.task,
+    });
+
+    const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+      messages: ChatMessage[];
+      model: string;
+      options?: typeof taskOptions;
+      task?: string;
+    };
 
     // Get provider client
     const providerClient = this.providers[provider];
@@ -639,7 +680,11 @@ export class LlmRouter implements LlmClient {
     }
 
     // Stream from provider
-    yield* providerClient.streamChat(messages, model, taskOptions);
+    yield* providerClient.streamChat(
+      payload.messages,
+      payload.model,
+      payload.options ?? taskOptions
+    );
   }
 
   /**
@@ -680,14 +725,35 @@ export class LlmRouter implements LlmClient {
 
     if (policy) {
       // Check if tenant allows remote egress
-      if (!policy.allowRemoteEgress) {
-        // Force local provider
-        provider = 'local';
-      }
+      const taskPolicy = task
+        ? policy.tasks.find(t => t.task === task)
+        : undefined;
 
-      // Check for task-specific policy
-      if (task) {
-        const taskPolicy = policy.tasks.find(t => t.task === task);
+      if (!policy.allowRemoteEgress) {
+        // Remote egress disabled - enforce local provider only
+        if (!this.providers.local) {
+          throw new LlmError(
+            'Remote egress is disabled for this tenant but no local provider is configured'
+          );
+        }
+
+        provider = 'local';
+        if (taskPolicy) {
+          // Honor task-specific settings only if they stay on local provider
+          if (taskPolicy.provider === 'local') {
+            model = taskPolicy.model;
+            if (taskPolicy.temperature !== undefined) {
+              taskOptions.temperature = taskPolicy.temperature;
+            }
+            if (taskPolicy.maxTokens !== undefined) {
+              taskOptions.maxTokens = taskPolicy.maxTokens;
+            }
+          }
+        } else {
+          model = policy.defaultModel;
+        }
+      } else {
+        // Remote egress allowed - use task policy if present, else fall back to defaults
         if (taskPolicy) {
           provider = taskPolicy.provider;
           model = taskPolicy.model;
@@ -697,13 +763,10 @@ export class LlmRouter implements LlmClient {
           if (taskPolicy.maxTokens !== undefined) {
             taskOptions.maxTokens = taskPolicy.maxTokens;
           }
+        } else {
+          provider = policy.defaultProvider;
+          model = policy.defaultModel;
         }
-      }
-
-      // Use policy defaults if no task-specific policy found
-      if (!task || !policy.tasks.find(t => t.task === task)) {
-        provider = policy.defaultProvider;
-        model = policy.defaultModel;
       }
     }
 
@@ -776,6 +839,17 @@ export interface LlmRouterConfig {
    * Default model to use
    */
   defaultModel?: string;
+
+  /**
+   * Optional egress client configuration for outbound calls.
+   * Defaults to baseline sanitization with the configured providers allowlisted.
+   */
+  egressClientConfig?: EgressClientConfig;
+
+  /**
+   * Optional preconfigured egress client to override the default.
+   */
+  egressClient?: EgressClient;
 }
 
 /**
@@ -866,6 +940,18 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
   const defaultModel = config.defaultModel ?? 'llama-3.3-70b-versatile';
 
   const policyStore = config.policyStore ?? new InMemoryPolicyStore();
+  const egressClient =
+    config.egressClient ??
+    new EgressClient({
+      allowedProviders: availableProviders,
+      ...(config.egressClientConfig ?? {}),
+    });
 
-  return new LlmRouter(providers, policyStore, defaultProvider, defaultModel);
+  return new LlmRouter(
+    providers,
+    policyStore,
+    defaultProvider,
+    defaultModel,
+    egressClient
+  );
 }
