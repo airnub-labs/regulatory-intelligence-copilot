@@ -54,7 +54,7 @@ Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
 For the full product concept, see:
 
-- 📄 `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`
+- 📄 `docs/architecture/copilot-concept/regulatory_graph_copilot_concept_v_0_6.md`
 
 ---
 
@@ -95,8 +95,8 @@ If you’re new to the repo, start here:
 - 🏛 **Architecture**  
   - `docs/architecture/README.md` – high‑level architecture overview for v0.6, with links to `architecture_v_0_6.md`, diagrams, graph schema, change detection, engines, and integration guides.
 
-- 🗺 **Roadmap & decisions**  
-  - `docs/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).  
+- 🗺 **Roadmap & decisions**
+  - `docs/governance/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).
   - `docs/governance/decisions/decisions_v_0_6.md` – architectural decision records (ADRs) and design rationale.
 
 - 🤖 **Agents & prompts**  
@@ -112,7 +112,7 @@ Specs and decisions in `docs/` are the **source of truth**. If anything in this 
 
 ## Current Status
 
-- **Architecture:** v0.6, based on `docs/architecture/versions/architecture_v_0_6.md`.
+- **Architecture:** v0.6, based on `docs/architecture/architecture_v_0_6.md`.
 - **Backend engine:** Implemented as reusable TypeScript packages (`reg-intel-core`, `reg-intel-graph`, `reg-intel-llm`, `reg-intel-prompts`).
 - **Frontend:** Next.js 16, React 19, Tailwind v4, shadcn/ui, Radix UI, Vercel AI SDK v5.
 - **Graph:** Memgraph Community + MAGE as a single shared rules graph.
@@ -129,7 +129,7 @@ This repo is **not** a finished product. It is a living reference implementation
 
 ### 1. Prerequisites
 
-- **Node.js** 24+ (LTS) – see `docs/node_24_lts_rationale.md` for why.  
+- **Node.js** 24+ (LTS) – see `docs/architecture/runtime/node_24_lts_rationale.md` for why.
 - **pnpm** (or your preferred package manager).  
 - **Docker** (for Memgraph + MCP gateway + any sandbox sidecars).  
 - Accounts / API keys for:
@@ -196,7 +196,7 @@ For local development you can either:
 - Use the **Supabase CLI / docker stack** for a full local Supabase instance, or  
 - Point `DATABASE_URL` at a local Postgres instance.
 
-The recommended path is described in **`docs/local_development.md`**, which covers:
+The recommended path is described in **`docs/development/local/LOCAL_DEVELOPMENT.md`**, which covers:
 
 - Starting Supabase locally.  
 - Running database migrations.  
@@ -204,7 +204,7 @@ The recommended path is described in **`docs/local_development.md`**, which cove
 
 ### 6. Seed Memgraph with demo data
 
-Seed scripts and example Cypher files live under `scripts/` and `docs/specs/graph-seed/` (see `docs/architecture/README.md` for pointers).
+Seed scripts and example Cypher files live under `scripts/` and `docs/architecture/graph/` (see `docs/architecture/README.md` for pointers).
 
 A typical flow looks like:
 
@@ -270,41 +270,69 @@ packages/
 
 docs/
   README.md                    # Docs index (start here)
+  api/
+    graph_change_detector_api.md
+    graph_change_detector_performance.md
+    graph_change_detector_testing.md
+    graph_change_detector_troubleshooting.md
+    graph_change_detector_usage.md
   architecture/
     README.md                  # Architecture index / map
-    versions/
-      architecture_v_0_6.md
-      # older versions archived here
-    diagrams/
-      architecture_diagrams_v_0_6.md
-  governance/
-    decisions/
-      decisions_v_0_6.md
-      versions/...
-    product/
+    architecture_v_0_6.md
+    architecture_diagrams_v_0_6.md
+    archive/
+      architecture_v_0_1.md
+      architecture_v_0_2.md
+      architecture_v_0_3.md
+      architecture_v_0_4.md
+      architecture_v_0_5.md
+      architecture_diagrams_v_0_5.md
+    copilot-concept/
+      regulatory_graph_copilot_concept_v_0_6.md
+      archive/ (v0.1–v0.4)
+    conversation-context/
+      concept_capture_from_main_chat_v_0_1.md
+      conversation_context_spec_v_0_1.md
+    graph/
+      graph_schema_v_0_6.md
+      graph_schema_changelog_v_0_6.md
+      graph_algorithms_v_0_1.md
+      graph_seed_ni_uk_ie_eu.txt
+      special_jurisdictions_modelling_v_0_1.md
+      graph_change_detection_v_0_6.md
+      archive/ (schema history, change detection v0.3, cross-jurisdiction design)
+    engines/
+      timeline-engine/
+        timeline_engine_v_0_2.md
+        timeline_integration_v_0_3.md
+        archive/ (v0.1 timeline docs)
       scenario-engine/
         scenario_engine_v_0_1.md
-  roadmap/
-    roadmap_v_0_6.md
-    versions/...
-  change-detection/
-    graph_change_detection_v_0_6.md
-    archive/...
-  specs/
-    regulatory_graph_copilot_concept_v_0_6.md
-    graph_schema_v_0_6.md
-    graph_schema_changelog_v_0_6.md
-    graph_algorithms_v_0_1.md
-    timeline_engine_v_0_2.md
-    special_jurisdictions_modelling_v_0_1.md
+        archive/ (scenario integration v0.1)
+    guards/
+      graph_ingress_guard_v_0_1.md
+      egress_guard_v_0_2.md
+    runtime/
+      node_24_lts_rationale.md
+      node_24_lts_integration_checklist.md
     data_privacy_and_architecture_boundaries_v_0_1.md
-    graph_ingress_guard_v_0_1.md
-    egress_guard_v_0_2.md
-    conversation-context/
-      conversation_context_spec_v_0_1.md
-      concept_capture_from_main_chat_v_0_1.md
+  governance/
+    decisions/ (v0.6 + archive)
+    roadmap/ (v0.6 + archive)
+    migrations/
+      migration_plan_v_0_1.md
+      migration_plan_v_0_2.md
+    product/
+      eligibility-explorer/
+        eligibility_explorer_spec_v_0_1.md
+  development/
+    local/
+      LOCAL_DEVELOPMENT.md
+      eslint_rules.md
+    implementation-plans/
+      PHASE_* docs and implementation summaries
 
-  # plus historical v0.1/v0.2/v0.3/v0.4 docs
+  # plus historical v0.1/v0.2/v0.3/v0.4/v0.5 docs preserved in archives
 
 AGENTS.md                      # v0.6 agent spec
 PROMPT.md                      # v0.6 coding agent prompt

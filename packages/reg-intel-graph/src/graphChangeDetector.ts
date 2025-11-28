@@ -4,7 +4,7 @@
  * Implements real-time graph change detection for streaming updates to clients.
  * Uses a polling-based approach with timestamp tracking to detect changes in Memgraph.
  *
- * Per v0.3 architecture (docs/architecture_v_0_3.md Section 9):
+ * Per v0.3 architecture (docs/architecture/archive/architecture_v_0_3.md Section 9):
  * - Detects nodes added/updated/removed
  * - Detects edges added/updated/removed
  * - Filters changes by jurisdiction and profile
