@@ -37,11 +37,11 @@ export interface LlmCompletionOptions {
 /**
  * Streaming chunk from LLM
  */
-export interface LlmStreamChunk {
-  type: 'text' | 'error' | 'done';
-  delta?: string; // Text delta for type='text'
-  error?: Error; // Error object for type='error'
-}
+export type LlmStreamChunk =
+  | { type: 'text'; delta: string }
+  | { type: 'tool'; name: string; argsJson: unknown }
+  | { type: 'error'; error: Error }
+  | { type: 'done' };
 
 /**
  * LLM task policy - defines model/provider for a specific task
@@ -95,6 +95,78 @@ export interface LlmProviderClient {
     model: string,
     options?: { temperature?: number; maxTokens?: number }
   ): AsyncIterable<LlmStreamChunk>;
+}
+
+/**
+ * Map AI SDK text stream parts into LLM router chunks.
+ */
+async function* streamTextPartsToLlmChunks(
+  fullStream: AsyncIterable<unknown>
+): AsyncIterable<LlmStreamChunk> {
+  let finished = false;
+
+  try {
+    for await (const part of fullStream as AsyncIterable<{ type?: string }>) {
+      if (part?.type === 'text-delta' && 'text' in part && typeof part.text === 'string') {
+        yield { type: 'text', delta: part.text } satisfies LlmStreamChunk;
+        continue;
+      }
+
+      if (part?.type === 'tool-call' && 'toolName' in part) {
+        const { toolName } = part as { toolName: string; input?: unknown };
+        yield { type: 'tool', name: toolName, argsJson: (part as { input?: unknown }).input };
+        continue;
+      }
+
+      if (part?.type === 'tool-result' && 'toolName' in part) {
+        const { toolName } = part as { toolName: string; output?: unknown; input?: unknown };
+        const argsJson =
+          'output' in part
+            ? (part as { output?: unknown }).output
+            : (part as { input?: unknown }).input;
+        yield { type: 'tool', name: toolName, argsJson };
+        continue;
+      }
+
+      if (part?.type === 'tool-error') {
+        const errorValue = (part as { error?: unknown }).error;
+        yield {
+          type: 'error',
+          error:
+            errorValue instanceof Error
+              ? errorValue
+              : new Error(`Tool error: ${String(errorValue)}`),
+        };
+        continue;
+      }
+
+      if (part?.type === 'error') {
+        const errorValue = (part as { error?: unknown }).error;
+        yield {
+          type: 'error',
+          error:
+            errorValue instanceof Error
+              ? errorValue
+              : new Error(String(errorValue ?? 'Unknown stream error')),
+        };
+        continue;
+      }
+
+      if (part?.type === 'finish') {
+        finished = true;
+        yield { type: 'done' };
+      }
+    }
+  } catch (error) {
+    yield {
+      type: 'error',
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+
+  if (!finished) {
+    yield { type: 'done' };
+  }
 }
 
 /**
@@ -164,11 +236,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      for await (const chunk of result.textStream) {
-        yield { type: 'text', delta: chunk };
-      }
-
-      yield { type: 'done' };
+      yield* streamTextPartsToLlmChunks(result.fullStream);
     } catch (error) {
       yield {
         type: 'error',
@@ -247,11 +315,7 @@ export class GroqProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      for await (const chunk of result.textStream) {
-        yield { type: 'text', delta: chunk };
-      }
-
-      yield { type: 'done' };
+      yield* streamTextPartsToLlmChunks(result.fullStream);
     } catch (error) {
       yield {
         type: 'error',
@@ -330,11 +394,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      for await (const chunk of result.textStream) {
-        yield { type: 'text', delta: chunk };
-      }
-
-      yield { type: 'done' };
+      yield* streamTextPartsToLlmChunks(result.fullStream);
     } catch (error) {
       yield {
         type: 'error',
@@ -413,11 +473,7 @@ export class GeminiProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      for await (const chunk of result.textStream) {
-        yield { type: 'text', delta: chunk };
-      }
-
-      yield { type: 'done' };
+      yield* streamTextPartsToLlmChunks(result.fullStream);
     } catch (error) {
       yield {
         type: 'error',
