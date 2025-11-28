@@ -1,6 +1,6 @@
 # Regulatory Intelligence Copilot 🧭📚
 
-> **Architecture version:** v0.6.1 (based on `architecture_v_0_6`)  
+> **Architecture version:** v0.6 (based on `architecture_v_0_6`)  
 > **Goal:** A chat‑first, graph‑backed regulatory research copilot that helps users and advisors explore how tax, social welfare, pensions, CGT and EU rules interact – without ever giving formal legal/tax advice or leaking sensitive data.
 >
 > ⚠️ **Important:** This project is a **research tool**, not legal or tax advice. Always confirm outcomes with Revenue, DSP, the Pensions Authority, your accountant, or another qualified professional.
@@ -93,7 +93,7 @@ If you’re new to the repo, start here:
   - `docs/README.md` – top‑level map of concept, architecture, safety, engines, and governance docs.
 
 - 🏛 **Architecture**  
-  - `docs/architecture/README.md` – high‑level architecture overview for v0.6.1, with links to `architecture_v_0_6.md`, diagrams, graph schema, change detection, engines, and integration guides.
+  - `docs/architecture/README.md` – high‑level architecture overview for v0.6, with links to `architecture_v_0_6.md`, diagrams, graph schema, change detection, engines, and integration guides.
 
 - 🗺 **Roadmap & decisions**  
   - `docs/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).  
@@ -112,7 +112,7 @@ Specs and decisions in `docs/` are the **source of truth**. If anything in this 
 
 ## Current Status
 
-- **Architecture:** v0.6.1, based on `docs/architecture/versions/architecture_v_0_6.md`.
+- **Architecture:** v0.6, based on `docs/architecture/versions/architecture_v_0_6.md`.
 - **Backend engine:** Implemented as reusable TypeScript packages (`reg-intel-core`, `reg-intel-graph`, `reg-intel-llm`, `reg-intel-prompts`).
 - **Frontend:** Next.js 16, React 19, Tailwind v4, shadcn/ui, Radix UI, Vercel AI SDK v5.
 - **Graph:** Memgraph Community + MAGE as a single shared rules graph.
@@ -252,7 +252,7 @@ You should see the chat UI. Try questions like:
 
 ---
 
-## Repository Layout (v0.6.1)
+## Repository Layout (v0.6)
 
 This is the **current** layout. Some names may still reflect the older `compliance-core` era but are being moved towards the v0.6 package split.
 
