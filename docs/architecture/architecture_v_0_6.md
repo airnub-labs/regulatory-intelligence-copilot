@@ -41,7 +41,7 @@ This architecture sits on top of, and must remain consistent with, the following
 ### Project‑Level Docs
 
 - `docs/architecture_v_0_4.md` (historic, now superseded by this document as the canonical architecture summary)
-- `docs/architecture_v_0_5.md` (UI‑focused extension, now folded into v0.6)
+- `docs/architecture/versions/architecture_v_0_5.md` (UI‑focused extension, now folded into v0.6)
 - `docs/decisions_v_0_5.md`
 - `docs/roadmap_v_0_4.md`
 - `docs/node_24_lts_rationale.md`

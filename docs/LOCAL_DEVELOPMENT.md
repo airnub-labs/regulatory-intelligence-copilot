@@ -831,7 +831,7 @@ ANALYZE=true pnpm build
 
 ## Additional Resources
 
-- **Architecture Documentation**: `docs/architecture_v_0_5.md`
+- **Architecture Documentation**: `docs/architecture/versions/architecture_v_0_5.md`
 - **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
 - **Architecture Decisions**: `docs/decisions_v_0_5.md`
 - **Graph Schema**: `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
