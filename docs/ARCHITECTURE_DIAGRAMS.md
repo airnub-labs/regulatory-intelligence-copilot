@@ -87,7 +87,7 @@ graph TB
     end
 
     subgraph "Utilities"
-        CN[cn() function<br/>src/lib/utils.ts]
+        CN["cn() function<br/>src/lib/utils.ts"]
         CVA[class-variance-authority<br/>Component variants]
         CLSX[clsx + tailwind-merge<br/>Class merging]
 
@@ -226,7 +226,7 @@ graph LR
     end
 
     subgraph "Dark Mode Theme"
-        DarkClass[.dark, data-theme='dark']
+        DarkClass[".dark, data-theme='dark'"]
         DarkTheme[theme block]
 
         DBG[--color-background: 240 10% 3.9%]
@@ -240,8 +240,8 @@ graph LR
     end
 
     subgraph "Auto Dark Mode"
-        MediaQuery[media prefers-color-scheme: dark]
-        AutoDark[:root:not(.light)]
+        MediaQuery["media prefers-color-scheme: dark"]
+        AutoDark[":root:not(.light)"]
         AutoTheme[theme block]
 
         MediaQuery --> AutoDark
