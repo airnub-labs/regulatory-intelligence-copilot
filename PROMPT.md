@@ -42,8 +42,8 @@ For any non‑trivial task, mentally load these files first (from `docs/`):
    - `docs/architecture/graph/graph_schema_changelog_v_0_6.md`
 
 3. **Agents & prompts**
-   - `AGENTS_v_0_6.md`
-   - `PROMPT_v_0_6.md` (this file – keep yourself aligned)
+   - `AGENTS.md`
+   - `PROMPT.md` (this file – keep yourself aligned)
 
 4. **Key cross‑cutting specs**
    - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
@@ -193,7 +193,7 @@ When working here, you should:
     - Stream answer tokens to the caller.  
     - Intercept tool output chunks and route them to a concept metadata handler.
   - Conversation Context loading/saving via a `ConversationContextStore` abstraction.
-  - Agent selection / delegation logic as defined in `AGENTS_v_0_6.md`.
+- Agent selection / delegation logic as defined in `AGENTS.md`.
 
 - Never:
   - Talk directly to Memgraph; use `reg-intel-graph` abstractions.  
@@ -346,5 +346,5 @@ If a feature request would push the system towards providing personalised, bindi
 
 ---
 
-**End of PROMPT_v_0_6.md**
+**End of PROMPT.md**
 
