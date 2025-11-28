@@ -608,33 +608,34 @@ export class LlmRouter implements LlmClient {
   ): Promise<string> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
-    const sanitized = await this.egressClient.guard({
-      target: 'llm',
-      providerId: provider,
-      endpointId: 'chat',
-      request: { messages, model, options: taskOptions, task: options?.task },
-      tenantId: options?.tenantId,
-      task: options?.task,
-    });
+    return this.egressClient.guardAndExecute(
+      {
+        target: 'llm',
+        providerId: provider,
+        endpointId: 'chat',
+        request: { messages, model, options: taskOptions, task: options?.task },
+        tenantId: options?.tenantId,
+        task: options?.task,
+      },
+      async sanitized => {
+        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+          messages: ChatMessage[];
+          model: string;
+          options?: typeof taskOptions;
+          task?: string;
+        };
 
-    const payload = (sanitized.sanitizedRequest || sanitized.request) as {
-      messages: ChatMessage[];
-      model: string;
-      options?: typeof taskOptions;
-      task?: string;
-    };
+        const providerClient = this.providers[provider];
+        if (!providerClient) {
+          throw new LlmError(`Unknown provider: ${provider}`);
+        }
 
-    // Get provider client
-    const providerClient = this.providers[provider];
-    if (!providerClient) {
-      throw new LlmError(`Unknown provider: ${provider}`);
-    }
-
-    // Call provider
-    return providerClient.chat(
-      payload.messages,
-      payload.model,
-      payload.options ?? taskOptions
+        return providerClient.chat(
+          payload.messages,
+          payload.model,
+          payload.options ?? taskOptions
+        );
+      }
     );
   }
 
@@ -644,47 +645,48 @@ export class LlmRouter implements LlmClient {
   ): AsyncIterable<LlmStreamChunk> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
-    const sanitized = await this.egressClient.guard({
-      target: 'llm',
-      providerId: provider,
-      endpointId: 'chat',
-      request: { messages, model, options: taskOptions, task: options?.task },
-      tenantId: options?.tenantId,
-      task: options?.task,
-    });
+    const streamResult = await this.egressClient.guardAndExecute(
+      {
+        target: 'llm',
+        providerId: provider,
+        endpointId: 'chat',
+        request: { messages, model, options: taskOptions, task: options?.task },
+        tenantId: options?.tenantId,
+        task: options?.task,
+      },
+      async sanitized => {
+        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+          messages: ChatMessage[];
+          model: string;
+          options?: typeof taskOptions;
+          task?: string;
+        };
 
-    const payload = (sanitized.sanitizedRequest || sanitized.request) as {
-      messages: ChatMessage[];
-      model: string;
-      options?: typeof taskOptions;
-      task?: string;
-    };
+        const providerClient = this.providers[provider];
+        if (!providerClient) {
+          throw new LlmError(`Unknown provider: ${provider}`);
+        }
 
-    // Get provider client
-    const providerClient = this.providers[provider];
-    if (!providerClient) {
-      yield {
-        type: 'error',
-        error: new LlmError(`Unknown provider: ${provider}`),
-      };
-      return;
-    }
+        if (!providerClient.streamChat) {
+          throw new LlmError(`Provider ${provider} does not support streaming`);
+        }
 
-    // Check if provider supports streaming
-    if (!providerClient.streamChat) {
-      yield {
-        type: 'error',
-        error: new LlmError(`Provider ${provider} does not support streaming`),
-      };
-      return;
-    }
-
-    // Stream from provider
-    yield* providerClient.streamChat(
-      payload.messages,
-      payload.model,
-      payload.options ?? taskOptions
+        return providerClient.streamChat(
+          payload.messages,
+          payload.model,
+          payload.options ?? taskOptions
+        );
+      }
     );
+
+    try {
+      yield* streamResult;
+    } catch (error) {
+      yield {
+        type: 'error',
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
   }
 
   /**

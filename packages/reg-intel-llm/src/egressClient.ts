@@ -84,4 +84,12 @@ export class EgressClient {
   async guard(ctx: EgressGuardContext) {
     return this.pipeline(ctx);
   }
+
+  async guardAndExecute<T>(
+    ctx: EgressGuardContext,
+    execute: (ctx: EgressGuardContext) => Promise<T>
+  ): Promise<T> {
+    const guarded = await this.guard(ctx);
+    return execute(guarded);
+  }
 }
