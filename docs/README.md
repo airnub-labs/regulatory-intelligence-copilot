@@ -1,6 +1,6 @@
 # Documentation index
 
-This folder contains all of the **architecture, governance, and spec documents** for the Regulatory Intelligence Copilot.
+This folder contains all of the **architecture, governance, and development documents** for the Regulatory Intelligence Copilot.
 
 The codebase is currently aligned with **architecture v0.6.x**. Earlier versions are retained for design history and archaeology.
 
