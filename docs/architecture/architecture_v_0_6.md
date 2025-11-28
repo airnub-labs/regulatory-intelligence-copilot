@@ -31,11 +31,11 @@ This architecture sits on top of, and must remain consistent with, the following
 
 ### New / Refined Specs Introduced by v0.6
 
-- `docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
+- `docs/architecture/conversation-context/concept_capture_from_main_chat_v_0_1.md`
   (SKOS‑inspired concept capture via LLM tools and self‑population of the rules graph.)
-- `docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md`  
+- `docs/architecture/conversation-context/conversation_context_spec_v_0_1.md`
   (Conversation‑level context, active graph node IDs, and how they are persisted and applied.)
-- `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md`  
+- `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md`
   (Initial design for a Scenario / What‑If Engine built on top of the rules graph + timeline.)
 
 ### Project‑Level Docs
@@ -44,7 +44,7 @@ This architecture sits on top of, and must remain consistent with, the following
 - `docs/architecture/versions/architecture_v_0_5.md` (UI‑focused extension, now folded into v0.6)
 - `docs/governance/decisions/versions/decisions_v_0_5.md`
 - `docs/roadmap_v_0_4.md`
-- `docs/architecture/dev-notes/node_24_lts_rationale.md`
+- `docs/architecture/development/node_24_lts_rationale.md`
 - `AGENTS.md` (agent landscape)
 - `PROMPTS.md` (coding‑agent prompts and implementation guidance)
 

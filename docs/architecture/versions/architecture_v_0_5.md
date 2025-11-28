@@ -32,7 +32,7 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 
 - `docs/governance/decisions/versions/decisions_v_0_4.md`
 - `docs/roadmap_v_0_4.md`
-- `docs/architecture/dev-notes/node_24_lts_rationale.md`
+- `docs/architecture/development/node_24_lts_rationale.md`
 
 ### UI Implementation Docs
 

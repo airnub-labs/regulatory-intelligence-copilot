@@ -229,7 +229,7 @@ Node.js 24 has just entered Active LTS and provides significant security and per
 - Improved **AsyncLocalStorage** for per-request/per-tenant context
 - Updated HTTP/fetch stack and OpenSSL for a more secure default platform
 
-(See `docs/architecture/dev-notes/node_24_lts_rationale.md` for detailed rationale.)
+(See `docs/architecture/development/node_24_lts_rationale.md` for detailed rationale.)
 
 ### Decision
 

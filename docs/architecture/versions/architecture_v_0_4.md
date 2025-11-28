@@ -30,7 +30,7 @@ And the project‑level docs:
 
 - `docs/governance/decisions/versions/decisions_v_0_3.md`
 - `docs/roadmap_v_0_2.md`
-- `docs/architecture/dev-notes/node_24_lts_rationale.md`
+- `docs/architecture/development/node_24_lts_rationale.md`
 
 Where there is ambiguity, these specs take precedence over this document.
 
@@ -110,7 +110,7 @@ To keep the stack modern and consistent:
 
 - **Node.js**: minimum **v24.x LTS**
   - Set in `"engines"` fields and CI.
-  - Motivated in `docs/architecture/dev-notes/node_24_lts_rationale.md` (security, performance, newer language features).
+  - Motivated in `docs/architecture/development/node_24_lts_rationale.md` (security, performance, newer language features).
 
 - **TypeScript**: latest Node‑24 compatible (TS 5.9+).
 

@@ -28,7 +28,7 @@ That metadata is used to:
 This spec does **not** cover:
 
 - Full ingestion pipelines for legislative/guidance documents (see graph ingestion specs).
-- Scenario modelling and what‑if simulation (see `scenario_engine_v_0_1.md`).
+- Scenario modelling and what‑if simulation (see `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md`).
 - Eligibility Explorer logic (see `eligibility_explorer_spec_v_0_1.md`).
 
 ---

@@ -21,10 +21,10 @@ The roadmap must stay aligned with the following documents:
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
 - `docs/architecture/graph/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.
-- `docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
-- `docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
+- `docs/architecture/conversation-context/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
+- `docs/architecture/conversation-context/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
 - `docs/governance/product/eligibility_explorer_spec_v_0_1.md` (once added) – deterministic eligibility evaluation (Use Case 1).
-- `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
+- `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
 
 Where there is ambiguity, **architecture + spec docs take precedence** over the roadmap.
 
@@ -316,7 +316,7 @@ These are high‑leverage enhancements that are **not required** for v1 but may 
 
 ### 7.6 Scenario Engine & What‑If Scenario Comparison (Use Case 2)
 
-- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` once added):
+- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md` once added):
   - Accept one or more `Scenario` objects (with multiple `ScenarioSnapshot`s).
   - Use the shared rules graph + Timeline Engine to produce `ScenarioEvaluationResult[]` (applicable rules, eligible/locked‑out benefits per snapshot).
 - [ ] Add a new Compliance Engine task type, e.g. `TaskType.WHAT_IF_SCENARIO_EVALUATION`, and a specialised `IE_WhatIfScenario_Agent` that:

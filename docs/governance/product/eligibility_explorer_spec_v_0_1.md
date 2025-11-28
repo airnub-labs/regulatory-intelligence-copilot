@@ -1,6 +1,6 @@
 # Eligibility Explorer Spec v0.1
 
-> Draft spec for the Eligibility Explorer feature (Use Case 1), building on `docs/architecture/versions/architecture_v_0_4.md`, `docs/architecture/versions/architecture_v_0_5.md`, `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_4.md`, `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`, `scenario_engine_v_0_1.md`, and `docs/architecture/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`.
+> Draft spec for the Eligibility Explorer feature (Use Case 1), building on `docs/architecture/versions/architecture_v_0_4.md`, `docs/architecture/versions/architecture_v_0_5.md`, `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_4.md`, `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`, `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md`, and `docs/architecture/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`.
 
 Status: **Draft v0.1**  
 Scope: **End-to-end eligibility exploration service and feature set in `reg-intel-core` + demo web UI, using the shared rules graph, Timeline Engine, and Scenario Engine without storing PII in Memgraph.**

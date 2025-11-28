@@ -14,7 +14,7 @@ This document tracks which specs/docs must explicitly assume **Node.js 24 LTS as
    
    - `docs/governance/decisions/versions/decisions_v_0_2.md`
      - Add a decision entry referencing `node_24_lts_rationale.md`, e.g.:
-       - *D-00X: Node.js 24 LTS is the minimum supported runtime for all services, based on the rationale in `docs/architecture/dev-notes/node_24_lts_rationale.md`.*
+       - *D-00X: Node.js 24 LTS is the minimum supported runtime for all services, based on the rationale in `docs/architecture/development/node_24_lts_rationale.md`.*
 
 2. **Roadmap & migration**
    - `docs/roadmap_v_0_2.md`
@@ -34,7 +34,7 @@ This document tracks which specs/docs must explicitly assume **Node.js 24 LTS as
    - `README.md`
      - In *Getting Started* / *Prerequisites*:
        - Change `Node 20+` or generic `Node LTS` to **`Node.js 24 LTS or newer`**.
-       - Optionally link to `docs/architecture/dev-notes/node_24_lts_rationale.md` as the rationale.
+       - Optionally link to `docs/architecture/development/node_24_lts_rationale.md` as the rationale.
    
    - `AGENTS.md`
      - If it mentions runtime assumptions, clarify that agents are designed with Node 24 features (permission model, ALS) in mind.
@@ -48,7 +48,7 @@ This document tracks which specs/docs must explicitly assume **Node.js 24 LTS as
      - Update `setup-node` / `actions/setup-node` to use Node 24.
 
 5. **Security / platform notes**
-   - `docs/architecture/dev-notes/node_24_lts_rationale.md`
+- `docs/architecture/development/node_24_lts_rationale.md`
      - Already present; treat as the canonical explanation.
    - If there's a `SECURITY.md` or `PLATFORM.md` later:
      - Explicitly tie our **sandboxing and permission model** requirements to Node 24.
@@ -58,7 +58,7 @@ This document tracks which specs/docs must explicitly assume **Node.js 24 LTS as
 When you:
 - Add a new backend package or service, assume **Node 24 LTS minimum**.
 - Change CI or devcontainer images, point them to **Node 24**.
-- Write new docs for runtime assumptions, link back to `docs/architecture/dev-notes/node_24_lts_rationale.md`.
+- Write new docs for runtime assumptions, link back to `docs/architecture/development/node_24_lts_rationale.md`.
 
 Once the above docs are updated, the repo will consistently reflect Node 24 as the baseline.
 

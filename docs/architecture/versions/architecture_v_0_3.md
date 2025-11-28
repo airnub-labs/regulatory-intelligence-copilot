@@ -24,7 +24,7 @@ For architectural intent and design trade‑offs, see also:
 - `docs/architecture/graph/graph-schema/versions/graph_schema_changelog_v_0_3.md`
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 - `docs/architecture/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
-- `docs/architecture/dev-notes/node_24_lts_rationale.md`
+- `docs/architecture/development/node_24_lts_rationale.md`
 
 ---
 

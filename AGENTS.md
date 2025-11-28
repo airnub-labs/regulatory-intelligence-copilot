@@ -12,9 +12,9 @@
 > - `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
 > - `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
 > - `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`
-> - `docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`
-> - `docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md`
-> - `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md`
+> - `docs/architecture/conversation-context/concept_capture_from_main_chat_v_0_1.md`
+> - `docs/architecture/conversation-context/conversation_context_spec_v_0_1.md`
+> - `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md`
 > - `docs/governance/decisions/decisions_v_0_6.md`
 > - `docs/governance/roadmap/roadmap_v_0_6.md`
 

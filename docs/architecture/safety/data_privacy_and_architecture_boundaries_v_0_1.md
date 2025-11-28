@@ -347,7 +347,7 @@ Implementers must also consult:
 - `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_3.md` (or latest)
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md` (or latest)
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/dev-notes/node_24_lts_rationale.md` (runtime & security baselines)
+- `docs/architecture/development/node_24_lts_rationale.md` (runtime & security baselines)
 
 Before making changes that affect storage, processing, or routing of data.
 

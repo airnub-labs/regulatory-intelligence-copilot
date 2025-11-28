@@ -17,7 +17,7 @@
 > - `docs/architecture/graph/graph_algorithms_v_0_1.md`
 > - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
 > - `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt` (example seed)
-> - `docs/architecture/dev-notes/node_24_lts_rationale.md`
+> - `docs/architecture/development/node_24_lts_rationale.md`
 
 The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/CTA‑aware) while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for:
 

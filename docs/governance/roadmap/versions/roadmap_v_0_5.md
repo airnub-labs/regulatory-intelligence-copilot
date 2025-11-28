@@ -17,7 +17,7 @@
 > - `docs/architecture/graph/graph_algorithms_v_0_1.md`
 > - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
 > - `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt` (example seed)
-> - `docs/architecture/dev-notes/node_24_lts_rationale.md`
+> - `docs/architecture/development/node_24_lts_rationale.md`
 
 The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/CTA‑aware) while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for:
 
@@ -263,7 +263,7 @@ These are high-leverage enhancements that are **not required** for v1 but may be
 
 ### 7.6 Scenario Engine & What-If Scenario Comparison (Use Case 2)
 
-- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` once added):
+- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/governance/product/scenario-engine/scenario_engine_v_0_1.md` once added):
   - Accept one or more `Scenario` objects (with multiple `ScenarioSnapshot`s).
   - Use the shared rules graph + Timeline Engine to produce `ScenarioEvaluationResult[]` (applicable rules, eligible/locked-out benefits per snapshot).
 - [ ] Add a new Compliance Engine task type, e.g. `TaskType.WHAT_IF_SCENARIO_EVALUATION`, and a specialised `IE_WhatIfScenario_Agent` that:

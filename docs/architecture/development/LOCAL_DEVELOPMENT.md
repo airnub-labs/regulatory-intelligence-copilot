@@ -23,7 +23,7 @@ Before starting, ensure you have the following installed:
 
 ### Required
 
-- **Node.js 24+ LTS** – Required for all packages. See `docs/architecture/dev-notes/node_24_lts_rationale.md` for details.
+- **Node.js 24+ LTS** – Required for all packages. See `docs/architecture/development/node_24_lts_rationale.md` for details.
   ```bash
   node --version  # Should be >= 24.0.0
   ```
