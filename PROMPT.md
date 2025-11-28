@@ -34,7 +34,7 @@ You must treat the project docs as **source of truth** and avoid inventing new a
 For any non‑trivial task, mentally load these files first (from `docs/` and `docs/specs/`):
 
 1. **Core concept & architecture**
-   - `docs/architecture_v_0_6.md`
+   - `docs/architecture/architecture_v_0_6.md`
    - `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`
 
 2. **Graph schema & changelog**
@@ -58,8 +58,8 @@ For any non‑trivial task, mentally load these files first (from `docs/` and `d
    - `docs/specs/scenario_engine_v_0_1.md` (if scenario/what‑if related)
 
 6. **Roadmap & decisions**
-   - `docs/decisions_v_0_6.md`
-   - `docs/roadmap_v_0_6.md`
+   - `docs/decisions/decisions_v_0_6.md`
+   - `docs/roadmap/roadmap_v_0_6.md`
 
 If you are unsure how to implement something, prefer **checking these docs again** over improvising a new design.
 

@@ -10,10 +10,10 @@ This roadmap is intentionally **implementation‑oriented**. It is structured as
 
 The roadmap must stay aligned with the following documents:
 
-- `docs/architecture_v_0_6.md` – **current canonical architecture** (backend + UI + v0.6 concept capture & conversation context).
-- `docs/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
-- `docs/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
-- `docs/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
+- `docs/architecture/architecture_v_0_6.md` – **current canonical architecture** (backend + UI + v0.6 concept capture & conversation context).
+- `docs/architecture/versions/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
+- `docs/architecture/versions/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
+- `docs/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
 - `docs/specs/graph_schema_v_0_4.md` + `docs/specs/graph_schema_changelog_v_0_4.md` – rules graph schema.
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
 - `docs/specs/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.

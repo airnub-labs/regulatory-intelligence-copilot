@@ -47,9 +47,9 @@ Comprehensive design documentation is available in the `docs/` directory.
 
 ### Core Architecture (v0.6)
 
-* **`docs/architecture_v_0_6.md`** – System components, data flow, packages, and how everything fits together, including concept capture and conversation context.
-* **`docs/decisions_v_0_6.md`** – Architectural decision records (ADRs) and design rationale up to v0.6.
-* **`docs/roadmap_v_0_6.md`** – Roadmap and phased implementation plan, including future use cases (scenario engine, eligibility explorers, advisory workflows).
+* **`docs/architecture/architecture_v_0_6.md`** – System components, data flow, packages, and how everything fits together, including concept capture and conversation context.
+* **`docs/decisions/decisions_v_0_6.md`** – Architectural decision records (ADRs) and design rationale up to v0.6.
+* **`docs/roadmap/roadmap_v_0_6.md`** – Roadmap and phased implementation plan, including future use cases (scenario engine, eligibility explorers, advisory workflows).
 * **`docs/migration_plan_v_0_2.md`** – Migration from the original RFC/OWASP auditor to the regulatory copilot.
 * **`docs/node_24_lts_rationale.md`** – Why Node.js 24 LTS is the minimum supported runtime.
 
@@ -354,9 +354,38 @@ regulatory-intelligence-copilot/
                               # - Prompt aspects & base system prompts
                               # - Ingress & Egress guards
   docs/
-    architecture_v_0_6.md
-    decisions_v_0_6.md
-    roadmap_v_0_6.md
+    README.md                # Structure + archive pointers
+    architecture/
+      architecture_v_0_6.md
+      versions/
+        architecture_v_0_1.md
+        architecture_v_0_2.md
+        architecture_v_0_3.md
+        architecture_v_0_4.md
+        architecture_v_0_5.md
+    decisions/
+      decisions_v_0_6.md
+      versions/
+        decisions_v_0_1.md
+        decisions_v_0_2.md
+        decisions_v_0_3.md
+        decisions_v_0_4.md
+        decisions_v_0_5.md
+    roadmap/
+      roadmap_v_0_6.md
+      versions/
+        roadmap_v_0_1.md
+        roadmap_v_0_2.md
+        roadmap_v_0_3.md
+        roadmap_v_0_4.md
+        roadmap_v_0_5.md
+    change-detection/
+      graph_change_detection_v_0_6.md
+      archive/
+        graph_change_detection.md
+        graph_change_detection_enhancements.md
+    phases/
+      PHASE_* (all phase plans, fixes, reviews)
     migration_plan_v_0_2.md
     node_24_lts_rationale.md
     specs/

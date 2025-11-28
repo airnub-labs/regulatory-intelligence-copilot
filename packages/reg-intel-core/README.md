@@ -432,9 +432,9 @@ pnpm test:coverage
 
 ### Core Documentation
 
-- [Architecture Overview](../../docs/graph_change_detection.md) - System architecture and design
+- [Architecture Overview](../../docs/change-detection/graph_change_detection_v_0_6.md) - System architecture and design
 - [Implementation Summary](../../docs/IMPLEMENTATION_SUMMARY.md) - What was built
-- [Enhancements](../../docs/graph_change_detection_enhancements.md) - Timestamp queries and batching
+- [Enhancements](../../docs/change-detection/archive/graph_change_detection_enhancements.md) - Timestamp queries and batching
 
 ### API Documentation
 

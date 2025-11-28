@@ -11,7 +11,7 @@ It is aligned with:
 - `architecture_v_0_6.md` (overall system architecture)
 - `data_privacy_and_architecture_boundaries_v_0_1.md` (what must *never* go into Memgraph)
 - `graph_ingress_guard_v_0_1.md` (write‑side validation and safety)
-- `graph_change_detection.md` and `graph_change_detection_enhancements.md` (patch/streaming behaviour)
+- `change-detection/graph_change_detection_v_0_6.md` and the archived v0.3 docs (patch/streaming behaviour)
 - `graph_algorithms_v_0_1.md` (optional derived metadata)
 - `special_jurisdictions_modelling_v_0_1.md` (NI/UK/IE/EU/IM/CTA and similar)
 - `concept_capture_from_main_chat_v_0_1.md` (SKOS‑inspired concept capture and self‑population)

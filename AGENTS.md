@@ -3,7 +3,7 @@
 > **Status:** Current  
 > **Supersedes:** `AGENTS.md` (v0.4)  
 > **Aligned with:**  
-> - `docs/architecture_v_0_6.md`  
+> - `docs/architecture/architecture_v_0_6.md`
 > - `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`  
 > - `docs/specs/graph_schema_v_0_6.md`  
 > - `docs/specs/graph_schema_changelog_v_0_6.md`  
@@ -15,8 +15,8 @@
 > - `docs/specs/concept_capture_from_main_chat_v_0_1.md`  
 > - `docs/specs/conversation_context_spec_v_0_1.md`  
 > - `docs/specs/scenario_engine_v_0_1.md`  
-> - `docs/decisions_v_0_6.md`  
-> - `docs/roadmap_v_0_6.md`
+> - `docs/decisions/decisions_v_0_6.md`
+> - `docs/roadmap/roadmap_v_0_6.md`
 
 > **Purpose:** Define the *logical agents* in the Regulatory Intelligence Copilot and how they should behave under the v0.6 architecture. Implementation details (files, classes, wiring) must follow this specification.
 
