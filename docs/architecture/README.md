@@ -1,4 +1,4 @@
-# Architecture docs (v0.6)
+# Architecture docs
 
 This directory contains the **architecture narratives and diagrams** for the Regulatory Intelligence Copilot.
 
