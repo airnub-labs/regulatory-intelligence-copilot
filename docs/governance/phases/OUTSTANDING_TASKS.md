@@ -301,7 +301,7 @@ This document provides a high-level overview of outstanding work and Phase 3 goa
 
 **Architecture:**
 - `docs/roadmap_v_0_4.md` - Complete roadmap
-- `docs/architecture_v_0_4.md` - System architecture
+- `docs/architecture/versions/architecture_v_0_4.md` - System architecture
 - `docs/governance/decisions/versions/decisions_v_0_4.md` - ADRs
 - `docs/V0_4_IMPLEMENTATION_STATUS.md` - Current status
 

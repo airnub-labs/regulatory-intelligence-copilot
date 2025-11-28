@@ -2,11 +2,11 @@
 
 ## Context
 
-Before this reorganisation, high-level design docs lived under `docs/` and detailed specs under `docs/specs/`, duplicating many topics (graph schema, timeline engine, conversation context, scenario engine, safety guards) across both trees. This plan defined the domain-first layout used to merge those materials so architecture narratives, specs, changelogs, and older versions sit side by side.
+Before this reorganisation, high-level design docs lived under `docs/` and detailed specs under `docs/specs/`, duplicating many topics (graph schema, timeline engine, conversation context, scenario engine, safety guards) across both trees. This plan defined the domain-first layout used to merge those materials so architecture narratives, specs, changelogs, and older versions sit side by side. The follow-up simplification collapses the domains so most technical content now lives under **architecture/** and strategic/product material under **governance/**.
 
 ## Organising principles
 
-1. **Domain-first grouping** – Place all documents for a domain (architecture, graph model, engines, safety, product planning) under a single folder with a short README explaining how to navigate it.
+1. **Domain-first grouping** – Place all documents for a domain under a single folder with a short README explaining how to navigate it.
 2. **Single home per topic** – Avoid parallel `docs/` and `docs/specs/` folders for the same topic; keep latest docs at the folder root and park historical versions inside `versions/` or `archive/` subfolders.
 3. **Consistent naming** – Use noun-based folder names and `_v_*` suffixes for versioned files to align with existing conventions.
 4. **Entry-point README** – Each domain folder should start with a README that lists the current canonical files and where to find older revisions.
@@ -15,13 +15,15 @@ Before this reorganisation, high-level design docs lived under `docs/` and detai
 
 ```
 docs/
-  architecture/                 # Architecture overviews & diagrams
-  governance/                   # ADRs, decision logs, roadmap, phase plans
-  graph/                        # Graph model, schema, algorithms, seeding, concepts
-  engines/                      # Timeline, scenario, conversation context, change detection
-  safety/                       # Data privacy & safety guards (ingress/egress)
-  product/                      # User-facing specs (eligibility explorer) and product notes
-  dev-notes/                    # Local dev guides, lint rules, node integration rationale
+  architecture/                 # Architecture overviews & diagrams, graph, engines, safety, concepts, dev notes
+    concept/                    # Core concept definitions (brought up from deep graph paths)
+    graph/                      # Graph model, schema, algorithms, seeding guidance
+    engines/                    # Timeline, scenario, conversation context, change detection
+    safety/                     # Data privacy & safety guards (ingress/egress)
+    dev-notes/                  # Local dev guides, lint rules, node integration rationale
+  governance/                   # ADRs, decision logs, roadmap, phase plans, product specs
+    product/                    # User-facing specs (eligibility explorer)
+  api/                          # API references (unchanged)
   archive/                      # Legacy documents not yet rehomed
 ```
 
@@ -29,9 +31,9 @@ docs/
 
 - **architecture/** – `architecture_v_0_6.md`, `architecture_diagrams_v_0_6.md`, previous versions under `architecture/versions/`.
 - **governance/** – `decisions/` contents, `roadmap/` contents, `phases/` plans, and migration plans. Add a short README that clarifies the lifecycle (decision → roadmap → phase plan).
-- **graph/** – Move `docs/graph/concept/`, `docs/graph/graph-schema/`, `docs/graph/graph_algorithms_v_0_1.md`, `docs/graph/graph_seed_ni_uk_ie_eu.txt`, and `docs/graph/special_jurisdictions_modelling_v_0_1.md`. Keep `versions/` subfolders inside this tree for historical schemas and concepts.
+- **graph/** – Move `docs/architecture/concept/`, `docs/architecture/graph/graph-schema/`, `docs/architecture/graph/graph_algorithms_v_0_1.md`, `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`, and `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`. Keep `versions/` subfolders inside this tree for historical schemas and concepts.
 - **engines/** – Host `timeline-engine/`, `scenario-engine/`, `conversation-context/`, and `change-detection/` content together. Include a README that outlines engine responsibilities and cross-links to the graph domain.
-- **safety/** – Combine `docs/safety/safety-guards/` and `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md` under one folder. Highlight ingress vs. egress guard responsibilities and privacy boundaries.
+- **safety/** – Combine `docs/architecture/safety/safety-guards/` and `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md` under one folder. Highlight ingress vs. egress guard responsibilities and privacy boundaries.
 - **product/** – Place `eligibility_explorer_spec_v_0_1.md` and any UX/product-oriented specs here. Add a `product/README.md` that points back to engines/graph dependencies.
 - **dev-notes/** – Consolidate `LOCAL_DEVELOPMENT.md`, `eslint_rules.md`, `node_24_lts_integration_checklist.md`, and `node_24_lts_rationale.md` to give contributors a single entry point for setup and tooling.
 

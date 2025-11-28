@@ -19,32 +19,32 @@ This architecture sits on top of, and must remain consistent with, the following
 
 ### Core Graph & Engine Specs
 
-- `docs/graph/graph-schema/versions/graph_schema_v_0_4.md`
-- `docs/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
-- `docs/graph/graph_algorithms_v_0_1.md`
-- `docs/engines/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/graph/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
-- `docs/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/safety/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/safety/safety-guards/egress_guard_v_0_2.md`
+- `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_4.md`
+- `docs/architecture/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
+- `docs/architecture/graph/graph_algorithms_v_0_1.md`
+- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/architecture/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
+- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`
 
 ### New / Refined Specs Introduced by v0.6
 
-- `docs/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
+- `docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
   (SKOS‑inspired concept capture via LLM tools and self‑population of the rules graph.)
-- `docs/engines/conversation-context/conversation_context_spec_v_0_1.md`  
+- `docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md`  
   (Conversation‑level context, active graph node IDs, and how they are persisted and applied.)
-- `docs/engines/scenario-engine/scenario_engine_v_0_1.md`  
+- `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md`  
   (Initial design for a Scenario / What‑If Engine built on top of the rules graph + timeline.)
 
 ### Project‑Level Docs
 
-- `docs/architecture_v_0_4.md` (historic, now superseded by this document as the canonical architecture summary)
+- `docs/architecture/versions/architecture_v_0_4.md` (historic, now superseded by this document as the canonical architecture summary)
 - `docs/architecture/versions/architecture_v_0_5.md` (UI‑focused extension, now folded into v0.6)
 - `docs/governance/decisions/versions/decisions_v_0_5.md`
 - `docs/roadmap_v_0_4.md`
-- `docs/node_24_lts_rationale.md`
+- `docs/architecture/dev-notes/node_24_lts_rationale.md`
 - `AGENTS.md` (agent landscape)
 - `PROMPTS.md` (coding‑agent prompts and implementation guidance)
 
@@ -347,7 +347,7 @@ This design ensures:
 
 ### 7.1 Timeline Engine (Unchanged in Scope)
 
-- The **Timeline Engine** (`docs/engines/timeline-engine/timeline_engine_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
+- The **Timeline Engine** (`docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
 - Given a scenario (sequence of events + dates), it can answer:
   - Whether a rule applies at a given date.
   - When lock‑in periods expire.

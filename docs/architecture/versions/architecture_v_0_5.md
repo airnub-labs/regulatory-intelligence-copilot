@@ -17,22 +17,22 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 
 ### Core Architecture (from v0.4)
 
-- `docs/architecture_v_0_4.md`
-- `docs/graph/graph-schema/versions/graph_schema_v_0_4.md`
-- `docs/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
-- `docs/graph/graph_algorithms_v_0_1.md`
-- `docs/engines/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/graph/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
-- `docs/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/safety/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/safety/safety-guards/egress_guard_v_0_2.md`
+- `docs/architecture/versions/architecture_v_0_4.md`
+- `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_4.md`
+- `docs/architecture/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
+- `docs/architecture/graph/graph_algorithms_v_0_1.md`
+- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/architecture/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
+- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`
 
 ### Project-Level Docs
 
 - `docs/governance/decisions/versions/decisions_v_0_4.md`
 - `docs/roadmap_v_0_4.md`
-- `docs/node_24_lts_rationale.md`
+- `docs/architecture/dev-notes/node_24_lts_rationale.md`
 
 ### UI Implementation Docs
 
@@ -308,7 +308,7 @@ Components will be installed to `src/components/ai-elements/` and can coexist wi
 
 ## 4. Backend Architecture (Unchanged from v0.4)
 
-_No changes from v0.4. See `docs/architecture_v_0_4.md` sections 4-10 for:_
+_No changes from v0.4. See `docs/architecture/versions/architecture_v_0_4.md` sections 4-10 for:_
 
 - API Route Handlers
 - Compliance Engine
@@ -424,7 +424,7 @@ Usage in components:
 
 ## 6. Privacy & Data Boundaries (Unchanged from v0.4)
 
-_See `docs/architecture_v_0_4.md` section 1.2 for privacy boundaries._
+_See `docs/architecture/versions/architecture_v_0_4.md` section 1.2 for privacy boundaries._
 
 **UI Layer Implications**:
 - Chat components **never** store PII locally
@@ -456,7 +456,7 @@ Node.js 24 LTS
 
 ### 7.2 Backend Stack (Unchanged from v0.4)
 
-_See `docs/architecture_v_0_4.md` for backend stack details._
+_See `docs/architecture/versions/architecture_v_0_4.md` for backend stack details._
 
 ---
 
@@ -700,7 +700,7 @@ Migrate gradually:
 ## References
 
 - `apps/demo-web/UI_IMPLEMENTATION.md` - Detailed UI implementation guide
-- `docs/architecture_v_0_4.md` - Backend architecture (unchanged)
+- `docs/architecture/versions/architecture_v_0_4.md` - Backend architecture (unchanged)
 - `docs/governance/decisions/versions/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
 - [Tailwind CSS v4 Documentation](https://tailwindcss.com/)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)

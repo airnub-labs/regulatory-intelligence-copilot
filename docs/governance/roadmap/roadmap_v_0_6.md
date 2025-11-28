@@ -14,17 +14,17 @@ The roadmap must stay aligned with the following documents:
 - `docs/architecture/versions/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
 - `docs/architecture/versions/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
 - `docs/governance/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
-- `docs/graph/graph-schema/versions/graph_schema_v_0_4.md` + `docs/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
-- `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
-- `docs/safety/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
-- `docs/safety/safety-guards/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
-- `docs/engines/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
-- `docs/graph/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
-- `docs/graph/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.
-- `docs/engines/conversation-context/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
-- `docs/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
-- `docs/product/eligibility_explorer_spec_v_0_1.md` (once added) – deterministic eligibility evaluation (Use Case 1).
-- `docs/engines/scenario-engine/scenario_engine_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
+- `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_4.md` + `docs/architecture/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
+- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
+- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
+- `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
+- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
+- `docs/architecture/graph/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
+- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.
+- `docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
+- `docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
+- `docs/governance/product/eligibility_explorer_spec_v_0_1.md` (once added) – deterministic eligibility evaluation (Use Case 1).
+- `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
 
 Where there is ambiguity, **architecture + spec docs take precedence** over the roadmap.
 
@@ -303,7 +303,7 @@ These are high‑leverage enhancements that are **not required** for v1 but may 
 
 ### 7.5 Eligibility Explorer (Use Case 1)
 
-- [ ] Formalise the **Eligibility Explorer** core service (see `docs/product/eligibility_explorer_spec_v_0_1.md` once added):
+- [ ] Formalise the **Eligibility Explorer** core service (see `docs/governance/product/eligibility_explorer_spec_v_0_1.md` once added):
   - Deterministic, boolean eligibility for benefits/reliefs across one or more domains (e.g. SOCIAL_WELFARE, TAX, PENSIONS).
   - Public TS API surface in `reg-intel-core` (e.g. `EligibilityExplorer.evaluateEligibility(...)`).
 - [ ] Wire Eligibility Explorer into IE/UK vertical slices:
@@ -316,7 +316,7 @@ These are high‑leverage enhancements that are **not required** for v1 but may 
 
 ### 7.6 Scenario Engine & What‑If Scenario Comparison (Use Case 2)
 
-- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/engines/scenario-engine/scenario_engine_v_0_1.md` once added):
+- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` once added):
   - Accept one or more `Scenario` objects (with multiple `ScenarioSnapshot`s).
   - Use the shared rules graph + Timeline Engine to produce `ScenarioEvaluationResult[]` (applicable rules, eligible/locked‑out benefits per snapshot).
 - [ ] Add a new Compliance Engine task type, e.g. `TaskType.WHAT_IF_SCENARIO_EVALUATION`, and a specialised `IE_WhatIfScenario_Agent` that:

@@ -35,27 +35,27 @@ For any non‑trivial task, mentally load these files first (from the domain fol
 
 1. **Core concept & architecture**
    - `docs/architecture/architecture_v_0_6.md`
-   - `docs/graph/concept/regulatory_graph_copilot_concept_v_0_6.md`
+   - `docs/architecture/concept/regulatory_graph_copilot_concept_v_0_6.md`
 
 2. **Graph schema & changelog**
-   - `docs/graph/graph-schema/graph_schema_v_0_6.md`
-   - `docs/graph/graph-schema/graph_schema_changelog_v_0_6.md`
+   - `docs/architecture/graph/graph-schema/graph_schema_v_0_6.md`
+   - `docs/architecture/graph/graph-schema/graph_schema_changelog_v_0_6.md`
 
 3. **Agents & prompts**
    - `AGENTS_v_0_6.md`
    - `PROMPT_v_0_6.md` (this file – keep yourself aligned)
 
 4. **Key cross‑cutting specs**
-   - `docs/engines/timeline-engine/timeline_engine_v_0_2.md`
-   - `docs/graph/graph_algorithms_v_0_1.md`
-   - `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
-   - `docs/safety/safety-guards/graph_ingress_guard_v_0_1.md`
-   - `docs/safety/safety-guards/egress_guard_v_0_2.md`
+   - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+   - `docs/architecture/graph/graph_algorithms_v_0_1.md`
+   - `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+   - `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+   - `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`
 
 5. **New v0.6 features**
-   - `docs/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`
-   - `docs/engines/conversation-context/conversation_context_spec_v_0_1.md`
-   - `docs/engines/scenario-engine/scenario_engine_v_0_1.md` (if scenario/what‑if related)
+   - `docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`
+   - `docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md`
+   - `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` (if scenario/what‑if related)
 
 6. **Roadmap & decisions**
    - `docs/governance/decisions/decisions_v_0_6.md`

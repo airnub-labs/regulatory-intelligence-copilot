@@ -5,7 +5,7 @@
 > **Status:** Phase 1 & Phase 2 Complete ✅
 
 This document tracks the implementation of the v0.4 architecture as defined in:
-- `docs/architecture_v_0_4.md`
+- `docs/architecture/versions/architecture_v_0_4.md`
 - `docs/governance/decisions/versions/decisions_v_0_4.md`
 - `docs/roadmap_v_0_4.md`
 
@@ -16,7 +16,7 @@ This document tracks the implementation of the v0.4 architecture as defined in:
 ### Core Infrastructure
 
 #### 1. Documentation & Specs
-- [x] Created `docs/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
+- [x] Created `docs/architecture/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
   - Documents schema evolution from v0.3 to v0.4
   - Clarifies that v0.4 uses v0.3 schema with enhanced enforcement
   - Documents Graph Ingress Guard integration

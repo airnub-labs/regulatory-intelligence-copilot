@@ -6,11 +6,11 @@
 > This roadmap reflects the **v0.3 architecture and decisions**: Node 24 LTS baseline, jurisdiction‑neutral prompts, prompt aspects, provider‑agnostic LLM routing (including OpenAI Responses + GPT‑OSS + Groq + local/OSS models), direct Memgraph GraphClient, WebSocket graph streaming, and a reusable engine + demo app split with Vercel AI SDK v5 used only as an **edge implementation detail**.
 >
 > See also:
-> - `docs/architecture_v_0_3.md`
+> - `docs/architecture/versions/architecture_v_0_3.md`
 > - `docs/governance/decisions/versions/decisions_v_0_3.md`
-> - `docs/graph/graph-schema/versions/graph_schema_v_0_3.md`
-> - `docs/engines/timeline-engine/timeline_engine_v_0_2.md`
-> - `docs/node_24_lts_rationale.md`
+> - `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_3.md`
+> - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+> - `docs/architecture/dev-notes/node_24_lts_rationale.md`
 
 The goal is to reach a **credible, useful v1** focused on Ireland/EU first, while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for multi‑jurisdiction expansion and optional Microsoft GraphRAG integration.
 

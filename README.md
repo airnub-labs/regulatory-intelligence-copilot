@@ -37,7 +37,7 @@ Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
 For the full concept, see:
 
-* 📄 `docs/graph/concept/regulatory_graph_copilot_concept_v_0_6.md`
+* 📄 `docs/architecture/concept/regulatory_graph_copilot_concept_v_0_6.md`
 
 ---
 
@@ -52,7 +52,7 @@ Comprehensive design documentation is available in the `docs/` directory.
 * **`docs/governance/decisions/decisions_v_0_6.md`** – Architectural decision records (ADRs) and design rationale up to v0.6.
 * **`docs/governance/roadmap/roadmap_v_0_6.md`** – Roadmap and phased implementation plan, including future use cases (scenario engine, eligibility explorers, advisory workflows).
 * **`docs/governance/migration_plan_v_0_2.md`** – Migration from the original RFC/OWASP auditor to the regulatory copilot.
-* **`docs/dev-notes/node_24_lts_rationale.md`** – Why Node.js 24 LTS is the minimum supported runtime.
+* **`docs/architecture/dev-notes/node_24_lts_rationale.md`** – Why Node.js 24 LTS is the minimum supported runtime.
 
 ### Agents, Prompts & Behaviour (v0.6)
 
@@ -61,23 +61,23 @@ Comprehensive design documentation is available in the `docs/` directory.
 
 ### Graph, Algorithms, Timeline & Scenarios
 
-* **`docs/graph/graph-schema/graph_schema_v_0_6.md`** – Node/edge types, schema design, concept/label nodes, and how rules are represented.
-* **`docs/graph/graph-schema/graph_schema_changelog_v_0_6.md`** – Schema evolution and breaking changes.
-* **`docs/graph/graph_algorithms_v_0_1.md`** – Graph algorithm choices (e.g. focused neighbourhood queries, optional Leiden community detection) and how they're used.
-* **`docs/engines/timeline-engine/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
-* **`docs/engines/scenario-engine/scenario_engine_v_0_1.md`** – How “what‑if” scenarios and synthetic timelines are modelled alongside the rules graph.
-* **`docs/graph/special_jurisdictions_modelling_v_0_1.md`** – Special cases (IE/UK/NI/IM/GI/AD/CTA) modelling patterns.
+* **`docs/architecture/graph/graph-schema/graph_schema_v_0_6.md`** – Node/edge types, schema design, concept/label nodes, and how rules are represented.
+* **`docs/architecture/graph/graph-schema/graph_schema_changelog_v_0_6.md`** – Schema evolution and breaking changes.
+* **`docs/architecture/graph/graph_algorithms_v_0_1.md`** – Graph algorithm choices (e.g. focused neighbourhood queries, optional Leiden community detection) and how they're used.
+* **`docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
+* **`docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md`** – How “what‑if” scenarios and synthetic timelines are modelled alongside the rules graph.
+* **`docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`** – Special cases (IE/UK/NI/IM/GI/AD/CTA) modelling patterns.
 
 ### Concept Capture & Conversation Context
 
-* **`docs/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`** – SKOS-inspired concept capture from main chat using a `capture_concepts` tool and structured outputs.
-* **`docs/engines/conversation-context/conversation_context_spec_v_0_1.md`** – Server-side, per-conversation `ConversationContext` that tracks active rule/benefit/tax nodes without storing PII in Memgraph.
+* **`docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`** – SKOS-inspired concept capture from main chat using a `capture_concepts` tool and structured outputs.
+* **`docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md`** – Server-side, per-conversation `ConversationContext` that tracks active rule/benefit/tax nodes without storing PII in Memgraph.
 
 ### Privacy, Ingress & Egress Guards
 
-* **`docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
-* **`docs/safety/safety-guards/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
-* **`docs/safety/safety-guards/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
+* **`docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
+* **`docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
+* **`docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
 
 Earlier versions (e.g. `*_v_0_1.md`, `graph_schema_v_0_3/0_4.md`, `regulatory_graph_copilot_concept_v_0_3/0_4.md`) are kept as **historical context** only.
 
@@ -115,7 +115,7 @@ Again: **this tool does not replace professional advice**. It is there to:
 
 ### 1. Prerequisites
 
-* **Node.js** 24+ (LTS) – see `docs/node_24_lts_rationale.md` for why.
+* **Node.js** 24+ (LTS) – see `docs/architecture/dev-notes/node_24_lts_rationale.md` for why.
 * **pnpm** (or your preferred package manager).
 * **Docker** (for Memgraph + MCP gateway + any sandbox sidecars).
 * Accounts / API keys for:
@@ -298,7 +298,7 @@ Throughout, Memgraph remains a **shared, PII-free rules graph**; all tenant- and
 
 ### ✅ v0.6 Concept Capture & Conversation Context
 
-* **SKOS-like concept capture from main chat** (`docs/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`):
+* **SKOS-like concept capture from main chat** (`docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md`):
 
   * `capture_concepts` tool attached to the main chat call.
   * LLM streams text to the UI while emitting concept metadata as tool output.
@@ -306,7 +306,7 @@ Throughout, Memgraph remains a **shared, PII-free rules graph**; all tenant- and
 
   * Concept resolver checks if a concept already exists in Memgraph.
   * If missing/under-populated, the engine enqueues ingestion jobs using MCP.
-* **ConversationContext** (`docs/engines/conversation-context/conversation_context_spec_v_0_1.md`):
+* **ConversationContext** (`docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md`):
 
   * Server-side context per conversation, tracking active graph node IDs and related flags.
   * Stored in Postgres/Supabase, not in Memgraph.
@@ -398,12 +398,12 @@ regulatory-intelligence-copilot/
       graph_algorithms_v_0_1.md
       timeline_engine_v_0_2.md
       scenario_engine_v_0_1.md
-      docs/engines/conversation-context/conversation_context_spec_v_0_1.md
-      docs/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md
+      docs/architecture/engines/conversation-context/conversation_context_spec_v_0_1.md
+      docs/architecture/engines/conversation-context/concept_capture_from_main_chat_v_0_1.md
       special_jurisdictions_modelling_v_0_1.md
       data_privacy_and_architecture_boundaries_v_0_1.md
       graph_ingress_guard_v_0_1.md
-      docs/safety/safety-guards/egress_guard_v_0_2.md
+      docs/architecture/safety/safety-guards/egress_guard_v_0_2.md
       # plus historical v0.1/v0.2/v0.3/v0.4 docs
   AGENTS.md                   # v0.6 agent spec
   PROMPT.md                   # v0.6 coding agent prompt

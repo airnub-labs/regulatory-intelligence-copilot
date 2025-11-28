@@ -4,7 +4,7 @@
  * The ONLY entry point for writing to the global Memgraph instance.
  * All writes pass through the Graph Ingress Guard aspect pipeline.
  *
- * See: docs/safety/safety-guards/graph_ingress_guard_v_0_1.md
+ * See: docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md
  */
 
 import type { Driver, Session } from 'neo4j-driver';
