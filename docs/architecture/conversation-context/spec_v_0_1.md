@@ -10,7 +10,7 @@ This spec is aligned with:
 
 - `architecture_v_0_6.md`
 - `decisions_v_0_6.md`
-- `concept_capture_from_main_chat_v_0_1.md`
+- `concept_capture_v_0_1.md`
 - `data_privacy_and_architecture_boundaries_v_0_1.md`
 
 ---
@@ -190,7 +190,7 @@ On each `/api/chat` request, the engine should:
    - Capture the `capture_concepts` tool output and pass it to the concept handler.
 
 4. **Resolve concepts & determine `referencedNodes`**
-   - From the concept handler (`handleConceptMetadataFromMainChat`), obtain `referencedNodeIds[]` (see `concept_capture_from_main_chat_v_0_1.md`).
+   - From the concept handler (`handleConceptMetadataFromMainChat`), obtain `referencedNodeIds[]` (see `concept_capture_v_0_1.md`).
    - Agents may add more node IDs based on explicit graph queries.
 
 5. **Update and save context**
@@ -296,7 +296,7 @@ Example system prompt fragment:
 
 Conversation context and concept capture are tightly coupled:
 
-- `concept_capture_from_main_chat_v_0_1.md` defines how the main chat call emits SKOS‑style concept metadata via `capture_concepts`.
+- `concept_capture_v_0_1.md` defines how the main chat call emits SKOS‑style concept metadata via `capture_concepts`.
 - The concept handler resolves or creates concept nodes in Memgraph and returns `referencedNodeIds`.
 - `ConversationContext.activeNodeIds` is updated as the **union** of previous `activeNodeIds` and `referencedNodeIds` for this turn.
 - `ChatResponse.referencedNodes` is populated with the node IDs that were central to this answer.

@@ -424,7 +424,7 @@ describe('SSE Chat Streaming', () => {
 ## Documentation Updates
 
 **Files to Update:**
-- [ ] `docs/V0_4_IMPLEMENTATION_STATUS.md` - Mark Phase 3 tasks complete
+- [ ] `docs/IMPLEMENTATION_STATUS_v_0_4.md` - Mark Phase 3 tasks complete
 - [ ] `README.md` - Update API documentation
 - [ ] `apps/demo-web/README.md` - Document new endpoints
 - [ ] Create `docs/API.md` - Comprehensive API reference

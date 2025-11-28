@@ -2,31 +2,34 @@
 
 > **Status:** Draft v0.3  
 > **Scope:** Core regulatory graph model with **cross‑jurisdiction support** (Ireland, other EU states, Isle of Man, Malta, etc.) and explicit alignment with the Timeline Engine v0.2.  
-> **Supersedes:** `graph_schema_v_0_2.md` (adds richer `:Timeline` modelling, more timeline‑related edges, and clarifies the "living graph" behaviour).
+> **Supersedes:** `schema_v_0_2.md` (adds richer `:Timeline` modelling, more timeline‑related edges, and clarifies the "living graph" behaviour).
 
 This document defines the **Memgraph graph schema** for the Regulatory Intelligence Copilot. It is the contract between:
 
 - Ingestion jobs (that create/update nodes & edges),
 - Agent runtime (that queries and reasons over the graph),
 - Timeline Engine,
-- Any visualisation / debugging tools.
+- Any visualisation / debugging tools,
+- Optional graph algorithms (see `algorithms_v_0_1.md`).
 
 The schema is designed to:
 
 - Capture **rules and their interactions**, not free‑form text.
 - Support **multi‑domain** reasoning (tax, welfare, pensions, CGT, EU law).
 - Support **multi‑jurisdiction** reasoning (Ireland, other EU countries, Isle of Man, Malta, etc.), without assuming any single "primary" country.
-- Support **time‑based reasoning** (lookbacks, lock‑ins, deadlines, usage frequency) through `:Timeline` nodes and edges consumed by the Timeline Engine.
+- Support **time‑based reasoning** (lookbacks, lock‑ins, deadlines, effective windows, usage frequency) through `:Timeline` nodes and edges consumed by the Timeline Engine v0.2.
 - Act as a **living, incrementally enriched graph** as new rules, guidance, and case law are discovered via MCP and conversation.
+- Remain compatible with **optional algorithm‑derived metadata** (communities, centrality, etc.) without depending on it.
 
 ### Normative References
 
 This schema spec must be read together with:
 
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
 - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/guards/graph_ingress_v_0_1.md`
+- `docs/architecture/graph/algorithms_v_0_1.md`
 
 ---
 
@@ -34,11 +37,11 @@ This schema spec must be read together with:
 
 1. **Explain interactions, not just find documents**  
    The graph must let us answer:
-   - “If I claim X, what happens to Y?”
-   - “Which rules interact with this section?”
-   - “What changes if I delay until next year?”
-   - “How do rules in country A coordinate or conflict with rules in country B?”
-   - “How long does this decision constrain my future options?”
+   - "If I claim X, what happens to Y?"
+   - "Which rules interact with this section?"
+   - "What changes if I delay until next year?"
+   - "How do rules in country A coordinate or conflict with rules in country B?"
+   - "How long does this decision constrain my future options?"
 
 2. **Jurisdiction‑neutral**  
    The schema works no matter which jurisdiction is home/primary; cross‑border links are first‑class edges.
@@ -57,8 +60,14 @@ This schema spec must be read together with:
    - Adding new node labels and edge types without breaking existing logic.
    - Incremental upserts as MCP tools and LLM‑assisted ingestion discover new rules, cases, and relationships.
 
-6. **User‑agnostic**
+6. **User‑agnostic**  
    The graph never stores personal user data or specific scenarios. Personas/use cases are modelled via `:ProfileTag` and inputs passed at query time.
+
+7. **Algorithm‑agnostic but algorithm‑friendly**  
+   The schema is the **structural contract**. Optional graph algorithms (Leiden communities, centrality, etc.):
+   - May add **derived metadata** (properties, helper nodes) as described in `algorithms_v_0_1.md`.
+   - Must not change the meaning of core relationships (`EXCLUDES`, `REQUIRES`, etc.).
+   - May be turned on/off without invalidating the schema.
 
 ---
 
@@ -70,25 +79,26 @@ The graph schema is constrained by the data privacy boundaries defined in:
 
 **In summary:**
 
-- Graph nodes and relationships are **public and rule-only**: they may represent jurisdictions, regions, agreements, regimes, rules, benefits, obligations, timelines and document metadata derived from public sources.
+- Graph nodes and relationships are **public and rule‑only**: they may represent jurisdictions, regions, agreements, regimes, rules, benefits, obligations, timelines and document metadata derived from public sources.
 - Graph properties must **never include**:
   - User identifiers (names, emails, account IDs)
   - Tenant identifiers (organization names, tenant keys)
-  - Uploaded document contents or line-level text
-  - Free-text scenario descriptions containing user-specific details
+  - Uploaded document contents or line‑level text
+  - Free‑text scenario descriptions containing user‑specific details
   - PII (personal identifiable information) of any kind
 - If new node or edge types are introduced, they **must** be classified according to the privacy spec before being persisted in Memgraph.
 - User profile and scenario context is passed to agents during queries but never stored in the graph.
+- Algorithm‑derived metadata must also respect these boundaries (e.g. community IDs, centrality scores are fine; no user‑linked identifiers).
 
-This ensures the graph remains a **shared, multi-tenant knowledge base** that can be freely queried and visualized without privacy concerns.
+This ensures the graph remains a **shared, multi‑tenant knowledge base** that can be freely queried and visualised without privacy concerns.
 
-> **Implementation note:**
+> **Implementation note:**  
 > The constraints in this schema are enforced in code by the
-> aspect-based Graph Ingress Guard described in
-> `docs/architecture/guards/graph_ingress_guard_v_0_1.md`, which is applied by the
-> `GraphWriteService` before any Cypher is executed against Memgraph.
+> aspect‑based Graph Ingress Guard described in
+> `docs/architecture/guards/graph_ingress_v_0_1.md`, which is applied by the
+> `GraphWriteService` before any Cypher is executed against Memgraph.  
 > Any new node/relationship types or properties introduced by future
-> schema revisions must be added both here and to the ingress guard
+> schema or algorithm revisions must be added both here and to the ingress guard
 > configuration before they can be written.
 
 ---
@@ -270,6 +280,20 @@ Northern Ireland, CTA, Isle of Man, Gibraltar, Andorra and similar edge cases ar
 
 Schema changes **must remain compatible** with that document.
 
+### 2.14 Algorithm‑Derived Helper Nodes & Properties (Optional)
+
+Graph algorithms described in `algorithms_v_0_1.md` may introduce **derived metadata** to support GraphRAG and explanation, for example:
+
+- Properties like `alg_community_id`, `alg_centrality_score`, `alg_rank` on core nodes, or
+- Helper labels such as `:CommunitySummary` with summary text and links to representative nodes.
+
+Rules:
+
+- These **do not change** the semantics of core node labels and relationships above.
+- They are **optional and ephemeral** – they can be recalculated or removed without breaking queries that rely only on core schema.
+- Ingestion and guards must treat them as **derived**, not as sources of truth for rules.
+- Any such properties/labels must be documented in `algorithms_v_0_1.md` and whitelisted in the Graph Ingress Guard configuration before writes.
+
 ---
 
 ## 3. Core Relationship Types
@@ -319,7 +343,7 @@ Conditions here typically encode thresholds (income, contributions, CGT limits, 
 - `(:Benefit)-[:MUTUALLY_EXCLUSIVE_WITH]->(:Relief)` (and vice versa)
 
 Usage:
-- `EXCLUDES` is usually directional (“claiming A excludes B”).
+- `EXCLUDES` is usually directional ("claiming A excludes B").
 - `MUTUALLY_EXCLUSIVE_WITH` should be treated as symmetric in logic, even if represented as two directed edges.
 - For cross‑jurisdiction cases, `basis` might be `"COORDINATION_RULE"` or `"TREATY"`.
 
@@ -517,6 +541,12 @@ RETURN u, t, directlyAffected, indirectlyLinked;
    - Attach `:Update` / `:ChangeEvent` nodes when new documents are detected.
    - Add relationships gradually; it’s acceptable for some regions of the graph to be sparse initially and enriched over time.
 
+8. **Treat algorithm metadata as hints**  
+   Algorithm‑derived properties and helper nodes:
+   - Must be clearly identified (e.g. `alg_*` property names, `:CommunitySummary` label).
+   - Are best‑effort hints for retrieval and explanation, not primary sources of truth.
+   - May be regenerated or dropped at any time without breaking ingestion.
+
 ---
 
 ## 6. Versioning & Evolution
@@ -527,7 +557,8 @@ RETURN u, t, directlyAffected, indirectlyLinked;
   - Added timeline‑related relationships: `FILING_DEADLINE`, `EFFECTIVE_WINDOW`, `USAGE_FREQUENCY`.
   - Clarified the role of `:Update`/`:ChangeEvent` nodes in combination with timelines and change‑impact queries.
   - Explicitly documented the "living graph" behaviour and incremental upsert expectations.
-- Further changes should be recorded in `graph_schema_changelog.md` with migration notes where needed.
+  - Recognised algorithm‑derived metadata as optional and governed by `algorithms_v_0_1.md` and the Graph Ingress Guard.
+- Further changes should be recorded in the appropriate `schema_changelog_v_*.md` file with migration notes where needed.
 
 ---
 
@@ -541,6 +572,7 @@ This schema is sufficient for:
 - CGT timing and loss‑relief interactions at a rule‑interaction level.
 - EU–Irish law mapping and initial cross‑border scenarios involving other EU states, Isle of Man, and Malta.
 - Capturing change events (Finance Acts, guidance updates, cases) and relating them to existing rules and timelines.
+- Optional GraphRAG/algorithm use (communities, centrality) without coupling rules logic to any particular algorithm.
 
 Agents and ingestion jobs should treat this document as the **source of truth** for how they structure and query the regulatory graph in v0.3.
 

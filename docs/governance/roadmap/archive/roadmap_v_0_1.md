@@ -70,7 +70,7 @@ This roadmap focuses on getting to a **useful, credible v1** as quickly as possi
 **Goal:** Move from a narrow slice to a more representative regulatory mesh: tax, welfare, CGT, R&D, EU interactions.
 
 **Scope**
-- Add more node types and edges per `graph_schema_v0_1.md`.
+- Add more node types and edges per `schema_v_0_1.md`.
 - Implement additional domain agents.
 
 **Tasks**
@@ -187,7 +187,7 @@ Microsoft’s **GraphRAG** provides a more opinionated framework for graph-centr
 
 - For **v1–v2**, we keep the **Memgraph-only GraphRAG approach**:
   - It’s simpler and under full control.
-  - It’s already tuned to the custom schema in `graph_schema_v0_1.md`.
+  - It’s already tuned to the custom schema in `schema_v_0_1.md`.
 - For **later phases**, we consider GraphRAG as:
   - A **complementary retrieval layer** (e.g. for text-heavy sources like guidance and case law).
   - Or a **separate mode** for experimentation and benchmarking.

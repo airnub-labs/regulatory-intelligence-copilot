@@ -1,6 +1,6 @@
 # Timeline Integration (v0.3)
 
-> **Status:** Draft v0.3 (aligned with architecture_v_0_6 and timeline_engine_v_0_2)
+> **Status:** Draft v0.3 (aligned with architecture_v_0_6 and spec_v_0_2)
 >
 > **Scope:** How the Timeline Engine plugs into the Regulatory Intelligence Copilot stack (Compliance Engine, agents, graph, LLM / Responses tools) without changing the core engine.
 
@@ -82,7 +82,7 @@ Key invariants:
 
 ## 3. Data Contracts (recap)
 
-The integration uses the types from `timeline_engine_v_0_2`.
+The integration uses the types from `spec_v_0_2`.
 
 ### 3.1 From graph → `TimelineNode`
 
@@ -262,7 +262,7 @@ This text becomes part of the system/context messages for the LLM.
 
 ## 5. Exposing the Timeline Engine as an LLM Tool
 
-In addition to the direct path, the Responses API + LlmRouter can expose the engine via a tool named `timeline_engine_evaluate`, as described in `timeline_engine_v_0_2`.
+In addition to the direct path, the Responses API + LlmRouter can expose the engine via a tool named `timeline_engine_evaluate`, as described in `spec_v_0_2`.
 
 ### 5.1 Tool contract (summary)
 
@@ -401,7 +401,7 @@ From the original `timeline-integration.md` to this v0.3:
 - **Clarified boundaries:**
   - Timeline Engine is explicitly positioned as a pure module, injected into Compliance Engine.
 - **Graph schema alignment:**
-  - Integration assumes `:Timeline` nodes and specific edge types (`LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, etc.) as per `graph_schema_v_0_6`.
+  - Integration assumes `:Timeline` nodes and specific edge types (`LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, etc.) as per `schema_v_0_6`.
 - **LLM tool integration:**
   - New section describing how to wrap the Timeline Engine for OpenAI Responses as `timeline_engine_evaluate` without changing the engine’s own API.
 - **Examples extended:**

@@ -80,7 +80,7 @@ Phase 1 is now **COMPLETE**:
 - [x] GraphWriteService extended with `upsertAgreement` and `upsertRegime`
 - [x] Graph Ingress Guard updated with new relationship types
 - [x] ESLint rules added to prevent future regressions
-- [x] Documentation updated (PHASE_1_FIXES.md, V0_4_IMPLEMENTATION_STATUS.md, ESLINT_RULES.md)
+- [x] Documentation updated (PHASE_1_FIXES.md, IMPLEMENTATION_STATUS_v_0_4.md, ESLINT_RULES.md)
 
 ### Lessons Learned
 

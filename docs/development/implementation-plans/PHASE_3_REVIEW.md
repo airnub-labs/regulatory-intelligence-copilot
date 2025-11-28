@@ -424,7 +424,7 @@ Check actual PromptContext type and adjust call
 
 1. **Immediate:** Fix TypeScript errors (see below)
 2. **Short Term:** Test end-to-end and verify all features work
-3. **Update Docs:** Mark Phase 3 as complete in `V0_4_IMPLEMENTATION_STATUS.md`
+3. **Update Docs:** Mark Phase 3 as complete in `IMPLEMENTATION_STATUS_v_0_4.md`
 
 ---
 

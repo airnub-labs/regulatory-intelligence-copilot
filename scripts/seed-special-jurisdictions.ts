@@ -7,7 +7,7 @@
  *
  * All operations use GraphWriteService to enforce ingress guard aspects.
  *
- * Based on docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt
+ * Based on docs/architecture/graph/seed_ni_uk_ie_eu.txt
  *
  * Usage:
  *   tsx scripts/seed-special-jurisdictions.ts

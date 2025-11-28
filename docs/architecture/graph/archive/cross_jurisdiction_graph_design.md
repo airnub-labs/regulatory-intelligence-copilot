@@ -2,7 +2,7 @@
 
 > **Goal:** Support reasoning across multiple jurisdictions (e.g. Ireland, other EU member states, Isle of Man, Malta) including intersections, mutual exclusions, coordination rules and conflicts – without assuming any single country is always the “primary”.
 
-This document extends `graph_schema_v0_1.md` with patterns for multi-jurisdiction modelling.
+This document extends `schema_v_0_1.md` with patterns for multi-jurisdiction modelling.
 
 ---
 

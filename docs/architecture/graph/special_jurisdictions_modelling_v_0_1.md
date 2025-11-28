@@ -328,7 +328,7 @@ blocks; they simply query the relevant neighbourhood.
 
 ## 8. Timeline Integration
 
-Timeline nodes (as per `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`) should be attached to
+Timeline nodes (as per `docs/architecture/engines/timeline-engine/spec_v_0_2.md`) should be attached to
 Agreements and Regimes to express:
 
 - When a protocol or framework came into force.
@@ -377,9 +377,9 @@ legal/tax/welfare advice.
 
 - Any future changes to how these are modelled must:
   1. Update this document (or a v0.2 successor), and
-  2. Update `docs/architecture/graph/archive/graph_schema_v_0_3.md` (or later version) and the graph
+  2. Update `docs/architecture/graph/archive/schema_v_0_3.md` (or later version) and the graph
      changelog.
 
-- The example seed file `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt` provides a
+- The example seed file `docs/architecture/graph/seed_ni_uk_ie_eu.txt` provides a
   minimal working seed for IE/UK/NI/IM/EU + CTA + NI goods regime and should be
   kept in sync with this document.

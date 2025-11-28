@@ -54,7 +54,7 @@ Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
 For the full product concept, see:
 
-- 📄 `docs/architecture/copilot-concept/regulatory_graph_copilot_concept_v_0_6.md`
+- 📄 `docs/architecture/copilot-concept/concept_v_0_6.md`
 
 ---
 
@@ -129,7 +129,7 @@ This repo is **not** a finished product. It is a living reference implementation
 
 ### 1. Prerequisites
 
-- **Node.js** 24+ (LTS) – see `docs/architecture/runtime/node_24_lts_rationale.md` for why.
+- **Node.js** 24+ (LTS) – see `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` for why.
 - **pnpm** (or your preferred package manager).  
 - **Docker** (for Memgraph + MCP gateway + any sandbox sidecars).  
 - Accounts / API keys for:
@@ -288,33 +288,33 @@ docs/
       architecture_v_0_5.md
       architecture_diagrams_v_0_5.md
     copilot-concept/
-      regulatory_graph_copilot_concept_v_0_6.md
+      concept_v_0_6.md
       archive/ (v0.1–v0.4)
     conversation-context/
-      concept_capture_from_main_chat_v_0_1.md
-      conversation_context_spec_v_0_1.md
+      concept_capture_v_0_1.md
+      spec_v_0_1.md
     graph/
-      graph_schema_v_0_6.md
-      graph_schema_changelog_v_0_6.md
-      graph_algorithms_v_0_1.md
-      graph_seed_ni_uk_ie_eu.txt
+      schema_v_0_6.md
+      schema_changelog_v_0_6.md
+      algorithms_v_0_1.md
+      seed_ni_uk_ie_eu.txt
       special_jurisdictions_modelling_v_0_1.md
-      graph_change_detection_v_0_6.md
+      change_detection_v_0_6.md
       archive/ (schema history, change detection v0.3, cross-jurisdiction design)
     engines/
       timeline-engine/
-        timeline_engine_v_0_2.md
-        timeline_integration_v_0_3.md
+        spec_v_0_2.md
+        integration_v_0_3.md
         archive/ (v0.1 timeline docs)
       scenario-engine/
-        scenario_engine_v_0_1.md
+        spec_v_0_1.md
         archive/ (scenario integration v0.1)
     guards/
-      graph_ingress_guard_v_0_1.md
-      egress_guard_v_0_2.md
+      graph_ingress_v_0_1.md
+      egress_v_0_2.md
     runtime/
-      node_24_lts_rationale.md
-      node_24_lts_integration_checklist.md
+      node_24_lts_rationale_v_0_1.md
+      node_24_lts_integration_checklist_v_0_1.md
     data_privacy_and_architecture_boundaries_v_0_1.md
   governance/
     decisions/ (v0.6 + archive)
@@ -324,7 +324,7 @@ docs/
       migration_plan_v_0_2.md
     product/
       eligibility-explorer/
-        eligibility_explorer_spec_v_0_1.md
+        spec_v_0_1.md
   development/
     local/
       LOCAL_DEVELOPMENT.md

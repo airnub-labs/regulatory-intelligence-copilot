@@ -1,7 +1,7 @@
 # Graph Schema Spec v0.6 – Regulatory Intelligence Copilot
 
 > **Status:** Draft v0.6  
-> **Supersedes:** `docs/architecture/graph/archive/graph_schema_v_0_4.md` (internally still labelled v0.3)  
+> **Supersedes:** `docs/architecture/graph/archive/schema_v_0_4.md` (internally still labelled v0.3)  
 > **Scope:** Core Memgraph rules graph for the Regulatory Intelligence Copilot (IE / UK / EU focus, extensible to other domains)
 
 This document is the **single source of truth** for how regulatory rules, benefits, and related entities are represented in **Memgraph**.
@@ -10,11 +10,11 @@ It is aligned with:
 
 - `architecture_v_0_6.md` (overall system architecture)
 - `data_privacy_and_architecture_boundaries_v_0_1.md` (what must *never* go into Memgraph)
-- `graph_ingress_guard_v_0_1.md` (write‑side validation and safety)
-- `architecture/graph/graph_change_detection_v_0_6.md` and the archived v0.3 docs (patch/streaming behaviour)
-- `graph_algorithms_v_0_1.md` (optional derived metadata)
+- `graph_ingress_v_0_1.md` (write‑side validation and safety)
+- `architecture/graph/change_detection_v_0_6.md` and the archived v0.3 docs (patch/streaming behaviour)
+- `algorithms_v_0_1.md` (optional derived metadata)
 - `special_jurisdictions_modelling_v_0_1.md` (NI/UK/IE/EU/IM/CTA and similar)
-- `concept_capture_from_main_chat_v_0_1.md` (SKOS‑inspired concept capture and self‑population)
+- `concept_capture_v_0_1.md` (SKOS‑inspired concept capture and self‑population)
 
 All writes to Memgraph **must** go through `GraphWriteService` and obey this schema.
 
@@ -302,7 +302,7 @@ Rules:
 - These **do not change** the semantics of core node labels and relationships above.
 - They are **optional and ephemeral** – they can be recalculated or removed without breaking queries that rely only on core schema.
 - Ingestion and guards must treat them as **derived**, not as sources of truth for rules.
-- Any such properties/labels must be documented in `graph_algorithms_v_0_1.md` and whitelisted in the Graph Ingress Guard configuration before writes.
+- Any such properties/labels must be documented in `algorithms_v_0_1.md` and whitelisted in the Graph Ingress Guard configuration before writes.
 
 ### 2.18 `:Concept` (SKOS‑Inspired)
 
@@ -534,13 +534,13 @@ Subsequent questions about VRT/import duties can then be answered using both the
 ## 6. Versioning & Evolution
 
 - This is **v0.6** of the graph schema.
-- Changes from the previous published schema (`docs/architecture/graph/archive/graph_schema_v_0_4.md`, internally v0.3):
+- Changes from the previous published schema (`docs/architecture/graph/archive/schema_v_0_4.md`, internally v0.3):
   - Added `pref_label` and `alt_labels` properties on `:Benefit` and `:Relief` to support SKOS‑style labels.
-  - Introduced `:Concept` and `:Label` node labels, plus `HAS_ALT_LABEL`, `ALIGNS_WITH`, and `DERIVED_FROM` relationships, to integrate with `concept_capture_from_main_chat_v_0_1.md`.
-  - Clarified that **conversation context** and scenarios live in Supabase, not in Memgraph, consistent with `conversation_context_spec_v_0_1.md`.
+  - Introduced `:Concept` and `:Label` node labels, plus `HAS_ALT_LABEL`, `ALIGNS_WITH`, and `DERIVED_FROM` relationships, to integrate with `concept_capture_v_0_1.md`.
+  - Clarified that **conversation context** and scenarios live in Supabase, not in Memgraph, consistent with `spec_v_0_1.md`.
   - Added explicit `created_at` / `updated_at` (and optional `last_verified_at` on `:Concept`) to support graph change detection and patch streaming.
   - Reconciled special jurisdictions and regimes with `special_jurisdictions_modelling_v_0_1.md` and `architecture_v_0_6.md`.
-- Further changes should be recorded in `graph_schema_changelog_v_0_6+.md` with migration notes where needed.
+- Further changes should be recorded in `schema_changelog_v_0_6+.md` with migration notes where needed.
 
 ---
 

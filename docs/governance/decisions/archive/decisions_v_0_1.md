@@ -82,7 +82,7 @@ Naïve RAG over PDFs/statutes is poor at:
 
 ### Consequences
 
-- All ingestion jobs must conform to **`graph_schema_v0_1.md`**.
+- All ingestion jobs must conform to **`schema_v_0_1.md`**.
 - Agents must use standard query patterns (see graph schema spec).
 - Graph is rule/relationship-only, not user-specific data.
 
@@ -209,7 +209,7 @@ Scattering date math across agents is error-prone and hard to explain.
 
 ### Decision
 
-- A dedicated **Timeline Engine** module is introduced (see `timeline_engine_v0_1.md`).
+- A dedicated **Timeline Engine** module is introduced (see `spec_v_0_1.md`).
 - It provides pure functions like:
   - `computeLookbackRange`
   - `isWithinLookback`

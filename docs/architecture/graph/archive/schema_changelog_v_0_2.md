@@ -11,8 +11,8 @@ Each entry should describe:
 
 ## v0.2 – Cross-Jurisdiction Support & Relationship Refinement
 
-**Spec:** `graph_schema_v0_2.md`  
-**Previous:** `graph_schema_v0_1.md`  
+**Spec:** `schema_v_0_2.md`  
+**Previous:** `schema_v_0_1.md`  
 **Status:** Draft / In implementation
 
 ### Summary of Changes
@@ -89,7 +89,7 @@ Each entry should describe:
      MATCH (n)-[:IN_JURISDICTION]->(j)
      ```
 
-   - Cross-border queries should use the new `COORDINATED_WITH`, `TREATY_LINKED_TO`, etc., as described in `graph_schema_v0_2.md`.
+   - Cross-border queries should use the new `COORDINATED_WITH`, `TREATY_LINKED_TO`, etc., as described in `schema_v_0_2.md`.
 
 5. **Visualisation and tooling**
    - Graph visualisation tools should be updated to:
@@ -100,7 +100,7 @@ Each entry should describe:
 
 ## v0.1 – Initial Regulatory Graph Schema
 
-**Spec:** `graph_schema_v0_1.md`  
+**Spec:** `schema_v_0_1.md`  
 **Status:** Baseline (deprecated but historically important)
 
 ### Summary of Features
@@ -128,7 +128,7 @@ Each entry should describe:
 When evolving the graph schema beyond v0.2:
 
 1. **Version every spec**  
-   - Add `graph_schema_v0_3.md`, `v0_4.md`, etc. rather than editing old versions in place.
+   - Add `schema_v_0_3.md`, `v0_4.md`, etc. rather than editing old versions in place.
 
 2. **Update this changelog**  
    - For each version, document:

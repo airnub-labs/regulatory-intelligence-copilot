@@ -1,6 +1,6 @@
 # Eligibility Explorer Spec v0.1
 
-> Draft spec for the Eligibility Explorer feature (Use Case 1), building on `docs/architecture/archive/architecture_v_0_4.md`, `docs/architecture/archive/architecture_v_0_5.md`, `docs/architecture/graph/archive/graph_schema_v_0_4.md`, `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`, `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md`, and `docs/architecture/copilot-concept/archive/regulatory_graph_copilot_concept_v_0_4.md`.
+> Draft spec for the Eligibility Explorer feature (Use Case 1), building on `docs/architecture/archive/architecture_v_0_4.md`, `docs/architecture/archive/architecture_v_0_5.md`, `docs/architecture/graph/archive/schema_v_0_4.md`, `docs/architecture/engines/timeline-engine/spec_v_0_2.md`, `docs/architecture/engines/scenario-engine/spec_v_0_1.md`, and `docs/architecture/copilot-concept/archive/concept_v_0_4.md`.
 
 Status: **Draft v0.1**  
 Scope: **End-to-end eligibility exploration service and feature set in `reg-intel-core` + demo web UI, using the shared rules graph, Timeline Engine, and Scenario Engine without storing PII in Memgraph.**
@@ -94,7 +94,7 @@ Time-related relationships:
 - `(:Benefit)-[:FILING_DEADLINE]->(:TimelineConstraint)`  
 - Equivalent edges for `:Relief`.
 
-These nodes/edges are defined and constrained by `docs/architecture/graph/archive/graph_schema_v_0_4.md` and `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`.
+These nodes/edges are defined and constrained by `docs/architecture/graph/archive/schema_v_0_4.md` and `docs/architecture/engines/timeline-engine/spec_v_0_2.md`.
 
 ### 3.3 Eligibility Query
 
@@ -130,7 +130,7 @@ export interface EligibilityQuery {
 
 Notes:
 
-- `ScenarioSnapshotFacts` is imported from `scenario_engine_v_0_1.ts`.
+- `ScenarioSnapshotFacts` is imported from `spec_v_0_1.ts`.
 - The query may either reference a pre-existing `Scenario` via `scenarioId` or supply a one-off `facts` object.
 
 ### 3.4 Eligibility Result
@@ -262,7 +262,7 @@ export interface EligibilityExplorer {
 
 Notes:
 
-- `Scenario` and `ScenarioEvaluationResult` come from `scenario_engine_v_0_1.ts`.
+- `Scenario` and `ScenarioEvaluationResult` come from `spec_v_0_1.ts`.
 - `evaluateEligibilityForScenarios` returns `ScenarioEvaluationResult` rather than `EligibilityResult` to avoid duplicating types and logic; callers can adapt as needed.
 
 ### 5.2 Default Implementation Sketch
@@ -348,7 +348,7 @@ While the Eligibility Explorer is a core service, v0.1 will include a basic demo
 
 2. **Eligibility Results View**
    - Shows list of **eligible**, **ineligible**, and **locked-out** benefits/reliefs.
-   - Uses `graph_change_detection` streaming where appropriate to update when rules change.
+   - Uses `change_detection` streaming where appropriate to update when rules change.
 
 3. **Chat Integration**
    - Chat messages can:

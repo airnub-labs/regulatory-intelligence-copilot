@@ -288,7 +288,7 @@ Result: ✅ No compliance-core references found in code
 **Documentation References (Intentional):**
 - `docs/PHASE_1_FIXES.md` - Historical context ✅
 - `docs/PHASE_2_PLAN.md` - Documents the rename process ✅
-- `docs/V0_4_IMPLEMENTATION_STATUS.md` - Migration notes ✅
+- `docs/IMPLEMENTATION_STATUS_v_0_4.md` - Migration notes ✅
 
 **demo-web app:**
 - ✅ Uses `@reg-copilot/reg-intel-core` in package.json

@@ -9,7 +9,7 @@
 ## v0.3 – Cross‑Jurisdiction + Timeline Alignment (CURRENT)
 
 **Status:** Draft, active design  
-**Supersedes:** `graph_schema_v_0_2.md`
+**Supersedes:** `schema_v_0_2.md`
 
 ### Summary
 
@@ -73,7 +73,7 @@ Aligns the graph schema with:
 ## v0.2 – Cross‑Jurisdiction & Regulatory Pivot
 
 **Status:** Historical, still compatible but superseded  
-**Primary doc:** `graph_schema_v_0_2.md`
+**Primary doc:** `schema_v_0_2.md`
 
 ### Summary
 
@@ -122,7 +122,7 @@ It introduced **jurisdiction‑aware modelling** and initial change‑tracking n
 ## v0.1 – Initial RFC / OWASP Graph (Legacy)
 
 **Status:** Legacy, no longer used by the regulatory copilot  
-**Primary doc:** Previous `graph_schema_v_0_1.md` (historical)
+**Primary doc:** Previous `schema_v_0_1.md` (historical)
 
 ### Summary
 

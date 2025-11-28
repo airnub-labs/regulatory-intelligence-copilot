@@ -28,8 +28,8 @@ That metadata is used to:
 This spec does **not** cover:
 
 - Full ingestion pipelines for legislative/guidance documents (see graph ingestion specs).
-- Scenario modelling and what‑if simulation (see `scenario_engine_v_0_1.md`).
-- Eligibility Explorer logic (see `eligibility_explorer_spec_v_0_1.md`).
+- Scenario modelling and what‑if simulation (see `spec_v_0_1.md`).
+- Eligibility Explorer logic (see `spec_v_0_1.md`).
 
 ---
 
@@ -337,7 +337,7 @@ The UI is **not required** to send them back on the next turn.
 
 ### 7.2 Conversation context update
 
-The Compliance Engine uses `referencedNodes` to update `ConversationContext` (see `conversation_context_spec_v_0_1.md`):
+The Compliance Engine uses `referencedNodes` to update `ConversationContext` (see `spec_v_0_1.md`):
 
 1. Load `ConversationContext` for `(tenantId, conversationId)`.
 2. Compute the new `activeNodeIds` as the union of existing `activeNodeIds` and `referencedNodes` for this turn (optionally pruned to a max size).

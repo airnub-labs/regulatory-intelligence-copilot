@@ -30,7 +30,7 @@ The product is **chat-first**. All capabilities flow through a single HTTP endpo
 
 Memgraph is the primary source of truth for regulatory rules and relationships. The graph encodes statutes, benefits, conditions, timelines, case law, EU instruments, jurisdictions, and cross-border relationships. LLMs explain the graph; they do not own the rules.
 
-(See `docs/architecture/graph/archive/graph_schema_v_0_3.md` and `graph_schema_changelog_v_0_3.md`.)
+(See `docs/architecture/graph/archive/schema_v_0_3.md` and `schema_changelog_v_0_3.md`.)
 
 ---
 
@@ -88,7 +88,7 @@ Core prompts are **jurisdiction-neutral**; agents + prompt aspects inject jurisd
 
 All time-based logic (lookbacks, lock-ins, effective dates, etc.) is centralised in a **Timeline Engine**. It consumes graph timeline nodes/edges and returns machine-friendly results plus human-readable explanations.
 
-(See `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`.)
+(See `docs/architecture/engines/timeline-engine/spec_v_0_2.md`.)
 
 ---
 
@@ -235,7 +235,7 @@ Node.js 24 has just entered Active LTS and provides significant security and per
 - Improved **AsyncLocalStorage** for per-request/per-tenant context
 - Updated HTTP/fetch stack and OpenSSL for a more secure default platform
 
-(See `docs/architecture/runtime/node_24_lts_rationale.md` for detailed rationale.)
+(See `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` for detailed rationale.)
 
 ### Decision
 
@@ -384,7 +384,7 @@ To enforce the data privacy and schema guarantees defined in D-025 and related s
 - Baseline aspects (schema validation, property whitelisting, static PII /
   tenant checks) are non‑removable and encode the guarantees from
   `data_privacy_and_architecture_boundaries_v_0_1.md` and
-  `graph_ingress_guard_v_0_1.md`.
+  `graph_ingress_v_0_1.md`.
 - Custom aspects (e.g. audit tagging, source annotation, future local LLM
   classification) may be configured via a registry+config mechanism, but may
   not weaken or bypass the baseline invariants.
@@ -392,7 +392,7 @@ To enforce the data privacy and schema guarantees defined in D-025 and related s
   `MERGE`, `SET` on new nodes/relationships) directly against Memgraph outside
   the GraphWriteService.
 
-See `docs/architecture/guards/graph_ingress_guard_v_0_1.md` for the detailed design of the
+See `docs/architecture/guards/graph_ingress_v_0_1.md` for the detailed design of the
 aspect pattern and the baseline/custom aspect split.
 
 ### Consequences
@@ -511,7 +511,7 @@ We also want to be able to experiment with Leiden community detection and centra
 - The **primary reasoning mode** remains:
   - Explicit graph edges modelling rules, exclusions, timelines, and cross-border relationships.
   - Targeted Cypher traversals for queries like "mutual exclusions" and "impact of rule X".
-- Graph algorithms are **optional enhancers**, configured and documented in `docs/architecture/graph/graph_algorithms_v_0_1.md`:
+- Graph algorithms are **optional enhancers**, configured and documented in `docs/architecture/graph/algorithms_v_0_1.md`:
   - Community detection (e.g. Leiden via MAGE) on static snapshots to assign `community_id` and create `:Community` nodes.
   - Centrality metrics (PageRank/betweenness) within communities to identify anchor rules.
   - Bounded multi-hop traversals for impact analysis.
