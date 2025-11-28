@@ -75,9 +75,9 @@ Comprehensive design documentation is available in the `docs/` directory.
 
 ### Privacy, Ingress & Egress Guards
 
-* **`docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
-* **`docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
-* **`docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
+* **`docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
+* **`docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
+* **`docs/architecture/safety-guards/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
 
 Earlier versions (e.g. `*_v_0_1.md`, `graph_schema_v_0_3/0_4.md`, `regulatory_graph_copilot_concept_v_0_3/0_4.md`) are kept as **historical context** only.
 
@@ -403,7 +403,7 @@ regulatory-intelligence-copilot/
       special_jurisdictions_modelling_v_0_1.md
       data_privacy_and_architecture_boundaries_v_0_1.md
       graph_ingress_guard_v_0_1.md
-      docs/architecture/safety/safety-guards/egress_guard_v_0_2.md
+      docs/architecture/safety-guards/egress_guard_v_0_2.md
       # plus historical v0.1/v0.2/v0.3/v0.4 docs
   AGENTS.md                   # v0.6 agent spec
   PROMPT.md                   # v0.6 coding agent prompt

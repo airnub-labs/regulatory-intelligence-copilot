@@ -2,7 +2,7 @@
  * Graph Ingress Guard v0.1
  *
  * Implements the aspect-based ingress guard pattern for all Memgraph writes.
- * See: docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md
+ * See: docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md
  */
 
 /**
@@ -184,7 +184,7 @@ export const piiBlockingAspect: GraphIngressAspect = async (ctx, next) => {
       throw new Error(
         `Graph Ingress Guard: Disallowed property key "${key}" detected. ` +
           `The global graph must not contain user or tenant PII. ` +
-          `See: docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`,
+          `See: docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`,
       );
     }
   }

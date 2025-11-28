@@ -15,13 +15,13 @@ Before this reorganisation, high-level design docs lived under `docs/` and detai
 
 ```
 docs/
-  architecture/                 # Architecture overviews & diagrams, graph, engines, safety, concepts, development notes
+  architecture/                 # Architecture overviews & diagrams, graph, engines, privacy/guardrails, concepts, development notes
     concept/                    # Core concept definitions (brought up from deep graph paths)
     graph/                      # Graph model, schema, algorithms, seeding guidance
     engines/                    # Timeline engine
     conversation-context/       # Concept capture and ConversationContext specs
     change-detection/           # Change detection specs and archives
-    safety/                     # Data privacy & safety guards (ingress/egress)
+    safety-guards/              # Ingress and egress guard designs
     development/                # Local dev guides, lint rules, node integration rationale
   governance/                   # ADRs, decision logs, roadmap, phase plans, product specs
     product/                    # User-facing specs (eligibility explorer, scenario engine)
@@ -34,7 +34,7 @@ docs/
 - **governance/** – `decisions/` contents, `roadmap/` contents, `phases/` plans, and migration plans. Add a short README that clarifies the lifecycle (decision → roadmap → phase plan).
 - **graph/** – Move `docs/architecture/concept/`, `docs/architecture/graph/graph-schema/`, `docs/architecture/graph/graph_algorithms_v_0_1.md`, `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`, and `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`. Keep `versions/` subfolders inside this tree for historical schemas and concepts.
 - **engines/** – Keep the Timeline Engine spec here; move conversation context and change detection into their own top-level architecture folders.
-- **safety/** – Combine `docs/architecture/safety/safety-guards/` and `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md` under one folder. Highlight ingress vs. egress guard responsibilities and privacy boundaries.
+- **privacy & guards** – Keep `data_privacy_and_architecture_boundaries_v_0_1.md` at the architecture root and collect ingress/egress guard specs under `docs/architecture/safety-guards/`.
 - **product/** – Place `eligibility_explorer_spec_v_0_1.md`, scenario engine concepts, and any UX/product-oriented specs here. Add a `product/README.md` that points back to graph and timeline dependencies.
 - **development/** – Consolidate `LOCAL_DEVELOPMENT.md`, `eslint_rules.md`, `node_24_lts_integration_checklist.md`, and `node_24_lts_rationale.md` to give contributors a single entry point for setup and tooling.
 

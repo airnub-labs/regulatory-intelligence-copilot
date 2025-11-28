@@ -22,9 +22,9 @@ This architecture sits on top of, and must remain consistent with, the following
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 - `docs/architecture/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`
+- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/safety-guards/egress_guard_v_0_2.md`
 
 And the project‑level docs:
 
@@ -378,7 +378,7 @@ The **EgressClient** is the single choke‑point for:
 It:
 
 1. Constructs an `EgressGuardContext` (target type, provider, endpoint, payload, tenantId, jurisdictions…).
-2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`.
+2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/architecture/safety-guards/egress_guard_v_0_2.md`.
 3. The final aspect executes the actual outbound call using the provider SDK/HTTP client and attaches the raw response back onto the context.
 
 Egress aspects can:

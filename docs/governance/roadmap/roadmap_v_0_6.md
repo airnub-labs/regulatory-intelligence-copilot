@@ -15,9 +15,9 @@ The roadmap must stay aligned with the following documents:
 - `docs/architecture/versions/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
 - `docs/governance/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
 - `docs/architecture/graph/graph-schema/versions/graph_schema_v_0_4.md` + `docs/architecture/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
-- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
-- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
-- `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
+- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
+- `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
+- `docs/architecture/safety-guards/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
 - `docs/architecture/graph/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.

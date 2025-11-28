@@ -353,7 +353,7 @@ The global regulatory graph (Memgraph) is a **shared knowledge base** intended t
   - In-memory session context during request handling
   - Never in the graph
 - Any exceptions or refinements to these rules must be made by updating:
-  - `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+  - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
   - This decisions file
 
 ### Consequences
@@ -364,7 +364,7 @@ The global regulatory graph (Memgraph) is a **shared knowledge base** intended t
 - Multi-tenant deployments can safely share a single graph instance.
 - Uploaded documents and user scenarios require separate storage strategy.
 
-See `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md` for full context, rationale, and detailed classification rules.
+See `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md` for full context, rationale, and detailed classification rules.
 
 ---
 
@@ -392,7 +392,7 @@ To enforce the data privacy and schema guarantees defined in D-025 and related s
   `MERGE`, `SET` on new nodes/relationships) directly against Memgraph outside
   the GraphWriteService.
 
-See `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md` for the detailed design of the
+See `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md` for the detailed design of the
 aspect pattern and the baseline/custom aspect split.
 
 ### Consequences

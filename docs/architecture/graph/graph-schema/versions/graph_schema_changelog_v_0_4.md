@@ -32,7 +32,7 @@ The v0.3 schema remains the authoritative structure. All node labels (`:Jurisdic
 
 #### 1. Graph Ingress Guard (Mandatory)
 
-Per `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md` and decision D-026:
+Per `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md` and decision D-026:
 
 - **All writes** to Memgraph must pass through `GraphWriteService`.
 - `GraphWriteService` applies an aspect-based **Graph Ingress Guard** pipeline before executing any Cypher.

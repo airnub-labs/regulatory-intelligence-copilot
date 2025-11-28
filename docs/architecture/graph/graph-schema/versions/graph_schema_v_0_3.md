@@ -25,8 +25,8 @@ This schema spec must be read together with:
 
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`
 
 ---
 
@@ -66,7 +66,7 @@ This schema spec must be read together with:
 
 The graph schema is constrained by the data privacy boundaries defined in:
 
-- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
 
 **In summary:**
 
@@ -85,7 +85,7 @@ This ensures the graph remains a **shared, multi-tenant knowledge base** that ca
 > **Implementation note:**
 > The constraints in this schema are enforced in code by the
 > aspect-based Graph Ingress Guard described in
-> `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`, which is applied by the
+> `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`, which is applied by the
 > `GraphWriteService` before any Cypher is executed against Memgraph.
 > Any new node/relationship types or properties introduced by future
 > schema revisions must be added both here and to the ingress guard

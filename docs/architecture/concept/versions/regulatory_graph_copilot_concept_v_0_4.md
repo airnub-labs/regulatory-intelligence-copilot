@@ -8,8 +8,8 @@
 > - `graph_algorithms_v_0_1.md`
 > - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 > - `data_privacy_and_architecture_boundaries_v_0_1.md`
-> - `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
-> - `docs/architecture/safety/safety-guards/egress_guard_v_0_2.md`
+> - `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`
+> - `docs/architecture/safety-guards/egress_guard_v_0_2.md`
 > - `special_jurisdictions_modelling_v_0_1.md`
 
 ---

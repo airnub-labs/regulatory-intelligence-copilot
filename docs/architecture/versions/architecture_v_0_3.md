@@ -14,8 +14,8 @@
 - `docs/architecture/graph/graph-schema/versions/docs/architecture/graph/graph-schema/versions/graph_schema_v_0_3.md`
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
-- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
-- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
+- `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`
 
 For architectural intent and design trade‑offs, see also:
 
@@ -64,7 +64,7 @@ At every layer, the architecture is designed to be:
 
 The high-level system architecture is constrained by the data privacy boundaries defined in:
 
-- `docs/architecture/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
 
 In particular, the global regulatory graph is **public and rule-only**: it may only store public regulatory data (jurisdictions, regions, agreements, regimes, rules, benefits, timelines) and document metadata, and must never store user or tenant-specific data, PII, or uploaded document contents. User profile and scenario data live outside the graph in per-tenant storage and in-memory session context.
 
@@ -83,7 +83,7 @@ All writes to the global Memgraph instance are routed through a
 `GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
 specified in:
 
-- `docs/architecture/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/architecture/safety-guards/graph_ingress_guard_v_0_1.md`
 
 No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
 against Memgraph. The ingress guard enforces that:
