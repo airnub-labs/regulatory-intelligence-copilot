@@ -30,7 +30,7 @@ The product is **chat-first**. All capabilities flow through a single HTTP endpo
 
 Memgraph is the primary source of truth for regulatory rules and relationships. The graph encodes statutes, benefits, conditions, timelines, case law, EU instruments, jurisdictions, and cross-border relationships. LLMs explain the graph; they do not own the rules.
 
-(See `docs/specs/graph_schema_v_0_3.md` and `graph_schema_changelog_v_0_3.md`.)
+(See `docs/specs/graph-schema/versions/graph_schema_v_0_3.md` and `graph_schema_changelog_v_0_3.md`.)
 
 ---
 
@@ -86,7 +86,7 @@ Core prompts are **jurisdiction-neutral**; agents + prompt aspects inject jurisd
 
 All time-based logic (lookbacks, lock-ins, effective dates, etc.) is centralised in a **Timeline Engine**. It consumes graph timeline nodes/edges and returns machine-friendly results plus human-readable explanations.
 
-(See `docs/specs/timeline_engine_v_0_2.md`.)
+(See `docs/specs/timeline-engine/timeline_engine_v_0_2.md`.)
 
 ---
 
@@ -372,7 +372,7 @@ To enforce the data privacy and schema guarantees defined in D-025 and related s
   `MERGE`, `SET` on new nodes/relationships) directly against Memgraph outside
   the GraphWriteService.
 
-See `docs/specs/graph_ingress_guard_v_0_1.md` for the detailed design of the
+See `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md` for the detailed design of the
 aspect pattern and the baseline/custom aspect split.
 
 ### Consequences

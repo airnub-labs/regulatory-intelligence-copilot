@@ -14,15 +14,15 @@ The roadmap must stay aligned with the following documents:
 - `docs/architecture/versions/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
 - `docs/architecture/versions/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
 - `docs/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
-- `docs/specs/graph_schema_v_0_4.md` + `docs/specs/graph_schema_changelog_v_0_4.md` – rules graph schema.
+- `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` + `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
-- `docs/specs/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
-- `docs/specs/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
-- `docs/specs/timeline_engine_v_0_2.md` – time‑based reasoning.
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
+- `docs/specs/safety-guards/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
 - `docs/specs/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.
-- `docs/specs/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
-- `docs/specs/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
+- `docs/specs/conversation-context/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
+- `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
 - `docs/specs/eligibility_explorer_spec_v_0_1.md` (once added) – deterministic eligibility evaluation (Use Case 1).
 - `docs/specs/scenario_engine_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
 

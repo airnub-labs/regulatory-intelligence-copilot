@@ -3,7 +3,7 @@
 > Tracks changes to the Memgraph schema for architecture alignment.
 >
 > **Status:** Current  
-> **Supersedes:** `graph_schema_changelog_v_0_4.md`
+> **Supersedes:** `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
 
 ---
 
@@ -263,7 +263,7 @@ v0.4 was an alignment release that:
 - Clarified “rules‑only, no PII” for the shared rules graph,  
 - Documented special jurisdiction modelling (IE/UK/NI/IM/MT/GI/AD/CTA).
 
-For full details, see `graph_schema_changelog_v_0_4.md`.
+For full details, see `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`.
 
 ---
 
@@ -274,7 +274,7 @@ For full details, see `graph_schema_changelog_v_0_4.md`.
 
 Highlights:
 
-- Tight alignment with `timeline_engine_v_0_2.md`.
+- Tight alignment with `docs/specs/timeline-engine/timeline_engine_v_0_2.md`.
 - Richer timeline modelling:
   - `LOOKBACK_WINDOW`
   - `LOCKS_IN_FOR_PERIOD`

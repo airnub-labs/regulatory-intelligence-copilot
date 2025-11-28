@@ -4,16 +4,16 @@
 > **Supersedes:** `AGENTS.md` (v0.4)  
 > **Aligned with:**  
 > - `docs/architecture/architecture_v_0_6.md`
-> - `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`  
-> - `docs/specs/graph_schema_v_0_6.md`  
-> - `docs/specs/graph_schema_changelog_v_0_6.md`  
+> - `docs/specs/concept/regulatory_graph_copilot_concept_v_0_6.md`  
+> - `docs/specs/graph-schema/graph_schema_v_0_6.md`  
+> - `docs/specs/graph-schema/graph_schema_changelog_v_0_6.md`  
 > - `docs/specs/graph_algorithms_v_0_1.md`  
-> - `docs/specs/timeline_engine_v_0_2.md`  
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`  
 > - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`  
-> - `docs/specs/graph_ingress_guard_v_0_1.md`  
-> - `docs/specs/egress_guard_v_0_2.md`  
-> - `docs/specs/concept_capture_from_main_chat_v_0_1.md`  
-> - `docs/specs/conversation_context_spec_v_0_1.md`  
+> - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`  
+> - `docs/specs/safety-guards/egress_guard_v_0_2.md`  
+> - `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
+> - `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
 > - `docs/specs/scenario_engine_v_0_1.md`  
 > - `docs/decisions/decisions_v_0_6.md`
 > - `docs/roadmap/roadmap_v_0_6.md`

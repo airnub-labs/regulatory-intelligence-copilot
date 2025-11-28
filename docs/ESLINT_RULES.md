@@ -14,7 +14,7 @@ Per `docs/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go thr
 - **Error:** Direct `session.run()` calls are prohibited
 - **Why:** Bypasses Graph Ingress Guard aspects (PII blocking, schema validation, property whitelisting)
 - **Fix:** Use `GraphWriteService` methods instead
-- **See:** `docs/specs/graph_ingress_guard_v_0_1.md`
+- **See:** `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 
 **Rule:** `no-restricted-syntax` (executeCypher)
 - **Error:** Direct `executeCypher()` calls are prohibited
@@ -83,6 +83,6 @@ Planned rules:
 ---
 
 **See Also:**
-- `docs/specs/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 - `docs/decisions_v_0_4.md` (D-026, D-028)
 - `docs/PHASE_1_FIXES.md`

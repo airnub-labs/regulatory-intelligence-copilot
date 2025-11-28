@@ -37,7 +37,7 @@ Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
 For the full concept, see:
 
-* 📄 `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`
+* 📄 `docs/specs/concept/regulatory_graph_copilot_concept_v_0_6.md`
 
 ---
 
@@ -60,23 +60,23 @@ Comprehensive design documentation is available in the `docs/` directory.
 
 ### Graph, Algorithms, Timeline & Scenarios
 
-* **`docs/specs/graph_schema_v_0_6.md`** – Node/edge types, schema design, concept/label nodes, and how rules are represented.
-* **`docs/specs/graph_schema_changelog_v_0_6.md`** – Schema evolution and breaking changes.
+* **`docs/specs/graph-schema/graph_schema_v_0_6.md`** – Node/edge types, schema design, concept/label nodes, and how rules are represented.
+* **`docs/specs/graph-schema/graph_schema_changelog_v_0_6.md`** – Schema evolution and breaking changes.
 * **`docs/specs/graph_algorithms_v_0_1.md`** – Graph algorithm choices (e.g. focused neighbourhood queries, optional Leiden community detection) and how they're used.
-* **`docs/specs/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
+* **`docs/specs/timeline-engine/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
 * **`docs/specs/scenario_engine_v_0_1.md`** – How “what‑if” scenarios and synthetic timelines are modelled alongside the rules graph.
 * **`docs/specs/special_jurisdictions_modelling_v_0_1.md`** – Special cases (IE/UK/NI/IM/GI/AD/CTA) modelling patterns.
 
 ### Concept Capture & Conversation Context
 
-* **`docs/specs/concept_capture_from_main_chat_v_0_1.md`** – SKOS-inspired concept capture from main chat using a `capture_concepts` tool and structured outputs.
-* **`docs/specs/conversation_context_spec_v_0_1.md`** – Server-side, per-conversation `ConversationContext` that tracks active rule/benefit/tax nodes without storing PII in Memgraph.
+* **`docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`** – SKOS-inspired concept capture from main chat using a `capture_concepts` tool and structured outputs.
+* **`docs/specs/conversation-context/conversation_context_spec_v_0_1.md`** – Server-side, per-conversation `ConversationContext` that tracks active rule/benefit/tax nodes without storing PII in Memgraph.
 
 ### Privacy, Ingress & Egress Guards
 
 * **`docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
-* **`docs/specs/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
-* **`docs/specs/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
+* **`docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
+* **`docs/specs/safety-guards/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
 
 Earlier versions (e.g. `*_v_0_1.md`, `graph_schema_v_0_3/0_4.md`, `regulatory_graph_copilot_concept_v_0_3/0_4.md`) are kept as **historical context** only.
 
@@ -297,7 +297,7 @@ Throughout, Memgraph remains a **shared, PII-free rules graph**; all tenant- and
 
 ### ✅ v0.6 Concept Capture & Conversation Context
 
-* **SKOS-like concept capture from main chat** (`concept_capture_from_main_chat_v_0_1.md`):
+* **SKOS-like concept capture from main chat** (`docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`):
 
   * `capture_concepts` tool attached to the main chat call.
   * LLM streams text to the UI while emitting concept metadata as tool output.
@@ -305,7 +305,7 @@ Throughout, Memgraph remains a **shared, PII-free rules graph**; all tenant- and
 
   * Concept resolver checks if a concept already exists in Memgraph.
   * If missing/under-populated, the engine enqueues ingestion jobs using MCP.
-* **ConversationContext** (`conversation_context_spec_v_0_1.md`):
+* **ConversationContext** (`docs/specs/conversation-context/conversation_context_spec_v_0_1.md`):
 
   * Server-side context per conversation, tracking active graph node IDs and related flags.
   * Stored in Postgres/Supabase, not in Memgraph.
@@ -395,12 +395,12 @@ regulatory-intelligence-copilot/
       graph_algorithms_v_0_1.md
       timeline_engine_v_0_2.md
       scenario_engine_v_0_1.md
-      conversation_context_spec_v_0_1.md
-      concept_capture_from_main_chat_v_0_1.md
+      docs/specs/conversation-context/conversation_context_spec_v_0_1.md
+      docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md
       special_jurisdictions_modelling_v_0_1.md
       data_privacy_and_architecture_boundaries_v_0_1.md
       graph_ingress_guard_v_0_1.md
-      egress_guard_v_0_2.md
+      docs/specs/safety-guards/egress_guard_v_0_2.md
       # plus historical v0.1/v0.2/v0.3/v0.4 docs
   AGENTS.md                   # v0.6 agent spec
   PROMPT.md                   # v0.6 coding agent prompt

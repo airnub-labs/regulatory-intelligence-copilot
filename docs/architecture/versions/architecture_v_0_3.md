@@ -11,19 +11,19 @@
 
 ## Normative References
 
-- `docs/specs/graph_schema_v_0_3.md`
-- `docs/specs/timeline_engine_v_0_2.md`
+- `docs/specs/graph-schema/versions/docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
-- `docs/specs/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 
 For architectural intent and design trade‑offs, see also:
 
 - `docs/decisions_v_0_3.md`
-- `docs/specs/graph_schema_v_0_3.md`
+- `docs/specs/graph-schema/versions/docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
 - `docs/specs/graph_schema_changelog_v_0_3.md`
-- `docs/specs/timeline_engine_v_0_2.md`
-- `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
 - `docs/node_24_lts_rationale.md`
 
 ---
@@ -83,12 +83,12 @@ All writes to the global Memgraph instance are routed through a
 `GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
 specified in:
 
-- `docs/specs/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 
 No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
 against Memgraph. The ingress guard enforces that:
 
-- Only schema‑approved node and relationship types (see `graph_schema_v_0_3.md`)
+- Only schema‑approved node and relationship types (see `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`)
   are persisted.
 - Only whitelisted properties for those types are allowed.
 - No user/tenant data, PII, or scenario‑specific text is ever written to the
@@ -444,7 +444,7 @@ This client uses Memgraph’s Bolt/HTTP interface directly. Memgraph MCP may sti
 
 ### 8.2 Schema Overview (Summary)
 
-The graph schema (see `graph_schema_v_0_3.md`) includes:
+The graph schema (see `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`) includes:
 
 - Node labels like `:Statute`, `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Timeline`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:ProfileTag`, `:Jurisdiction`, and nodes that model social welfare, pensions, CGT, and cross‑border coordination.
 - Edge types like `CITES`, `REFERENCES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, and cross‑border relationships linking domestic and EU instruments.

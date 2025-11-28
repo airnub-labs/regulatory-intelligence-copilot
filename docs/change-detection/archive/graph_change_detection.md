@@ -469,7 +469,7 @@ interface ChangeFilter {
 ## Related Documentation
 
 - **Architecture:** `docs/architecture_v_0_3.md` (Section 9)
-- **Graph Schema:** `docs/specs/graph_schema_v_0_3.md`
+- **Graph Schema:** `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
 - **Seeding Scripts:** `scripts/seed-graph.ts`, `scripts/seed-special-jurisdictions.ts`
 - **Test Utility:** `scripts/test-graph-changes.ts`
 
