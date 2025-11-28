@@ -1,567 +1,302 @@
-# Regulatory Intelligence Copilot 🧭📚
+# Regulatory Intelligence Copilot
 
-> **Chat-first, graph-powered regulatory research copilot for complex regulatory compliance.**
->
-> ⚠️ **Important:** This project is a **research tool**, not legal or tax advice. Always confirm outcomes with Revenue, DSP, the Pensions Authority, your accountant, or another qualified professional.
+> **Version:** Architecture v0.6  
+> **Status:** Work‑in‑progress research tool – not legal/tax/welfare advice.
 
----
+A **chat‑first, graph‑powered regulatory research copilot** for complex tax, welfare, pensions, and cross‑border rules (starting with **Ireland / UK / EU / CTA**).
 
-## What This Is
+The system combines:
 
-The **Regulatory Intelligence Copilot** is a fork and evolution of the original `rfc-refactor` project.
+- A **shared, PII‑free regulatory rules graph** in Memgraph.  
+- A **Timeline Engine** for lookbacks, lock‑ins, deadlines, and effective windows.  
+- **Agents** that orchestrate LLMs, graph queries, and tools.  
+- A **self‑populating concept layer** that learns regulatory concepts (VAT, VRT, benefits, reliefs) from normal chat.  
+- A **Next.js demo shell** with chat + graph views, backed by Supabase for tenants, users, conversations, and conversation context.
 
-Instead of auditing HTTP APIs against RFCs and OWASP, this repo focuses on:
+The goal is to help people and professionals **understand how rules interact** – across time and jurisdictions – while never pretending to replace qualified advisors.
 
-- 🧠 **Graph-based reasoning over regulations** – tax, social welfare, pensions, CGT, and EU rules are modelled as a **knowledge graph** in Memgraph.
-- 💬 **Chat-first UX** – a single conversational interface where users ask natural-language questions.
-- 🧑‍💼 **Expert agents** – specialised agents for (examples):
-  - Single-director Irish companies.
-  - Self-employed welfare & social safety net.
-  - Irish CGT & investments.
-  - R&D tax credits.
-  - EU social security / cross-border regulatory effects.
-- 🌐 **Global Regulatory Agent** – a meta-agent that can reason across domains and explain interactions (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU, across jurisdictions such as IE / UK / NI / EU / IM / MT / GI / AD).
-- 🧪 **Sandboxed analysis** – heavy or untrusted work can run inside an **E2B sandbox**, with outbound calls routed through an **MCP gateway**.
-- 🔐 **Privacy-first & non-advice** – PII redaction on egress, strict ingress rules for the shared graph, and explicit “research-only” framing.
-
-Under the hood, it reuses and extends the architecture from `rfc-refactor`:
-
-- Next.js app with a **single `/api/chat`**-style entrypoint.
-- Optional **E2B sandbox** to host isolated agent runtimes.
-- **MCP tools** for Memgraph, LLMs, and external legal content, mediated by an **E2B MCP gateway**.
-- **Memgraph** as the core regulatory rules graph database (global, anonymous rule graph).
-
-For the full concept, see:
-
-- 📄 `docs/specs/regulatory_graph_copilot_concept_v_0_4.md`
+> ⚠️ **Important:** The copilot is a **research assistant only**. It does *not* provide legal, tax, or welfare advice. Always consult qualified professionals and official sources.
 
 ---
 
-## 📚 Architecture & Design Documentation
+## 1. Motivation
 
-Comprehensive design documentation is available in the `docs/` directory.
+Modern tax and welfare systems are:
 
-### Core Architecture (v0.4)
+- **Fragmented** – statutes, regulations, guidance notes, calculators, and case law live in different places.  
+- **Temporal** – rules change over time; eligibility can depend on what you did years ago.  
+- **Profile‑dependent** – company directors, self‑employed, PAYE workers, cross‑border commuters all have different pathways.  
+- **Cross‑jurisdictional** – IE / UK / NI / IM / EU / CTA / GI / AD and bilateral agreements complicate everything.
 
-- **`docs/architecture_v_0_4.md`** – System components, data flow, packages, and how everything fits together.
-- **`docs/decisions_v_0_4.md`** – Architectural decision records (ADRs) and design rationale.
-- **`docs/migration_plan_v_0_2.md`** – Migration from the original RFC/OWASP auditor to the regulatory copilot.
-- **`docs/roadmap_v_0_4.md`** – Roadmap and phased implementation plan.
-- **`docs/node_24_lts_rationale.md`** – Why Node.js 24 LTS is the minimum supported runtime.
+People end up:
 
-### Agents, Prompts & Behaviour
+- Reading the same documents repeatedly.  
+- Doing mental graph work to connect obligations, benefits, and timing.  
+- Maintaining personal notes that cannot be easily reused or audited.
 
-- **`AGENTS.md`** (v0.4) – Agent interfaces, orchestration, domain/jurisdiction-specific agents, and the Global Regulatory Compliance Agent.
-- **`PROMPTS.md`** – Coding-agent prompt for implementing and evolving the architecture.
+The Regulatory Intelligence Copilot aims to:
 
-### Graph, Algorithms & Timeline Modelling
-
-- **`docs/specs/graph_schema_v_0_4.md`** – Node/edge types, schema design, cross-jurisdiction modelling, and how rules are represented.
-- **`docs/specs/graph_schema_changelog_v_0_4.md`** – Schema evolution and breaking changes.
-- **`docs/specs/graph_algorithms_v_0_1.md`** – Graph algorithm choices (e.g. focused neighbourhood queries, optional Leiden community detection) and how they're used.
-- **`docs/specs/timeline_engine_v_0_2.md`** – Time-based reasoning (lookback windows, lock-ins, deadlines, effective windows).
-- **`docs/specs/special_jurisdictions_modelling_v_0_1.md`** – Special cases (IE/UK/NI/IM/GI/AD/CTA) modelling patterns.
-
-### Privacy, Ingress & Egress Guards
-
-- **`docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`** – High-level privacy model, what can/can't go into the global graph, and handling of user uploads.
-- **`docs/specs/graph_ingress_guard_v_0_1.md`** – Ingress guard and ingress-aspect pipeline for all graph writes.
-- **`docs/specs/egress_guard_v_0_2.md`** – Egress guard and egress-aspect pipeline for all outbound calls (LLM, MCP, HTTP).
-
-Earlier versions (e.g. `*_v_0_1.md`, `graph_schema_v_0_2.md`, `regulatory_graph_copilot_concept_v_0_1/0_2.md`) are kept as **historical context** only.
+- Represent this complexity as a **shared rules graph**.  
+- Use a **Timeline Engine** to make time‑based constraints explicit.  
+- Use **agents + LLMs** to query and explain that graph in chat form.  
+- **Self‑populate** over time so that every conversation helps enrich the graph.
 
 ---
 
-## High-Level Architecture
+## 2. High‑Level Architecture (v0.6)
 
-At a high level, the system looks like this:
+v0.6 is built around a few key ideas:
 
-1. The **user** types a question into the chat UI.
-2. The **Next.js API route** (e.g. `POST /api/chat`) forwards the message and basic profile info (persona, jurisdictions) to the backend **Compliance Engine**.
-3. The Compliance Engine:
-   - Uses a provider-agnostic **LLM router** to pick the appropriate model/provider for the task (OpenAI Responses + GPT‑OSS, Groq, or local/OSS models).
-   - Builds system prompts via **prompt aspects** (jurisdiction, persona, agent context, disclaimers).
-   - Selects a **domain or global agent** to handle the query.
-4. The selected agent:
-   - Queries **Memgraph** (via a typed `GraphClient`) for relevant rules, benefits, timelines, exclusions, and cross-jurisdiction links.
-   - Uses the **Timeline Engine** to reason about lookbacks, lock-ins, deadlines, and effective periods.
-   - Optionally calls **MCP tools** (e.g. legal search, case-law feeds) from a sandbox to discover missing rules, then proposes upserts into the graph via the **Graph Ingress Guard**.
-   - Sends a graph slice + context through the LLM router to generate a research-style explanation.
-5. The backend streams a **research-style answer** back to `/api/chat` and from there to the UI (via SSE), including metadata such as agent, jurisdictions considered, and uncertainty.
-6. In parallel, **graph updates** (from ingestion jobs or change-monitoring) are sent to the frontend via **patch-based graph streaming** (SSE or WebSockets), so the live graph view stays up to date without reloading full snapshots.
+1. **Shared Regulatory Rules Graph (Memgraph)**  
+   - Stores rules, sections, benefits, reliefs, conditions, timelines, guidance, cases, EU instruments, profile tags, and change events.  
+   - Contains a **concept layer** (`:Concept` + `:Label`) that anchors SKOS‑like regulatory concepts (e.g. `tax:ie:vat`, `vehicle:ie:vrt`, `import:ie:vehicle:japan`).  
+   - Is **write‑guarded** by `GraphWriteService` + Graph Ingress Guard and is strictly **PII‑free**.
 
-For a more detailed breakdown of components and data flow, see:
+2. **Timeline Engine (v0.2)**  
+   - Interprets `:Timeline` nodes and edges for lookbacks, lock‑ins, deadlines, effective windows, and usage frequency.  
+   - Used by agents to answer “when” and “how long” questions without hard‑coding time rules.
 
-- 📄 `docs/architecture_v_0_4.md`
+3. **Agents & Compliance Engine**  
+   - A **Global Regulatory Copilot Agent** orchestrates chat, delegates to domain/jurisdiction experts, and coordinates what‑if/scenario agents.  
+   - Agents query the rules graph via `GraphClient`, invoke the Timeline Engine, and call LLMs via a provider‑agnostic **LlmRouter**.  
+   - A **Compliance Engine** in `reg-intel-core` manages:
+     - Chat flows and streaming,  
+     - Agent selection and prompt assembly (via prompt aspects),  
+     - Concept capture from main chat,  
+     - Conversation Context (per conversation, per tenant).
 
----
+4. **Concept Capture & Self‑Populating Graph (v0.6)**  
+   - Every main chat call includes a `capture_concepts` tool with a SKOS‑like JSON schema.  
+   - The LLM:
+     - Streams user‑visible answer text, and  
+     - Emits a structured concept payload for regulatory concepts mentioned in the conversation.  
+   - The Compliance Engine:
+     - Resolves concepts into `:Concept` nodes via a canonical concept resolver + `GraphWriteService`.  
+     - Attaches `:Label` nodes for synonyms, and links concepts to rule nodes (`ALIGNS_WITH`).  
+     - Updates `ChatResponse.referencedNodes` and `ConversationContext.activeNodeIds` so answers are evidence‑linked and context‑aware.  
+   - If a concept is new or sparse, the engine can queue **ingestion jobs** (MCP + HTTP tools) to fetch official documents (e.g. Revenue VAT/VRT pages) and extract rules into the graph.
 
-## Core Concepts
+5. **Conversation Context (v0.6)**  
+   - Conversation Context is stored in Supabase/app DB (per tenant, per conversation).  
+   - It tracks a small set of active graph node IDs (`activeNodeIds`), usually concept IDs and key rule nodes referenced in answers.  
+   - A prompt aspect turns this into a short “concepts in play” summary injected into subsequent LLM calls.  
+   - This provides a **stable, graph‑backed conversational memory** without ever storing conversation text or PII in Memgraph.
 
-### 1. Regulatory Rules Graph (Memgraph)
+6. **Scenario Engine & What‑If (early v0.6)**  
+   - Scenario Engine (spec’d separately) defines how to represent hypothetical fact patterns and compare outcomes over time.  
+   - Scenario/what‑if agents use it to evaluate alternative paths (“import a car now vs next year”, “claim benefit A vs B”), always backed by the rules graph and Timeline Engine.  
+   - Scenario definitions and user‑specific inputs live in Supabase/app DB, **not** in Memgraph.
 
-All the interesting reasoning lives in a **graph**, not in ad-hoc prompts.
-
-See:
-
-- 📄 `docs/specs/graph_schema_v_0_4.md`
-- 📄 `docs/specs/graph_schema_changelog_v_0_4.md`
-- 📄 `docs/specs/graph_algorithms_v_0_1.md`
-
-Key ideas:
-
-- Node types like `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:Timeline`, `:ProfileTag`, `:Jurisdiction`, `:Treaty`, `:Agreement`, etc.
-- Edge types like `CITES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `FILING_DEADLINE`, `EFFECTIVE_WINDOW`, `COORDINATED_WITH`, `TREATY_LINKED_TO`, `EQUIVALENT_TO`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, `IN_JURISDICTION`, `HAS_PROFILE_TAG`.
-
-This allows the system to:
-
-- Surface **hidden interactions** (e.g. claiming one benefit excludes another, or a tax relief is limited by an EU rule or treaty).
-- Model **time-based eligibility** (lookback windows, waiting periods, lock-ins, filing deadlines, usage frequency).
-- Represent **cross-domain dependencies** (tax ↔ welfare ↔ pensions ↔ CGT ↔ EU) across multiple jurisdictions (e.g. IE, UK, NI, EU, IM, MT, GI, AD) and special regimes (CTA, NI dual status, etc.).
-
-The graph is a **living knowledge graph**:
-
-- Batch ingestion loads baseline legislation, guidance, and key case law.
-- MCP jobs and agents can **upsert** (`MERGE`) new nodes and edges when new sources are discovered – but only via the **Graph Ingress Guard**.
-- No user-specific scenarios are stored; personas are represented via `:ProfileTag` and user scenarios remain ephemeral.
-
-### 2. Timeline Engine
-
-Temporal rules are handled by a dedicated **Timeline Engine**:
-
-- 📄 `docs/specs/timeline_engine_v_0_2.md`
-
-Key features:
-
-- Encodes lookback windows, lock-in periods, filing deadlines, and effective windows as `:Timeline` nodes linked to rules and benefits.
-- Provides pure functions to evaluate things like:
-  - “Given this scenario time and jurisdiction, is the user inside or outside the window?”
-  - “What changes if they act now vs in 6 months?”
-- Agents **do not hard-code** durations or deadlines; they query the graph for `:Timeline` nodes and pass them to the Timeline Engine.
-
-### 3. Agent Lenses
-
-Agents are **different lenses on the same graph**. They are defined in:
-
-- 📄 `AGENTS.md`
-
-Examples:
-
-- Global Regulatory Compliance Agent (orchestrator / meta-agent).
-- Single-director IE social safety net agent.
-- IE tax & company obligations agent.
-- EU regulation & cross-border coordination agent.
-- IE CGT & investments agent.
-- IE R&D tax credit agent.
-
-Each agent:
-
-- Has a domain-specific system prompt built using **prompt aspects**.
-- Queries a **filtered subgraph** (e.g. only rules tagged as relevant for a single director in a given jurisdiction).
-- Uses the shared Timeline Engine + LLM router.
-
-### 4. LLM Router & Prompt Aspects
-
-LLM usage is **provider- and model-agnostic**.
-
-A single **LLM router** chooses which provider/model to call based on:
-
-- Tenant configuration and data-protection requirements.
-- Task type (`main_chat`, `egress_guard`, `pii_sanitizer`, `graph_ingress_guard`, etc.).
-
-Supported patterns include:
-
-- OpenAI **Responses API** (including `gpt-4.x` and `gpt-oss-*` models).
-- Groq-hosted models.
-- Locally-hosted OSS models (for tenants that require **no external egress**).
-
-Prompts are built via a composable **aspect** system:
-
-- Jurisdiction context (primary + secondary jurisdictions).
-- Agent context (agent ID and domain).
-- User profile / persona context.
-- Standard disclaimers and safety text.
-- Optional additional aspects (e.g. product tier, audience, feature flags).
-
-See:
-
-- 📄 `PROMPTS.md`
-- 📄 `docs/decisions_v_0_4.md`
-
-### 5. Ingress & Egress Guards
-
-Two symmetrical guard systems protect the graph and external calls:
-
-- **Graph Ingress Guard** (`docs/specs/graph_ingress_guard_v_0_1.md`):
-  - All graph writes go through a `GraphWriteService` which applies a pipeline of **ingress aspects**.
-  - Ingress aspects can:
-    - Enforce schema invariants.
-    - Strip or block any user/tenant PII.
-    - Apply AI-based guard checks if configured.
-  - This keeps the shared Memgraph graph **global and anonymous**.
-
-- **Egress Guard** (`docs/specs/egress_guard_v_0_2.md`):
-  - All outbound requests (LLM, MCP, HTTP) go through an **egress aspect** pipeline.
-  - Egress aspects can:
-    - Redact PII / sensitive fields.
-    - Enforce tenant policy (e.g. “no external egress”, “EU-only endpoints”).
-    - Route to AI-based monitoring or guard agents.
-  - The E2B MCP gateway is treated as a **choke point**; all MCP traffic is subject to the Egress Guard.
-
-Both guards use the same **aspect pattern**, so they’re easy to extend and can even use AI agents as aspects when appropriate.
+7. **Shell Apps (Next.js 16 / React 19 / Tailwind v4)**  
+   - `apps/demo-web` is a demo shell that uses the engine packages.  
+   - It exposes `/api/chat` and graph endpoints, renders chat and graph visualisations, and handles auth/tenants via Supabase.  
+   - The long‑term goal is to use the same engine packages in multiple shells (SaaS products, internal tools) without rewriting the core.
 
 ---
 
-## Who This Is For
+## 3. Packages & Responsibilities
 
-- **Self-employed people** in Ireland or similar jurisdictions who want to understand:
-  - What they may be entitled to (benefits, credits) and what might conflict.
-  - How decisions interact across tax, welfare, pensions, and CGT.
-- **Single-director company owners** who juggle:
-  - Corporation tax, PRSI, salary vs dividends, and social welfare entitlements.
-- **Advisors & accountants** who need:
-  - Faster research across multiple domains.
-  - A graph view of rule interactions, mutual exclusions, and timelines.
-- **Researchers & developers** exploring:
-  - GraphRAG beyond simple document retrieval.
-  - Agentic architectures for complex regulations.
+The monorepo is organised around domain responsibilities:
 
-Again: **this tool does not replace professional advice**. It is there to:
+### 3.1 `packages/reg-intel-core`
 
-- Surface relevant rules.
-- Reveal interactions and trade-offs.
-- Help you ask better questions of real authorities and professionals.
+**Compliance Engine and chat orchestration**.
 
----
+- Implements `/api/chat`‑facing logic (in the app, usually via a thin wrapper).  
+- Selects the appropriate agent(s) based on profile, jurisdictions, and question type.  
+- Applies prompt aspects (jurisdiction, agent, persona, disclaimers, Conversation Context).  
+- Calls `LlmRouter.stream` with:
+  - Main chat messages, and  
+  - The `capture_concepts` tool definition for concept capture.  
+- Handles streaming:
+  - Forwards `text` chunks to the client immediately.  
+  - Intercepts `tool` chunks (e.g. `capture_concepts`) and routes them to the concept handler.  
+- Updates:
+  - `ChatResponse.referencedNodes` (graph nodes used in the answer).  
+  - `ConversationContext.activeNodeIds` (stored in Supabase/app DB).  
+- Delegates scenario/what‑if questions to Scenario Engine and specialist agents.
 
-## Documentation Map
+### 3.2 `packages/reg-intel-graph`
 
-If you’re new to the repo, start here:
+**Memgraph infrastructure and write guarding**.
 
-- 🧠 **Concept & vision**
-  - `docs/specs/regulatory_graph_copilot_concept_v_0_4.md`
+- `GraphClient` for read‑only queries (used by agents and Timeline Engine).  
+- `GraphWriteService` as the only write path.  
+- `GraphIngressGuard` enforcing:
+  - Allowed labels and relationships (incl. v0.6 `:Concept`, `:Label`, `:HAS_ALT_LABEL`, `:ALIGNS_WITH`).  
+  - Property whitelists and PII stripping.  
+- Concept support:
+  - Creating / merging `:Concept` nodes and `:Label` nodes from SKOS‑like payloads.  
+  - Linking concepts to rules via `:ALIGNS_WITH` and sources via `:HAS_SOURCE` / `:DERIVED_FROM`.  
+- `GraphChangeDetector` and streaming patches for graph UI updates.
 
-- 🏛 **Architecture & decisions**
-  - `docs/architecture_v_0_4.md`
-  - `docs/decisions_v_0_4.md`
-  - `docs/roadmap_v_0_4.md`
-  - `docs/migration_plan_v_0_2.md`
-  - `docs/node_24_lts_rationale.md`
+### 3.3 `packages/reg-intel-llm`
 
-- 🕸 **Graph, algorithms & timelines**
-  - `docs/specs/graph_schema_v_0_4.md`
-  - `docs/specs/graph_schema_changelog_v_0_4.md`
-  - `docs/specs/graph_algorithms_v_0_1.md`
-  - `docs/specs/timeline_engine_v_0_2.md`
-  - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+**LLM router, providers, and egress guard**.
 
-- 🔐 **Privacy & guards**
-  - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-  - `docs/specs/graph_ingress_guard_v_0_1.md`
-  - `docs/specs/egress_guard_v_0_2.md`
+- Provider‑agnostic `LlmRouter` interface.  
+- Adapters for OpenAI Responses, Groq, and local models.  
+- Streaming interface that emits:
 
-- 🤖 **Agents & prompts**
-  - `AGENTS.md`
-  - `PROMPTS.md`
+  ```ts
+  type LlmStreamChunk =
+    | { type: 'text'; delta: string }
+    | { type: 'tool'; name: string; argsJson: unknown }
+    | { type: 'error'; error: Error };
+  ```
 
-Older versions (e.g. v0.1/v0.2) are kept for historical context only.
+- `capture_concepts` tool definition (SKOS‑inspired JSON schema).  
+- Egress Guard integration for all outbound calls (LLM, MCP, HTTP).  
+- Tenant/task policies to control which models/providers are used and whether remote egress is allowed.
 
----
+### 3.4 `packages/reg-intel-prompts`
 
-## Getting Started
+**Prompt aspect system**.
 
-> ⚠️ This is an experimental research project. Don’t rely on it for real compliance decisions.
+- Aspects for:
+  - Jurisdiction context (primary + secondary).  
+  - Agent identity and role.  
+  - Persona/profile (e.g. single‑director IE LTD).  
+  - Standard disclaimers.  
+  - Additional context (conversation context summary, feature flags, etc.).
 
-### 1. Prerequisites
+- `conversationContextAspect` summarises `activeNodeIds` into a short description of “concepts in play” (using data from Memgraph via `reg-intel-graph`).
 
-- **Node.js** 24+ (LTS) – see `docs/node_24_lts_rationale.md` for why.
-- **pnpm** (or your preferred package manager).
-- **Docker** (for Memgraph + MCP gateway + any sandbox sidecars).
-- Accounts / API keys for:
-  - **E2B** (if using sandboxed code execution).
-  - At least one LLM provider (e.g. OpenAI, Groq) or a locally hosted OSS model.
+### 3.5 `apps/demo-web`
 
-### 2. Clone & Install
+**Next.js demo shell**.
 
-```bash
-git clone https://github.com/<your-org>/regulatory-intelligence-copilot.git
-cd regulatory-intelligence-copilot
-
-# Install dependencies
-pnpm install
-```
-
-### 3. Environment Configuration
-
-Create a `.env` / `.env.local` and configure environment variables, for example:
-
-```bash
-E2B_API_KEY=...
-OPENAI_API_KEY=...
-GROQ_API_KEY=...
-MEMGRAPH_URI=bolt://localhost:7687
-MEMGRAPH_USER=...
-MEMGRAPH_PASSWORD=...
-MCP_GATEWAY_URL=http://localhost:4000
-# Add any other MCP- or provider-specific config
-```
-
-Keep all secrets **out of source control**.
-
-### 4. Start Infra (Memgraph + MCP Gateway)
-
-With Docker installed, bring up the graph DB and MCP gateway stack:
-
-```bash
-# Start Memgraph (with Lab UI and MAGE included) and Memgraph MCP server
-docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
-```
-
-The `memgraph` service uses `memgraph/memgraph-platform:latest` which includes the Memgraph database, Memgraph Lab (web UI), and MAGE (Memgraph Advanced Graph Extensions) in a single container.
-
-Ensure:
-
-- Memgraph is reachable at the configured `MEMGRAPH_URI` (default: `bolt://localhost:7687`).
-- Memgraph Lab UI is available at `http://localhost:7444`.
-- The Memgraph MCP server exposes tools at `http://localhost:8001`.
-
-### 5. Run the Dev Server
-
-```bash
-# Start the Next.js dev server
-pnpm dev
-
-# By default, visit:
-http://localhost:3000
-```
-
-You should see the chat UI. Try questions like:
-
-- "I'm a single director of an Irish limited company. What should I understand about PRSI and Illness Benefit?"
-- "If I sell shares at a loss and buy back within a short period, how might that affect CGT loss relief eligibility?"
-
-(Answers will depend on how much law and guidance you've already ingested into Memgraph.)
-
-### 6. Development Tools
-
-#### Memgraph Lab UI
-
-**Memgraph Lab** is a web-based interface for managing and exploring your Memgraph database:
-
-- **URL**: `http://localhost:7444/`
-- **Features**:
-  - Visual graph exploration and querying
-  - Query editor with syntax highlighting
-  - Database schema visualization
-  - Performance monitoring
-  - MAGE algorithm integration
-
-Use Memgraph Lab to:
-- Inspect nodes and relationships
-- Run Cypher queries interactively
-- Debug graph structure
-- Monitor query performance
-
-#### Supabase Local Development
-
-For local Supabase development (multi-tenant storage, auth, and API):
-
-1. **Install Supabase CLI**:
-
-```bash
-# macOS
-brew install supabase/tap/supabase
-
-# Linux
-curl -fsSL https://raw.githubusercontent.com/supabase/cli/main/install.sh | sh
-
-# Windows (PowerShell)
-scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-scoop install supabase
-```
-
-2. **Initialize Supabase** (if not already done):
-
-```bash
-supabase init
-```
-
-3. **Start local Supabase stack**:
-
-```bash
-supabase start
-```
-
-This starts PostgreSQL, PostgREST, GoTrue (auth), Realtime, Storage, and Studio locally.
-
-4. **Access Supabase Studio**:
-
-- **URL**: `http://localhost:54323` (default)
-- Manage tables, auth, storage, and run SQL queries
-
-For comprehensive local development setup including environment configuration, database migrations, and advanced workflows, see:
-
-- 📄 **`docs/LOCAL_DEVELOPMENT.md`** – Complete local development guide
+- `/api/chat` – thin wrapper around Compliance Engine.  
+- `/api/graph` + graph streaming – thin wrappers around `reg-intel-graph`.  
+- Chat UI – React 19 + Tailwind v4, streaming answers, showing referenced nodes, jurisdictions, and uncertainty.  
+- Graph UI – subscribes to graph patch stream and highlights `referencedNodes` from chat responses.  
+- Supabase integration for tenants, users, conversations, and Conversation Context.
 
 ---
 
-## Implementation Status (v0.4)
+## 4. Data & Privacy Boundaries
 
-The v0.4 architecture is **partially implemented**. Here's what's working and what's planned:
+v0.6 keeps strict boundaries between **global rules** and **tenant/user state**:
 
-### ✅ Implemented
+### 4.1 Memgraph (Global Rules Graph)
 
-- **Node 24 LTS baseline** – All packages require Node.js >=24.0.0
-- **apps/demo-web** – Next.js 16 / React 19 with updated dependencies (Tailwind 4, AI SDK v5-ready)
-- **LLM Router** – Provider-agnostic routing with:
-  - OpenAI Responses API support (including GPT-OSS models)
-  - Groq support
-  - Local/OSS HTTP model support
-  - Per-tenant and per-task policy framework
-- **Prompt Aspects** – Composable jurisdiction-neutral prompt building with:
-  - Jurisdiction context
-  - Agent context
-  - Profile/persona context
-  - Disclaimer aspect
-  - Additional context aspect
-- **Compliance Engine** – Core orchestrator that coordinates agents, graph, timeline, and LLM
-- **Agents** – GlobalRegulatoryComplianceAgent + SingleDirector_IE_SocialSafetyNet_Agent (others scaffolded in AGENTS.md)
-- **Timeline Engine** – Pure functions for lookback windows, lock-ins, deadlines
-- **GraphClient** – Direct Bolt connection to Memgraph + schema helpers, matching `graph_schema_v_0_4.md`
-- **Graph Ingress Guard** – Aspect-based guard for all writes to the shared graph
-- **Egress Guard** – Aspect-based guard for all outbound calls (LLM, MCP, HTTP), integrated with LlmRouter and MCP gateway
-- **Streaming responses** – LLM Router supports `AsyncIterable` streaming with:
-  - `streamChat()` method on all providers (OpenAI Responses, Groq, Local)
-  - SSE parsing with proper line buffering
-  - Error handling with error chunks and done signals
-  - Integrated into `/api/chat` endpoint
-- **WebSocket/SSE graph streaming** – Incremental graph updates with:
-  - `GET /api/graph` REST endpoint for initial subgraph snapshots (with jurisdiction/profile filtering)
-  - `GET /api/graph/stream` SSE endpoint for real-time graph patches
-  - Graph patch format: nodes_added, nodes_updated, nodes_removed, edges_added, edges_removed
-  - Connection management with keep-alive and graceful disconnect handling
+Contains only:
 
-### 🚧 In Progress / Planned (v0.4+)
+- Public/regulatory knowledge: statutes, sections, benefits, reliefs, conditions, timelines, guidance, cases, EU regs/directives, treaties, regime nodes, profile tags, concept nodes (`:Concept`, `:Label`), and change events.  
+- Algorithm‑derived metadata (communities, centrality scores, etc.).
 
-- **Graph change detection** – Connect graph streaming to actual Memgraph change notifications (triggers/polling or scheduled jobs)
-- **Graph algorithms integration** – Optional Leiden community detection and related ranking as per `graph_algorithms_v_0_1.md`
-- **Package split** – Future refactor to split `compliance-core` into `reg-intel-{core,graph,llm,prompts,next-adapter}` when the API surface stabilizes
+Must **never** contain:
 
-### 📋 Roadmap Items
+- User PII: names, emails, addresses, PPSNs, company IDs, bank details.  
+- Tenant IDs, conversation IDs, raw message text.  
+- Concrete user scenario data (“Alan imported a car in 2024 for €X”).
 
-See `docs/roadmap_v_0_4.md` for the full phased plan. Key upcoming work includes:
+### 4.2 Supabase / Application Database
 
-- Expand domain agents (IE tax, CGT, R&D, EU coordination, NI/UK/IM/MT/GI/AD)
-- Batch ingestion for core IE/EU/UK regulations
-- On-demand enrichment via MCP legal search and case law feeds
-- Change tracking and notification system when new rulings / updates affect parts of the graph
-- Multi-tenant policy store (beyond in-memory), aligned with Supabase-based SaaS
-- Richer graph visualisation in the UI
-- Hardening of prompt, ingress and egress aspects for safety and robustness
+Contains:
+
+- Tenants, users, auth.  
+- Conversations and message history.  
+- Conversation Context (e.g. `activeNodeIds`, scenario metadata).  
+- Scenario inputs and results (what‑if), if implemented.
+
+Is **never** replicated into Memgraph.
+
+### 4.3 Ingress & Egress Guards
+
+- **Graph Ingress Guard** – enforces schema and PII rules for Memgraph writes.
+- **Egress Guard** – inspects outbound payloads (LLMs, MCP, HTTP) for:
+  - PII and sensitive data.  
+  - Tenant egress policies.  
+  - Potential routing to additional guard models.
 
 ---
 
-## Repository Layout
+## 5. Getting Started (Dev)
 
-### Current Structure (v0.4-in-progress)
+> **Note:** The exact scripts/commands may differ in your local setup; this is a conceptual quickstart. Keep it aligned with your actual `package.json` / devcontainer setup.
 
-```txt
-regulatory-intelligence-copilot/
-  apps/
-    demo-web/                 # Next.js 16 chat UI + /api/chat (renamed from apps/web)
-  packages/
-    compliance-core/          # Unified engine package containing:
-                              # - Compliance Engine, agent interfaces, orchestrator
-                              # - LLM Router + providers (OpenAI Responses, Groq, Local)
-                              # - GraphClient (Memgraph)
-                              # - Timeline Engine
-                              # - Prompt aspects & base system prompts
-                              # - Ingress & Egress guards
-  docs/
-    architecture_v_0_4.md
-    decisions_v_0_4.md
-    roadmap_v_0_4.md
-    migration_plan_v_0_2.md
-    node_24_lts_rationale.md
-    specs/
-      regulatory_graph_copilot_concept_v_0_4.md
-      graph_schema_v_0_4.md
-      graph_schema_changelog_v_0_4.md
-      graph_algorithms_v_0_1.md
-      timeline_engine_v_0_2.md
-      special_jurisdictions_modelling_v_0_1.md
-      data_privacy_and_architecture_boundaries_v_0_1.md
-      graph_ingress_guard_v_0_1.md
-      egress_guard_v_0_2.md
-      # plus historical v0.1/v0.2 docs
-  AGENTS.md
-  PROMPTS.md
-```
+1. **Prerequisites**
+   - Node.js **24 LTS**.  
+   - pnpm (preferred) or npm.  
+   - Docker (for Memgraph, Supabase, and other services).  
+   - Access to OpenAI/Groq/local model endpoints if you want LLMs.
 
-### Target Structure (Future)
+2. **Install dependencies**
 
-The v0.4 architecture spec describes a **future split** of `compliance-core` into smaller, more focused packages:
+   ```bash
+   pnpm install
+   ```
 
-```txt
-packages/
-  reg-intel-core/           # Compliance Engine, agent interfaces, orchestrator only
-  reg-intel-graph/          # GraphClient + Memgraph utilities
-  reg-intel-llm/            # LLM router + providers + egress guard
-  reg-intel-prompts/        # Prompt aspects + base system prompts
-  reg-intel-next-adapter/   # Helpers to mount engine in Next.js apps
-```
+3. **Start infrastructure (local)**
 
-**Current decision:** Keep `compliance-core` unified for now to maintain velocity. The package can be split later when the API surface stabilizes and reuse patterns emerge.
+   Common pattern (adjust for your repo):
 
-The important principle remains:
+   ```bash
+   docker compose up -d   # Memgraph, Supabase, etc.
+   ```
 
-- **apps/** – UI and HTTP edges.
-- **packages/** – reusable engine components.
-- **docs/** – living design & spec documents.
+4. **Run dev shell app**
 
-This makes it easier to reuse the engine inside other Next.js/Supabase SaaS projects.
+   ```bash
+   pnpm dev   # or pnpm dev --filter apps/demo-web
+   ```
+
+5. **Open the app**
+
+   Visit the printed URL (typically `http://localhost:3000`) and try:
+
+   - Asking about **VAT in Ireland**.  
+   - Asking about **VRT and importing a car from Japan**.  
+   - Watching how answers start to link to graph nodes (`referencedNodes`) and how the graph view evolves.
 
 ---
 
-## Safety, Limitations & Disclaimers
+## 6. Working on the Project
 
-This project is **not**:
+When you change or add features:
 
-- A substitute for a tax advisor, accountant, solicitor, welfare officer, or any other professional.
-- Guaranteed to be correct, complete, or current.
-- Suitable for making real-world financial or legal decisions.
-
-This project **is**:
-
-- An experiment in applying:
-  - Graph-based reasoning.
-  - Agentic architectures.
-  - E2B + MCP patterns.
-  - Memgraph-based GraphRAG.
-  - Strict privacy and architectural boundaries.
-- A way to explore how regulatory domains interact (tax, welfare, pensions, CGT, EU rules, cross-border edge cases).
-
-Always treat outputs as **starting points for further research**.
+1. **Identify the affected package(s)** (core, graph, llm, prompts, demo web).  
+2. **Re‑read relevant specs** (`architecture_v_0_6`, `graph_schema_v_0_6`, concept/Conversation Context/scenario specs).  
+3. **Follow the coding agent prompt** (`PROMPT_v_0_6.md`) for boundaries and invariants.  
+4. **Keep changes incremental** and aligned with `roadmap_v_0_6`.  
+5. **Update docs** if behaviour or architecture changes.
 
 ---
 
-## Contributing
+## 7. Roadmap Snapshot (v0.6‑aligned)
 
-Contributions, suggestions, and critiques are welcome — especially from:
+A simplified snapshot (see `roadmap_v_0_6.md` for detail):
 
-- Accountants / tax advisors.
-- Welfare rights advocates.
-- Legal professionals.
-- Graph and AI researchers.
+- **Phase 1–2** – Core chat + graph integration
+  - IE‑focused tax/welfare domain.  
+  - Basic graph queries, Timeline Engine integration.  
+  - Demo chat + graph UI.
 
-Please open issues or PRs with:
+- **Phase 3** – Graph streaming & evidence
+  - GraphChangeDetector → patch streaming to the UI.  
+  - `referencedNodes` wired up from agents → UI highlights rule nodes used in answers.
 
-- Clear descriptions of the regulatory scenarios you care about.
-- Links to official legislation or guidance you think should be modelled.
+- **Phase 4** – Concept capture & Conversation Context (v0.6)
+  - `capture_concepts` tool wired into main chat.  
+  - SKOS‑like `:Concept` + `:Label` nodes in Memgraph.  
+  - Conversation Context (`activeNodeIds`) and prompt aspects.  
+  - Auto‑ingestion jobs keyed by concepts to enrich sparse areas.
+
+- **Phase 5+** – Scenario Engine & cross‑border expansion
+  - Scenario/what‑if agent flows.  
+  - Richer cross‑border regimes (IE/UK/NI/IM/EU/CTA/GI/AD).  
+  - More robust graph algorithms for retrieval and prioritisation.
 
 ---
 
-## License
+## 8. Disclaimer
 
-_Choose a license appropriate for your goals (MIT / Apache-2.0 / other) and document it here._
+This project is intended as a **research and exploration tool** for understanding regulatory systems. Nothing produced by this system constitutes legal, tax, welfare, or financial advice. Rules may change, be interpreted differently, or apply differently to individual situations.
+
+> Always consult relevant authorities and qualified professionals before making decisions based on any outputs from this system.
+
+---
+
+**End of README_v_0_6**
 
