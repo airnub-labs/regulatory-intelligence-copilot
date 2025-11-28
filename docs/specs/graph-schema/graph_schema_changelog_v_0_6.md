@@ -235,7 +235,7 @@ For an existing v0.4 deployment:
 ## v0.5 – No Graph Schema Changes (UI‑Only Release)
 
 **Status:** Historical, fully compatible  
-**Aligned with:** `architecture_v_0_5.md`, `decisions_v_0_5.md`
+**Aligned with:** `docs/architecture/versions/architecture_v_0_5.md`, `docs/decisions/versions/decisions_v_0_5.md`
 
 v0.5 focused on the **UI layer**:
 

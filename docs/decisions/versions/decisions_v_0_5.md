@@ -520,9 +520,9 @@ All decisions support the goal of building a maintainable, accessible, and futur
 
 ## References
 
-- `docs/architecture_v_0_5.md` - Full architecture documentation
+- `docs/architecture/versions/architecture_v_0_5.md` - Full architecture documentation
 - `apps/demo-web/UI_IMPLEMENTATION.md` - Implementation details
-- `docs/ARCHITECTURE_DIAGRAMS.md` - Mermaid diagrams
+- `docs/architecture/versions/architecture_diagrams_v_0_5.md` - Mermaid diagrams (v0.5)
 - [Tailwind CSS v4 Docs](https://tailwindcss.com/)
 - [shadcn/ui Docs](https://ui.shadcn.com/)
 - [Radix UI Docs](https://www.radix-ui.com/)

@@ -12,7 +12,7 @@ The Graph Change Detection system provides real-time monitoring of the Memgraph 
 **✨ v0.3.1 Enhancements:**
 - **Timestamp-based queries:** 80-95% reduction in query overhead
 - **Change batching:** 80%+ reduction in SSE messages during bulk operations
-- See `docs/graph_change_detection_enhancements.md` for details
+- See `docs/change-detection/archive/graph_change_detection_enhancements_v_0_3_1.md` for details
 
 ## Architecture
 

@@ -811,7 +811,7 @@ Per active filter:
 ## Related Documentation
 
 - [Architecture Overview](../change-detection/graph_change_detection_v_0_6.md)
-- [Enhancement Details](../graph_change_detection_enhancements.md)
+- [Enhancement Details](../change-detection/archive/graph_change_detection_enhancements_v_0_3_1.md)
 - [Usage Guide](./graph_change_detector_usage.md)
 - [Testing Guide](./graph_change_detector_testing.md)
 - [Performance Guide](./graph_change_detector_performance.md)
