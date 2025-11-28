@@ -3,7 +3,7 @@
  * Special Jurisdictions Seeding Script
  *
  * Seeds Memgraph with IE/UK/NI/IM/EU jurisdictions, CTA framework, and NI goods regime.
- * Implements the modelling documented in docs/specs/special_jurisdictions_modelling_v_0_1.md
+ * Implements the modelling documented in docs/graph/special_jurisdictions_modelling_v_0_1.md
  *
  * All operations use GraphWriteService to enforce ingress guard aspects.
  *

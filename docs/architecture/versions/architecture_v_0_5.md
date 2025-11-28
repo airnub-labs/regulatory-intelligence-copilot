@@ -18,19 +18,19 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 ### Core Architecture (from v0.4)
 
 - `docs/architecture_v_0_4.md`
-- `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
-- `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
-- `docs/specs/graph_algorithms_v_0_1.md`
-- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
-- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
-- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/specs/safety-guards/egress_guard_v_0_2.md`
+- `docs/graph/graph-schema/versions/graph_schema_v_0_4.md`
+- `docs/graph/graph-schema/versions/graph_schema_changelog_v_0_4.md`
+- `docs/graph/graph_algorithms_v_0_1.md`
+- `docs/engines/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/graph/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/graph/special_jurisdictions_modelling_v_0_1.md`
+- `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/safety/safety-guards/egress_guard_v_0_2.md`
 
 ### Project-Level Docs
 
-- `docs/decisions_v_0_4.md`
+- `docs/governance/decisions/versions/decisions_v_0_4.md`
 - `docs/roadmap_v_0_4.md`
 - `docs/node_24_lts_rationale.md`
 
@@ -701,7 +701,7 @@ Migrate gradually:
 
 - `apps/demo-web/UI_IMPLEMENTATION.md` - Detailed UI implementation guide
 - `docs/architecture_v_0_4.md` - Backend architecture (unchanged)
-- `docs/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
+- `docs/governance/decisions/versions/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
 - [Tailwind CSS v4 Documentation](https://tailwindcss.com/)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)
 - [Radix UI Documentation](https://www.radix-ui.com/)

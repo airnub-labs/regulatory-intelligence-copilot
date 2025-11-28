@@ -1,11 +1,14 @@
 # Documentation structure
 
-This folder groups the core design documents and their historical versions by theme.
+The documentation tree is organised by domain so related narratives, specs, and historical versions sit together.
 
-- **architecture/** – Current architecture spec lives in `architecture_v_0_6.md`; earlier v0.1–v0.5 revisions are in `architecture/versions/`.
-- **decisions/** – ADRs/decision logs with the latest `decisions_v_0_6.md` in the folder root and older versions in `decisions/versions/`.
-- **roadmap/** – Roadmaps, with `roadmap_v_0_6.md` in the root and earlier milestones in `roadmap/versions/`.
-- **phases/** – All phase plans, verification passes, and remediation notes (PHASE_* files).
-- **change-detection/** – Change-detection specs; the active reference is `graph_change_detection_v_0_6.md` and earlier drafts live under `change-detection/archive/`.
+- **architecture/** – Current architecture spec lives in `architecture_v_0_6.md`; earlier revisions are in `architecture/versions/`.
+- **governance/** – Decision logs, roadmap milestones, phase plans, and migration plans.
+- **graph/** – Graph schema, concept model, algorithms, seeding notes, and special jurisdiction modelling guidance.
+- **engines/** – Timeline, scenario, conversation context, and change detection engines.
+- **safety/** – Privacy boundaries plus ingress and egress guard designs.
+- **product/** – User-facing product specs (e.g., Eligibility Explorer).
+- **dev-notes/** – Developer setup, lint rules, and Node 24 materials.
+- **archive/** – Legacy documents that predate the current structure.
 
-Other top-level docs (e.g., `LOCAL_DEVELOPMENT.md`, `ESLINT_RULES.md`, `migration_plan_v_0_2.md`) remain alongside this README for quick access. Historical documents that predate the themed folders remain in `docs/archive/`.
+See `documentation_restructure_plan.md` for the rationale behind this layout and how the former `docs/specs/` tree was merged into these folders.

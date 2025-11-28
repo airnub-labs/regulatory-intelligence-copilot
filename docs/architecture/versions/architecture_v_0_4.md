@@ -16,19 +16,19 @@
 
 This architecture sits on top of, and must remain consistent with, the following specs:
 
-- `docs/specs/graph-schema/versions/docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
-- `docs/specs/graph_schema_changelog_v_0_3.md`
-- `docs/specs/graph_algorithms_v_0_1.md`
-- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
-- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
-- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/specs/safety-guards/egress_guard_v_0_2.md`
+- `docs/graph/graph-schema/versions/docs/graph/graph-schema/versions/graph_schema_v_0_3.md`
+- `docs/graph/graph-schema/versions/graph_schema_changelog_v_0_3.md`
+- `docs/graph/graph_algorithms_v_0_1.md`
+- `docs/engines/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/graph/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
+- `docs/graph/special_jurisdictions_modelling_v_0_1.md`
+- `docs/safety/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/safety/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/safety/safety-guards/egress_guard_v_0_2.md`
 
 And the project‑level docs:
 
-- `docs/decisions_v_0_3.md`
+- `docs/governance/decisions/versions/decisions_v_0_3.md`
 - `docs/roadmap_v_0_2.md`
 - `docs/node_24_lts_rationale.md`
 
@@ -378,7 +378,7 @@ The **EgressClient** is the single choke‑point for:
 It:
 
 1. Constructs an `EgressGuardContext` (target type, provider, endpoint, payload, tenantId, jurisdictions…).
-2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/specs/safety-guards/egress_guard_v_0_2.md`.
+2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/safety/safety-guards/egress_guard_v_0_2.md`.
 3. The final aspect executes the actual outbound call using the provider SDK/HTTP client and attaches the raw response back onto the context.
 
 Egress aspects can:
@@ -487,7 +487,7 @@ All writes must go through `GraphWriteService`, which applies the ingress aspect
 
 ### 8.2 Schema Overview (Summary)
 
-Full details are in `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`; in brief:
+Full details are in `docs/graph/graph-schema/versions/graph_schema_v_0_3.md`; in brief:
 
 - **Key node labels**:
   - `:Jurisdiction`, `:Region`, `:Agreement`, `:Treaty`
