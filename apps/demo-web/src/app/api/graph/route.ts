@@ -4,7 +4,7 @@
  * Returns an initial subgraph snapshot based on user profile and jurisdictions.
  * Used in conjunction with /api/graph/stream for incremental updates.
  *
- * Per v0.3 architecture (docs/architecture_v_0_3.md Section 9):
+ * Per v0.3 architecture (docs/architecture/archive/architecture_v_0_3.md Section 9):
  * - REST endpoint returns initial snapshot (bounded to avoid overwhelming the UI)
  * - WebSocket endpoint (/api/graph/stream) sends incremental patches
  */

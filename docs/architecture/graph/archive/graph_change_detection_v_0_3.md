@@ -4,7 +4,7 @@
 
 The Graph Change Detection system provides real-time monitoring of the Memgraph regulatory knowledge graph and streams incremental updates to connected clients via Server-Sent Events (SSE).
 
-**Per v0.3 architecture** (docs/architecture_v_0_3.md Section 9):
+**Per v0.3 architecture** (`docs/architecture/archive/architecture_v_0_3.md` Section 9):
 - Implements incremental graph patches for WebSocket/SSE streaming
 - Supports jurisdiction and profile filtering
 - Enables scalable, responsive graph visualization
@@ -468,7 +468,7 @@ interface ChangeFilter {
 
 ## Related Documentation
 
-- **Architecture:** `docs/architecture_v_0_3.md` (Section 9)
+- **Architecture:** `docs/architecture/archive/architecture_v_0_3.md` (Section 9)
 - **Graph Schema:** `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 - **Seeding Scripts:** `scripts/seed-graph.ts`, `scripts/seed-special-jurisdictions.ts`
 - **Test Utility:** `scripts/test-graph-changes.ts`

@@ -3,7 +3,7 @@
 > **Goal:** A chat‑driven, graph‑backed regulatory copilot that helps users and advisors explore how tax, social welfare, pensions, CGT and EU rules interact – without ever giving formal legal / tax advice or leaking sensitive data. The system is EU‑first, privacy‑conscious, and designed to be reused inside other Next.js/Supabase SaaS products.
 >
 > **This version (v0.3)** updates v0.2 to:
-> - Align with the **latest decisions** in `decisions_v_0_3.md`.
+> - Align with the **latest decisions** in `docs/governance/decisions/archive/decisions_v_0_3.md`.
 > - Set **Node.js 24 LTS** as the minimum runtime (see `node_24_lts_rationale.md`).
 > - Standardise web apps on **Next.js 16**, **React 19**, **Tailwind CSS 4**, and **TypeScript 5.9+**.
 > - Clarify the role of **Vercel AI SDK v5** as an **edge‑only implementation detail** behind a provider‑agnostic `LlmRouter`.
@@ -11,7 +11,7 @@
 
 ## Normative References
 
-- `docs/architecture/graph/versions/docs/architecture/graph/archive/graph_schema_v_0_3.md`
+- `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
 - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
@@ -19,8 +19,8 @@
 
 For architectural intent and design trade‑offs, see also:
 
-- `docs/decisions_v_0_3.md`
-- `docs/architecture/graph/versions/docs/architecture/graph/archive/graph_schema_v_0_3.md`
+- `docs/governance/decisions/archive/decisions_v_0_3.md`
+- `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 - `docs/architecture/graph/archive/graph_schema_changelog_v_0_3.md`
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 - `docs/architecture/copilot-concept/archive/regulatory_graph_copilot_concept_v_0_3.md`

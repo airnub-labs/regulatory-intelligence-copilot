@@ -442,8 +442,8 @@ Implementers of the GraphWriteService and ingress aspects must consult:
 - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
 - `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture_v_0_3.md`
-- `docs/decisions_v_0_3.md`
+- `docs/architecture/archive/architecture_v_0_3.md`
+- `docs/governance/decisions/archive/decisions_v_0_3.md`
 
 before making changes that affect Memgraph writes or the ingress aspect chain.
 

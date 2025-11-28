@@ -483,8 +483,8 @@ After Phase 3 is complete, the recommended path is:
 ## References
 
 - `docs/governance/roadmap/archive/roadmap_v_0_4.md` - Phase 3 definition
-- `docs/architecture_v_0_4.md` - Architecture overview
-- `docs/decisions_v_0_4.md` - ADRs
+- `docs/architecture/archive/architecture_v_0_4.md` - Architecture overview
+- `docs/governance/decisions/archive/decisions_v_0_4.md` - ADRs
 - `packages/reg-intel-core/src/orchestrator/complianceEngine.ts` - Engine interface
 - `apps/demo-web/src/app/api/` - Current API implementation
 

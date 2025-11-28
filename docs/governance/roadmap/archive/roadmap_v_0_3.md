@@ -6,8 +6,8 @@
 > This roadmap reflects the **v0.3 architecture and decisions**: Node 24 LTS baseline, jurisdiction‑neutral prompts, prompt aspects, provider‑agnostic LLM routing (including OpenAI Responses + GPT‑OSS + Groq + local/OSS models), direct Memgraph GraphClient, WebSocket graph streaming, and a reusable engine + demo app split with Vercel AI SDK v5 used only as an **edge implementation detail**.
 >
 > See also:
-> - `docs/architecture_v_0_3.md`
-> - `docs/decisions_v_0_3.md`
+> - `docs/architecture/archive/architecture_v_0_3.md`
+> - `docs/governance/decisions/archive/decisions_v_0_3.md`
 > - `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 > - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
 > - `docs/architecture/runtime/node_24_lts_rationale.md`

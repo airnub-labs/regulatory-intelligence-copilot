@@ -5,14 +5,14 @@ This document tracks which specs/docs must explicitly assume **Node.js 24 LTS as
 ## Documents that should reference Node 24 LTS
 
 1. **High-level architecture & decisions**
-   - `docs/architecture_v_0_2.md`
+   - `docs/architecture/archive/architecture_v_0_2.md`
      - State that all backend services and CLI tools are expected to run on **Node 24 LTS or higher**.
      - Mention that we rely on:
        - The **permission model** (`--permission`) for sandboxing agents/MCP tools.
        - Modern **AsyncLocalStorage** for per-request context.
        - The built-in **fetch/HTTP client** for outbound calls where possible.
    
-   - `docs/decisions_v_0_2.md`
+   - `docs/governance/decisions/archive/decisions_v_0_2.md`
      - Add a decision entry referencing `node_24_lts_rationale.md`, e.g.:
        - *D-00X: Node.js 24 LTS is the minimum supported runtime for all services, based on the rationale in `docs/architecture/runtime/node_24_lts_rationale.md`.*
 

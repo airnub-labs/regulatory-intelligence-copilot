@@ -16,7 +16,7 @@
 
 This architecture sits on top of, and must remain consistent with, the following specs:
 
-- `docs/architecture/graph/versions/docs/architecture/graph/archive/graph_schema_v_0_3.md`
+- `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 - `docs/architecture/graph/archive/graph_schema_changelog_v_0_3.md`
 - `docs/architecture/graph/graph_algorithms_v_0_1.md`
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
@@ -28,7 +28,7 @@ This architecture sits on top of, and must remain consistent with, the following
 
 And the project‑level docs:
 
-- `docs/decisions_v_0_3.md`
+- `docs/governance/decisions/archive/decisions_v_0_3.md`
 - `docs/governance/roadmap/archive/roadmap_v_0_2.md`
 - `docs/architecture/runtime/node_24_lts_rationale.md`
 

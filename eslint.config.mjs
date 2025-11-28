@@ -79,7 +79,7 @@ export default tseslint.config(
           name: '@reg-copilot/reg-intel-llm',
           importNames: ['LlmRouter', 'createLlmRouter', 'createDefaultLlmRouter'],
           message:
-            'Direct LlmRouter usage is prohibited in application code. Use ComplianceEngine.handleChat() or ComplianceEngine.handleChatStream() instead. See docs/architecture_v_0_4.md',
+            'Direct LlmRouter usage is prohibited in application code. Use ComplianceEngine.handleChat() or ComplianceEngine.handleChatStream() instead. See docs/architecture/archive/architecture_v_0_4.md',
         },
       ],
     },

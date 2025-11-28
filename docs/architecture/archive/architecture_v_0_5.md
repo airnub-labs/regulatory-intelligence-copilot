@@ -17,7 +17,7 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 
 ### Core Architecture (from v0.4)
 
-- `docs/architecture_v_0_4.md`
+- `docs/architecture/archive/architecture_v_0_4.md`
 - `docs/architecture/graph/archive/graph_schema_v_0_4.md`
 - `docs/architecture/graph/archive/graph_schema_changelog_v_0_4.md`
 - `docs/architecture/graph/graph_algorithms_v_0_1.md`
@@ -30,7 +30,7 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 
 ### Project-Level Docs
 
-- `docs/decisions_v_0_4.md`
+- `docs/governance/decisions/archive/decisions_v_0_4.md`
 - `docs/governance/roadmap/archive/roadmap_v_0_4.md`
 - `docs/architecture/runtime/node_24_lts_rationale.md`
 
@@ -308,7 +308,7 @@ Components will be installed to `src/components/ai-elements/` and can coexist wi
 
 ## 4. Backend Architecture (Unchanged from v0.4)
 
-_No changes from v0.4. See `docs/architecture_v_0_4.md` sections 4-10 for:_
+_No changes from v0.4. See `docs/architecture/archive/architecture_v_0_4.md` sections 4-10 for:_
 
 - API Route Handlers
 - Compliance Engine
@@ -424,7 +424,7 @@ Usage in components:
 
 ## 6. Privacy & Data Boundaries (Unchanged from v0.4)
 
-_See `docs/architecture_v_0_4.md` section 1.2 for privacy boundaries._
+_See `docs/architecture/archive/architecture_v_0_4.md` section 1.2 for privacy boundaries._
 
 **UI Layer Implications**:
 - Chat components **never** store PII locally
@@ -456,7 +456,7 @@ Node.js 24 LTS
 
 ### 7.2 Backend Stack (Unchanged from v0.4)
 
-_See `docs/architecture_v_0_4.md` for backend stack details._
+_See `docs/architecture/archive/architecture_v_0_4.md` for backend stack details._
 
 ---
 
@@ -700,8 +700,8 @@ Migrate gradually:
 ## References
 
 - `apps/demo-web/UI_IMPLEMENTATION.md` - Detailed UI implementation guide
-- `docs/architecture_v_0_4.md` - Backend architecture (unchanged)
-- `docs/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
+- `docs/architecture/archive/architecture_v_0_4.md` - Backend architecture (unchanged)
+- `docs/governance/decisions/archive/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
 - [Tailwind CSS v4 Documentation](https://tailwindcss.com/)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)
 - [Radix UI Documentation](https://www.radix-ui.com/)

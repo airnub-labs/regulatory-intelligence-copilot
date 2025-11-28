@@ -5,8 +5,8 @@
 > **Status:** Phase 1 & Phase 2 Complete ✅
 
 This document tracks the implementation of the v0.4 architecture as defined in:
-- `docs/architecture_v_0_4.md`
-- `docs/decisions_v_0_4.md`
+- `docs/architecture/archive/architecture_v_0_4.md`
+- `docs/governance/decisions/archive/decisions_v_0_4.md`
 - `docs/governance/roadmap/archive/roadmap_v_0_4.md`
 
 ---

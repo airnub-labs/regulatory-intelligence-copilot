@@ -10,7 +10,7 @@
 ## v0.4 – Architecture Alignment & Ingress Guard Integration
 
 **Status:** Current
-**Aligned with:** `docs/architecture_v_0_4.md`, `docs/decisions_v_0_4.md`
+**Aligned with:** `docs/architecture/archive/architecture_v_0_4.md`, `docs/governance/decisions/archive/decisions_v_0_4.md`
 **Primary schema:** `graph_schema_v_0_4.md` (based on v0.3 with clarifications)
 
 ### Summary

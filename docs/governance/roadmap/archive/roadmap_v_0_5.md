@@ -6,8 +6,8 @@
 > This roadmap reflects the **v0.4 architecture and decisions**: Node 24 LTS baseline, jurisdiction‑neutral prompts + prompt aspects, provider‑agnostic LLM routing (OpenAI Responses + GPT‑OSS + Groq + local/OSS models), direct Memgraph `GraphClient`, read‑only Memgraph MCP, `GraphWriteService` + Graph Ingress Guard, `EgressClient` + AI SDK v5 as an **edge implementation detail**, patch‑based graph streaming, and a reusable engine + demo app split.
 >
 > Normative references:
-> - `docs/architecture_v_0_4.md`
-> - `docs/decisions_v_0_4.md`
+> - `docs/architecture/archive/architecture_v_0_4.md`
+> - `docs/governance/decisions/archive/decisions_v_0_4.md`
 > - `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 > - `docs/architecture/graph/archive/graph_schema_changelog_v_0_3.md`
 > - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`

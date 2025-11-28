@@ -342,8 +342,8 @@ mandatory**:
 
 Implementers must also consult:
 
-- `docs/architecture_v_0_3.md` (or latest)
-- `docs/decisions_v_0_3.md` (or latest)
+- `docs/architecture/archive/architecture_v_0_3.md` (or latest)
+- `docs/governance/decisions/archive/decisions_v_0_3.md` (or latest)
 - `docs/architecture/graph/archive/graph_schema_v_0_3.md` (or latest)
 - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md` (or latest)
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`

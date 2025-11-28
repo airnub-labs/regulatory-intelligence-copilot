@@ -565,7 +565,7 @@ Currently, edge changes are detected via full snapshot comparison. Optimize:
 ## Related Documentation
 
 - **Main documentation:** `docs/architecture/graph/graph_change_detection_v_0_6.md`
-- **Architecture spec:** `docs/architecture_v_0_3.md` (Section 9)
+- **Architecture spec:** `docs/architecture/archive/architecture_v_0_3.md` (Section 9)
 - **Graph schema:** `docs/architecture/graph/archive/graph_schema_v_0_3.md`
 - **Implementation summary:** `docs/IMPLEMENTATION_SUMMARY.md`
 

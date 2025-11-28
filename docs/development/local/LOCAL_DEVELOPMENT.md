@@ -833,7 +833,7 @@ ANALYZE=true pnpm build
 
 - **Architecture Documentation**: `docs/architecture/archive/architecture_v_0_5.md`
 - **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
-- **Architecture Decisions**: `docs/decisions_v_0_5.md`
+- **Architecture Decisions**: `docs/governance/decisions/archive/decisions_v_0_5.md`
 - **Graph Schema**: `docs/architecture/graph/archive/graph_schema_v_0_4.md`
 - **Agent Design**: `AGENTS.md`
 
