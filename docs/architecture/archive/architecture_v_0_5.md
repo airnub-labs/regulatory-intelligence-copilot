@@ -18,21 +18,21 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 ### Core Architecture (from v0.4)
 
 - `docs/architecture/archive/architecture_v_0_4.md`
-- `docs/architecture/graph/archive/graph_schema_v_0_4.md`
-- `docs/architecture/graph/archive/graph_schema_changelog_v_0_4.md`
-- `docs/architecture/graph/graph_algorithms_v_0_1.md`
-- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/architecture/copilot-concept/archive/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/architecture/graph/archive/schema_v_0_4.md`
+- `docs/architecture/graph/archive/schema_changelog_v_0_4.md`
+- `docs/architecture/graph/algorithms_v_0_1.md`
+- `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
+- `docs/architecture/copilot-concept/archive/concept_v_0_4.md`
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
 - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/guards/graph_ingress_guard_v_0_1.md`
-- `docs/architecture/guards/egress_guard_v_0_2.md`
+- `docs/architecture/guards/graph_ingress_v_0_1.md`
+- `docs/architecture/guards/egress_v_0_2.md`
 
 ### Project-Level Docs
 
 - `docs/governance/decisions/archive/decisions_v_0_4.md`
 - `docs/governance/roadmap/archive/roadmap_v_0_4.md`
-- `docs/architecture/runtime/node_24_lts_rationale.md`
+- `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
 
 ### UI Implementation Docs
 

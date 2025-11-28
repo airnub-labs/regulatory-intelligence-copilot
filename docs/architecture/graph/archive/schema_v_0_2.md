@@ -2,7 +2,7 @@
 
 > **Status:** Draft v0.2  
 > **Scope:** Core regulatory graph model with **cross‑jurisdiction support** (Ireland, other EU states, Isle of Man, Malta, etc.).  
-> **Supersedes:** `graph_schema_v0_1.md` (adds explicit `:Jurisdiction` nodes and cross‑border relationships).
+> **Supersedes:** `schema_v_0_1.md` (adds explicit `:Jurisdiction` nodes and cross‑border relationships).
 
 This document defines the **Memgraph graph schema** for the Regulatory Intelligence Copilot. It is the contract between:
 
@@ -423,7 +423,7 @@ RETURN n, r, m;
   - Introduced explicit `:Jurisdiction` nodes and `IN_JURISDICTION` edges.
   - Added cross‑border relationship types: `COORDINATED_WITH`, `TREATY_LINKED_TO`, `EQUIVALENT_TO`, `OVERRIDES`.
   - Clarified cross‑jurisdiction usage of `EXCLUDES` / `MUTUALLY_EXCLUSIVE_WITH`.
-- Future changes should be documented in a `graph_schema_changelog.md` with migration notes where needed.
+- Future changes should be documented in a `schema_changelog.md` with migration notes where needed.
 
 ---
 

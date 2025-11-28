@@ -200,7 +200,7 @@ The following are future possibilities and are **explicitly non‑binding** for 
 - **Enterprise‑grade dynamic algorithms**  
   If this project evolves into a dedicated “Regulatory Graph as a Service” platform, Memgraph Enterprise features for dynamic community detection and centrality may be evaluated.
 
-These can be captured in future specs (e.g. `graph_algorithms_v_0_2.md`) once needed.
+These can be captured in future specs (e.g. `algorithms_v_0_2.md`) once needed.
 
 ---
 

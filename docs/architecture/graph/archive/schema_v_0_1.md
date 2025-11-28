@@ -313,7 +313,7 @@ Agent then passes `timelines` to the timeline engine.
 ## 6. Versioning & Evolution
 
 - This is **v0.1** of the schema.
-- Changes should be documented in a `graph_schema_changelog.md` and, where necessary, migration scripts should be provided.
+- Changes should be documented in a `schema_changelog.md` and, where necessary, migration scripts should be provided.
 - New node/edge types can be added freely, but existing semantics (especially for `EXCLUDES`, `REQUIRES`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`) should remain stable or be evolved carefully.
 
 ---

@@ -3,7 +3,7 @@
 > Tracks changes to the Memgraph schema for v0.4 architecture alignment.
 >
 > **Status:** Current
-> **Supersedes:** `graph_schema_changelog_v_0_3.md`
+> **Supersedes:** `schema_changelog_v_0_3.md`
 
 ---
 
@@ -11,7 +11,7 @@
 
 **Status:** Current
 **Aligned with:** `docs/architecture/archive/architecture_v_0_4.md`, `docs/governance/decisions/archive/decisions_v_0_4.md`
-**Primary schema:** `graph_schema_v_0_4.md` (based on v0.3 with clarifications)
+**Primary schema:** `schema_v_0_4.md` (based on v0.3 with clarifications)
 
 ### Summary
 
@@ -32,7 +32,7 @@ The v0.3 schema remains the authoritative structure. All node labels (`:Jurisdic
 
 #### 1. Graph Ingress Guard (Mandatory)
 
-Per `docs/architecture/guards/graph_ingress_guard_v_0_1.md` and decision D-026:
+Per `docs/architecture/guards/graph_ingress_v_0_1.md` and decision D-026:
 
 - **All writes** to Memgraph must pass through `GraphWriteService`.
 - `GraphWriteService` applies an aspect-based **Graph Ingress Guard** pipeline before executing any Cypher.
@@ -47,7 +47,7 @@ Direct Cypher `CREATE`/`MERGE` statements from agents, tools, or scripts are **p
 
 #### 2. Graph Algorithms as Optional Add-Ons
 
-Per `docs/architecture/graph/graph_algorithms_v_0_1.md` and decision D-030:
+Per `docs/architecture/graph/algorithms_v_0_1.md` and decision D-030:
 
 - **Leiden community detection** (via Memgraph MAGE) may be run on static snapshots to assign `community_id` properties to nodes and create optional `:Community` nodes.
 - **Centrality metrics** (PageRank, betweenness) may be computed within communities to identify anchor rules.
@@ -86,7 +86,7 @@ Per `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`:
   - `(:Section|:Relief)-[:TREATY_LINKED_TO]->(:Section|:Relief)` for bilateral/multilateral tax treaties.
   - `(:Benefit|:Relief)-[:EQUIVALENT_TO]->(:Benefit|:Relief)` for functionally similar provisions across jurisdictions.
 
-**No schema changes**, but clarified modelling patterns and documented seed examples (e.g. `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`).
+**No schema changes**, but clarified modelling patterns and documented seed examples (e.g. `docs/architecture/graph/seed_ni_uk_ie_eu.txt`).
 
 #### 4. Read-Only Memgraph MCP
 
@@ -170,7 +170,7 @@ The v0.3 schema is fully compatible with v0.4. Existing nodes and relationships 
 ## v0.3 – Cross-Jurisdiction + Timeline Alignment
 
 **Status:** Historical, still compatible
-**Detailed changelog:** `graph_schema_changelog_v_0_3.md`
+**Detailed changelog:** `schema_changelog_v_0_3.md`
 
 ### Summary
 
@@ -192,7 +192,7 @@ Key additions:
 ## v0.2 – Cross-Jurisdiction & Regulatory Pivot
 
 **Status:** Historical
-**Detailed changelog:** `graph_schema_changelog_v_0_3.md`
+**Detailed changelog:** `schema_changelog_v_0_3.md`
 
 Pivoted from HTTP/RFC/OWASP to regulatory compliance. Introduced jurisdiction-aware modelling, EU regulations/directives, mutual exclusions, profile tags, and initial change tracking.
 
@@ -201,7 +201,7 @@ Pivoted from HTTP/RFC/OWASP to regulatory compliance. Introduced jurisdiction-aw
 ## v0.1 – Initial RFC / OWASP Graph (Legacy)
 
 **Status:** Legacy, superseded
-**Detailed changelog:** `graph_schema_changelog_v_0_3.md`
+**Detailed changelog:** `schema_changelog_v_0_3.md`
 
 Original schema for HTTP/RFC/OWASP auditing. No longer used by the regulatory copilot.
 

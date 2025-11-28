@@ -21,7 +21,7 @@ The platform already:
 - Applies some form of **egress guard** to scrub PII and sensitive context before it leaves the system.
 
 This spec brings that into the same formal, composable pattern as the
-`graph_ingress_guard_v_0_1.md` spec, so that:
+`graph_ingress_v_0_1.md` spec, so that:
 
 - Ingress and egress guards look and feel the same to engineers.
 - Both can be extended with **AI policy agents** via aspects, without

@@ -1,7 +1,7 @@
 # Regulatory Graph Copilot – Concept Spec v0.6
 
 > **Status:** v0.6 – aligned with `architecture_v_0_6.md`  
-> **Supersedes:** `docs/architecture/copilot-concept/archive/regulatory_graph_copilot_concept_v_0_4.md`  
+> **Supersedes:** `docs/architecture/copilot-concept/archive/concept_v_0_4.md`  
 > **Scope:** Product and system concept for the Regulatory Intelligence Copilot
 
 This document explains **what** the Regulatory Intelligence Copilot is trying to be, **for whom**, and **how** it conceptually works – independent of any single implementation detail.

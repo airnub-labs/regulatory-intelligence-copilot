@@ -11,7 +11,7 @@ It:
 - Streams **Server‑Sent Events (SSE)** to subscribed clients with compact `GraphPatch` payloads.
 - Supports **change batching** to reduce SSE noise and client thrash.
 
-This document supersedes the earlier `graph_change_detection_v_0_3.md` (v0.3) and `graph_change_detection_enhancements_v_0_3_1.md` (v0.3.1) by folding the enhancements into a single v0.6 spec aligned with `architecture_v_0_6.md` and the updated graph schema.
+This document supersedes the earlier `change_detection_v_0_3.md` (v0.3) and `change_detection_enhancements_v_0_3_1.md` (v0.3.1) by folding the enhancements into a single v0.6 spec aligned with `architecture_v_0_6.md` and the updated graph schema.
 
 ---
 
@@ -94,7 +94,7 @@ interface GraphPatch {
 }
 ```
 
-`GraphNode` / `GraphEdge` are the same wire‑level structures used elsewhere for graph visualization (aligned with `graph_schema_v_0_6.md`).
+`GraphNode` / `GraphEdge` are the same wire‑level structures used elsewhere for graph visualization (aligned with `schema_v_0_6.md`).
 
 **Diff semantics:**
 

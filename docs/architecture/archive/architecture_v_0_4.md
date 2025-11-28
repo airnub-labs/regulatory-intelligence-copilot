@@ -16,21 +16,21 @@
 
 This architecture sits on top of, and must remain consistent with, the following specs:
 
-- `docs/architecture/graph/archive/graph_schema_v_0_3.md`
-- `docs/architecture/graph/archive/graph_schema_changelog_v_0_3.md`
-- `docs/architecture/graph/graph_algorithms_v_0_1.md`
-- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
-- `docs/architecture/copilot-concept/archive/regulatory_graph_copilot_concept_v_0_3.md`
+- `docs/architecture/graph/archive/schema_v_0_3.md`
+- `docs/architecture/graph/archive/schema_changelog_v_0_3.md`
+- `docs/architecture/graph/algorithms_v_0_1.md`
+- `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
+- `docs/architecture/copilot-concept/archive/concept_v_0_3.md`
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
 - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/guards/graph_ingress_guard_v_0_1.md`
-- `docs/architecture/guards/egress_guard_v_0_2.md`
+- `docs/architecture/guards/graph_ingress_v_0_1.md`
+- `docs/architecture/guards/egress_v_0_2.md`
 
 And the project‑level docs:
 
 - `docs/governance/decisions/archive/decisions_v_0_3.md`
 - `docs/governance/roadmap/archive/roadmap_v_0_2.md`
-- `docs/architecture/runtime/node_24_lts_rationale.md`
+- `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
 
 Where there is ambiguity, these specs take precedence over this document.
 
@@ -110,7 +110,7 @@ To keep the stack modern and consistent:
 
 - **Node.js**: minimum **v24.x LTS**
   - Set in `"engines"` fields and CI.
-  - Motivated in `docs/architecture/runtime/node_24_lts_rationale.md` (security, performance, newer language features).
+  - Motivated in `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` (security, performance, newer language features).
 
 - **TypeScript**: latest Node‑24 compatible (TS 5.9+).
 
@@ -378,7 +378,7 @@ The **EgressClient** is the single choke‑point for:
 It:
 
 1. Constructs an `EgressGuardContext` (target type, provider, endpoint, payload, tenantId, jurisdictions…).
-2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/architecture/guards/egress_guard_v_0_2.md`.
+2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/architecture/guards/egress_v_0_2.md`.
 3. The final aspect executes the actual outbound call using the provider SDK/HTTP client and attaches the raw response back onto the context.
 
 Egress aspects can:
@@ -483,11 +483,11 @@ interface GraphWriteService {
 }
 ```
 
-All writes must go through `GraphWriteService`, which applies the ingress aspect pipeline (`graph_ingress_guard_v_0_1.md`) before issuing Cypher `MERGE`/`CREATE`.
+All writes must go through `GraphWriteService`, which applies the ingress aspect pipeline (`graph_ingress_v_0_1.md`) before issuing Cypher `MERGE`/`CREATE`.
 
 ### 8.2 Schema Overview (Summary)
 
-Full details are in `docs/architecture/graph/archive/graph_schema_v_0_3.md`; in brief:
+Full details are in `docs/architecture/graph/archive/schema_v_0_3.md`; in brief:
 
 - **Key node labels**:
   - `:Jurisdiction`, `:Region`, `:Agreement`, `:Treaty`
@@ -512,7 +512,7 @@ These encode the semantics needed for:
 
 ### 8.3 Graph Algorithms (Optional, Non‑Breaking)
 
-As per `graph_algorithms_v_0_1.md`:
+As per `algorithms_v_0_1.md`:
 
 - Core behaviour relies on **explicit edges + Cypher path queries**.
 - Optional algorithms include:
@@ -529,7 +529,7 @@ Invariants:
 
 ## 9. Timeline Engine
 
-The **Timeline Engine** (`timeline_engine_v_0_2.md`) handles time‑based reasoning:
+The **Timeline Engine** (`spec_v_0_2.md`) handles time‑based reasoning:
 
 - Consumes `LOOKBACK_WINDOW` and `LOCKS_IN_FOR_PERIOD` edges from the graph.
 - Given a scenario (e.g. sequence of events, dates, actions), computes:
@@ -549,7 +549,7 @@ The Compliance Engine:
 Special modelling for IE/UK/NI/EU/IM/GI/AD/CTA is captured in:
 
 - `special_jurisdictions_modelling_v_0_1.md`
-- Seed examples such as `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`
+- Seed examples such as `docs/architecture/graph/seed_ni_uk_ie_eu.txt`
 
 The architecture must:
 

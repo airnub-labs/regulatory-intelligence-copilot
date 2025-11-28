@@ -35,7 +35,7 @@ The engine consumes:
 
 ### 2.1 Timeline Nodes
 
-`(:Timeline)` nodes (see `graph_schema_v0_1.md`) with properties:
+`(:Timeline)` nodes (see `schema_v_0_1.md`) with properties:
 
 - `window_days?: int`
 - `window_months?: int`

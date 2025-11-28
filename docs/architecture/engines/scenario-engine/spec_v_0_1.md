@@ -4,12 +4,12 @@
 >
 > **Builds on:**
 > - `architecture_v_0_6.md`
-> - `graph_schema_v_0_6.md`
-> - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+> - `schema_v_0_6.md`
+> - `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
 > - `timeline-integration_v_0_3.md`
-> - `concept_capture_from_main_chat_v_0_1.md`
-> - `conversation_context_spec_v_0_1.md`
-> - `docs/architecture/copilot-concept/regulatory_graph_copilot_concept_v_0_6.md`
+> - `concept_capture_v_0_1.md`
+> - `spec_v_0_1.md`
+> - `docs/architecture/copilot-concept/concept_v_0_6.md`
 
 ## 1. Purpose
 
@@ -213,7 +213,7 @@ Scenario Engine composes:
 - **GraphClient** (`reg-intel-graph`):
   - Read-only access to rules, benefits, reliefs, conditions, timelines.
   - Helper queries like `getRulesForProfileAndJurisdictions` / `getTimelinesForBenefit`.
-- **TimelineEngine** (`docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`):
+- **TimelineEngine** (`docs/architecture/engines/timeline-engine/spec_v_0_2.md`):
   - Evaluates lookbacks, lock-ins, deadlines, and effective windows per rule/timeline.
 - **ComplianceEngine & Agents** (`reg-intel-core`):
   - Provide Scenarios loaded from tenant storage.
@@ -225,8 +225,8 @@ Scenario Engine composes:
 It respects:
 
 - `data_privacy_and_architecture_boundaries_v_0_1` (no PII in Memgraph).
-- `graph_ingress_guard_v_0_1` (no direct graph writes).
-- `egress_guard_v_0_2` (any scenario data leaving to LLMs must pass through Egress Guard).
+- `graph_ingress_v_0_1` (no direct graph writes).
+- `egress_v_0_2` (any scenario data leaving to LLMs must pass through Egress Guard).
 
 ---
 
@@ -422,7 +422,7 @@ Example agent config (described in `AGENTS.md`):
 When Scenario Engine evaluations are used inside chat:
 
 - ComplianceEngine **may**:
-  - Merge `ScenarioSnapshotEvaluation.*NodeIds` into `ConversationContext.activeNodeIds` (see `conversation_context_spec_v_0_1`).
+  - Merge `ScenarioSnapshotEvaluation.*NodeIds` into `ConversationContext.activeNodeIds` (see `spec_v_0_1`).
   - Add those node IDs to `ChatResponse.referencedNodes` for the turn.
 - This ensures subsequent chat turns and graph UI views "know" which rules/benefits are relevant to the scenarios just analysed.
 

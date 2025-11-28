@@ -181,7 +181,7 @@ Create `packages/reg-intel-graph`:
 ### 4.3 Minimal Graph Seeding
 
 **Actions**
-- [ ] Define a tiny but realistic initial graph in line with `graph_schema_v0_2.md`:
+- [ ] Define a tiny but realistic initial graph in line with `schema_v_0_2.md`:
   - A few `:Benefit` nodes (Illness Benefit, Jobseeker’s Benefit (Self-Employed), Treatment Benefit).
   - Some `:Section`, `:Condition`, `:Timeline` nodes.
   - Edges: `APPLIES_TO`, `REQUIRES`, `EXCLUDES`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`.

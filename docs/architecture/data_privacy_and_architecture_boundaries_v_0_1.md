@@ -344,10 +344,10 @@ Implementers must also consult:
 
 - `docs/architecture/archive/architecture_v_0_3.md` (or latest)
 - `docs/governance/decisions/archive/decisions_v_0_3.md` (or latest)
-- `docs/architecture/graph/archive/graph_schema_v_0_3.md` (or latest)
-- `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md` (or latest)
+- `docs/architecture/graph/archive/schema_v_0_3.md` (or latest)
+- `docs/architecture/engines/timeline-engine/spec_v_0_2.md` (or latest)
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/runtime/node_24_lts_rationale.md` (runtime & security baselines)
+- `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` (runtime & security baselines)
 
 Before making changes that affect storage, processing, or routing of data.
 

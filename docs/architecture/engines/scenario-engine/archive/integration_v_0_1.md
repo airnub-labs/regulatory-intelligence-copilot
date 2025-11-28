@@ -1,6 +1,6 @@
 # Scenario Integration (v0.1)
 
-> **Status:** Draft v0.1 (aligned with architecture_v_0_6 and scenario_engine_v_0_1)
+> **Status:** Draft v0.1 (aligned with architecture_v_0_6 and spec_v_0_1)
 >
 > **Scope:** How the Scenario Engine plugs into the Regulatory Intelligence Copilot stack (Compliance Engine, agents, graph, Timeline Engine, LLM) without changing the core Scenario Engine.
 
@@ -80,7 +80,7 @@ It explicitly **does not**:
 
 ### 2.3 Timeline Engine
 
-- Performs date arithmetic and temporal reasoning (see `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`).
+- Performs date arithmetic and temporal reasoning (see `docs/architecture/engines/timeline-engine/spec_v_0_2.md`).
 - Scenario Engine calls Timeline Engine functions when rules have `:Timeline` attachments, e.g.:
   - `isWithinLookback(...)` for contribution windows.
   - `isLockInActive(...)` for lock‑ins.
@@ -97,7 +97,7 @@ It explicitly **does not**:
 
 ---
 
-## 3. Data Contracts (recap from scenario_engine_v_0_1)
+## 3. Data Contracts (recap from spec_v_0_1)
 
 ### 3.1 Scenario and snapshots
 
@@ -248,7 +248,7 @@ This lets the UI highlight relevant rules/benefits and keeps chat / graph views 
 
 ### 5.2 Feeding scenario nodes into ConversationContext
 
-In addition, the Compliance Engine may update `ConversationContext.activeNodeIds` (from `conversation_context_spec_v_0_1`) by merging in scenario node IDs. That way:
+In addition, the Compliance Engine may update `ConversationContext.activeNodeIds` (from `spec_v_0_1`) by merging in scenario node IDs. That way:
 
 - Subsequent chat turns have access to which rules/benefits are currently "in play".
 - Prompt aspects can inject a short summary, e.g.:

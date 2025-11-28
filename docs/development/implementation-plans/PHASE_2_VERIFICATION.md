@@ -121,7 +121,7 @@ grep -r "@reg-copilot/compliance-core" \
 The string "compliance-core" still appears in documentation files for **historical context** only:
 - `docs/PHASE_1_FIXES.md` - Historical reference to original package name
 - `docs/PHASE_2_PLAN.md` - Documents the rename process itself
-- `docs/V0_4_IMPLEMENTATION_STATUS.md` - Historical context with migration notes
+- `docs/IMPLEMENTATION_STATUS_v_0_4.md` - Historical context with migration notes
 
 These are **intentional** and provide valuable context for understanding the evolution of the codebase.
 

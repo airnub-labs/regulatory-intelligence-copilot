@@ -23,7 +23,7 @@ Before starting, ensure you have the following installed:
 
 ### Required
 
-- **Node.js 24+ LTS** – Required for all packages. See `docs/architecture/runtime/node_24_lts_rationale.md` for details.
+- **Node.js 24+ LTS** – Required for all packages. See `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` for details.
   ```bash
   node --version  # Should be >= 24.0.0
   ```
@@ -834,7 +834,7 @@ ANALYZE=true pnpm build
 - **Architecture Documentation**: `docs/architecture/archive/architecture_v_0_5.md`
 - **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
 - **Architecture Decisions**: `docs/governance/decisions/archive/decisions_v_0_5.md`
-- **Graph Schema**: `docs/architecture/graph/archive/graph_schema_v_0_4.md`
+- **Graph Schema**: `docs/architecture/graph/archive/schema_v_0_4.md`
 - **Agent Design**: `AGENTS.md`
 
 ---

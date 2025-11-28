@@ -43,20 +43,20 @@ When you’re working on a feature:
   - “Where do we enforce ingress/egress rules?”
 
 - Use the **specs** to answer:
-  - “What does this node/edge look like?” (`graph/graph_schema_v_0_6.md`)
+  - “What does this node/edge look like?” (`graph/schema_v_0_6.md`)
   - “How should this tool’s parameters be shaped?” (timeline/scenario/concept-capture specs)
-  - “How is conversation context stored and injected?” (`conversation-context/conversation_context_spec_v_0_1.md`)
+  - “How is conversation context stored and injected?” (`conversation-context/spec_v_0_1.md`)
 
 Relevant specs include:
 
-- `../architecture/copilot-concept/regulatory_graph_copilot_concept_v_0_6.md` – product concept and goals.
-- `../architecture/graph/graph_schema_v_0_6.md` & `../architecture/graph/graph_schema_changelog_v_0_6.md` – rules graph schema.
-- `../architecture/graph/graph_algorithms_v_0_1.md` – optional graph algorithms and when to use them.
-- `../architecture/conversation-context/concept_capture_from_main_chat_v_0_1.md` – SKOS-style concept capture via tools.
-- `../architecture/conversation-context/conversation_context_spec_v_0_1.md` – server-side ConversationContext and its aspect.
-- `../architecture/engines/timeline-engine/timeline_engine_v_0_2.md` – timeline engine modelling and tool interface.
-- `../architecture/engines/scenario-engine/scenario_engine_v_0_1.md` – conceptual Scenario Engine and integration.
-- `../architecture/graph/graph_change_detection_v_0_6.md` – graph change detection and patch streaming.
+- `../architecture/copilot-concept/concept_v_0_6.md` – product concept and goals.
+- `../architecture/graph/schema_v_0_6.md` & `../architecture/graph/schema_changelog_v_0_6.md` – rules graph schema.
+- `../architecture/graph/algorithms_v_0_1.md` – optional graph algorithms and when to use them.
+- `../architecture/conversation-context/concept_capture_v_0_1.md` – SKOS-style concept capture via tools.
+- `../architecture/conversation-context/spec_v_0_1.md` – server-side ConversationContext and its aspect.
+- `../architecture/engines/timeline-engine/spec_v_0_2.md` – timeline engine modelling and tool interface.
+- `../architecture/engines/scenario-engine/spec_v_0_1.md` – conceptual Scenario Engine and integration.
+- `../architecture/graph/change_detection_v_0_6.md` – graph change detection and patch streaming.
 
 For decisions about **why** the architecture looks this way, see:
 

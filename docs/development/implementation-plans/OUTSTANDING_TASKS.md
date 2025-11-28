@@ -303,7 +303,7 @@ This document provides a high-level overview of outstanding work and Phase 3 goa
 - `docs/governance/roadmap/archive/roadmap_v_0_4.md` - Complete roadmap
 - `docs/architecture/archive/architecture_v_0_4.md` - System architecture
 - `docs/governance/decisions/archive/decisions_v_0_4.md` - ADRs
-- `docs/V0_4_IMPLEMENTATION_STATUS.md` - Current status
+- `docs/IMPLEMENTATION_STATUS_v_0_4.md` - Current status
 
 **Code:**
 - `packages/reg-intel-core/src/orchestrator/complianceEngine.ts` - Engine

@@ -16,7 +16,7 @@ This document tracks the implementation of the v0.4 architecture as defined in:
 ### Core Infrastructure
 
 #### 1. Documentation & Specs
-- [x] Created `docs/architecture/graph/archive/graph_schema_changelog_v_0_4.md`
+- [x] Created `docs/architecture/graph/archive/schema_changelog_v_0_4.md`
   - Documents schema evolution from v0.3 to v0.4
   - Clarifies that v0.4 uses v0.3 schema with enhanced enforcement
   - Documents Graph Ingress Guard integration
@@ -160,7 +160,7 @@ Per `architecture_v_0_4.md` and D-020, the monorepo has been reorganized with cl
 **Current Blocker:** None - demo-web works fine with direct reg-intel-core imports
 
 ### Phase 3: Graph Algorithm Integration (Optional)
-Per `graph_algorithms_v_0_1.md` and D-030:
+Per `algorithms_v_0_1.md` and D-030:
 - [ ] Implement optional Leiden community detection
 - [ ] Implement optional centrality metrics (PageRank, betweenness)
 - [ ] Add configuration flags to enable/disable algorithms

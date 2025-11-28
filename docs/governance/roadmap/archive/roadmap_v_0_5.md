@@ -8,16 +8,16 @@
 > Normative references:
 > - `docs/architecture/archive/architecture_v_0_4.md`
 > - `docs/governance/decisions/archive/decisions_v_0_4.md`
-> - `docs/architecture/graph/archive/graph_schema_v_0_3.md`
-> - `docs/architecture/graph/archive/graph_schema_changelog_v_0_3.md`
-> - `docs/architecture/engines/timeline-engine/timeline_engine_v_0_2.md`
+> - `docs/architecture/graph/archive/schema_v_0_3.md`
+> - `docs/architecture/graph/archive/schema_changelog_v_0_3.md`
+> - `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
 > - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-> - `docs/architecture/guards/graph_ingress_guard_v_0_1.md`
-> - `docs/architecture/guards/egress_guard_v_0_2.md`
-> - `docs/architecture/graph/graph_algorithms_v_0_1.md`
+> - `docs/architecture/guards/graph_ingress_v_0_1.md`
+> - `docs/architecture/guards/egress_v_0_2.md`
+> - `docs/architecture/graph/algorithms_v_0_1.md`
 > - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt` (example seed)
-> - `docs/architecture/runtime/node_24_lts_rationale.md`
+- `docs/architecture/graph/seed_ni_uk_ie_eu.txt` (example seed)
+> - `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
 
 The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/CTA‑aware) while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for:
 
@@ -155,7 +155,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
 
 **Key tasks**
 - [ ] Seed IE/UK/NI/IM/EU/CTA graph:
-- [ ] Implement the concrete seed in `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`.
+- [ ] Implement the concrete seed in `docs/architecture/graph/seed_ni_uk_ie_eu.txt`.
   - [ ] Model NI as a region under UK with EU‑linked goods regimes via `Regime` nodes (per `special_jurisdictions_modelling_v_0_1.md`).
   - [ ] Model Isle of Man, Malta, Gibraltar, Andorra and their relevant treaty/coordination edges as needed.
 - [ ] Domain agents:
@@ -185,7 +185,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
   - [ ] Ensure all external calls still go through `EgressClient`.
 - [ ] On-demand enrichment pipeline:
   - [ ] When an agent detects missing coverage, use MCP search (possibly from E2B sandbox) to fetch relevant documents.
-  - [ ] Parse into candidate nodes/edges consistent with `docs/architecture/graph/versions/graph_schema_v_0_3`.
+  - [ ] Parse into candidate nodes/edges consistent with `docs/architecture/graph/versions/schema_v_0_3`.
   - [ ] Upsert via `GraphWriteService` (never directly) so ingress guard applies.
 - [ ] Change tracking:
   - [ ] Model `:ChangeEvent` / `:Update` nodes (Finance Acts, eBriefs, TAC decisions, EU cases).
@@ -228,7 +228,7 @@ These are high-leverage enhancements that are **not required** for v1 but may be
 
 ### 7.1 Graph Algorithms & GraphRAG Enhancements
 
-- [ ] Implement optional Leiden community detection + centrality metrics on static snapshots, per `graph_algorithms_v_0_1.md`.
+- [ ] Implement optional Leiden community detection + centrality metrics on static snapshots, per `algorithms_v_0_1.md`.
 - [ ] Integrate community info into GraphRAG retrieval (e.g. sample representative nodes from communities for explanation).
 - [ ] Add configuration flags to enable/disable algorithms with minimal impact on core flows.
 
@@ -250,7 +250,7 @@ These are high-leverage enhancements that are **not required** for v1 but may be
 
 ### 7.5 Eligibility Explorer (Use Case 1)
 
-- [ ] Formalise the **Eligibility Explorer** core service (see `docs/governance/product/eligibility-explorer/eligibility_explorer_spec_v_0_1.md` once added):
+- [ ] Formalise the **Eligibility Explorer** core service (see `docs/governance/product/eligibility-explorer/spec_v_0_1.md` once added):
   - Deterministic, boolean eligibility for benefits/reliefs across one or more domains (e.g. SOCIAL_WELFARE, TAX, PENSIONS).
   - Public TS API surface in `reg-intel-core` (e.g. `EligibilityExplorer.evaluateEligibility(...)`).
 - [ ] Wire Eligibility Explorer into IE/UK vertical slices:
@@ -263,7 +263,7 @@ These are high-leverage enhancements that are **not required** for v1 but may be
 
 ### 7.6 Scenario Engine & What-If Scenario Comparison (Use Case 2)
 
-- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/architecture/engines/scenario-engine/scenario_engine_v_0_1.md` once added):
+- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/architecture/engines/scenario-engine/spec_v_0_1.md` once added):
   - Accept one or more `Scenario` objects (with multiple `ScenarioSnapshot`s).
   - Use the shared rules graph + Timeline Engine to produce `ScenarioEvaluationResult[]` (applicable rules, eligible/locked-out benefits per snapshot).
 - [ ] Add a new Compliance Engine task type, e.g. `TaskType.WHAT_IF_SCENARIO_EVALUATION`, and a specialised `IE_WhatIfScenario_Agent` that:

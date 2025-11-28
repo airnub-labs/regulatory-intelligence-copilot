@@ -12,7 +12,7 @@ The Graph Change Detection system provides real-time monitoring of the Memgraph 
 **✨ v0.3.1 Enhancements:**
 - **Timestamp-based queries:** 80-95% reduction in query overhead
 - **Change batching:** 80%+ reduction in SSE messages during bulk operations
-- See `docs/architecture/graph/archive/graph_change_detection_enhancements_v_0_3_1.md` for details
+- See `docs/architecture/graph/archive/change_detection_enhancements_v_0_3_1.md` for details
 
 ## Architecture
 
@@ -469,7 +469,7 @@ interface ChangeFilter {
 ## Related Documentation
 
 - **Architecture:** `docs/architecture/archive/architecture_v_0_3.md` (Section 9)
-- **Graph Schema:** `docs/architecture/graph/archive/graph_schema_v_0_3.md`
+- **Graph Schema:** `docs/architecture/graph/archive/schema_v_0_3.md`
 - **Seeding Scripts:** `scripts/seed-graph.ts`, `scripts/seed-special-jurisdictions.ts`
 - **Test Utility:** `scripts/test-graph-changes.ts`
 

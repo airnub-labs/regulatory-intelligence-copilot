@@ -291,7 +291,7 @@ interface ConversationContextStore {
 
 **Decision:**
 
-- The **Scenario Engine** (`scenario_engine_v_0_1.md`) and **Use Case 1 (expert/collection-based profiles)** are treated as **optional layers** on top of the core engine:
+- The **Scenario Engine** (`spec_v_0_1.md`) and **Use Case 1 (expert/collection-based profiles)** are treated as **optional layers** on top of the core engine:
   - They may persist scenario definitions and collections in Supabase.
   - They must consume the **same graph and concept capture mechanisms** as the main chat flow.
   - They must not introduce PII into Memgraph.

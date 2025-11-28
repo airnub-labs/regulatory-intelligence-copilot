@@ -196,7 +196,7 @@ Seeds Memgraph with special jurisdiction modelling for IE/UK/NI/IM/EU, Common Tr
 
 Implements the design documented in:
 - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`
+- `docs/architecture/graph/seed_ni_uk_ie_eu.txt`
 
 ### Usage
 
