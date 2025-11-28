@@ -1,86 +1,122 @@
-# Concept Capture from Main Chat Spec v0.1
+# Concept Capture from Main Chat (v0.1)
 
-> **Status**: Draft
-> **Scope**: v0.5 architecture — entity capture, self-populating rules graph, and conversation context integration
-> **Audience**: `reg-intel-core`, `reg-intel-llm`, `reg-intel-graph`, demo-web implementers
+**Status:** v0.1 (stable for implementation)
 
-This spec captures the agreed design for **automatic regulatory concept capture** from the **main chat LLM call**, and how that drives **self-population of the Memgraph rules graph** and **conversation context**.
+This document specifies how the **main chat task** in the Regulatory Intelligence Copilot captures regulatory concepts (VAT, VRT, benefits, rules, etc.) as **SKOS‑style metadata** and uses them to **self‑populate the shared rules graph** and **inform conversation context**, without breaking streaming UX.
 
-It replaces the earlier idea of a **separate entity-extraction task** with a single **main-chat call** that returns:
-
-1. **Streamed natural-language answer** (for the UI), and
-2. A **structured SKOS-inspired concept payload** via a tool/structured-output side-channel (for the Compliance Engine only).
-
-All of this remains aligned with the v0.4/v0.5 architecture invariants:
-
-- Memgraph is a **shared, PII-free, bloat-free rules graph**.
-- Supabase/Postgres holds **conversations, messages, and conversation context** (tenant/user scoped).
-- All graph writes go through **GraphWriteService + Graph Ingress Guard**.
+It assumes the architecture in `architecture_v_0_6.md` and the decisions in `decisions_v_0_6.md`.
 
 ---
 
-## 1. Design Overview
+## 1. Purpose & Scope
 
-### 1.1 Removal of separate entity-extraction task
+### 1.1 Purpose
 
-Instead of two LLM tasks:
+Instead of a separate entity‑extraction LLM call, the system uses a **single main chat call** that:
 
-- **Task A**: `entity-extraction` → SKOS JSON
-- **Task B**: `main-chat` → natural-language answer
+1. Streams natural‑language answer text back to the UI.
+2. Emits **structured concept metadata** via a dedicated tool call (`capture_concepts`).
 
-We now use a **single task**:
+That metadata is used to:
 
-- **Task**: `main-chat`
-  - Produces **streamed answer text** for the UI.
-  - Emits a **tool/structured-output payload** (`capture_concepts`) with SKOS-like metadata on the regulatory concepts mentioned.
+- Resolve or create concept nodes in **Memgraph** (via `GraphWriteService` + `Graph Ingress Guard`).
+- Update **`referencedNodes`** for the current answer.
+- Update per‑conversation **`activeNodeIds`** in `ConversationContext` (stored in Supabase/Postgres).
 
-The **entity extraction is embedded** into the main chat call as a tool, not a separate request. The UI does not see this payload; only the Compliance Engine does.
+### 1.2 Non‑Goals
 
-### 1.2 Key properties
+This spec does **not** cover:
 
-- ✅ One LLM call per user message → simpler orchestration and lower cost.
-- ✅ Concept extraction is **always in sync** with the final answer (same messages, same reasoning path).
-- ✅ **Streaming UX preserved**: text is streamed as usual; concept metadata arrives as a tool result alongside.
-- ✅ Existing abstractions (`LlmRouter`, `LlmProvider`, `GraphWriteService`, prompt aspects) remain valid.
+- Full ingestion pipelines for legislative/guidance documents (see graph ingestion specs).
+- Scenario modelling and what‑if simulation (see `scenario_engine_v_0_1.md`).
+- Eligibility Explorer logic (see `eligibility_explorer_spec_v_0_1.md`).
 
 ---
 
-## 2. LLM Layer Changes (`reg-intel-llm`)
+## 2. High‑Level Design
 
-### 2.1 Extended stream chunk type
+### 2.1 Single main‑chat call with side‑channel metadata
 
-We extend the streaming type returned by providers to model **tool output chunks**:
+For each user message, the Compliance Engine:
+
+1. Builds a system prompt via prompt aspects (jurisdiction, agent, profile, disclaimers, conversation context).
+2. Calls `LlmRouter.stream(...)` for the **main chat task**.
+3. Registers the `capture_concepts` tool for this call.
+
+The model:
+
+- Streams answer text in chunks (`type: 'text'`).
+- Calls `capture_concepts` once, returning a **SKOS‑inspired concept array** as a `type: 'tool'` chunk.
+
+The UI sees only streamed text + a final meta event. Tool output is consumed by the engine only.
+
+### 2.2 Provider capabilities & fallbacks
+
+- v0.1 requires concept capture **only** for providers that support tools/structured outputs (e.g. OpenAI Responses).
+- For other providers, it is acceptable to:
+  - Run in **answer‑only** mode with no concept capture, or
+  - Add a separate, slower metadata path in a future version.
+
+Implementations should default to: **if tools available → enable concept capture; otherwise → answer‑only**.
+
+---
+
+## 3. LLM Streaming Contract
+
+### 3.1 `LlmStreamChunk` shape
+
+All LLM providers used by the engine must implement a **tagged union** stream type:
 
 ```ts
-type LlmStreamChunk =
+export type LlmStreamChunk =
   | { type: 'text'; delta: string }
   | { type: 'tool'; name: string; argsJson: unknown }
   | { type: 'error'; error: Error };
-
-export interface LlmProvider {
-  stream(
-    messages: LlmMessage[],
-    options: LlmCompletionOptions & { tenantId: string }
-  ): AsyncIterable<LlmStreamChunk>;
-}
 ```
 
-**Provider behaviour**:
+Semantics:
 
-- When the underlying model emits answer tokens → provider yields `{ type: 'text', delta }`.
-- When the underlying model completes a tool call → provider yields `{ type: 'tool', name, argsJson }`.
-- On provider error → provider yields `{ type: 'error', error }`.
+- `type: 'text'`  
+  Append `delta` to the current answer string; forward directly to the UI SSE stream.
 
-This keeps the `LlmRouter` / `LlmClient` shape intact, while enabling a **side-channel** for structured concept metadata.
+- `type: 'tool'`  
+  A tool result (e.g. `capture_concepts`). **Never** forwarded to the UI. Parsed and dispatched inside the Compliance Engine.
 
-### 2.2 `capture_concepts` tool schema (SKOS-inspired)
+- `type: 'error'`  
+  Provider‑level failure. The engine must stop streaming and surface a safe error to the user.
 
-We define a **single tool** for concept capture, inspired by SKOS concepts and labels. This tool is attached to the **main-chat** task.
+### 3.2 Provider responsibilities
+
+Each `LlmProvider` implementation (OpenAI, Groq, local HTTP) must:
+
+- Map underlying SDK/HTTP streaming events into `LlmStreamChunk`.
+- Emit tool results as a **single `type: 'tool'` chunk per tool invocation**, with the **final parsed JSON** in `argsJson`.
+- Never mix tool JSON into the text stream.
+
+---
+
+## 4. `capture_concepts` Tool
+
+### 4.1 Purpose
+
+The `capture_concepts` tool is the **only source of concept metadata** from the main chat task in v0.1.
+
+It is used to:
+
+- Identify **regulatory concepts** that appeared in the user’s question and/or the assistant’s answer.
+- Provide a **SKOS‑like description** of each concept.
+- Allow the engine to **resolve or create** Memgraph nodes for these concepts.
+
+### 4.2 JSON Schema
+
+The tool is defined using an OpenAPI/JSON‑Schema‑style `parameters` object.
+
+Conceptual shape:
 
 ```jsonc
 {
   "name": "capture_concepts",
-  "description": "Capture SKOS-like regulatory concepts mentioned in the conversation.",
+  "description": "Capture SKOS-like regulatory concepts mentioned in this turn.",
   "parameters": {
     "type": "object",
     "properties": {
@@ -89,9 +125,9 @@ We define a **single tool** for concept capture, inspired by SKOS concepts and l
         "items": {
           "type": "object",
           "properties": {
-            "domain": { "type": "string" },       // e.g. "TAX", "WELFARE", "VEHICLE_REG"
-            "kind": { "type": "string" },         // e.g. "VAT", "VRT", "IMPORT_DUTY"
-            "jurisdiction": { "type": "string" }, // e.g. "IE", "UK", "EU"
+            "domain": { "type": "string" },        // e.g. "TAX", "SOCIAL_WELFARE", "VEHICLE_REG"
+            "kind": { "type": "string" },          // e.g. "VAT", "VRT", "IMPORT_DUTY"
+            "jurisdiction": { "type": "string" },  // e.g. "IE", "UK", "EU"
             "prefLabel": { "type": "string" },
             "altLabels": {
               "type": "array",
@@ -114,322 +150,242 @@ We define a **single tool** for concept capture, inspired by SKOS concepts and l
 
 Notes:
 
-- This is intentionally **SKOS-like**, not full RDF SKOS:
-  - `prefLabel` ~ SKOS `prefLabel`.
-  - `altLabels[]` ~ SKOS `altLabel`s.
-  - `definition` ~ SKOS `definition`.
-- There is **no ID** in the tool payload. IDs are assigned by the engine.
+- The model **does not** set any graph/node IDs here.
+- `domain/kind/jurisdiction` are used later for canonical resolution.
+- `altLabels` should include both canonical synonyms and user phrasing (e.g. "sales tax in Ireland" for VAT_IE).
 
-### 2.3 Prompt instructions
+### 4.3 Prompting guidelines
 
-For the main chat task, the engine embeds a short instruction in the **system prompt** (via prompt aspects) along the lines of:
+System prompts for the main chat task must include instructions such as:
 
-> "In addition to answering the user, you must **call the `capture_concepts` tool once** with any tax/benefit/regulatory concepts you detect in this conversation, using SKOS-style labels (`prefLabel`, `altLabels`, `definition`)."
+- "In addition to answering the user, you **must call** the `capture_concepts` tool once per turn with any important tax, welfare, pension, or regulatory concepts you detect."
+- "Prefer a **small number of important concepts** (usually 1–5 per turn). Do *not* list every noun phrase."
+- "Use short, human‑readable `prefLabel` values and reasonable `definition` texts."
 
-The provider passes the `capture_concepts` tool definition to the model. The model then:
-
-- Streams the answer text.
-- Calls the tool once with its concept list.
-
-For **providers without tools/structured outputs**, we can:
-
-- Disable concept capture for that tenant, or
-- (Later) fall back to a less robust “JSON in text” pattern for those providers only.
+The engine must not rely on any **specific ordering** of tool vs text events; the model is allowed to call the tool before, during or after emitting all text.
 
 ---
 
-## 3. Compliance Engine Flow (`reg-intel-core`)
+## 5. Compliance Engine Integration
 
-### 3.1 High-level `handleChat` pipeline
+### 5.1 Canonical concept types
 
-The Compliance Engine (`reg-intel-core`) owns:
-
-- Conversation context (via `ConversationContextStore`).
-- LLM orchestration via `LlmRouter`.
-- Concept resolution and graph enrichment.
-- Setting `ChatResponse.referencedNodes`.
-
-High-level steps:
-
-1. Load the **ConversationContext** for `(tenantId, conversationId)`.
-2. Build the **system prompt** via prompt aspects:
-   - Jurisdiction, agent, disclaimers, etc.
-   - `conversationContextAspect` summarizes `activeNodeIds` (see conversation context spec).
-3. Call `LlmRouter.stream(...)` with:
-   - Messages + system prompt.
-   - `capture_concepts` tool definition.
-   - Instructions to call `capture_concepts` exactly once.
-4. Process the stream:
-
-   ```ts
-   const referencedNodeIds: string[] = [];
-   let finalAnswerText = '';
-
-   for await (const chunk of llmStream) {
-     if (chunk.type === 'text') {
-       // Stream answer text to UI (SSE / HTTP chunked)
-       uiStream.write(chunk.delta);
-       finalAnswerText += chunk.delta;
-     }
-
-     if (chunk.type === 'tool' && chunk.name === 'capture_concepts') {
-       await handleConceptMetadataFromMainChat(chunk.argsJson, referencedNodeIds, identity);
-     }
-
-     if (chunk.type === 'error') {
-       // handle error / abort
-     }
-   }
-
-   uiStream.end();
-   ```
-
-5. After streaming completes:
-   - Merge `referencedNodeIds` into `ConversationContext.activeNodeIds` and save.
-   - Build and return `ChatResponse` with `referencedNodes = referencedNodeIds`.
-
-### 3.2 `handleConceptMetadataFromMainChat`
-
-`handleConceptMetadataFromMainChat` is the core of the **self-population** pipeline.
-
-Inputs:
-
-- `argsJson`: the decoded tool payload (SKOS-like concepts).
-- `referencedNodeIds`: a mutable array collecting graph node IDs for this turn.
-- `identity`: `{ tenantId, userId, conversationId }` (for logging and provenance; graph writes remain tenant-neutral).
-
-Steps per concept:
-
-1. **Normalise** the concept description:
-   - Lowercase + trim `prefLabel` and `altLabels` for matching.
-   - Basic cleaning (punctuation, whitespace).
-
-2. **Resolve or create concept node** via `canonicalConceptResolver.resolveOrCreateFromGraph`:
-
-   ```ts
-   const conceptNode = await canonicalConceptResolver.resolveOrCreateFromGraph({
-     domain,
-     kind,
-     jurisdiction,
-     prefLabel,
-     altLabels,
-     definition,
-     sourceUrls,
-   });
-   ```
-
-   Implementation details:
-
-   - Uses `GraphClient` to check if a `:Concept` (or specific subtype, e.g. `:TaxConcept`) exists with matching `{ domain, kind, jurisdiction }`.
-   - If found → returns that node (no new node).
-   - If not found → calls `GraphWriteService.upsertConcept(...)` to create:
-     - `(:Concept { id, domain, kind, jurisdiction, pref_label, definition })`
-     - `(:Label { value: altLabel })` nodes linked by `:HAS_ALT_LABEL`.
-   - All writes go through **Graph Ingress Guard**.
-
-3. **Decide whether to trigger auto-ingestion**:
-
-   After resolving/creating the concept node, call e.g. `graphHasUsefulDetail(conceptNode.id)`:
-
-   ```ts
-   if (!graphHasUsefulDetail(conceptNode.id)) {
-     enqueueIngestionJob({
-       conceptId: conceptNode.id,
-       domain,
-       kind,
-       jurisdiction,
-       sourceUrls,
-     });
-   }
-   ```
-
-   Where `graphHasUsefulDetail` checks for:
-
-   - Presence of relevant rule subgraph (e.g. `:Rate` nodes for VAT, `:Band` nodes for VRT, `:Condition` nodes for benefits).
-   - Optionally staleness (e.g. `last_verified_at` older than some threshold).
-
-   Ingestion flows (MCP → web → parsing → LLM → GraphWriteService) are outside this spec but are queued here.
-
-4. **Populate `referencedNodeIds` for this turn**:
-
-   - Append `conceptNode.id` to `referencedNodeIds`.
-   - De-duplicate at the end of the handler.
-
-### 3.3 When does self-population trigger?
-
-Self-population is triggered **as soon as the `capture_concepts` tool output arrives** in the stream:
-
-- The answer text is still streaming to the UI.
-- Tool output is parsed and used to:
-  - Resolve/create concept nodes.
-  - Optionally enqueue ingestion.
-  - Collect `referencedNodeIds` for the current turn.
-
-The **current answer** does *not* depend on the new nodes being present (they are mainly for **next turns** and for the graph UI). The rules graph "quietly" gets smarter in the background.
-
----
-
-## 4. Conversation Context & `referencedNodes`
-
-This spec is designed to work with **Conversation Context v0.1**.
-
-### 4.1 Role of `referencedNodes`
-
-From the v0.4/v0.5 architecture, `ChatResponse` includes:
+The engine treats `capture_concepts` as input to a **Canonical Concept Resolver** in the graph layer.
 
 ```ts
-interface ChatResponse {
-  answer: string;
-  referencedNodes: string[];    // IDs of rules/benefits/etc.
-  jurisdictions: string[];
-  uncertaintyLevel: 'low' | 'medium' | 'high';
-  disclaimerKey: string;
+export interface CanonicalConceptInput {
+  domain: string;
+  kind: string;
+  jurisdiction: string;
+  prefLabel: string;
+  altLabels: string[];
+  definition?: string;
+  sourceUrls?: string[];
+}
+
+export interface CanonicalConceptResult {
+  id: string;        // Memgraph node ID (internal identifier)
+  labels: string[];  // e.g. ['Concept', 'TaxConcept']
+}
+
+export interface CanonicalConceptResolver {
+  resolveOrCreateFromGraph(
+    input: CanonicalConceptInput,
+  ): Promise<CanonicalConceptResult>;
 }
 ```
 
-`referencedNodes` are explicitly intended to be **graph node IDs** for the rules/benefits/sections/timelines/cases/etc. that the answer is hanging off.
+Implementation notes:
 
-In this design, they are populated from the **concept capture & resolution** pipeline:
+- `CanonicalConceptResolver` lives in `reg-intel-graph`.
+- It must use `GraphClient` for reads and `GraphWriteService` for any writes.
+- All writes must be subject to `Graph Ingress Guard` aspects.
 
-- For each concept resolved to a graph node via `canonicalConceptResolver`, we add the node ID to `referencedNodeIds`.
-- These IDs are returned in `ChatResponse.referencedNodes` and can be:
-  - Rendered in the UI as “evidence chips”, and
-  - Used to focus/highlight nodes in any graph view.
+### 5.2 `handleConceptMetadataFromMainChat` flow
 
-### 4.2 Conversation Context ownership
+Within `reg-intel-core`, the Compliance Engine defines a handler for tool payloads:
 
-The **front-end remains dumb**:
+```ts
+async function handleConceptMetadataFromMainChat(
+  argsJson: unknown,
+  opts: {
+    tenantId: string;
+    conversationId: string;
+    graph: CanonicalConceptResolver;
+    enqueueIngestionJob: (input: { conceptId: string; domain: string; kind: string; jurisdiction: string; sourceUrls?: string[] }) => Promise<void>;
+  },
+): Promise<{ referencedNodeIds: string[] }> {
+  // Implementation sketch; see textual description below.
+}
+```
 
-- It only knows about `POST /api/chat` with `{ messages, profile }`.
-- It receives streamed answers plus meta (`referencedNodes`, etc.).
-- It is **not responsible** for managing conversation context.
+Conceptual steps:
 
-Conversation context is managed **server-side** by `reg-intel-core`, via a `ConversationContextStore` implemented by the host app (e.g. Supabase/Postgres in the demo shell).
+1. **Parse & validate `argsJson`:**
+   - Ensure it matches the expected `concepts[]` shape.
+   - On validation failure: log & return `{ referencedNodeIds: [] }` (do **not** fail the chat).
 
-For each `(tenantId, conversationId)`:
+2. **Normalise each concept:**
+   - Trim/normalise whitespace.
+   - Lowercase for comparison where appropriate.
+   - Clean up obvious formatting issues.
 
-- On `handleChat` **start**:
-  - Load `ConversationContext` (or use an empty one).
-  - Use `conversationContextAspect` to inject a short description of `activeNodeIds` into the system prompt.
+3. **Resolve or create concept nodes:**
+   - For each concept, call `CanonicalConceptResolver.resolveOrCreateFromGraph(...)`.
+   - Collect `id` values into a `referencedNodeIds` array.
 
-- On `handleChat` **end**:
-  - Merge `referencedNodeIds` from this turn into `ctx.activeNodeIds`.
-  - Save `ConversationContext` back to the store.
+4. **Decide on ingestion:**
+   - For each resolved concept, call a helper like `graphHasUsefulDetail(conceptId)`.
+   - If missing/sparse:
+     - Call `enqueueIngestionJob(...)` to trigger MCP‑based enrichment.
 
-This ensures that **existing concepts** become “immediately available” to the next question *without* any responsibility on the front-end.
+5. **Return `referencedNodeIds`:**
+   - The Compliance Engine uses these IDs to:
+     - Populate `ChatResponse.referencedNodes`.
+     - Update `ConversationContext.activeNodeIds`.
 
----
+### 5.3 Error handling and resilience
 
-## 5. Storage & Separation of Concerns
+- **Malformed tool output:**
+  - If `argsJson` cannot be parsed/validated, the engine must:
+    - Log the error (including minimal context for debugging).
+    - Skip concept capture for this turn.
+    - Still return a normal answer to the user.
 
-### 5.1 Conversations & context (Supabase/Postgres)
+- **Graph errors:**
+  - If `CanonicalConceptResolver` throws for a single concept, the engine should:
+    - Log the error.
+    - Continue processing other concepts where possible.
 
-Supabase/Postgres (or equivalent) holds:
+- **Ingestion errors:**
+  - If `enqueueIngestionJob` fails, the engine should:
+    - Log the failure.
+    - Not block the user response.
 
-- `tenants` (tenantId).
-- `users` (userId, belongs to tenantId).
-- `conversations` (conversationId, tenantId, createdByUserId, etc.).
-- `messages` (per conversation, roles + content).
-- `conversation_context` (per-tenant, per-conversation `activeNodeIds` and future fields).
-
-Access control is per-tenant/per-user. One or many users in a tenant may access a conversation, depending on later sharing rules.
-
-### 5.2 Rules & concepts (Memgraph)
-
-Memgraph remains a **shared, PII-free knowledge graph** containing:
-
-- Regulatory structures:
-  - `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:TimelineConstraint`,
-  - `:TaxConcept` / `:Concept` (VAT, VRT, import flows, etc.),
-  - `:Guidance`, `:Case`, `:Treaty`, `:Jurisdiction`, etc.
-- Minimal label metadata:
-  - `pref_label` on concept nodes.
-  - A small number of `:Label` nodes for alternative labels, via `:HAS_ALT_LABEL`.
-
-Memgraph **never** stores:
-
-- Conversation text.
-- User or company identifiers.
-- Per-user scenarios with PII.
-
-All writes go through:
-
-- `GraphWriteService` → `Graph Ingress Guard`, enforcing schema and PII-stripping.
-
-### 5.3 Runtime connection
-
-For each `/api/chat` call:
-
-1. The API route (demo web app) resolves `tenantId`, `userId`, `conversationId` from Supabase auth/session.
-2. It calls:
-
-   ```ts
-   complianceEngine.handleChat({
-     request: { messages, profile },
-     identity: { tenantId, userId, conversationId },
-   });
-   ```
-
-3. Inside the engine:
-   - Load `ConversationContext` from the store.
-   - Build prompts (including context aspect).
-   - Call `LlmRouter.stream(...)` with `capture_concepts` tool.
-   - Stream answer text to the UI.
-   - Process tool output for concept capture & graph enrichment.
-   - Update `ConversationContext` and save.
-
-4. The engine returns `ChatResponse` with:
-   - `answer` (final text),
-   - `referencedNodes` (Memgraph IDs of relevant rules/benefits/etc.),
-   - `jurisdictions`, `uncertaintyLevel`, `disclaimerKey`.
-
-The front-end **never** talks directly to Memgraph; it only calls `/api/chat` and graph read endpoints.
+Concept capture is **additive**: failures should not break chat.
 
 ---
 
-## 6. Future Considerations
+## 6. Self‑Population & Ingestion Gating
 
-### 6.1 Non-OpenAI providers
+### 6.1 When to create concept nodes
 
-For providers that do not support tools/structured outputs:
+For each `CanonicalConceptInput`, the resolver must:
 
-- v0.1 implementation may simply **disable concept capture** for those tenants.
-- v0.2 may introduce a fallback:
-  - Ask the model to emit a small JSON block as part of the answer (with clear delimiters),
-  - Parse it on the server side (more brittle, but still usable).
+1. Query Memgraph (via `GraphClient`) for an existing concept node matching at least `(domain, kind, jurisdiction)`.
+2. If such a node exists:
+   - Reuse its `id`.
+   - Optionally enrich label/alias nodes via `GraphWriteService` if new `altLabels` are useful.
+3. If no node exists:
+   - Create a new concept node (e.g. labelled `:Concept` and a more specific label like `:TaxConcept`).
+   - Set canonical properties such as `domain`, `kind`, `jurisdiction`, `prefLabel`, `definition`.
+   - Create and link `:Label`/alias nodes if the graph schema supports them.
 
-### 6.2 Extending the SKOS payload
+All writes must go through `GraphWriteService` and be validated by `Graph Ingress Guard`.
 
-Future versions may add fields to `capture_concepts` such as:
+### 6.2 When to trigger ingestion
 
-- `broaderConcept` / `narrowerConcept` hints.
-- Explicit `sectionReferences` (e.g. TCA 1997 s.81B).
-- Confidence scores.
+The concept capture pipeline must **not** trigger ingestion for every concept blindly.
 
-The engine should treat the tool schema as versioned and **defensively parse** unknown fields.
+For each `CanonicalConceptResult` (`id`):
 
-### 6.3 Integration with scenarios and what-if engine
+- Call a helper like `graphHasUsefulDetail(id)` that checks:
+  - Are there edges to rules/sections/rates/benefits?
+  - Are important properties (e.g. VAT rate bands) populated and not stale?
 
-Once the **Scenario Engine** is introduced, `activeNodeIds` and concept capture can feed into:
+If **missing or clearly sparse**:
 
-- Scenario definitions (e.g. VAT + VRT + import duty as a combined scenario).
-- What-if comparisons (changing jurisdiction, entity type, or timelines).
+- Call `enqueueIngestionJob({ conceptId: id, domain, kind, jurisdiction, sourceUrls })`.
+- This job will:
+  - Use MCP (or similar) to fetch official documents (e.g. Revenue, gov.ie, EU regs).
+  - Parse them with LLM tools.
+  - Upsert richer rule/timeline nodes via `GraphWriteService`.
 
-These will be layered on top of the same concept capture and conversation context primitives defined here.
+If **sufficiently enriched**:
+
+- Do not enqueue ingestion; reuse existing graph detail.
+
+### 6.3 Graph change detection integration
+
+- When ingestion jobs write to Memgraph via `GraphWriteService`, they must maintain `created_at` / `updated_at` timestamps.
+- `GraphChangeDetector` uses these timestamps to compute patches.
+- The graph UI subscribes to `/api/graph/stream` to receive those patches and update visualisations.
+
+Self‑population via `capture_concepts` therefore feeds into the live graph update loop without additional wiring.
 
 ---
 
-## 7. Summary
+## 7. Conversation Context & `referencedNodes`
 
-- We remove the dedicated `entity-extraction` LLM task and embed **concept capture** into the **main chat** call via the `capture_concepts` tool.
-- The LLM streaming pipeline now yields **text chunks** (to the UI) and **tool chunks** (to the Compliance Engine only).
-- Tool output contains **SKOS-inspired concept descriptions** (`prefLabel`, `altLabels`, `definition`, etc.).
-- The Compliance Engine:
-  - Resolves/creates concept nodes in Memgraph via `canonicalConceptResolver` + `GraphWriteService`.
-  - Decides whether to enqueue **auto-ingestion** tasks when the graph lacks detail.
-  - Populates `ChatResponse.referencedNodes` with the relevant node IDs.
-  - Updates **ConversationContext.activeNodeIds**, ensuring concepts are immediately available for the next turn.
-- Supabase/Postgres holds conversations and per-conversation context (tenant/user scoped); Memgraph remains a shared, PII-free rules graph.
+### 7.1 `referencedNodes` semantics
 
-This spec, together with `conversation_context_spec_v_0_1.md`, defines the backbone for **self-populating, context-aware chat** in the Regulatory Intelligence Copilot.
+`ChatResponse.referencedNodes: string[]` is defined as:
+
+> The set of Memgraph node IDs (rules, sections, benefits, reliefs, concepts, timelines, etc.) that the engine considers central to the answer it just returned.
+
+From this spec’s perspective:
+
+- All `CanonicalConceptResult.id` values discovered via `capture_concepts` for this turn should be added to `referencedNodes`.
+- Other graph lookups performed by the agent/engine (e.g. specific sections) may also add node IDs.
+
+The UI may use `referencedNodes` to:
+
+- Show evidence chips.
+- Highlight nodes in the graph view.
+
+The UI is **not required** to send them back on the next turn.
+
+### 7.2 Conversation context update
+
+The Compliance Engine uses `referencedNodes` to update `ConversationContext` (see `conversation_context_spec_v_0_1.md`):
+
+1. Load `ConversationContext` for `(tenantId, conversationId)`.
+2. Compute the new `activeNodeIds` as the union of existing `activeNodeIds` and `referencedNodes` for this turn (optionally pruned to a max size).
+3. Save the updated context via `ConversationContextStore`.
+
+On the **next** turn, the `conversationContextAspect`:
+
+- Resolves `activeNodeIds` back to short SKOS‑style summaries via `GraphClient`.
+- Injects a concise "concepts already in scope" paragraph into the system prompt.
+
+This ensures that concepts learned in earlier turns (e.g. `Rule:VAT_IE`, `Rule:VRT_IE`) remain available and explicit to the model in later turns.
+
+---
+
+## 8. Storage & Privacy Boundaries
+
+This spec respects the global data‑separation rules:
+
+- **Supabase/Postgres** stores:
+  - Tenants, users, conversations, messages.
+  - `ConversationContext` (including `activeNodeIds`).
+- **Memgraph** stores only:
+  - Public regulatory graph data (rules, sections, benefits, timelines, concept nodes, label/alias nodes, etc.).
+  - No user IDs, no conversation IDs, no raw chat text, no detailed scenario objects.
+
+`capture_concepts` payloads must not contain user‑specific personal data; they describe **general regulatory concepts**, not individual situations.
+
+---
+
+## 9. Versioning & Future Extensions
+
+### 9.1 v0.1 guarantees
+
+v0.1 guarantees the following behaviour:
+
+- Single main chat call per user message.
+- SKOS‑style concept capture via `capture_concepts` tool for providers that support tools.
+- Self‑population of concept nodes in Memgraph via `CanonicalConceptResolver`.
+- `referencedNodes` populated based on resolved concept IDs.
+- Conversation context updates with `activeNodeIds` per conversation, owned by the engine.
+- Resilience: failures in concept capture **must not** break user‑visible chat.
+
+### 9.2 Possible v0.2+ enhancements (non‑binding)
+
+- Multi‑schema support for providers that do not support tools (e.g. JSON‑in‑text fallback).
+- Richer SKOS fields (`notation`, `broader`, `narrower`, `related`).
+- Domain‑specific schemas for tax, welfare, pensions, and other regimes.
+- Deeper integration with the Scenario Engine for scenario‑scoped concept capture.
+
+For now, v0.1 is intentionally minimal but sufficient to support VAT/VRT/import‑type flows and to validate self‑populating behaviour in the shared rules graph.
 
