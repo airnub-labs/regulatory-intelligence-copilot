@@ -195,8 +195,8 @@ await executeCypher(driver, `
 Seeds Memgraph with special jurisdiction modelling for IE/UK/NI/IM/EU, Common Travel Area (CTA), and Northern Ireland Protocol framework.
 
 Implements the design documented in:
-- `docs/specs/special_jurisdictions_modelling_v_0_1.md`  
-- `docs/graph_seed_ni_uk_ie_eu.txt`
+- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
+- `docs/architecture/graph/graph_seed_ni_uk_ie_eu.txt`
 
 ### Usage
 
