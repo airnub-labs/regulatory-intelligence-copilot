@@ -8,12 +8,12 @@
 > Normative references:
 > - `docs/architecture_v_0_4.md`
 > - `docs/decisions_v_0_4.md`
-> - `docs/specs/graph_schema_v_0_3.md`
+> - `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
 > - `docs/specs/graph_schema_changelog_v_0_3.md`
-> - `docs/specs/timeline_engine_v_0_2.md`
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
 > - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-> - `docs/specs/graph_ingress_guard_v_0_1.md`
-> - `docs/specs/egress_guard_v_0_2.md`
+> - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+> - `docs/specs/safety-guards/egress_guard_v_0_2.md`
 > - `docs/specs/graph_algorithms_v_0_1.md`
 > - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 > - `docs/specs/special_jurisdictions_graph_seed_ni_uk_ie_eu.cypher` (example seed)
@@ -185,7 +185,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
   - [ ] Ensure all external calls still go through `EgressClient`.
 - [ ] On-demand enrichment pipeline:
   - [ ] When an agent detects missing coverage, use MCP search (possibly from E2B sandbox) to fetch relevant documents.
-  - [ ] Parse into candidate nodes/edges consistent with `graph_schema_v_0_3`.
+  - [ ] Parse into candidate nodes/edges consistent with `docs/specs/graph-schema/versions/graph_schema_v_0_3`.
   - [ ] Upsert via `GraphWriteService` (never directly) so ingress guard applies.
 - [ ] Change tracking:
   - [ ] Model `:ChangeEvent` / `:Update` nodes (Finance Acts, eBriefs, TAC decisions, EU cases).

@@ -16,7 +16,7 @@ This document tracks the implementation of the v0.4 architecture as defined in:
 ### Core Infrastructure
 
 #### 1. Documentation & Specs
-- [x] Created `docs/specs/graph_schema_changelog_v_0_4.md`
+- [x] Created `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
   - Documents schema evolution from v0.3 to v0.4
   - Clarifies that v0.4 uses v0.3 schema with enhanced enforcement
   - Documents Graph Ingress Guard integration

@@ -1,15 +1,15 @@
 # Regulatory Graph Copilot – Concept v0.4
 
 > **Status:** v0.4  
-> **Supersedes:** `regulatory_graph_copilot_concept_v_0_3.md`  
+> **Supersedes:** `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`  
 > **Companion specs:**
 > - `architecture_v_0_4.md`
-> - `graph_schema_v_0_4.md`
+> - `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
 > - `graph_algorithms_v_0_1.md`
-> - `timeline_engine_v_0_2.md`
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
 > - `data_privacy_and_architecture_boundaries_v_0_1.md`
-> - `graph_ingress_guard_v_0_1.md`
-> - `egress_guard_v_0_2.md`
+> - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+> - `docs/specs/safety-guards/egress_guard_v_0_2.md`
 > - `special_jurisdictions_modelling_v_0_1.md`
 
 ---
@@ -69,7 +69,7 @@ These create:
 - **Timing‑sensitive events** – especially for CGT (disposals vs reacquisitions, share matching), contribution windows, and qualifying periods for benefits.
 - **Cross‑border interactions** – which country’s system applies, how contributions aggregate, how treaties and EU regulations coordinate.
 
-The graph model (see `graph_schema_v_0_4.md`) expresses this as:
+The graph model (see `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`) expresses this as:
 
 - Nodes: statutes/sections, benefits, reliefs, conditions, timelines, cases, guidance, EU instruments, jurisdictions, profile tags, change events.
 - Edges (examples):
@@ -113,7 +113,7 @@ Domain narrowing happens at the **agent + prompt aspect** layer (persona, jurisd
 
 Same as v0.3, but now explicitly:
 
-- Backed by `graph_schema_v_0_4.md` for structure.
+- Backed by `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` for structure.
 - Leveraging Timeline Engine v0.2 for time windows.
 - Optionally using graph algorithms (e.g. communities) for better retrieval/explanation.
 
@@ -155,7 +155,7 @@ Agents can form explanations like:
 
 Unchanged in principle from v0.3, but now:
 
-- Expressed in `graph_schema_v_0_4.md` using explicit edge types for different time aspects.
+- Expressed in `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` using explicit edge types for different time aspects.
 - Federated into the Timeline Engine v0.2 so the engine can reason over timelines, not just the graph.
 
 This supports explanations like:

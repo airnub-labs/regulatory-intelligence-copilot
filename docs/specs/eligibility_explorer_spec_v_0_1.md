@@ -1,6 +1,6 @@
 # Eligibility Explorer Spec v0.1
 
-> Draft spec for the Eligibility Explorer feature (Use Case 1), building on `architecture_v_0_4.md`, `architecture_v_0_5.md`, `graph_schema_v_0_4.md`, `timeline_engine_v_0_2.md`, `scenario_engine_v_0_1.md`, and `regulatory_graph_copilot_concept_v_0_4.md`.
+> Draft spec for the Eligibility Explorer feature (Use Case 1), building on `architecture_v_0_4.md`, `architecture_v_0_5.md`, `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`, `docs/specs/timeline-engine/timeline_engine_v_0_2.md`, `scenario_engine_v_0_1.md`, and `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`.
 
 Status: **Draft v0.1**  
 Scope: **End-to-end eligibility exploration service and feature set in `reg-intel-core` + demo web UI, using the shared rules graph, Timeline Engine, and Scenario Engine without storing PII in Memgraph.**
@@ -94,7 +94,7 @@ Time-related relationships:
 - `(:Benefit)-[:FILING_DEADLINE]->(:TimelineConstraint)`  
 - Equivalent edges for `:Relief`.
 
-These nodes/edges are defined and constrained by `graph_schema_v_0_4.md` and `timeline_engine_v_0_2.md`.
+These nodes/edges are defined and constrained by `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` and `docs/specs/timeline-engine/timeline_engine_v_0_2.md`.
 
 ### 3.3 Eligibility Query
 

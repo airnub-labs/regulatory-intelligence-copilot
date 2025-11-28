@@ -5,11 +5,11 @@
 > **Builds on:**
 > - `architecture_v_0_6.md`
 > - `graph_schema_v_0_6.md`
-> - `timeline_engine_v_0_2.md`
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
 > - `timeline-integration_v_0_3.md`
 > - `concept_capture_from_main_chat_v_0_1.md`
 > - `conversation_context_spec_v_0_1.md`
-> - `regulatory_graph_copilot_concept_v_0_6.md`
+> - `docs/specs/concept/regulatory_graph_copilot_concept_v_0_6.md`
 
 ## 1. Purpose
 
@@ -213,7 +213,7 @@ Scenario Engine composes:
 - **GraphClient** (`reg-intel-graph`):
   - Read-only access to rules, benefits, reliefs, conditions, timelines.
   - Helper queries like `getRulesForProfileAndJurisdictions` / `getTimelinesForBenefit`.
-- **TimelineEngine** (`timeline_engine_v_0_2`):
+- **TimelineEngine** (`docs/specs/timeline-engine/timeline_engine_v_0_2.md`):
   - Evaluates lookbacks, lock-ins, deadlines, and effective windows per rule/timeline.
 - **ComplianceEngine & Agents** (`reg-intel-core`):
   - Provide Scenarios loaded from tenant storage.

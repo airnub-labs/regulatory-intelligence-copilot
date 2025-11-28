@@ -280,6 +280,6 @@ The integration test verifies:
 ## References
 
 - **Timeline Engine Spec**: [`docs/specs/timeline_engine_v_0_1.md`](specs/timeline_engine_v_0_1.md)
-- **Graph Schema**: [`docs/specs/graph_schema_v_0_2.md`](specs/graph_schema_v_0_2.md)
+- **Graph Schema**: [`docs/specs/graph-schema/versions/graph_schema_v_0_2.md`](specs/graph_schema_v_0_2.md)
 - **Agent Implementation**: [`packages/compliance-core/src/agents/SingleDirector_IE_SocialSafetyNet_Agent.ts`](../packages/compliance-core/src/agents/SingleDirector_IE_SocialSafetyNet_Agent.ts)
 - **BoltGraphClient**: [`packages/compliance-core/src/graph/boltGraphClient.ts`](../packages/compliance-core/src/graph/boltGraphClient.ts)

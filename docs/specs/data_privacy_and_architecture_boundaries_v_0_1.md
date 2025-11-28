@@ -344,8 +344,8 @@ Implementers must also consult:
 
 - `docs/architecture_v_0_3.md` (or latest)
 - `docs/decisions_v_0_3.md` (or latest)
-- `docs/specs/graph_schema_v_0_3.md` (or latest)
-- `docs/specs/timeline_engine_v_0_2.md` (or latest)
+- `docs/specs/graph-schema/versions/graph_schema_v_0_3.md` (or latest)
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md` (or latest)
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/specs/node_24_lts_rationale.md` (runtime & security baselines)
 

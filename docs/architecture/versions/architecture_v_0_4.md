@@ -16,15 +16,15 @@
 
 This architecture sits on top of, and must remain consistent with, the following specs:
 
-- `docs/specs/graph_schema_v_0_3.md`
+- `docs/specs/graph-schema/versions/docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
 - `docs/specs/graph_schema_changelog_v_0_3.md`
 - `docs/specs/graph_algorithms_v_0_1.md`
-- `docs/specs/timeline_engine_v_0_2.md`
-- `docs/specs/regulatory_graph_copilot_concept_v_0_3.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/specs/graph_ingress_guard_v_0_1.md`
-- `docs/specs/egress_guard_v_0_2.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/egress_guard_v_0_2.md`
 
 And the project‑level docs:
 
@@ -378,7 +378,7 @@ The **EgressClient** is the single choke‑point for:
 It:
 
 1. Constructs an `EgressGuardContext` (target type, provider, endpoint, payload, tenantId, jurisdictions…).
-2. Passes this through the **Egress Guard aspect pipeline** defined in `egress_guard_v_0_2.md`.
+2. Passes this through the **Egress Guard aspect pipeline** defined in `docs/specs/safety-guards/egress_guard_v_0_2.md`.
 3. The final aspect executes the actual outbound call using the provider SDK/HTTP client and attaches the raw response back onto the context.
 
 Egress aspects can:
@@ -487,7 +487,7 @@ All writes must go through `GraphWriteService`, which applies the ingress aspect
 
 ### 8.2 Schema Overview (Summary)
 
-Full details are in `graph_schema_v_0_3.md`; in brief:
+Full details are in `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`; in brief:
 
 - **Key node labels**:
   - `:Jurisdiction`, `:Region`, `:Agreement`, `:Treaty`

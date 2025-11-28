@@ -2,7 +2,7 @@
  * Graph Ingress Guard v0.1
  *
  * Implements the aspect-based ingress guard pattern for all Memgraph writes.
- * See: docs/specs/graph_ingress_guard_v_0_1.md
+ * See: docs/specs/safety-guards/graph_ingress_guard_v_0_1.md
  */
 
 /**
