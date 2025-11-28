@@ -1,4 +1,4 @@
-# Documentation index (v0.6)
+# Documentation index
 
 This folder contains all of the **architecture, governance, and spec documents** for the Regulatory Intelligence Copilot.
 
