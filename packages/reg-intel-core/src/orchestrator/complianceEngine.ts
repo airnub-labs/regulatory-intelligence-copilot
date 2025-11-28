@@ -32,6 +32,7 @@ import {
   disclaimerAspect,
   jurisdictionAspect,
   profileContextAspect,
+  conversationContextAspect,
 } from '@reg-copilot/reg-intel-prompts';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 
@@ -130,8 +131,25 @@ export interface CapturedConcept {
 /**
  * Conversation context store for active node tracking
  */
+export interface ConversationIdentity {
+  tenantId: string;
+  conversationId: string;
+  userId?: string | null;
+}
+
+export interface ConversationContext {
+  activeNodeIds: string[];
+}
+
+export const EMPTY_CONVERSATION_CONTEXT: ConversationContext = { activeNodeIds: [] };
+
 export interface ConversationContextStore {
-  mergeActiveNodeIds(conversationId: string, nodeIds: string[]): Promise<void>;
+  load(identity: ConversationIdentity): Promise<ConversationContext | null>;
+  save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void>;
+  mergeActiveNodeIds?(
+    identity: ConversationIdentity,
+    nodeIds: string[]
+  ): Promise<void>;
 }
 
 /**
@@ -146,6 +164,12 @@ interface ToolStreamChunk extends RouterStreamChunk {
 }
 
 type RouterChunk = RouterStreamChunk | ToolStreamChunk;
+
+interface ResolvedNodeMeta {
+  id: string;
+  label: string;
+  type: string;
+}
 
 interface ToolAwareCompletionOptions extends LlmCompletionOptions {
   tools?: Array<Record<string, unknown>>;
@@ -190,11 +214,15 @@ export class ComplianceEngine {
     this.deps = deps;
   }
 
-  private async buildPromptMetadata(profile?: UserProfile) {
+  private async buildPromptMetadata(
+    profile?: UserProfile,
+    conversationContext?: { summary?: string; nodes: ResolvedNodeMeta[] }
+  ) {
     const builder = createPromptBuilder([
       jurisdictionAspect,
       agentContextAspect,
       profileContextAspect,
+      conversationContextAspect,
       disclaimerAspect,
     ]);
 
@@ -204,6 +232,8 @@ export class ComplianceEngine {
       profile,
       agentId: 'ComplianceEngine',
       includeDisclaimer: true,
+      conversationContextSummary: conversationContext?.summary,
+      conversationContextNodes: conversationContext?.nodes,
     });
 
     const jurisdictions =
@@ -330,18 +360,138 @@ export class ComplianceEngine {
     return merged;
   }
 
+  private async resolveActiveNodes(nodeIds: string[]): Promise<ResolvedNodeMeta[]> {
+    if (!nodeIds.length) {
+      return [];
+    }
+
+    const escapedIds = nodeIds.map(id =>
+      id.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    );
+    const query = `
+      MATCH (n)
+      WHERE n.id IN ['${escapedIds.join("','")}']
+      RETURN n.id AS id, coalesce(n.label, n.name, n.title) AS label, head(labels(n)) AS type
+    `;
+
+    try {
+      const result = await this.deps.graphClient.executeCypher(query);
+      if (!Array.isArray(result)) {
+        return [];
+      }
+
+      return (
+        result
+          .map(raw => {
+            const row = raw as Record<string, unknown>;
+            const id =
+              typeof row.id === 'string'
+                ? row.id
+                : row.id !== undefined
+                  ? String(row.id)
+                  : undefined;
+            if (!id) {
+              return null;
+            }
+
+            const labelCandidate =
+              typeof row.label === 'string'
+                ? row.label
+                : typeof (row as Record<string, unknown>).name === 'string'
+                  ? ((row as Record<string, unknown>).name as string)
+                  : typeof (row as Record<string, unknown>).title === 'string'
+                    ? ((row as Record<string, unknown>).title as string)
+                    : 'Unknown';
+
+            const typeCandidate =
+              typeof row.type === 'string'
+                ? row.type
+                : Array.isArray((row as Record<string, unknown>).labels) &&
+                    typeof (row as Record<string, unknown>).labels?.[0] === 'string'
+                  ? ((row as Record<string, unknown>).labels?.[0] as string)
+                  : 'Concept';
+
+            return {
+              id,
+              label: labelCandidate,
+              type: typeCandidate,
+            } satisfies ResolvedNodeMeta;
+          })
+          .filter(Boolean) as ResolvedNodeMeta[]
+      );
+    } catch (error) {
+      console.warn('Failed to resolve conversation context nodes', error);
+      return [];
+    }
+  }
+
+  private buildConversationContextSummary(nodes: ResolvedNodeMeta[]) {
+    if (!nodes.length) {
+      return undefined;
+    }
+
+    const nodeText = nodes
+      .map(node => `${node.label}${node.type ? ` (${node.type})` : ''}`)
+      .join(', ');
+
+    return `Previous turns referenced: ${nodeText}. Keep follow-up answers consistent with these concepts and their related rules.`;
+  }
+
+  private async loadConversationContext(
+    identity?: ConversationIdentity
+  ): Promise<{
+    context: ConversationContext;
+    nodes: ResolvedNodeMeta[];
+    summary?: string;
+  }> {
+    if (!identity || !this.deps.conversationContextStore) {
+      return { context: EMPTY_CONVERSATION_CONTEXT, nodes: [] };
+    }
+
+    try {
+      const stored =
+        (await this.deps.conversationContextStore.load(identity)) ||
+        EMPTY_CONVERSATION_CONTEXT;
+      const nodes = await this.resolveActiveNodes(stored.activeNodeIds);
+
+      return {
+        context: stored,
+        nodes,
+        summary: this.buildConversationContextSummary(nodes),
+      };
+    } catch (error) {
+      console.warn('Failed to load conversation context', error);
+      return { context: EMPTY_CONVERSATION_CONTEXT, nodes: [] };
+    }
+  }
+
   private async updateConversationContext(
-    conversationId: string | undefined,
+    identity: ConversationIdentity | undefined,
     nodeIds: string[]
   ) {
-    if (!conversationId || !this.deps.conversationContextStore) {
+    if (!identity || !this.deps.conversationContextStore) {
       return;
     }
 
-    await this.deps.conversationContextStore.mergeActiveNodeIds(
-      conversationId,
-      nodeIds
-    );
+    try {
+      if (this.deps.conversationContextStore.mergeActiveNodeIds) {
+        await this.deps.conversationContextStore.mergeActiveNodeIds(identity, nodeIds);
+        return;
+      }
+
+      const existingContext =
+        (await this.deps.conversationContextStore.load(identity)) ||
+        EMPTY_CONVERSATION_CONTEXT;
+      const mergedIds = Array.from(
+        new Set([...existingContext.activeNodeIds, ...nodeIds])
+      );
+
+      await this.deps.conversationContextStore.save(identity, {
+        activeNodeIds: mergedIds,
+      });
+    } catch (error) {
+      console.warn('Failed to persist conversation context', error);
+    }
   }
 
   /**
@@ -368,7 +518,17 @@ export class ComplianceEngine {
       now: new Date(),
     };
 
-    const promptMetadata = await this.buildPromptMetadata(profile);
+    const conversationIdentity =
+      tenantId && conversationId
+        ? { tenantId, conversationId }
+        : undefined;
+    const conversationContext = await this.loadConversationContext(
+      conversationIdentity
+    );
+    const promptMetadata = await this.buildPromptMetadata(profile, {
+      summary: conversationContext.summary,
+      nodes: conversationContext.nodes,
+    });
     const conceptNodeIds = new Set<string>();
     const conceptAwareClient = this.createConceptAwareLlmClient(
       conceptNodeIds,
@@ -396,10 +556,7 @@ export class ComplianceEngine {
       agentResult.referencedNodes,
       conceptNodeIds
     );
-    await this.updateConversationContext(
-      conversationId,
-      referencedNodes.map(node => node.id)
-    );
+    await this.updateConversationContext(conversationIdentity, referencedNodes.map(node => node.id));
 
     return {
       answer: agentResult.answer,
@@ -434,7 +591,17 @@ export class ComplianceEngine {
     }
 
     try {
-      const promptMetadata = await this.buildPromptMetadata(profile);
+      const conversationIdentity =
+        tenantId && conversationId
+          ? { tenantId, conversationId }
+          : undefined;
+      const conversationContext = await this.loadConversationContext(
+        conversationIdentity
+      );
+      const promptMetadata = await this.buildPromptMetadata(profile, {
+        summary: conversationContext.summary,
+        nodes: conversationContext.nodes,
+      });
       const conceptNodeIds = new Set<string>();
       const conceptAwareClient = this.createConceptAwareLlmClient(
         conceptNodeIds,
@@ -501,7 +668,7 @@ export class ComplianceEngine {
       );
 
       await this.updateConversationContext(
-        conversationId,
+        conversationIdentity,
         finalReferencedNodes.map(node => node.id)
       );
 

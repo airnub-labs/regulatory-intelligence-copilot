@@ -32,6 +32,8 @@ export interface LlmCompletionOptions {
   temperature?: number;
   maxTokens?: number;
   tenantId?: string;
+  tools?: Array<Record<string, unknown>>;
+  toolChoice?: 'auto' | 'required' | { type: string; function: { name: string } };
 }
 
 /**
@@ -87,13 +89,23 @@ export interface LlmProviderClient {
   chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string>;
 
   streamChat?(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk>;
 }
 
@@ -195,7 +207,12 @@ export class OpenAiProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -221,7 +238,12 @@ export class OpenAiProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -234,6 +256,8 @@ export class OpenAiProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -274,7 +298,12 @@ export class GroqProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -300,7 +329,12 @@ export class GroqProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -313,6 +347,8 @@ export class GroqProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -353,7 +389,12 @@ export class AnthropicProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -379,7 +420,12 @@ export class AnthropicProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -392,6 +438,8 @@ export class AnthropicProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -432,7 +480,12 @@ export class GeminiProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -458,7 +511,12 @@ export class GeminiProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -471,6 +529,8 @@ export class GeminiProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -590,7 +650,12 @@ export class LlmRouter implements LlmClient {
   ): Promise<{
     provider: string;
     model: string;
-    taskOptions: { temperature?: number; maxTokens?: number };
+    taskOptions: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    };
   }> {
     const tenantId = options?.tenantId ?? 'default';
     const task = options?.task;
@@ -601,9 +666,16 @@ export class LlmRouter implements LlmClient {
     // Determine provider and model
     let provider = this.defaultProvider;
     let model = this.defaultModel;
-    const taskOptions: { temperature?: number; maxTokens?: number } = {
+    const taskOptions: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    } = {
       temperature: options?.temperature,
       maxTokens: options?.maxTokens,
+      tools: options?.tools,
+      toolChoice: options?.toolChoice,
     };
 
     if (policy) {
