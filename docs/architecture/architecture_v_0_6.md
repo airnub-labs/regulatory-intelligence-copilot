@@ -27,7 +27,7 @@ This architecture sits on top of, and must remain consistent with, the following
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
 - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/specs/safety-guards/egress_guard_v_0_2.md`
+- `docs/specs/safety-guards/egress_guard_v_0_3.md`
 
 ### New / Refined Specs Introduced by v0.6
 
@@ -83,6 +83,7 @@ The system consists of:
    - `LlmRouter` with pluggable providers (OpenAI Responses, Groq, local/OSS models).
    - Uses OpenAI Responses API (incl. GPT‑OSS models) as a primary reference implementation.
    - All outbound calls (LLM, MCP, HTTP) go through `EgressClient` and the **Egress Guard**.
+   - Egress Guard supports `enforce` / `report-only` / `off` modes; production wiring uses **enforce** with optional report-only rollout in non-prod.
    - Main‑chat calls can emit **streamed text** for the UI and **structured tool output** for concept capture and other metadata.
 
 5. **Graph Ingress & Ingestion**

@@ -945,8 +945,12 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
   const egressClient =
     config.egressClient ??
     new EgressClient({
-      allowedProviders: availableProviders,
-      ...(config.egressClientConfig ?? {}),
+      allowedProviders:
+        config.egressClientConfig?.allowedProviders ?? availableProviders,
+      mode: config.egressClientConfig?.mode ?? 'enforce',
+      preserveOriginalRequest:
+        config.egressClientConfig?.preserveOriginalRequest ?? false,
+      aspects: config.egressClientConfig?.aspects,
     });
 
   return new LlmRouter(

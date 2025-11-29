@@ -11,7 +11,7 @@
 > - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`  
 > - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`  
 > - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`  
-> - `docs/specs/safety-guards/egress_guard_v_0_2.md`  
+> - `docs/specs/safety-guards/egress_guard_v_0_3.md`
 > - `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
 > - `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
 > - `docs/specs/scenario_engine_v_0_1.md`  
