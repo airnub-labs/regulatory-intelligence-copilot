@@ -301,6 +301,44 @@ interface ConversationContextStore {
 - Allows advanced features like what-if comparisons and curated expert profiles to be built without changing the core engine/graph contracts.
 - Ensures the architecture remains **extensible** while preserving the invariants defined in v0.4–v0.6.
 
+### D-041 – Egress guard modes and safe sanitisation
+
+**Context:**
+
+- Egress policy enforcement and PII redaction need staged rollout controls without allowing accidental bypass of the sanitiser.
+
+**Decision:**
+
+- `EgressClient` exposes three modes: `enforce`, `report-only`, and `off`.
+- In `enforce` and `report-only`, the execution payload is always the sanitised request; `report-only` logs/flags violations and sanitiser changes without blocking calls.
+- `originalRequest` can be preserved explicitly for debugging/telemetry in non-production wiring when needed.
+- `off` disables guarding entirely and is reserved for explicit test/benchmark clients.
+
+**Consequences:**
+
+- Production wiring uses `mode: 'enforce'` by default; staged environments may temporarily use `report-only` while still running with sanitised execution payloads.
+- `mode: 'off'` must be treated as a deliberate, non-default testing override and avoided in normal app wiring.
+
+---
+
+### D-042 – Per-tenant/per-user egress mode resolution (safe by default)
+
+**Context:**
+
+- Tenants may need to stage egress policy changes or enable report-only telemetry without weakening protections for others.
+- Per-user experimentation must not bypass sanitisation for unrelated tenants.
+
+**Decision:**
+
+- `LlmRouter` resolves an `effectiveMode` per call using global defaults, tenant policy (`egressMode`, `allowOffMode`), and optional per-call overrides (e.g. `egressModeOverride`).
+- `EgressGuardContext` carries `effectiveMode`; `EgressClient` falls back to its configured default when it is absent.
+- In `enforce` and `report-only`, execution always uses the sanitised payload; `report-only` logs/flags policy and sanitiser changes instead of blocking. `off` disables aspects entirely and is only for explicitly configured test/benchmark wiring.
+
+**Consequences:**
+
+- Production wiring and default SaaS tenants continue to run in `enforce`; opt-in `report-only` or `off` require explicit tenant policy.
+- Coding agents must assume all outbound provider calls flow through `LlmRouter` + `EgressClient`, with per-call effective mode resolution rather than ad-hoc bypasses.
+
 ---
 
 ## 8. Summary of Changes in v0.6

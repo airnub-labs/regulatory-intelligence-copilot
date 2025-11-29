@@ -26,7 +26,7 @@ If you’re new to the project and want to understand how it fits together:
    - `specs/conversation-context/conversation_context_spec_v_0_1.md`
    - `specs/data_privacy_and_architecture_boundaries_v_0_1.md`
    - `specs/graph_ingress_guard_v_0_1.md`
-   - `specs/egress_guard_v_0_2.md`
+  - `specs/safety-guards/egress_guard_v_0_3.md`
 5. **Change detection & streaming**
    - `change-detection/graph_change_detection_v_0_6.md`
 
@@ -99,7 +99,7 @@ Specs capture the **shape and behaviour** of the main subsystems.
 
 - `specs/data_privacy_and_architecture_boundaries_v_0_1.md` – what data is allowed where (Supabase vs Memgraph vs LLMs vs MCP).
 - `specs/graph_ingress_guard_v_0_1.md` – how all Memgraph writes go through ingress aspects.
-- `specs/egress_guard_v_0_2.md` – how all outbound calls (LLM, MCP, HTTP) go through egress aspects.
+- `specs/safety-guards/egress_guard_v_0_3.md` – how all outbound calls (LLM, MCP, HTTP) go through egress aspects.
 - `specs/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/IM/EU/CTA/GI/AD and their special relationships.
 
 ### Other

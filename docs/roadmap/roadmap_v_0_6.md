@@ -17,7 +17,7 @@ The roadmap must stay aligned with the following documents:
 - `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` + `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
 - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
-- `docs/specs/safety-guards/egress_guard_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
+- `docs/specs/safety-guards/egress_guard_v_0_3.md` – outbound HTTP/LLM/MCP guardrails.
 - `docs/specs/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
 - `docs/specs/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.

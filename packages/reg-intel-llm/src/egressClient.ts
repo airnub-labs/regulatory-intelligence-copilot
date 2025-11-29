@@ -9,9 +9,15 @@ export interface EgressGuardContext {
   endpointId?: string;
   request: unknown;
   sanitizedRequest?: unknown;
+  originalRequest?: unknown;
   tenantId?: string;
   task?: string;
   metadata?: Record<string, unknown>;
+
+  /**
+   * Per-call effective egress mode. Falls back to the client's default when undefined.
+   */
+  effectiveMode?: EgressMode;
 }
 
 export type EgressAspect = (
@@ -29,6 +35,8 @@ export function composeEgressAspects(
   );
 }
 
+export type EgressMode = 'enforce' | 'report-only' | 'off';
+
 export interface EgressClientConfig {
   /**
    * Providers that are allowed to receive outbound traffic.
@@ -36,42 +44,127 @@ export interface EgressClientConfig {
    */
   allowedProviders?: string[];
   aspects?: EgressAspect[];
+
+  /**
+   * Egress mode:
+   * - 'enforce': apply policy, sanitisation, and blocking behaviour.
+   * - 'report-only': detect and log/report policy and sanitisation results, but do not block.
+   * - 'off': disable all guarding/sanitisation (only for explicit test wiring).
+   */
+  mode?: EgressMode;
+
+  /**
+   * When true, keep a copy of the original request payload on ctx.originalRequest.
+   * This is intended for non-production debugging and should not be required for normal operation.
+   */
+  preserveOriginalRequest?: boolean;
 }
 
-function enforceAllowedProvidersAspect(allowed?: string[]): EgressAspect {
+function resolveEgressMode(
+  ctx: EgressGuardContext,
+  defaultMode: EgressMode
+): EgressMode {
+  return ctx.effectiveMode ?? defaultMode;
+}
+
+function providerAllowlistAspect(
+  allowed: string[] | undefined,
+  defaultMode: EgressMode
+): EgressAspect {
   return async (ctx, next) => {
-    if (allowed && allowed.length > 0 && !allowed.includes(ctx.providerId)) {
+    const mode = resolveEgressMode(ctx, defaultMode);
+
+    if (mode === 'off' || !allowed || allowed.length === 0) {
+      return next(ctx);
+    }
+
+    const isAllowed = allowed.includes(ctx.providerId);
+
+    if (!isAllowed && mode === 'enforce') {
       throw new LlmError(
         `Provider ${ctx.providerId} is not allowed by the current egress policy`
       );
+    }
+
+    if (!isAllowed && mode === 'report-only') {
+      const metadata = {
+        ...ctx.metadata,
+        egressPolicyViolation: true,
+        egressPolicyViolationReason: `Provider ${ctx.providerId} is not allowed by the current egress policy`,
+      };
+
+      console.warn('[Egress][report-only] Disallowed provider used', {
+        providerId: ctx.providerId,
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+      });
+
+      return next({ ...ctx, metadata });
     }
 
     return next(ctx);
   };
 }
 
-function sanitizeRequestAspect(): EgressAspect {
+function sanitizeRequestAspect(
+  defaultMode: EgressMode,
+  options: { preserveOriginalRequest?: boolean } = {}
+): EgressAspect {
   return async (ctx, next) => {
-    const sanitizedRequest = sanitizeObjectForEgress(ctx.request);
-    return next({
+    const mode = resolveEgressMode(ctx, defaultMode);
+
+    if (mode === 'off') {
+      return next(ctx);
+    }
+
+    const originalRequest = ctx.request;
+    const sanitizedRequest = sanitizeObjectForEgress(originalRequest);
+
+    const metadata = {
+      ...ctx.metadata,
+      redactionApplied: sanitizedRequest !== originalRequest,
+      redactionReportOnly: mode === 'report-only',
+    };
+
+    const baseCtx: EgressGuardContext = {
       ...ctx,
+      request: sanitizedRequest,
       sanitizedRequest,
-      metadata: {
-        ...ctx.metadata,
-        redactionApplied: sanitizedRequest !== ctx.request,
-      },
-    });
+      metadata,
+    };
+
+    if (options.preserveOriginalRequest) {
+      baseCtx.originalRequest = originalRequest;
+    }
+
+    if (mode === 'report-only' && sanitizedRequest !== originalRequest) {
+      console.warn('[Egress][report-only] PII sanitiser changed payload', {
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+      });
+    }
+
+    return next(baseCtx);
   };
 }
 
 export class EgressClient {
   private readonly pipeline: (ctx: EgressGuardContext) => Promise<EgressGuardContext>;
+  private readonly defaultMode: EgressMode;
 
   constructor(config?: EgressClientConfig) {
-    const baselineAspects: EgressAspect[] = [
-      enforceAllowedProvidersAspect(config?.allowedProviders),
-      sanitizeRequestAspect(),
-    ];
+    this.defaultMode = config?.mode ?? 'enforce';
+
+    const providerAspect = providerAllowlistAspect(
+      config?.allowedProviders,
+      this.defaultMode
+    );
+
+    const sanitizeAspect = sanitizeRequestAspect(this.defaultMode, {
+      preserveOriginalRequest: config?.preserveOriginalRequest,
+    });
+
+    const baselineAspects: EgressAspect[] = [providerAspect, sanitizeAspect];
 
     const runPipeline = composeEgressAspects(
       [...baselineAspects, ...(config?.aspects ?? [])],
@@ -79,6 +172,10 @@ export class EgressClient {
     );
 
     this.pipeline = runPipeline;
+  }
+
+  getDefaultMode(): EgressMode {
+    return this.defaultMode;
   }
 
   async guard(ctx: EgressGuardContext) {

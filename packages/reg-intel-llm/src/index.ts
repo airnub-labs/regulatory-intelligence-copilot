@@ -54,6 +54,7 @@ export {
   composeEgressAspects,
   type EgressAspect,
   type EgressGuardContext,
+  type EgressMode,
   type EgressTarget,
   type EgressClientConfig,
 } from './egressClient.js';

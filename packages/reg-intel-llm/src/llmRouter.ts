@@ -22,7 +22,11 @@
 
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
-import { EgressClient, type EgressClientConfig } from './egressClient.js';
+import {
+  EgressClient,
+  type EgressClientConfig,
+  type EgressMode,
+} from './egressClient.js';
 
 /**
  * LLM completion options
@@ -33,8 +37,13 @@ export interface LlmCompletionOptions {
   temperature?: number;
   maxTokens?: number;
   tenantId?: string;
+  /** Optional user identifier for per-user policies. */
+  userId?: string;
   tools?: Array<Record<string, unknown>>;
   toolChoice?: 'auto' | 'required' | { type: string; function: { name: string } };
+
+  /** Optional per-call override for egress mode. */
+  egressModeOverride?: EgressMode;
 }
 
 /**
@@ -66,6 +75,12 @@ export interface TenantLlmPolicy {
   defaultProvider: string;
   allowRemoteEgress: boolean; // If false, only local models allowed
   tasks: LlmTaskPolicy[];
+
+  /** Default egress mode for this tenant, if configured. */
+  egressMode?: EgressMode;
+
+  /** Whether this tenant is allowed to use 'off' mode for egress. */
+  allowOffMode?: boolean;
 }
 
 /**
@@ -108,6 +123,35 @@ export interface LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): AsyncIterable<LlmStreamChunk>;
+}
+
+function resolveEffectiveEgressMode(
+  baseMode: EgressMode,
+  tenantPolicy: TenantLlmPolicy | null,
+  options?: LlmCompletionOptions
+): EgressMode {
+  const globalDefault: EgressMode = baseMode;
+
+  let mode: EgressMode = tenantPolicy?.egressMode ?? globalDefault;
+
+  const override = options?.egressModeOverride;
+
+  if (override) {
+    if (override === 'off') {
+      if (tenantPolicy?.allowOffMode) {
+        mode = override;
+      } else {
+        mode =
+          tenantPolicy?.egressMode && tenantPolicy.egressMode !== 'off'
+            ? tenantPolicy.egressMode
+            : 'enforce';
+      }
+    } else {
+      mode = override;
+    }
+  }
+
+  return mode;
 }
 
 /**
@@ -586,6 +630,7 @@ export class LlmRouter implements LlmClient {
   private defaultProvider: string;
   private defaultModel: string;
   private egressClient: EgressClient;
+  private egressDefaultMode: EgressMode;
 
   constructor(
     providers: LlmProviderRegistry,
@@ -600,13 +645,21 @@ export class LlmRouter implements LlmClient {
     this.defaultModel = defaultModel;
     this.egressClient =
       egressClient ?? new EgressClient({ allowedProviders: Object.keys(providers) });
+    this.egressDefaultMode = this.egressClient.getDefaultMode();
   }
 
   async chat(
     messages: ChatMessage[],
     options?: LlmCompletionOptions
   ): Promise<string> {
-    const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
+    const { provider, model, taskOptions, tenantPolicy } =
+      await this.resolveProviderAndModel(options);
+
+    const effectiveMode = resolveEffectiveEgressMode(
+      this.egressDefaultMode,
+      tenantPolicy,
+      options
+    );
 
     return this.egressClient.guardAndExecute(
       {
@@ -616,6 +669,7 @@ export class LlmRouter implements LlmClient {
         request: { messages, model, options: taskOptions, task: options?.task },
         tenantId: options?.tenantId,
         task: options?.task,
+        effectiveMode,
       },
       async sanitized => {
         const payload = (sanitized.sanitizedRequest || sanitized.request) as {
@@ -643,7 +697,14 @@ export class LlmRouter implements LlmClient {
     messages: ChatMessage[],
     options?: LlmCompletionOptions
   ): AsyncIterable<LlmStreamChunk> {
-    const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
+    const { provider, model, taskOptions, tenantPolicy } =
+      await this.resolveProviderAndModel(options);
+
+    const effectiveMode = resolveEffectiveEgressMode(
+      this.egressDefaultMode,
+      tenantPolicy,
+      options
+    );
 
     const streamResult = await this.egressClient.guardAndExecute(
       {
@@ -653,6 +714,7 @@ export class LlmRouter implements LlmClient {
         request: { messages, model, options: taskOptions, task: options?.task },
         tenantId: options?.tenantId,
         task: options?.task,
+        effectiveMode,
       },
       async sanitized => {
         const payload = (sanitized.sanitizedRequest || sanitized.request) as {
@@ -703,6 +765,7 @@ export class LlmRouter implements LlmClient {
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
     };
+    tenantPolicy: TenantLlmPolicy | null;
   }> {
     const tenantId = options?.tenantId ?? 'default';
     const task = options?.task;
@@ -777,7 +840,7 @@ export class LlmRouter implements LlmClient {
       model = options.model;
     }
 
-    return { provider, model, taskOptions };
+    return { provider, model, taskOptions, tenantPolicy: policy };
   }
 }
 
@@ -945,8 +1008,12 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
   const egressClient =
     config.egressClient ??
     new EgressClient({
-      allowedProviders: availableProviders,
-      ...(config.egressClientConfig ?? {}),
+      allowedProviders:
+        config.egressClientConfig?.allowedProviders ?? availableProviders,
+      mode: config.egressClientConfig?.mode ?? 'enforce',
+      preserveOriginalRequest:
+        config.egressClientConfig?.preserveOriginalRequest ?? false,
+      aspects: config.egressClientConfig?.aspects,
     });
 
   return new LlmRouter(
