@@ -93,6 +93,16 @@ native request types and this context.
   - Application code (ComplianceEngine, agents, API routes) must route outbound calls via `EgressClient` / `LlmRouter` rather than direct provider clients, so the mode and sanitisation guarantees apply uniformly.
   - `mode: 'off'` must be treated as a deliberate, test-only override.
 
+### 2.2 Effective mode resolution
+
+- Each `EgressGuardContext` carries an optional `effectiveMode` so that per-call decisions can be made without changing the egress pipeline.
+- `EgressClient` uses `effectiveMode` when provided, falling back to its configured default (usually `enforce`).
+- `LlmRouter` is responsible for resolving `effectiveMode` based on:
+  - Global/default mode (production = `enforce`).
+  - Tenant policy (`TenantLlmPolicy.egressMode` + optional `allowOffMode`).
+  - Optional per-call overrides (e.g. user-specific `egressModeOverride`), constrained by tenant policy.
+- In all cases, `enforce` and `report-only` use the **sanitised payload** for execution; `off` skips aspects entirely.
+
 ---
 
 ## 3. Aspect Composition & EgressClient

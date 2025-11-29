@@ -13,6 +13,11 @@ export interface EgressGuardContext {
   tenantId?: string;
   task?: string;
   metadata?: Record<string, unknown>;
+
+  /**
+   * Per-call effective egress mode. Falls back to the client's default when undefined.
+   */
+  effectiveMode?: EgressMode;
 }
 
 export type EgressAspect = (
@@ -55,21 +60,33 @@ export interface EgressClientConfig {
   preserveOriginalRequest?: boolean;
 }
 
-function enforceAllowedProvidersAspect(allowed?: string[]): EgressAspect {
+function resolveEgressMode(
+  ctx: EgressGuardContext,
+  defaultMode: EgressMode
+): EgressMode {
+  return ctx.effectiveMode ?? defaultMode;
+}
+
+function providerAllowlistAspect(
+  allowed: string[] | undefined,
+  defaultMode: EgressMode
+): EgressAspect {
   return async (ctx, next) => {
-    if (allowed && allowed.length > 0 && !allowed.includes(ctx.providerId)) {
+    const mode = resolveEgressMode(ctx, defaultMode);
+
+    if (mode === 'off' || !allowed || allowed.length === 0) {
+      return next(ctx);
+    }
+
+    const isAllowed = allowed.includes(ctx.providerId);
+
+    if (!isAllowed && mode === 'enforce') {
       throw new LlmError(
         `Provider ${ctx.providerId} is not allowed by the current egress policy`
       );
     }
 
-    return next(ctx);
-  };
-}
-
-function allowedProvidersReportOnlyAspect(allowed?: string[]): EgressAspect {
-  return async (ctx, next) => {
-    if (allowed && allowed.length > 0 && !allowed.includes(ctx.providerId)) {
+    if (!isAllowed && mode === 'report-only') {
       const metadata = {
         ...ctx.metadata,
         egressPolicyViolation: true,
@@ -89,18 +106,24 @@ function allowedProvidersReportOnlyAspect(allowed?: string[]): EgressAspect {
   };
 }
 
-function sanitizeRequestAspect(options: {
-  preserveOriginalRequest?: boolean;
-  reportOnly?: boolean;
-} = {}): EgressAspect {
+function sanitizeRequestAspect(
+  defaultMode: EgressMode,
+  options: { preserveOriginalRequest?: boolean } = {}
+): EgressAspect {
   return async (ctx, next) => {
+    const mode = resolveEgressMode(ctx, defaultMode);
+
+    if (mode === 'off') {
+      return next(ctx);
+    }
+
     const originalRequest = ctx.request;
     const sanitizedRequest = sanitizeObjectForEgress(originalRequest);
 
     const metadata = {
       ...ctx.metadata,
       redactionApplied: sanitizedRequest !== originalRequest,
-      redactionReportOnly: !!options.reportOnly,
+      redactionReportOnly: mode === 'report-only',
     };
 
     const baseCtx: EgressGuardContext = {
@@ -114,7 +137,7 @@ function sanitizeRequestAspect(options: {
       baseCtx.originalRequest = originalRequest;
     }
 
-    if (options.reportOnly && sanitizedRequest !== originalRequest) {
+    if (mode === 'report-only' && sanitizedRequest !== originalRequest) {
       console.warn('[Egress][report-only] PII sanitiser changed payload', {
         tenantId: ctx.tenantId,
         task: ctx.task,
@@ -127,23 +150,18 @@ function sanitizeRequestAspect(options: {
 
 export class EgressClient {
   private readonly pipeline: (ctx: EgressGuardContext) => Promise<EgressGuardContext>;
+  private readonly defaultMode: EgressMode;
 
   constructor(config?: EgressClientConfig) {
-    const mode: EgressMode = config?.mode ?? 'enforce';
+    this.defaultMode = config?.mode ?? 'enforce';
 
-    if (mode === 'off') {
-      this.pipeline = async ctx => ctx;
-      return;
-    }
+    const providerAspect = providerAllowlistAspect(
+      config?.allowedProviders,
+      this.defaultMode
+    );
 
-    const providerAspect =
-      mode === 'report-only'
-        ? allowedProvidersReportOnlyAspect(config?.allowedProviders)
-        : enforceAllowedProvidersAspect(config?.allowedProviders);
-
-    const sanitizeAspect = sanitizeRequestAspect({
+    const sanitizeAspect = sanitizeRequestAspect(this.defaultMode, {
       preserveOriginalRequest: config?.preserveOriginalRequest,
-      reportOnly: mode === 'report-only',
     });
 
     const baselineAspects: EgressAspect[] = [providerAspect, sanitizeAspect];
@@ -154,6 +172,10 @@ export class EgressClient {
     );
 
     this.pipeline = runPipeline;
+  }
+
+  getDefaultMode(): EgressMode {
+    return this.defaultMode;
   }
 
   async guard(ctx: EgressGuardContext) {

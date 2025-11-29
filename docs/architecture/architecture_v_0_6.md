@@ -83,7 +83,7 @@ The system consists of:
    - `LlmRouter` with pluggable providers (OpenAI Responses, Groq, local/OSS models).
    - Uses OpenAI Responses API (incl. GPT‑OSS models) as a primary reference implementation.
    - All outbound calls (LLM, MCP, HTTP) go through `EgressClient` and the **Egress Guard**.
-   - Egress Guard supports `enforce` / `report-only` / `off` modes; production wiring uses **enforce** with optional report-only rollout in non-prod.
+   - Egress Guard supports `enforce` / `report-only` / `off` modes; production wiring uses **enforce** with optional report-only rollout in non-prod. Per-tenant/per-user preferences resolve to an `effectiveMode` in `LlmRouter`, but execution payloads remain sanitised in enforce/report-only.
    - Main‑chat calls can emit **streamed text** for the UI and **structured tool output** for concept capture and other metadata.
 
 5. **Graph Ingress & Ingestion**
