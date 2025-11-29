@@ -20,6 +20,7 @@ export {
   profileContextAspect,
   disclaimerAspect,
   additionalContextAspect,
+  conversationContextAspect,
   createPromptBuilder,
   defaultPromptBuilder,
   buildPromptWithAspects,

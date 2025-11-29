@@ -22,6 +22,8 @@ export interface PromptContext {
     jurisdictions?: string[];
   };
   additionalContext?: string[];
+  conversationContextSummary?: string;
+  conversationContextNodes?: Array<{ label: string; type?: string }>;
   includeDisclaimer?: boolean;
 }
 
@@ -145,6 +147,35 @@ export const additionalContextAspect: PromptAspect = async (ctx, next) => {
   return {
     ...result,
     systemPrompt: `${result.systemPrompt}\n\n${additional}`,
+  };
+};
+
+/**
+ * Conversation context aspect - injects a concise summary of active graph concepts/nodes
+ */
+export const conversationContextAspect: PromptAspect = async (ctx, next) => {
+  const result = await next(ctx);
+
+  const summary = ctx.conversationContextSummary?.trim();
+  const nodes = ctx.conversationContextNodes || [];
+
+  if (!summary && nodes.length === 0) {
+    return result;
+  }
+
+  const nodeText =
+    nodes.length > 0
+      ? `Active graph concepts: ${nodes
+          .map(node => `${node.label}${node.type ? ` (${node.type})` : ''}`)
+          .join('; ')}`
+      : '';
+
+  const contextParts = [summary, nodeText].filter(Boolean);
+  const contextBlock = contextParts.join('\n');
+
+  return {
+    ...result,
+    systemPrompt: `${result.systemPrompt}\n\nConversation Context: ${contextBlock}`,
   };
 };
 
