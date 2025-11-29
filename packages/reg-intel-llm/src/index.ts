@@ -48,6 +48,16 @@ export {
   createDefaultLlmRouter,
 } from './llmRouterFactory.js';
 
+// Egress Client
+export {
+  EgressClient,
+  composeEgressAspects,
+  type EgressAspect,
+  type EgressGuardContext,
+  type EgressTarget,
+  type EgressClientConfig,
+} from './egressClient.js';
+
 // Egress Guard
 export {
   sanitizeTextForEgress,

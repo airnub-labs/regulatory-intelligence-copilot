@@ -22,6 +22,7 @@
 
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
+import { EgressClient, type EgressClientConfig } from './egressClient.js';
 
 /**
  * LLM completion options
@@ -32,6 +33,8 @@ export interface LlmCompletionOptions {
   temperature?: number;
   maxTokens?: number;
   tenantId?: string;
+  tools?: Array<Record<string, unknown>>;
+  toolChoice?: 'auto' | 'required' | { type: string; function: { name: string } };
 }
 
 /**
@@ -87,13 +90,23 @@ export interface LlmProviderClient {
   chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string>;
 
   streamChat?(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk>;
 }
 
@@ -195,7 +208,12 @@ export class OpenAiProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -221,7 +239,12 @@ export class OpenAiProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -234,6 +257,8 @@ export class OpenAiProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -274,7 +299,12 @@ export class GroqProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -300,7 +330,12 @@ export class GroqProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -313,6 +348,8 @@ export class GroqProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -353,7 +390,12 @@ export class AnthropicProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -379,7 +421,12 @@ export class AnthropicProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -392,6 +439,8 @@ export class AnthropicProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -432,7 +481,12 @@ export class GeminiProviderClient implements LlmProviderClient {
   async chat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): Promise<string> {
     try {
       const { generateText } = require('ai');
@@ -458,7 +512,12 @@ export class GeminiProviderClient implements LlmProviderClient {
   async *streamChat(
     messages: ChatMessage[],
     model: string,
-    options?: { temperature?: number; maxTokens?: number }
+    options?: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    }
   ): AsyncIterable<LlmStreamChunk> {
     try {
       const { streamText } = require('ai');
@@ -471,6 +530,8 @@ export class GeminiProviderClient implements LlmProviderClient {
         })),
         temperature: options?.temperature ?? 0.3,
         maxTokens: options?.maxTokens ?? 2048,
+        tools: options?.tools,
+        toolChoice: options?.toolChoice,
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
@@ -524,17 +585,21 @@ export class LlmRouter implements LlmClient {
   private policyStore: LlmPolicyStore;
   private defaultProvider: string;
   private defaultModel: string;
+  private egressClient: EgressClient;
 
   constructor(
     providers: LlmProviderRegistry,
     policyStore: LlmPolicyStore,
     defaultProvider: string,
-    defaultModel: string
+    defaultModel: string,
+    egressClient?: EgressClient
   ) {
     this.providers = providers;
     this.policyStore = policyStore;
     this.defaultProvider = defaultProvider;
     this.defaultModel = defaultModel;
+    this.egressClient =
+      egressClient ?? new EgressClient({ allowedProviders: Object.keys(providers) });
   }
 
   async chat(
@@ -543,14 +608,35 @@ export class LlmRouter implements LlmClient {
   ): Promise<string> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
-    // Get provider client
-    const providerClient = this.providers[provider];
-    if (!providerClient) {
-      throw new LlmError(`Unknown provider: ${provider}`);
-    }
+    return this.egressClient.guardAndExecute(
+      {
+        target: 'llm',
+        providerId: provider,
+        endpointId: 'chat',
+        request: { messages, model, options: taskOptions, task: options?.task },
+        tenantId: options?.tenantId,
+        task: options?.task,
+      },
+      async sanitized => {
+        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+          messages: ChatMessage[];
+          model: string;
+          options?: typeof taskOptions;
+          task?: string;
+        };
 
-    // Call provider
-    return providerClient.chat(messages, model, taskOptions);
+        const providerClient = this.providers[provider];
+        if (!providerClient) {
+          throw new LlmError(`Unknown provider: ${provider}`);
+        }
+
+        return providerClient.chat(
+          payload.messages,
+          payload.model,
+          payload.options ?? taskOptions
+        );
+      }
+    );
   }
 
   async *streamChat(
@@ -559,27 +645,48 @@ export class LlmRouter implements LlmClient {
   ): AsyncIterable<LlmStreamChunk> {
     const { provider, model, taskOptions } = await this.resolveProviderAndModel(options);
 
-    // Get provider client
-    const providerClient = this.providers[provider];
-    if (!providerClient) {
+    const streamResult = await this.egressClient.guardAndExecute(
+      {
+        target: 'llm',
+        providerId: provider,
+        endpointId: 'chat',
+        request: { messages, model, options: taskOptions, task: options?.task },
+        tenantId: options?.tenantId,
+        task: options?.task,
+      },
+      async sanitized => {
+        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+          messages: ChatMessage[];
+          model: string;
+          options?: typeof taskOptions;
+          task?: string;
+        };
+
+        const providerClient = this.providers[provider];
+        if (!providerClient) {
+          throw new LlmError(`Unknown provider: ${provider}`);
+        }
+
+        if (!providerClient.streamChat) {
+          throw new LlmError(`Provider ${provider} does not support streaming`);
+        }
+
+        return providerClient.streamChat(
+          payload.messages,
+          payload.model,
+          payload.options ?? taskOptions
+        );
+      }
+    );
+
+    try {
+      yield* streamResult;
+    } catch (error) {
       yield {
         type: 'error',
-        error: new LlmError(`Unknown provider: ${provider}`),
+        error: error instanceof Error ? error : new Error(String(error)),
       };
-      return;
     }
-
-    // Check if provider supports streaming
-    if (!providerClient.streamChat) {
-      yield {
-        type: 'error',
-        error: new LlmError(`Provider ${provider} does not support streaming`),
-      };
-      return;
-    }
-
-    // Stream from provider
-    yield* providerClient.streamChat(messages, model, taskOptions);
   }
 
   /**
@@ -590,7 +697,12 @@ export class LlmRouter implements LlmClient {
   ): Promise<{
     provider: string;
     model: string;
-    taskOptions: { temperature?: number; maxTokens?: number };
+    taskOptions: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    };
   }> {
     const tenantId = options?.tenantId ?? 'default';
     const task = options?.task;
@@ -601,21 +713,49 @@ export class LlmRouter implements LlmClient {
     // Determine provider and model
     let provider = this.defaultProvider;
     let model = this.defaultModel;
-    const taskOptions: { temperature?: number; maxTokens?: number } = {
+    const taskOptions: {
+      temperature?: number;
+      maxTokens?: number;
+      tools?: Array<Record<string, unknown>>;
+      toolChoice?: LlmCompletionOptions['toolChoice'];
+    } = {
       temperature: options?.temperature,
       maxTokens: options?.maxTokens,
+      tools: options?.tools,
+      toolChoice: options?.toolChoice,
     };
 
     if (policy) {
       // Check if tenant allows remote egress
-      if (!policy.allowRemoteEgress) {
-        // Force local provider
-        provider = 'local';
-      }
+      const taskPolicy = task
+        ? policy.tasks.find(t => t.task === task)
+        : undefined;
 
-      // Check for task-specific policy
-      if (task) {
-        const taskPolicy = policy.tasks.find(t => t.task === task);
+      if (!policy.allowRemoteEgress) {
+        // Remote egress disabled - enforce local provider only
+        if (!this.providers.local) {
+          throw new LlmError(
+            'Remote egress is disabled for this tenant but no local provider is configured'
+          );
+        }
+
+        provider = 'local';
+        if (taskPolicy) {
+          // Honor task-specific settings only if they stay on local provider
+          if (taskPolicy.provider === 'local') {
+            model = taskPolicy.model;
+            if (taskPolicy.temperature !== undefined) {
+              taskOptions.temperature = taskPolicy.temperature;
+            }
+            if (taskPolicy.maxTokens !== undefined) {
+              taskOptions.maxTokens = taskPolicy.maxTokens;
+            }
+          }
+        } else {
+          model = policy.defaultModel;
+        }
+      } else {
+        // Remote egress allowed - use task policy if present, else fall back to defaults
         if (taskPolicy) {
           provider = taskPolicy.provider;
           model = taskPolicy.model;
@@ -625,13 +765,10 @@ export class LlmRouter implements LlmClient {
           if (taskPolicy.maxTokens !== undefined) {
             taskOptions.maxTokens = taskPolicy.maxTokens;
           }
+        } else {
+          provider = policy.defaultProvider;
+          model = policy.defaultModel;
         }
-      }
-
-      // Use policy defaults if no task-specific policy found
-      if (!task || !policy.tasks.find(t => t.task === task)) {
-        provider = policy.defaultProvider;
-        model = policy.defaultModel;
       }
     }
 
@@ -704,6 +841,17 @@ export interface LlmRouterConfig {
    * Default model to use
    */
   defaultModel?: string;
+
+  /**
+   * Optional egress client configuration for outbound calls.
+   * Defaults to baseline sanitization with the configured providers allowlisted.
+   */
+  egressClientConfig?: EgressClientConfig;
+
+  /**
+   * Optional preconfigured egress client to override the default.
+   */
+  egressClient?: EgressClient;
 }
 
 /**
@@ -794,6 +942,18 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
   const defaultModel = config.defaultModel ?? 'llama-3.3-70b-versatile';
 
   const policyStore = config.policyStore ?? new InMemoryPolicyStore();
+  const egressClient =
+    config.egressClient ??
+    new EgressClient({
+      allowedProviders: availableProviders,
+      ...(config.egressClientConfig ?? {}),
+    });
 
-  return new LlmRouter(providers, policyStore, defaultProvider, defaultModel);
+  return new LlmRouter(
+    providers,
+    policyStore,
+    defaultProvider,
+    defaultModel,
+    egressClient
+  );
 }

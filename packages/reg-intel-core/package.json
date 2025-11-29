@@ -9,10 +9,12 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./client": {
       "import": "./dist/client.js",
+      "require": "./dist/client.js",
       "types": "./dist/client.d.ts"
     }
   },
