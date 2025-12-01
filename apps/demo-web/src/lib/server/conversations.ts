@@ -2,7 +2,7 @@ import {
   ConversationEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
-} from '@reg-copilot/reg-intel-next-adapter';
+} from '@reg-copilot/reg-intel-conversations';
 
 export const conversationStore = new InMemoryConversationStore();
 export const conversationContextStore = new InMemoryConversationContextStore();

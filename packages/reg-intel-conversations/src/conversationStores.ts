@@ -1,8 +1,9 @@
+import { randomUUID } from 'crypto';
 import type {
+  ChatMessage,
   ConversationContext,
   ConversationContextStore,
   ConversationIdentity,
-  ChatMessage,
 } from '@reg-copilot/reg-intel-core';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
@@ -135,7 +136,7 @@ export class InMemoryConversationStore implements ConversationStore {
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
   }): Promise<{ conversationId: string }> {
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     const now = new Date();
     const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
@@ -175,7 +176,7 @@ export class InMemoryConversationStore implements ConversationStore {
       throw new Error('User not authorised for conversation');
     }
     const message: ConversationMessage = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       role: input.role,
       content: input.content,
       metadata: input.metadata,

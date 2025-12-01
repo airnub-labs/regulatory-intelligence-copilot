@@ -242,6 +242,22 @@ interface ConversationContextStore {
 - Synchronise tuple writes alongside Supabase updates when `authorization_model = 'openfga'` is enabled for a tenant.
 - Gate authz in the chat/conversation APIs via OpenFGA checks before RLS queries.
 
+### D-041 – Shared conversation/authorisation package
+
+**Decision:**
+
+- Extract the conversation store/context interfaces, sharing/authorisation envelope, and per-conversation SSE event hub into a reusable package `@reg-copilot/reg-intel-conversations` so host shells beyond Next.js can consume the same logic without divergence.
+- Keep `@reg-copilot/reg-intel-next-adapter` thin: it re-exports these primitives but no longer owns their implementations.
+
+**Status:**
+
+- Implemented in v0.6; Next.js wiring now depends on the shared package while remaining API-compatible for callers.
+
+**Rationale:**
+
+- Avoids duplicated sharing/auth logic as ReBAC (OpenFGA) lands.
+- Simplifies adoption in other runtimes (CLI, different web shells) while keeping a single derivation for `share_audience` + `tenant_access` resolution and SSE fan-out semantics.
+
 ---
 
 ### D-037 – ConversationContext aspect for prompts (implicit, engine-side)

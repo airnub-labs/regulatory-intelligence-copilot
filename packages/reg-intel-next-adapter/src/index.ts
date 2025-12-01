@@ -21,16 +21,16 @@ import type {
 } from '@reg-copilot/reg-intel-llm';
 import type { ConversationContextStore } from '@reg-copilot/reg-intel-core';
 import {
+  ConversationEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   deriveIsShared,
+  type AuthorizationModel,
+  type AuthorizationSpec,
   type ConversationStore,
   type ShareAudience,
   type TenantAccess,
-  type AuthorizationModel,
-  type AuthorizationSpec,
-} from './conversationStores.js';
-import { ConversationEventHub } from './eventHub.js';
+} from '@reg-copilot/reg-intel-conversations';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 

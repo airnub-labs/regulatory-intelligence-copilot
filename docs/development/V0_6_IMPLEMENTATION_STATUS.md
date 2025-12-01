@@ -15,7 +15,7 @@ This tracker summarises what is implemented versus still pending for the v0.6 ar
 - **Scenario engine integration** — **Not implemented**
   - Hooks documented; runtime paths not yet exercised.
 - **Conversation persistence (Supabase + dev fallback)** — **In progress**
-  - Schema + seeds added (share_audience + tenant_access + authorization envelope), in-memory stores used by the Next adapter; Supabase-backed store deferred.
+  - Schema + seeds added (share_audience + tenant_access + authorization envelope), shared `@reg-copilot/reg-intel-conversations` package owns store interfaces/in-memory defaults; Supabase-backed store deferred.
 - **UI conversation list/resume + metadata ribbon** — **In progress**
   - UI can list/resume via in-memory store; Supabase and richer metadata rendering deferred.
 - **Shared-conversation SSE fan-out** — **In progress**
