@@ -394,6 +394,20 @@ export default function Home() {
               </div>
             )}
 
+            <div className="sticky top-20 z-30 border-b bg-card/95 px-6 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/80">
+              <PromptInput
+                value={input}
+                onChange={setInput}
+                onSubmit={handleSubmit}
+                placeholder="Ask about tax, welfare, pensions, or cross-border rules. The copilot will query the regulatory graph and timeline engine for you."
+                disabled={isLoading}
+                isLoading={isLoading}
+              />
+              <p className="mt-3 text-center text-xs text-muted-foreground">
+                Research assistance only · Not legal, tax, or welfare advice · All LLM calls pass through an egress guard with PII redaction.
+              </p>
+            </div>
+
             <ChatContainer className="flex-1 bg-transparent px-4">
               {messages.length === 0 ? (
                 <ChatWelcome>
@@ -451,19 +465,6 @@ export default function Home() {
               <div ref={messagesEndRef} />
             </ChatContainer>
 
-            <div className="border-t bg-muted/30 px-6 py-4">
-              <PromptInput
-                value={input}
-                onChange={setInput}
-                onSubmit={handleSubmit}
-                placeholder="Ask about tax, welfare, pensions, or cross-border rules. The copilot will query the regulatory graph and timeline engine for you."
-                disabled={isLoading}
-                isLoading={isLoading}
-              />
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Research assistance only · Not legal, tax, or welfare advice · All LLM calls pass through an egress guard with PII redaction.
-              </p>
-            </div>
           </section>
 
           <aside className="space-y-4">
