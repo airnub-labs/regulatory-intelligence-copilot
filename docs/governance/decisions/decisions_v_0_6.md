@@ -408,6 +408,26 @@ interface ConversationContextStore {
 
 ---
 
+### D-043 – Supabase-backed authentication with seeded demo credentials
+
+**Context:**
+
+- The demo Next.js shell now relies on **NextAuth credentials** wired to Supabase.
+- Previous hardcoded demo headers risked regression when authentication was not configured or when database ID sequences advanced.
+
+**Decision:**
+
+- Keep the demo login flow anchored to Supabase via NextAuth using a seeded email/password account.
+- The seed script must generate IDs for the demo tenant/user/identity (respecting UUID defaults) and emit them so `.env.local` can be populated without overriding database sequences.
+- Documentation and environment examples should instruct developers to read the seeded IDs from Supabase after `supabase db reset` rather than relying on fixed constants.
+
+**Consequences:**
+
+- Local authentication remains reproducible without polluting UUID/sequence generators.
+- Future changes to the demo shell or seed data must preserve the NextAuth + Supabase contract and keep documentation updated to prevent regression to unauthenticated or hardcoded flows.
+
+---
+
 ## 8. Summary of Changes in v0.6
 
 ### Added
