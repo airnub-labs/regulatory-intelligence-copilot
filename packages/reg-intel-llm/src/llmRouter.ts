@@ -686,11 +686,11 @@ export class LlmRouter implements LlmClient {
         tenantId: options?.tenantId,
         userId: options?.userId,
         task: options?.task,
-        mode: requestedMode,
+        mode: requestedMode ?? effectiveMode,
         effectiveMode,
       },
       async sanitized => {
-        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+        const payload = sanitized.request as {
           messages: ChatMessage[];
           model: string;
           options?: typeof taskOptions;
@@ -733,11 +733,11 @@ export class LlmRouter implements LlmClient {
         tenantId: options?.tenantId,
         userId: options?.userId,
         task: options?.task,
-        mode: requestedMode,
+        mode: requestedMode ?? effectiveMode,
         effectiveMode,
       },
       async sanitized => {
-        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+        const payload = sanitized.request as {
           messages: ChatMessage[];
           model: string;
           options?: typeof taskOptions;

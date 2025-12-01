@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatMessage } from './types.js';
 import { LlmRouter, type LlmProviderRegistry, type TenantLlmPolicy } from './llmRouter.js';
@@ -16,7 +16,33 @@ class MockPolicyStore {
 
 class MockEgressClient {
   private readonly mode: EgressMode;
-  public guardAndExecute = vi.fn(async (ctx: any, execute: any) => execute(ctx));
+  public guardAndExecute = vi.fn(async (ctx: any, execute: any) => {
+    const effectiveMode = ctx.effectiveMode ?? this.mode;
+    const baseRequest = ctx.request as {
+      messages: ChatMessage[];
+      model: string;
+      options?: unknown;
+    };
+
+    const sanitizedRequest = {
+      ...baseRequest,
+      messages: baseRequest.messages.map(message => ({
+        ...message,
+        content: '[sanitized]'.concat(
+          typeof message.content === 'string' ? ` ${message.content}` : ''
+        ),
+      })),
+    };
+
+    const executionCtx = {
+      ...ctx,
+      effectiveMode,
+      sanitizedRequest,
+      request: effectiveMode === 'enforce' ? sanitizedRequest : baseRequest,
+    };
+
+    return execute(executionCtx);
+  });
 
   constructor(mode: EgressMode = 'enforce') {
     this.mode = mode;
@@ -42,6 +68,10 @@ describe('LlmRouter egress resolution', () => {
 
   const messages: ChatMessage[] = [{ role: 'user', content: 'Hi' }];
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('honours per-call override to report-only while propagating IDs', async () => {
     const policy: TenantLlmPolicy = {
       tenantId: 'tenant-1',
@@ -61,24 +91,21 @@ describe('LlmRouter egress resolution', () => {
       egressClient as any
     );
 
-    const stream = router.streamChat(messages, {
+    await router.chat(messages, {
       tenantId: 'tenant-1',
       userId: 'user-1',
       egressModeOverride: 'report-only',
     });
 
-    const chunks: any[] = [];
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks.some(chunk => chunk.type === 'text')).toBe(true);
     expect(egressClient.guardAndExecute).toHaveBeenCalledTimes(1);
     const ctx = egressClient.guardAndExecute.mock.calls[0][0];
     expect(ctx.mode).toBe('report-only');
     expect(ctx.effectiveMode).toBe('report-only');
     expect(ctx.tenantId).toBe('tenant-1');
     expect(ctx.userId).toBe('user-1');
+
+    const providerCall = providers.mock.chat.mock.calls[0];
+    expect(providerCall[0][0].content).toBe('Hi');
   });
 
   it('does not allow off mode when tenant forbids it', async () => {
@@ -139,5 +166,31 @@ describe('LlmRouter egress resolution', () => {
     const ctx = egressClient.guardAndExecute.mock.calls[0][0];
     expect(ctx.mode).toBe('enforce');
     expect(ctx.effectiveMode).toBe('enforce');
+  });
+
+  it('executes with sanitised payload when effective mode is enforce', async () => {
+    const policy: TenantLlmPolicy = {
+      tenantId: 'tenant-1',
+      defaultModel: 'model-a',
+      defaultProvider: 'mock',
+      allowRemoteEgress: true,
+      tasks: [],
+      egressMode: 'enforce',
+      allowOffMode: false,
+    };
+
+    const egressClient = new MockEgressClient('enforce');
+    const router = new LlmRouter(
+      providers,
+      new MockPolicyStore(policy) as any,
+      'mock',
+      'model-a',
+      egressClient as any
+    );
+
+    await router.chat(messages, { tenantId: 'tenant-1' });
+
+    const providerCall = providers.mock.chat.mock.calls[0];
+    expect(providerCall[0][0].content).toContain('[sanitized]');
   });
 });

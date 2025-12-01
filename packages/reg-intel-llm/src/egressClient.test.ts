@@ -26,6 +26,25 @@ describe('EgressClient', () => {
     expect(JSON.stringify(result)).not.toContain('test@example.com');
   });
 
+  it('defaults to the client mode when no effective mode is provided', async () => {
+    const client = new EgressClient({ mode: 'enforce' });
+    const execute = vi.fn(async ctx => ctx.request);
+
+    const result = await client.guardAndExecute(
+      {
+        target: 'llm',
+        providerId: 'openai',
+        request: { message: 'Email me at test@example.com' },
+      },
+      async ctx => execute(ctx)
+    );
+
+    const executedCtx = execute.mock.calls[0][0];
+    expect(executedCtx.effectiveMode).toBe('enforce');
+    expect(JSON.stringify(executedCtx.request)).not.toContain('test@example.com');
+    expect(result).not.toEqual({ message: 'Email me at test@example.com' });
+  });
+
   it('sanitises but executes original payload in report-only while recording metadata', async () => {
     const client = new EgressClient({ mode: 'enforce' });
     const execute = vi.fn(async ctx => ctx.request);

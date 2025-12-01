@@ -98,7 +98,7 @@ function sanitizeRequestAspect(
     const mode = ctx.effectiveMode ?? defaultMode;
 
     if (mode === 'off') {
-      return next(ctx);
+      return next({ ...ctx, effectiveMode: mode });
     }
 
     const originalRequest = ctx.request;
@@ -114,6 +114,7 @@ function sanitizeRequestAspect(
       ...ctx,
       sanitizedRequest,
       metadata,
+      effectiveMode: mode,
     };
 
     if (mode === 'enforce') {
@@ -167,7 +168,10 @@ export class EgressClient {
   }
 
   async guard(ctx: EgressGuardContext) {
-    return this.pipeline(ctx);
+    const effectiveMode = ctx.effectiveMode ?? this.defaultMode;
+    const mode = ctx.mode ?? effectiveMode;
+
+    return this.pipeline({ ...ctx, effectiveMode, mode });
   }
 
   async guardAndExecute<T>(
@@ -177,12 +181,12 @@ export class EgressClient {
     const guarded = await this.guard(ctx);
     const effectiveMode = guarded.effectiveMode ?? this.defaultMode;
 
-    const executionCtx: EgressGuardContext = { ...guarded };
+    const executionCtx: EgressGuardContext = { ...guarded, effectiveMode };
 
     if (effectiveMode === 'enforce') {
       executionCtx.request = guarded.sanitizedRequest ?? guarded.request;
     } else {
-      executionCtx.request = guarded.originalRequest ?? guarded.request;
+      executionCtx.request = guarded.request;
     }
 
     return execute(executionCtx);

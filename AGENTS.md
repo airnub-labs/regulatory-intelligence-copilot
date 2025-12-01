@@ -280,6 +280,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - Agents never call providers directly; they always go through the **LLM router**.
 - Tenant and task policies determine which models/providers are used and whether remote egress is allowed.
 - AI SDK v5, Responses API, and other provider specifics are implementation details behind the `LlmProvider` abstraction.
+- The router resolves requested vs effective egress modes (global defaults → tenant policy → optional per-user policy → per-call override), injects `tenantId`/`userId` into the `EgressGuardContext`, and enforces provider allowlisting even when sanitisation mode is `off`.
 
 ### 5.4 Egress Guard
 
@@ -301,6 +302,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
   - Must not implement their own concept extraction pipelines.
   - Should use clear terminology and cite jurisdictions to help concept capture.
   - Rely on updated graph content and Conversation Context in subsequent turns.
+- Canonicalised concept node IDs are merged into `referencedNodes` and persisted to the Conversation Context so subsequent turns inherit captured concepts automatically.
 
 ### 5.6 Conversation Context
 

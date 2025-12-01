@@ -375,7 +375,7 @@ interface ConversationContextStore {
 **Decision:**
 
 - `EgressClient` exposes three modes: `enforce`, `report-only`, and `off`.
-- In `enforce` and `report-only`, the execution payload is always the sanitised request; `report-only` logs/flags violations and sanitiser changes without blocking calls (including `metadata.redactionReportOnly`).
+- In `enforce`, the execution payload is the sanitised request. In `report-only`, sanitisation still runs and is recorded in metadata, but the original payload executes for observability and parity with caller intent.
 - `originalRequest` can be preserved explicitly for debugging/telemetry in non-production wiring when needed.
 - `off` disables sanitisation but still runs provider allowlisting (and will throw on disallowed providers); it is reserved for explicit test/benchmark clients.
 - Sanitisation runs before other aspects; provider allowlisting is **always enforced**.
@@ -399,7 +399,7 @@ interface ConversationContextStore {
 - `LlmRouter` resolves an `effectiveMode` per call using global defaults, tenant policy (`egressMode`, `allowOffMode`), optional per-user policies, and optional per-call overrides (e.g. `egressModeOverride`).
 - Optional per-user policies (when present on a tenant policy) can narrow the mode further but cannot escalate beyond tenant-level `allowOffMode`; per-call overrides follow the same constraint and will not downgrade below tenant defaults.
 - `EgressGuardContext` carries the requested mode and the resolved `effectiveMode` along with tenant/user IDs; `EgressClient` falls back to its configured default when it is absent.
-- In `enforce` and `report-only`, execution always uses the sanitised payload; `report-only` logs/flags policy and sanitiser changes instead of blocking. `off` disables sanitisation but still enforces provider allowlisting and is only for explicitly configured test/benchmark wiring.
+- In `enforce`, execution uses the sanitised payload. In `report-only`, execution uses the original payload while surfacing sanitisation deltas in metadata. `off` disables sanitisation but still enforces provider allowlisting and is only for explicitly configured test/benchmark wiring.
 
 **Consequences:**
 
@@ -413,6 +413,7 @@ interface ConversationContextStore {
 ### Added
 
 - ✅ **Single main-chat task with SKOS-style concept capture** (`capture_concepts` tool).
+- ✅ **Router-centric LLM egress** – all providers flow through `LlmRouter` + `EgressClient` with requested/effective mode and tenant/user IDs recorded per call.
 - ✅ **Extended streaming contract** for `LlmProvider` (`text` + `tool` chunks).
 - ✅ **Self-population pipeline** from concept metadata → Memgraph via `GraphWriteService`.
 - ✅ **Auto-ingestion gating** to avoid graph bloat; ingestion only when concepts are missing or sparse.

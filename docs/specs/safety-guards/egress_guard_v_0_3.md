@@ -98,6 +98,13 @@ native request types and this context.
   - Application code (ComplianceEngine, agents, API routes) must route outbound calls via `EgressClient` / `LlmRouter` rather than direct provider clients, so the mode and sanitisation guarantees apply uniformly.
   - `mode: 'off'` must be treated as a deliberate, test-only override.
 
+The implementation mirrors this table:
+
+- `effectiveMode` is always set on the context (defaulting to the client’s base mode when none is provided) and governs how aspects mutate `ctx.request`.
+- In `enforce`, aspects overwrite `ctx.request` with `sanitizedRequest` before execution so downstream callers only ever see the scrubbed payload.
+- In `report-only`, aspects populate `sanitizedRequest` and metadata but leave `ctx.request` untouched so providers execute the original payload.
+- In `off`, sanitisation aspects short-circuit but the provider allowlist still throws for disallowed providers.
+
 ### 2.2 Effective mode resolution
 
 - Each `EgressGuardContext` carries both an optional **requested** mode and the resolved `effectiveMode` plus tenant/user identifiers so that per-call decisions can be made without changing the egress pipeline.
@@ -108,6 +115,7 @@ native request types and this context.
   - Optional per-user policy where defined on the tenant (cannot escalate beyond tenant `allowOffMode`).
   - Optional per-call overrides (e.g. user-specific `egressModeOverride`), constrained by tenant policy (no `off` unless allowed).
 - Mode resolution only affects whether sanitisation mutates the execution payload. `enforce` executes the sanitised payload, `report-only` executes the original payload with sanitisation metadata attached, and `off` skips sanitisation entirely while still enforcing provider allowlisting.
+- The router populates `tenantId`, `userId`, the requested mode, and the resolved `effectiveMode` into `EgressGuardContext` for observability and downstream auditing.
 
 ---
 
