@@ -161,6 +161,7 @@ function buildMetadataChunk(args: {
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   disclaimerKey?: string;
   referencedNodes: Array<{ id: string } | string>;
+  conversationId?: string;
 }) {
   return {
     agentId: args.agentId,
@@ -168,17 +169,8 @@ function buildMetadataChunk(args: {
     uncertaintyLevel: args.uncertaintyLevel ?? 'medium',
     disclaimerKey: args.disclaimerKey ?? DEFAULT_DISCLAIMER_KEY,
     referencedNodes: args.referencedNodes.map(node => (typeof node === 'string' ? node : node.id)),
+    conversationId: args.conversationId,
   };
-}
-
-/**
- * Configuration options for the chat route handler
- */
-export interface ChatRouteHandlerOptions {
-  /** Tenant identifier for multi-tenant deployments (default: 'default') */
-  tenantId?: string;
-  /** Whether to include disclaimer in system prompt and response (default: true) */
-  includeDisclaimer?: boolean;
 }
 
 /**
@@ -278,7 +270,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return new Response('Invalid request body', { status: 400 });
       }
 
-      const { messages, message, profile, conversationId: requestConversationId, userId } = body;
+      const { messages, message, profile, conversationId: requestConversationId, userId, isShared } = body;
 
       // Validate profile if provided
       if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
@@ -305,13 +297,25 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           userId,
           personaId: profile?.personaType,
           jurisdictions: profile?.jurisdictions,
+          isShared: Boolean(isShared),
         });
         conversationId = created.conversationId;
+      }
+
+      const conversationRecord = await conversationStore.getConversation({
+        tenantId,
+        conversationId,
+        userId,
+      });
+
+      if (!conversationRecord) {
+        return new Response('Conversation not found or access denied', { status: 404 });
       }
 
       const existingMessages = await conversationStore.getMessages({
         tenantId,
         conversationId,
+        userId,
         limit: 50,
       });
 
@@ -344,6 +348,12 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         async start(controller) {
           const writer = new SseStreamWriter(controller);
           subscriber.send = (event: string, data: unknown) => writer.send(event, data);
+
+          // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
+          eventHub.broadcast(tenantId, conversationId, 'metadata', {
+            conversationId,
+            isShared: conversationRecord.isShared,
+          });
 
           try {
             // Use ComplianceEngine to handle chat with streaming
@@ -381,6 +391,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 await conversationStore.appendMessage({
                   tenantId,
                   conversationId,
+                  userId: conversationRecord.userId ?? userId,
                   role: 'assistant',
                   content: streamedTextBuffer,
                   metadata: lastMetadata ?? undefined,

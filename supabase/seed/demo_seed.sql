@@ -40,8 +40,8 @@ values
 
 -- Demo conversation
 with demo_conv as (
-  insert into copilot_internal.conversations (tenant_id, user_id, title, persona_id, jurisdictions)
-  values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', 'Demo conversation', 'single-director-ie', array['IE'])
+  insert into copilot_internal.conversations (tenant_id, user_id, is_shared, title, persona_id, jurisdictions)
+  values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-00000000000a', true, 'Demo conversation', 'single-director-ie', array['IE'])
   on conflict do nothing
   returning id
 )

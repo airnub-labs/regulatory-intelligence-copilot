@@ -4,6 +4,7 @@ export interface ConversationRecord {
   id: string;
   tenantId: string;
   userId?: string | null;
+  isShared: boolean;
   personaId?: string | null;
   jurisdictions: string[];
   title?: string | null;
@@ -26,6 +27,7 @@ export interface ConversationStore {
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
+    isShared?: boolean;
   }): Promise<{ conversationId: string }>;
 
   appendMessage(input: {
@@ -40,12 +42,15 @@ export interface ConversationStore {
   getMessages(input: {
     tenantId: string;
     conversationId: string;
+    userId?: string | null;
     limit?: number;
   }): Promise<ConversationMessage[]>;
 
   listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]>;
 
-  getConversation(input: { tenantId: string; conversationId: string }): Promise<ConversationRecord | null>;
+  getConversation(input: { tenantId: string; conversationId: string; userId?: string | null }): Promise<ConversationRecord | null>;
+
+  updateSharing(input: { tenantId: string; conversationId: string; userId?: string | null; isShared: boolean }): Promise<void>;
 }
 
 export class InMemoryConversationStore implements ConversationStore {
@@ -58,6 +63,7 @@ export class InMemoryConversationStore implements ConversationStore {
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
+    isShared?: boolean;
   }): Promise<{ conversationId: string }> {
     const id = crypto.randomUUID();
     const now = new Date();
@@ -65,6 +71,7 @@ export class InMemoryConversationStore implements ConversationStore {
       id,
       tenantId: input.tenantId,
       userId: input.userId,
+      isShared: input.isShared ?? false,
       personaId: input.personaId ?? null,
       jurisdictions: input.jurisdictions ?? [],
       title: input.title ?? null,
@@ -88,6 +95,9 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!record || record.tenantId !== input.tenantId) {
       throw new Error('Conversation not found for tenant');
     }
+    if (record.userId && !record.isShared && (!input.userId || record.userId !== input.userId)) {
+      throw new Error('User not authorised for conversation');
+    }
     const message: ConversationMessage = {
       id: crypto.randomUUID(),
       role: input.role,
@@ -107,10 +117,14 @@ export class InMemoryConversationStore implements ConversationStore {
   async getMessages(input: {
     tenantId: string;
     conversationId: string;
+    userId?: string | null;
     limit?: number;
   }): Promise<ConversationMessage[]> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
+      return [];
+    }
+    if (record.userId && !record.isShared && (!input.userId || record.userId !== input.userId)) {
       return [];
     }
     const msgs = this.messages.get(input.conversationId) ?? [];
@@ -123,10 +137,9 @@ export class InMemoryConversationStore implements ConversationStore {
   async listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]> {
     const records = Array.from(this.conversations.values()).filter(record => {
       if (record.tenantId !== input.tenantId) return false;
-      if (input.userId && record.userId && input.userId !== record.userId) {
-        return false;
-      }
-      return true;
+      if (!input.userId) return record.isShared;
+      if (record.isShared) return true;
+      return record.userId ? input.userId === record.userId : false;
     });
 
     records.sort((a, b) => {
@@ -142,12 +155,26 @@ export class InMemoryConversationStore implements ConversationStore {
     return records;
   }
 
-  async getConversation(input: { tenantId: string; conversationId: string }): Promise<ConversationRecord | null> {
+  async getConversation(input: { tenantId: string; conversationId: string; userId?: string | null }): Promise<ConversationRecord | null> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
       return null;
     }
+    if (record.userId && !record.isShared && (!input.userId || input.userId !== record.userId)) {
+      return null;
+    }
     return record;
+  }
+
+  async updateSharing(input: { tenantId: string; conversationId: string; userId?: string | null; isShared: boolean }): Promise<void> {
+    const record = this.conversations.get(input.conversationId);
+    if (!record || record.tenantId !== input.tenantId) {
+      throw new Error('Conversation not found for tenant');
+    }
+    if (record.userId && (!input.userId || input.userId !== record.userId)) {
+      throw new Error('User not authorised to update conversation');
+    }
+    this.conversations.set(input.conversationId, { ...record, isShared: input.isShared, updatedAt: new Date() });
   }
 }
 

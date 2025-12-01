@@ -52,6 +52,7 @@ interface ConversationSummary {
   title?: string | null
   createdAt: string
   lastMessageAt?: string | null
+  isShared: boolean
 }
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
@@ -108,6 +109,8 @@ const quickPrompts = [
   },
 ]
 
+const DEMO_USER_ID = 'demo-user'
+
 const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director-ie'
 
 export default function Home() {
@@ -118,6 +121,7 @@ export default function Home() {
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [isShared, setIsShared] = useState(false)
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
@@ -133,14 +137,14 @@ export default function Home() {
   }
 
   const loadConversations = async () => {
-    const response = await fetch('/api/conversations')
+    const response = await fetch(`/api/conversations?userId=${DEMO_USER_ID}`)
     if (!response.ok) return
     const payload = await response.json()
     setConversations(payload.conversations ?? [])
   }
 
   const loadConversation = async (id: string) => {
-    const response = await fetch(`/api/conversations/${id}`)
+    const response = await fetch(`/api/conversations/${id}?userId=${DEMO_USER_ID}`)
     if (!response.ok) return
     const payload = await response.json()
     const loadedMessages: ChatMessage[] = (payload.messages ?? []).map((msg: any) => ({
@@ -152,6 +156,7 @@ export default function Home() {
     setMessages(loadedMessages)
     setConversationId(id)
     conversationIdRef.current = id
+    setIsShared(Boolean(payload.conversation?.isShared))
     if (payload.conversation?.personaId) {
       setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
     }
@@ -171,6 +176,61 @@ export default function Home() {
     }
     prevMessageCountRef.current = messages.length
   }, [messages.length])
+
+  useEffect(() => {
+    if (!conversationId) return
+    const controller = new AbortController()
+
+    const subscribe = async () => {
+      const response = await fetch(`/api/conversations/${conversationId}/stream?userId=${DEMO_USER_ID}`, {
+        signal: controller.signal,
+      })
+      if (!response.ok || !response.body) return
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        let boundaryIndex
+        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, boundaryIndex).trim()
+          buffer = buffer.slice(boundaryIndex + 2)
+
+          if (!rawEvent) continue
+          const parsedEvent = parseSseEvent(rawEvent)
+          if (!parsedEvent) continue
+          const parsedData = parseJsonSafe(parsedEvent.data)
+
+          if (parsedEvent.type === 'metadata') {
+            if ((parsedData as any)?.conversationId) {
+              setConversationId((parsedData as any).conversationId)
+              conversationIdRef.current = (parsedData as any).conversationId
+            }
+            if ((parsedData as any)?.isShared !== undefined) {
+              setIsShared(Boolean((parsedData as any).isShared))
+            }
+            if (conversationIdRef.current) {
+              loadConversation(conversationIdRef.current)
+            }
+          } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
+            loadConversation(conversationIdRef.current)
+          }
+        }
+      }
+    }
+
+    subscribe()
+
+    return () => {
+      controller.abort()
+    }
+  }, [conversationId])
 
   const streamChatResponse = async (response: Response, assistantMessageId: string) => {
     if (!response.body) {
@@ -211,6 +271,9 @@ export default function Home() {
             if ((parsedData as any)?.conversationId) {
               setConversationId((parsedData as any).conversationId)
               conversationIdRef.current = (parsedData as any).conversationId
+            }
+            if ((parsedData as any)?.isShared !== undefined) {
+              setIsShared(Boolean((parsedData as any).isShared))
             }
             setChatMetadata(parsedData as ChatMetadata)
             setMessages(prev =>
@@ -275,6 +338,8 @@ export default function Home() {
           message: input.trim(),
           profile,
           scenarioHint,
+          userId: DEMO_USER_ID,
+          isShared,
         }),
         signal: controller.signal,
       })
@@ -304,6 +369,20 @@ export default function Home() {
       setProfile({ ...profile, jurisdictions: current.filter(j => j !== jur) })
     } else {
       setProfile({ ...profile, jurisdictions: [...current, jur] })
+    }
+  }
+
+  const toggleSharing = async () => {
+    if (!conversationIdRef.current) return
+    const next = !isShared
+    const response = await fetch(`/api/conversations/${conversationIdRef.current}?userId=${DEMO_USER_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isShared: next }),
+    })
+    if (response.ok) {
+      setIsShared(next)
+      loadConversations()
     }
   }
 
@@ -530,6 +609,16 @@ export default function Home() {
                 <CardDescription className="text-sm">Resume recent threads and share SSE output in-session.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
+                {conversationId && (
+                  <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">
+                      {isShared ? 'Shared with tenant' : 'Private to you'}
+                    </span>
+                    <Button size="sm" variant="ghost" onClick={toggleSharing}>
+                      {isShared ? 'Make private' : 'Share with tenant'}
+                    </Button>
+                  </div>
+                )}
                 {conversations.length === 0 && (
                   <p className="text-sm text-muted-foreground">No saved conversations yet. Ask your first question to start one.</p>
                 )}
@@ -542,7 +631,10 @@ export default function Home() {
                       className="w-full justify-start"
                       onClick={() => loadConversation(conv.id)}
                     >
-                      <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
+                        {conv.isShared && <Badge variant="secondary">Shared</Badge>}
+                      </span>
                     </Button>
                   ))}
                 </div>
