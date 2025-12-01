@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const tenantId = 'default';
   const { id: conversationId } = await context.params;
-  const userId = new URL(request.url).searchParams.get('userId');
+  const userId = request.headers.get('x-user-id') ?? new URL(request.url).searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
   }
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const tenantId = 'default';
   const { id: conversationId } = await context.params;
-  const userId = new URL(request.url).searchParams.get('userId');
+  const userId = request.headers.get('x-user-id') ?? new URL(request.url).searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
   }
@@ -36,6 +36,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const shareAudience = body?.shareAudience;
   const tenantAccess = body?.tenantAccess;
   const authorizationModel = body?.authorizationModel;
+  const title = typeof body?.title === 'string' ? body.title : undefined;
   const allowedAudiences = ['private', 'tenant', 'public'];
   const allowedTenantAccess = ['view', 'edit'];
   const allowedAuthorizationModels = ['supabase_rbac', 'openfga'];
@@ -56,6 +57,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       shareAudience,
       tenantAccess,
       authorizationModel,
+      title,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

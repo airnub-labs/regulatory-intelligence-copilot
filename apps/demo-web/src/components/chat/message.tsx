@@ -143,6 +143,8 @@ interface MessageMetadata {
   jurisdictions?: string[]
   uncertaintyLevel?: "low" | "medium" | "high"
   referencedNodes?: string[]
+  deletedAt?: string
+  supersededBy?: string
 }
 
 interface MessageProps {
@@ -151,18 +153,22 @@ interface MessageProps {
   className?: string
   metadata?: MessageMetadata
   disclaimer?: string
+  deletedAt?: string | null
+  supersededBy?: string | null
 }
 
-export function Message({ role, content, className, metadata, disclaimer }: MessageProps) {
+export function Message({ role, content, className, metadata, disclaimer, deletedAt, supersededBy }: MessageProps) {
   const isUser = role === "user"
+  const isDeleted = Boolean(deletedAt ?? metadata?.deletedAt)
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
 
   return (
     <div
       className={cn(
-        "group flex w-full gap-3", 
+        "group flex w-full gap-3",
         isUser ? "justify-end" : "justify-start",
+        isDeleted && "opacity-75",
         className
       )}
     >
@@ -206,7 +212,16 @@ export function Message({ role, content, className, metadata, disclaimer }: Mess
               </Badge>
             )}
             <div className="space-y-2">
-              <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
+              <MessageContent
+                content={content}
+                tone={isUser ? "user" : "assistant"}
+                className={cn(isDeleted && "line-through opacity-70")}
+              />
+              {isDeleted && (
+                <div className="text-[11px] font-medium text-muted-foreground">
+                  Superseded {supersededBy ? `by message ${supersededBy.slice(0, 8)}…` : ''}
+                </div>
+              )}
               {!isUser && disclaimer && (
                 <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
                   {disclaimer}
@@ -242,14 +257,16 @@ export function Message({ role, content, className, metadata, disclaimer }: Mess
 interface MessageContentProps {
   content: string
   tone: "user" | "assistant"
+  className?: string
 }
 
-export function MessageContent({ content, tone }: MessageContentProps) {
+export function MessageContent({ content, tone, className }: MessageContentProps) {
   return (
     <div
       className={cn(
         "prose prose-sm max-w-none dark:prose-invert",
-        tone === "assistant" ? "text-foreground" : "text-primary-foreground"
+        tone === "assistant" ? "text-foreground" : "text-primary-foreground",
+        className
       )}
     >
       <div className="text-sm leading-relaxed">{renderMarkdown(content)}</div>

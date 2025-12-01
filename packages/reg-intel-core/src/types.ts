@@ -156,6 +156,9 @@ export type LlmStreamChunk =
     type: 'tool';
     name: string;
     argsJson: unknown;
+    toolName?: string;
+    arguments?: unknown;
+    payload?: unknown;
   }
   | { type: 'error'; error: Error }
   | {

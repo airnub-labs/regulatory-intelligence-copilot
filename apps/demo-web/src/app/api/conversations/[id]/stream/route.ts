@@ -14,7 +14,7 @@ function sseChunk(event: ConversationEventType, data: unknown) {
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const tenantId = 'default';
   const { id: conversationId } = await context.params;
-  const userId = new URL(request.url).searchParams.get('userId');
+  const userId = request.headers.get('x-user-id') ?? new URL(request.url).searchParams.get('userId');
 
   if (!userId) {
     return new Response('userId required', { status: 400 });

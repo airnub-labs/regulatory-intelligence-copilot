@@ -10,6 +10,7 @@ import { AppHeader } from '@/components/layout/app-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -23,11 +24,7 @@ import {
  * User profile for regulatory context
  */
 interface UserProfile {
-  personaType:
-    | 'single-director-ie'
-    | 'self-employed-contractor-ie'
-    | 'paye-eu-ties'
-    | 'cross-border-ie-eu'
+  personaType: 'single-director' | 'self-employed' | 'paye-employee' | 'advisor'
   jurisdictions: string[]
 }
 
@@ -44,7 +41,9 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   disclaimer?: string
-  metadata?: ChatMetadata
+  metadata?: ChatMetadata & { deletedAt?: string; supersededBy?: string }
+  deletedAt?: string | null
+  supersededBy?: string | null
 }
 
 type ShareAudience = 'private' | 'tenant' | 'public'
@@ -97,7 +96,9 @@ interface ApiMessage {
   id?: string
   role: ChatMessage['role']
   content: string
-  metadata?: ChatMetadata
+  metadata?: ChatMetadata & { deletedAt?: string; supersededBy?: string }
+  deletedAt?: string | null
+  supersededBy?: string | null
 }
 
 interface ConversationPayload {
@@ -108,6 +109,7 @@ interface ConversationPayload {
     authorizationModel?: AuthorizationModel
     personaId?: UserProfile['personaType']
     jurisdictions?: string[]
+    title?: string | null
   }
 }
 
@@ -185,7 +187,17 @@ const quickPrompts = [
 
 const DEMO_USER_ID = '00000000-0000-0000-0000-00000000000a'
 
-const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director-ie'
+const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director'
+
+const normalizePersonaType = (value?: string | null): UserProfile['personaType'] => {
+  if (!value) return DEFAULT_PERSONA
+  const normalized = value.toLowerCase()
+  if (normalized.startsWith('self-employed')) return 'self-employed'
+  if (normalized.startsWith('paye')) return 'paye-employee'
+  if (normalized.startsWith('advisor')) return 'advisor'
+  if (normalized.startsWith('single-director')) return 'single-director'
+  return DEFAULT_PERSONA
+}
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -193,7 +205,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [conversationTitle, setConversationTitle] = useState<string>('')
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
   const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
@@ -214,37 +228,45 @@ export default function Home() {
   }
 
   const loadConversations = async () => {
-    const response = await fetch(`/api/conversations?userId=${DEMO_USER_ID}`)
+    const response = await fetch(`/api/conversations`, {
+      headers: { 'x-user-id': DEMO_USER_ID },
+    })
     if (!response.ok) return
     const payload = await response.json()
     setConversations(payload.conversations ?? [])
   }
 
-    const loadConversation = async (id: string) => {
-      const response = await fetch(`/api/conversations/${id}?userId=${DEMO_USER_ID}`)
-      if (!response.ok) return
-      const payload: ConversationPayload = await response.json()
-      const loadedMessages: ChatMessage[] = (payload.messages ?? []).map(msg => ({
-        id: msg.id ?? crypto.randomUUID(),
-        role: msg.role,
-        content: msg.content,
-        metadata: msg.metadata,
-      }))
-      setMessages(loadedMessages)
-      setConversationId(id)
-      conversationIdRef.current = id
-      setShareAudience(payload.conversation?.shareAudience ?? 'private')
-      setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
-      setAuthorizationModel(payload.conversation?.authorizationModel ?? 'supabase_rbac')
-      const personaId = payload.conversation?.personaId
-      if (personaId) {
-        setProfile(prev => ({ ...prev, personaType: personaId }))
-      }
-      const jurisdictions = payload.conversation?.jurisdictions
-      if (jurisdictions) {
-        setProfile(prev => ({ ...prev, jurisdictions }))
-      }
+  const loadConversation = async (id: string) => {
+    const response = await fetch(`/api/conversations/${id}`, {
+      headers: { 'x-user-id': DEMO_USER_ID },
+    })
+    if (!response.ok) return
+    const payload: ConversationPayload = await response.json()
+    const loadedMessages: ChatMessage[] = (payload.messages ?? []).map(msg => ({
+      id: msg.id ?? crypto.randomUUID(),
+      role: msg.role,
+      content: msg.content,
+      metadata: msg.metadata,
+      deletedAt: msg.deletedAt ?? msg.metadata?.deletedAt ?? null,
+      supersededBy: msg.supersededBy ?? msg.metadata?.supersededBy ?? null,
+    }))
+    setMessages(loadedMessages)
+    setConversationId(id)
+    conversationIdRef.current = id
+    setEditingMessageId(null)
+    setShareAudience(payload.conversation?.shareAudience ?? 'private')
+    setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
+    setAuthorizationModel(payload.conversation?.authorizationModel ?? 'supabase_rbac')
+    const personaId = payload.conversation?.personaId
+    if (personaId) {
+      setProfile(prev => ({ ...prev, personaType: normalizePersonaType(personaId) }))
     }
+    const jurisdictions = payload.conversation?.jurisdictions
+    if (jurisdictions) {
+      setProfile(prev => ({ ...prev, jurisdictions }))
+    }
+    setConversationTitle(payload.conversation?.title ?? '')
+  }
 
   useEffect(() => {
     loadConversations()
@@ -279,8 +301,9 @@ export default function Home() {
       const controller = new AbortController()
 
       const subscribe = async () => {
-        const response = await fetch(`/api/conversations/${conversationId}/stream?userId=${DEMO_USER_ID}`, {
+      const response = await fetch(`/api/conversations/${conversationId}/stream`, {
           signal: controller.signal,
+          headers: { 'x-user-id': DEMO_USER_ID },
         })
         if (!response.ok || !response.body) return
 
@@ -415,16 +438,17 @@ export default function Home() {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': DEMO_USER_ID },
         body: JSON.stringify({
           conversationId: conversationIdRef.current,
           message: input.trim(),
           profile,
           scenarioHint,
-          userId: DEMO_USER_ID,
           shareAudience,
           tenantAccess,
           authorizationModel,
+          title: conversationTitle,
+          replaceMessageId: editingMessageId,
         }),
         signal: controller.signal,
       })
@@ -444,6 +468,7 @@ export default function Home() {
     } finally {
       setIsLoading(false)
       setScenarioHint(null)
+      setEditingMessageId(null)
       loadConversations()
     }
   }
@@ -457,18 +482,47 @@ export default function Home() {
     }
   }
 
+  const lastEditableUserMessage = () =>
+    [...messages]
+      .reverse()
+      .find(msg => msg.role === 'user' && !msg.deletedAt && !msg.metadata?.deletedAt)
+
+  const startEditingLastMessage = () => {
+    const lastMessage = lastEditableUserMessage()
+    if (!lastMessage) return
+    setInput(lastMessage.content)
+    setEditingMessageId(lastMessage.id)
+  }
+
+  const cancelEditing = () => {
+    setEditingMessageId(null)
+    setInput('')
+  }
+
   const toggleSharing = async () => {
     if (!conversationIdRef.current) return
     const nextAudience: ShareAudience = shareAudience === 'private' ? 'tenant' : 'private'
     const nextTenantAccess: TenantAccess = nextAudience === 'tenant' ? 'edit' : tenantAccess
-    const response = await fetch(`/api/conversations/${conversationIdRef.current}?userId=${DEMO_USER_ID}`, {
+    const response = await fetch(`/api/conversations/${conversationIdRef.current}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-user-id': DEMO_USER_ID },
       body: JSON.stringify({ shareAudience: nextAudience, tenantAccess: nextTenantAccess }),
     })
     if (response.ok) {
       setShareAudience(nextAudience)
       setTenantAccess(nextTenantAccess)
+      loadConversations()
+    }
+  }
+
+  const saveConversationTitle = async () => {
+    if (!conversationIdRef.current) return
+    const response = await fetch(`/api/conversations/${conversationIdRef.current}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': DEMO_USER_ID },
+      body: JSON.stringify({ title: conversationTitle || null }),
+    })
+    if (response.ok) {
       loadConversations()
     }
   }
@@ -534,10 +588,10 @@ export default function Home() {
                     <SelectValue placeholder="Choose persona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single-director-ie">Single-director company (IE)</SelectItem>
-                    <SelectItem value="self-employed-contractor-ie">Self-employed / contractor (IE)</SelectItem>
-                    <SelectItem value="paye-eu-ties">PAYE employee with EU ties</SelectItem>
-                    <SelectItem value="cross-border-ie-eu">Cross-border worker (IE–EU)</SelectItem>
+                    <SelectItem value="single-director">Single-director company (IE)</SelectItem>
+                    <SelectItem value="self-employed">Self-employed / contractor (IE)</SelectItem>
+                    <SelectItem value="paye-employee">PAYE employee with EU ties</SelectItem>
+                    <SelectItem value="advisor">Cross-border / advisor lens</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -660,13 +714,15 @@ export default function Home() {
               ) : (
                 <>
                   {messages.map((message) => (
-                    <Message
-                      key={message.id}
-                      role={message.role}
-                      content={message.content}
-                      disclaimer={message.disclaimer}
-                      metadata={message.metadata}
-                    />
+                  <Message
+                    key={message.id}
+                    role={message.role}
+                    content={message.content}
+                    disclaimer={message.disclaimer}
+                    metadata={message.metadata}
+                    deletedAt={message.deletedAt}
+                    supersededBy={message.supersededBy}
+                  />
                   ))}
                   {isLoading && <MessageLoading />}
                 </>
@@ -675,6 +731,23 @@ export default function Home() {
             </ChatContainer>
 
             <div className="border-t bg-muted/30 px-6 py-4">
+              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {editingMessageId
+                    ? 'Editing your last message. Submit to replace it, or cancel to keep the original.'
+                    : 'Send a new prompt or edit your last message to update the thread.'}
+                </span>
+                <div className="flex items-center gap-2">
+                  {editingMessageId && (
+                    <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
+                      Cancel edit
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={startEditingLastMessage} disabled={isLoading}>
+                    Edit last message
+                  </Button>
+                </div>
+              </div>
               <PromptInput
                 value={input}
                 onChange={setInput}
@@ -710,6 +783,23 @@ export default function Home() {
                     <Button size="sm" variant="ghost" onClick={toggleSharing}>
                       {shareAudience === 'private' ? 'Share with tenant' : 'Make private'}
                     </Button>
+                  </div>
+                )}
+                {conversationId && (
+                  <div className="space-y-2 rounded-lg border px-3 py-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Conversation title
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        value={conversationTitle}
+                        onChange={event => setConversationTitle(event.target.value)}
+                        placeholder="Add a title for this thread"
+                      />
+                      <Button size="sm" onClick={saveConversationTitle}>
+                        Save
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {conversations.length === 0 && (

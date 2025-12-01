@@ -4,6 +4,7 @@ import {
   createDefaultLlmRouter,
   createGraphClient,
   createTimelineEngine,
+  normalizeProfileType,
   sanitizeObjectForEgress,
   sanitizeTextForEgress,
   type ChatMessage,
@@ -282,12 +283,24 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         message,
         profile,
         conversationId: requestConversationId,
-        userId,
+        userId: bodyUserId,
         shareAudience,
         tenantAccess,
         authorizationModel,
         authorizationSpec,
+        title,
+        replaceMessageId,
       } = body;
+
+      const headerUserId = request.headers.get('x-user-id') ?? undefined;
+      const userId = headerUserId ?? (typeof bodyUserId === 'string' ? bodyUserId : undefined);
+      if (!userId) {
+        return new Response('userId required', { status: 400 });
+      }
+
+      const normalizedProfile = profile
+        ? { ...profile, personaType: normalizeProfileType(profile.personaType) }
+        : undefined;
 
       // Validate profile if provided
       if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
@@ -312,8 +325,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         const created = await conversationStore.createConversation({
           tenantId,
           userId,
-          personaId: profile?.personaType,
-          jurisdictions: profile?.jurisdictions,
+          personaId: normalizedProfile?.personaType,
+          jurisdictions: normalizedProfile?.jurisdictions,
+          title: typeof title === 'string' ? title : undefined,
           shareAudience: shareAudience as ShareAudience | undefined,
           tenantAccess: tenantAccess as TenantAccess | undefined,
           authorizationModel: authorizationModel as AuthorizationModel | undefined,
@@ -339,17 +353,44 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         limit: 50,
       });
 
+      const activeMessages = existingMessages.filter(msg => {
+        const metadataDeleted = Boolean((msg.metadata as { deletedAt?: unknown } | undefined)?.deletedAt);
+        return !msg.deletedAt && !metadataDeleted;
+      });
+
+      if (replaceMessageId) {
+        const lastUserMessage = [...activeMessages]
+          .reverse()
+          .find(msg => msg.role === 'user');
+        if (!lastUserMessage || lastUserMessage.id !== replaceMessageId) {
+          return new Response('Only the last user message can be replaced', { status: 400 });
+        }
+      }
+
       const sanitizedMessages = [
-        ...existingMessages.map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
+        ...activeMessages
+          .filter(msg => msg.id !== replaceMessageId)
+          .map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
         { role: 'user', content: incomingMessageContent } as ChatMessage,
       ];
-      await conversationStore.appendMessage({
+      const { messageId: appendedMessageId } = await conversationStore.appendMessage({
         tenantId,
         conversationId,
         role: 'user',
         content: incomingMessageContent,
         userId,
+        metadata: normalizedProfile ? { profile: normalizedProfile } : undefined,
       });
+
+      if (replaceMessageId) {
+        await conversationStore.softDeleteMessage({
+          tenantId,
+          conversationId,
+          messageId: replaceMessageId,
+          userId,
+          supersededBy: appendedMessageId,
+        });
+      }
       const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
       const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
       const normalizedStandardDisclaimer = normalizeText(NON_ADVICE_DISCLAIMER);
@@ -385,7 +426,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             // This ensures proper agent routing and graph querying
             for await (const chunk of complianceEngine.handleChatStream({
               messages: sanitizedMessages,
-              profile,
+              profile: normalizedProfile,
               tenantId,
               conversationId,
             })) {
