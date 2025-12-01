@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Message, MessageLoading } from '@/components/chat/message';
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container';
 import { PromptInput } from '@/components/chat/prompt-input';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import {
   Select,
   SelectContent,
@@ -205,9 +206,12 @@ export default function Home() {
               Graph-powered regulatory research for tax, welfare, pensions, and EU rules
             </p>
           </div>
-          <Button asChild>
-            <a href="/graph">View Graph</a>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button asChild>
+              <a href="/graph">View Graph</a>
+            </Button>
+          </div>
         </div>
       </header>
 
