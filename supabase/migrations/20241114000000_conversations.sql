@@ -2,9 +2,11 @@ create extension if not exists "pgcrypto";
 
 create schema if not exists copilot_internal;
 
--- Ensure auth.identities supports upserts on provider/provider_id used in seeds
-create unique index if not exists identities_provider_provider_id_idx
-  on auth.identities(provider, provider_id);
+-- The Supabase auth schema already owns and manages its indexes. Avoid
+-- switching roles here because migrations run without membership in the
+-- `supabase_auth_admin` role. Rely on the built-in
+-- `identities_provider_provider_id_idx` created by Supabase instead of
+-- re-creating it here.
 
 create table if not exists copilot_internal.conversations (
   id uuid primary key default gen_random_uuid(),
