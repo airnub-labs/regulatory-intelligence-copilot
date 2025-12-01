@@ -81,6 +81,9 @@ export interface TenantLlmPolicy {
 
   /** Whether this tenant is allowed to use 'off' mode for egress. */
   allowOffMode?: boolean;
+
+  /** Optional per-user overrides keyed by userId. */
+  userPolicies?: Record<string, { egressMode?: EgressMode; allowOffMode?: boolean }>;
 }
 
 /**
@@ -129,29 +132,32 @@ function resolveEffectiveEgressMode(
   baseMode: EgressMode,
   tenantPolicy: TenantLlmPolicy | null,
   options?: LlmCompletionOptions
-): EgressMode {
+): { requestedMode?: EgressMode; effectiveMode: EgressMode } {
   const globalDefault: EgressMode = baseMode;
 
+  const applyOverride = (current: EgressMode, candidate?: EgressMode) => {
+    if (!candidate) return current;
+    if (candidate === 'off' && tenantPolicy?.allowOffMode !== true) {
+      return current;
+    }
+    return candidate;
+  };
+
   let mode: EgressMode = tenantPolicy?.egressMode ?? globalDefault;
+  let requestedMode: EgressMode | undefined = tenantPolicy?.egressMode;
+
+  const userPolicy = options?.userId
+    ? tenantPolicy?.userPolicies?.[options.userId]
+    : undefined;
+
+  mode = applyOverride(mode, userPolicy?.egressMode);
+  requestedMode = userPolicy?.egressMode ?? requestedMode;
 
   const override = options?.egressModeOverride;
+  mode = applyOverride(mode, override);
+  requestedMode = override ?? requestedMode;
 
-  if (override) {
-    if (override === 'off') {
-      if (tenantPolicy?.allowOffMode) {
-        mode = override;
-      } else {
-        mode =
-          tenantPolicy?.egressMode && tenantPolicy.egressMode !== 'off'
-            ? tenantPolicy.egressMode
-            : 'enforce';
-      }
-    } else {
-      mode = override;
-    }
-  }
-
-  return mode;
+  return { requestedMode, effectiveMode: mode };
 }
 
 /**
@@ -655,7 +661,7 @@ export class LlmRouter implements LlmClient {
     const { provider, model, taskOptions, tenantPolicy } =
       await this.resolveProviderAndModel(options);
 
-    const effectiveMode = resolveEffectiveEgressMode(
+    const { effectiveMode, requestedMode } = resolveEffectiveEgressMode(
       this.egressDefaultMode,
       tenantPolicy,
       options
@@ -668,7 +674,9 @@ export class LlmRouter implements LlmClient {
         endpointId: 'chat',
         request: { messages, model, options: taskOptions, task: options?.task },
         tenantId: options?.tenantId,
+        userId: options?.userId,
         task: options?.task,
+        mode: requestedMode,
         effectiveMode,
       },
       async sanitized => {
@@ -700,7 +708,7 @@ export class LlmRouter implements LlmClient {
     const { provider, model, taskOptions, tenantPolicy } =
       await this.resolveProviderAndModel(options);
 
-    const effectiveMode = resolveEffectiveEgressMode(
+    const { effectiveMode, requestedMode } = resolveEffectiveEgressMode(
       this.egressDefaultMode,
       tenantPolicy,
       options
@@ -713,7 +721,9 @@ export class LlmRouter implements LlmClient {
         endpointId: 'chat',
         request: { messages, model, options: taskOptions, task: options?.task },
         tenantId: options?.tenantId,
+        userId: options?.userId,
         task: options?.task,
+        mode: requestedMode,
         effectiveMode,
       },
       async sanitized => {

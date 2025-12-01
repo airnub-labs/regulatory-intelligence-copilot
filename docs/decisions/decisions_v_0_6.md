@@ -313,6 +313,7 @@ interface ConversationContextStore {
 - In `enforce` and `report-only`, the execution payload is always the sanitised request; `report-only` logs/flags violations and sanitiser changes without blocking calls.
 - `originalRequest` can be preserved explicitly for debugging/telemetry in non-production wiring when needed.
 - `off` disables guarding entirely and is reserved for explicit test/benchmark clients.
+- Sanitisation runs before other aspects; provider allowlisting still runs in all modes (logging violations when not enforcing).
 
 **Consequences:**
 
@@ -331,7 +332,8 @@ interface ConversationContextStore {
 **Decision:**
 
 - `LlmRouter` resolves an `effectiveMode` per call using global defaults, tenant policy (`egressMode`, `allowOffMode`), and optional per-call overrides (e.g. `egressModeOverride`).
-- `EgressGuardContext` carries `effectiveMode`; `EgressClient` falls back to its configured default when it is absent.
+- Optional per-user policies (when present on a tenant policy) can narrow the mode further but cannot escalate beyond tenant-level `allowOffMode`.
+- `EgressGuardContext` carries both the requested mode and the resolved `effectiveMode`; `EgressClient` falls back to its configured default when it is absent.
 - In `enforce` and `report-only`, execution always uses the sanitised payload; `report-only` logs/flags policy and sanitiser changes instead of blocking. `off` disables aspects entirely and is only for explicitly configured test/benchmark wiring.
 
 **Consequences:**

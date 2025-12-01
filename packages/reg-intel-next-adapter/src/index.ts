@@ -281,6 +281,10 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
 
       const sanitizedMessages = sanitizeMessages(messages as Array<{ role: string; content: string }>);
       const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
+      const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
+      const normalizedStandardDisclaimer = normalizeText(NON_ADVICE_DISCLAIMER);
+      let streamedTextBuffer = '';
+      let disclaimerAlreadyPresent = false;
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -305,6 +309,10 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 });
                 writer.send('metadata', metadata);
               } else if (chunk.type === 'text' && chunk.delta) {
+                streamedTextBuffer += chunk.delta;
+                if (!disclaimerAlreadyPresent && normalizeText(streamedTextBuffer).includes(normalizedStandardDisclaimer)) {
+                  disclaimerAlreadyPresent = true;
+                }
                 writer.send('message', { text: chunk.delta });
               } else if (chunk.type === 'error') {
                 writer.send('error', { message: chunk.error || 'Unknown error' });
@@ -312,7 +320,12 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 return;
               } else if (chunk.type === 'done') {
                 // Send disclaimer after response (if configured)
-                if (shouldIncludeDisclaimer && chunk.disclaimer) {
+                if (
+                  shouldIncludeDisclaimer &&
+                  chunk.disclaimer &&
+                  !disclaimerAlreadyPresent &&
+                  !normalizeText(streamedTextBuffer).includes(normalizeText(chunk.disclaimer))
+                ) {
                   writer.send('message', { text: `\n\n${chunk.disclaimer}` });
                 }
                 writer.send('done', { status: 'ok' });

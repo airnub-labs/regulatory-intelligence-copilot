@@ -11,8 +11,12 @@ export interface EgressGuardContext {
   sanitizedRequest?: unknown;
   originalRequest?: unknown;
   tenantId?: string;
+  userId?: string;
   task?: string;
   metadata?: Record<string, unknown>;
+
+  /** Requested mode before policy resolution. */
+  mode?: EgressMode;
 
   /**
    * Per-call effective egress mode. Falls back to the client's default when undefined.
@@ -60,21 +64,14 @@ export interface EgressClientConfig {
   preserveOriginalRequest?: boolean;
 }
 
-function resolveEgressMode(
-  ctx: EgressGuardContext,
-  defaultMode: EgressMode
-): EgressMode {
-  return ctx.effectiveMode ?? defaultMode;
-}
-
 function providerAllowlistAspect(
   allowed: string[] | undefined,
   defaultMode: EgressMode
 ): EgressAspect {
   return async (ctx, next) => {
-    const mode = resolveEgressMode(ctx, defaultMode);
+    const mode = ctx.effectiveMode ?? defaultMode;
 
-    if (mode === 'off' || !allowed || allowed.length === 0) {
+    if (!allowed || allowed.length === 0) {
       return next(ctx);
     }
 
@@ -86,14 +83,14 @@ function providerAllowlistAspect(
       );
     }
 
-    if (!isAllowed && mode === 'report-only') {
+    if (!isAllowed && (mode === 'report-only' || mode === 'off')) {
       const metadata = {
         ...ctx.metadata,
         egressPolicyViolation: true,
         egressPolicyViolationReason: `Provider ${ctx.providerId} is not allowed by the current egress policy`,
       };
 
-      console.warn('[Egress][report-only] Disallowed provider used', {
+      console.warn('[Egress] Disallowed provider used', {
         providerId: ctx.providerId,
         tenantId: ctx.tenantId,
         task: ctx.task,
@@ -111,7 +108,7 @@ function sanitizeRequestAspect(
   options: { preserveOriginalRequest?: boolean } = {}
 ): EgressAspect {
   return async (ctx, next) => {
-    const mode = resolveEgressMode(ctx, defaultMode);
+    const mode = ctx.effectiveMode ?? defaultMode;
 
     if (mode === 'off') {
       return next(ctx);
@@ -155,16 +152,16 @@ export class EgressClient {
   constructor(config?: EgressClientConfig) {
     this.defaultMode = config?.mode ?? 'enforce';
 
+    const sanitizeAspect = sanitizeRequestAspect(this.defaultMode, {
+      preserveOriginalRequest: config?.preserveOriginalRequest,
+    });
+
     const providerAspect = providerAllowlistAspect(
       config?.allowedProviders,
       this.defaultMode
     );
 
-    const sanitizeAspect = sanitizeRequestAspect(this.defaultMode, {
-      preserveOriginalRequest: config?.preserveOriginalRequest,
-    });
-
-    const baselineAspects: EgressAspect[] = [providerAspect, sanitizeAspect];
+    const baselineAspects: EgressAspect[] = [sanitizeAspect, providerAspect];
 
     const runPipeline = composeEgressAspects(
       [...baselineAspects, ...(config?.aspects ?? [])],

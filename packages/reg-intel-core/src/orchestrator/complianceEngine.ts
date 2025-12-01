@@ -174,11 +174,10 @@ export interface ConversationContextStore {
 /**
  * LLM tool stream chunk (from router providers)
  */
-type ToolStreamChunk = RouterStreamChunk & {
-  type: 'tool';
-  name?: string;
-  toolName?: string;
+type ToolStreamChunk = Extract<RouterStreamChunk, { type: 'tool' }> & {
   argsJson?: unknown;
+  /** Legacy fields kept for defensive parsing of older provider shapes. */
+  toolName?: string;
   arguments?: unknown;
   payload?: unknown;
 };
@@ -213,6 +212,18 @@ const CAPTURE_CONCEPTS_TOOL = {
             label: { type: 'string' },
             type: { type: 'string' },
             jurisdiction: { type: 'string' },
+            domain: { type: 'string' },
+            kind: { type: 'string' },
+            prefLabel: { type: 'string' },
+            altLabels: {
+              type: 'array',
+              items: { type: 'string' },
+            },
+            definition: { type: 'string' },
+            sourceUrls: {
+              type: 'array',
+              items: { type: 'string' },
+            },
             canonicalId: { type: 'string' },
             nodeId: { type: 'string' },
           },
