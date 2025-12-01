@@ -138,14 +138,24 @@ function renderMarkdown(content: string) {
   return elements
 }
 
+interface MessageMetadata {
+  agentId?: string
+  jurisdictions?: string[]
+  uncertaintyLevel?: "low" | "medium" | "high"
+  referencedNodes?: string[]
+}
+
 interface MessageProps {
   role: "user" | "assistant"
   content: string
   className?: string
+  metadata?: MessageMetadata
 }
 
-export function Message({ role, content, className }: MessageProps) {
+export function Message({ role, content, className, metadata }: MessageProps) {
   const isUser = role === "user"
+
+  const nodesCount = metadata?.referencedNodes?.length ?? 0
 
   return (
     <div
@@ -178,22 +188,38 @@ export function Message({ role, content, className }: MessageProps) {
             </>
           )}
         </div>
-        <div
-          className={cn(
-            "relative overflow-hidden rounded-2xl border px-4 py-3 shadow-sm transition", 
-            isUser
-              ? "bg-gradient-to-br from-primary to-primary/85 text-primary-foreground"
-              : "bg-card/90 text-foreground",
-            !isUser && "backdrop-blur supports-[backdrop-filter]:border-border/80"
-          )}
-        >
+        <div className="flex flex-col gap-2">
+          <div
+            className={cn(
+              "relative overflow-hidden rounded-2xl border px-4 py-3 shadow-sm transition",
+              isUser
+                ? "bg-gradient-to-br from-primary to-primary/85 text-primary-foreground"
+                : "bg-card/90 text-foreground",
+              !isUser && "backdrop-blur supports-[backdrop-filter]:border-border/80"
+            )}
+          >
+            {!isUser && (
+              <Badge className="absolute right-3 top-3 flex items-center gap-1" variant="secondary">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                AI Elements
+              </Badge>
+            )}
+            <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
+          </div>
           {!isUser && (
-            <Badge className="absolute right-3 top-3 flex items-center gap-1" variant="secondary">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              AI Elements
-            </Badge>
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+              <span className="rounded-full bg-background px-2 py-1 text-xs font-semibold text-foreground">
+                Agent: {metadata?.agentId ?? "pending"}
+              </span>
+              <span className="rounded-full bg-background px-2 py-1 text-xs">
+                Jurisdictions: {metadata?.jurisdictions?.join(", ") ?? "pending"}
+              </span>
+              <span className="rounded-full bg-background px-2 py-1 text-xs">
+                Uncertainty: {metadata?.uncertaintyLevel ?? "unknown"}
+              </span>
+              <span className="rounded-full bg-background px-2 py-1 text-xs">Nodes: {nodesCount}</span>
+            </div>
           )}
-          <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
         </div>
       </div>
       {isUser && (

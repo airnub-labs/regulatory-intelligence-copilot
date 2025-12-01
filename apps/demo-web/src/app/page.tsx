@@ -23,14 +23,12 @@ import {
  * User profile for regulatory context
  */
 interface UserProfile {
-  personaType: 'self-employed' | 'single-director' | 'paye-employee' | 'investor' | 'advisor'
+  personaType:
+    | 'single-director-ie'
+    | 'self-employed-contractor-ie'
+    | 'paye-eu-ties'
+    | 'cross-border-ie-eu'
   jurisdictions: string[]
-}
-
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
 }
 
 interface ChatMetadata {
@@ -39,6 +37,13 @@ interface ChatMetadata {
   uncertaintyLevel: 'low' | 'medium' | 'high'
   disclaimerKey: string
   referencedNodes: string[]
+}
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  metadata?: ChatMetadata
 }
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
@@ -72,19 +77,37 @@ function parseJsonSafe(value: string) {
 }
 
 const quickPrompts = [
-  'What are the key PAYE obligations for a single director company in IE?',
-  'Summarise CGT deadlines for an Irish investor with UK ties.',
-  'Outline PRSI considerations for a self-employed founder expanding to EU.',
-  'Show pension contribution limits for PAYE employees across IE and EU.',
+  {
+    label: 'Graph + welfare',
+    prompt: 'Show me how PRSI contributions and jobseeker’s benefit interact for this persona.',
+    scenarioHint: 'graph_welfare_prsi_jobseekers_benefit',
+  },
+  {
+    label: 'Graph + tax + CGT',
+    prompt:
+      'Summarise PAYE, USC, and PRSI obligations for this persona and highlight any graph nodes with recent changes.',
+    scenarioHint: 'graph_tax_cgt_recent_changes',
+  },
+  {
+    label: 'Timeline engine',
+    prompt: 'Explain how pension contribution limits for this persona change over the next 5 years, based on the regulatory timeline.',
+    scenarioHint: 'timeline_pension_contribution_limits',
+  },
+  {
+    label: 'Cross-border / scenario engine',
+    prompt: 'Outline social security coordination rules if this persona starts working remotely from another EU country.',
+    scenarioHint: 'cross_border_social_security_coordination',
+  },
 ]
 
-const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director'
+const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director-ie'
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
+  const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
@@ -93,6 +116,7 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const conversationIdRef = useRef<string>(crypto.randomUUID())
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -143,6 +167,13 @@ export default function Home() {
         switch (parsedEvent.type) {
           case 'metadata':
             setChatMetadata(parsedData as ChatMetadata)
+            setMessages(prev =>
+              prev.map(message =>
+                message.id === assistantMessageId
+                  ? { ...message, metadata: parsedData as ChatMetadata }
+                  : message
+              )
+            )
             break
           case 'message': {
             const textChunk = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? ''
@@ -184,7 +215,12 @@ export default function Home() {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: outgoingMessages.map(({ role, content }) => ({ role, content })), profile }),
+        body: JSON.stringify({
+          conversationId: conversationIdRef.current,
+          messages: outgoingMessages.map(({ role, content }) => ({ role, content })),
+          profile,
+          scenarioHint,
+        }),
         signal: controller.signal,
       })
 
@@ -202,6 +238,7 @@ export default function Home() {
       )
     } finally {
       setIsLoading(false)
+      setScenarioHint(null)
     }
   }
 
@@ -217,7 +254,7 @@ export default function Home() {
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
-      <AppHeader />
+      <AppHeader primaryAction={{ label: 'View Graph', href: `/graph?conversationId=${conversationIdRef.current}` }} />
 
       <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-12 pt-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.8fr)]">
@@ -233,45 +270,60 @@ export default function Home() {
                   <Badge variant="secondary" className="rounded-full">Live preview</Badge>
                 </div>
                 <p className="max-w-2xl text-sm text-muted-foreground">
-                  Persona-aware answers grounded on the regulatory graph with shadcn/ui styling and Vercel-inspired chat affordances.
+                  Persona-aware answers grounded on the regulatory graph, with timeline- and scenario-aware reasoning.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Answers are grounded in a Memgraph regulatory graph, a timeline engine for law-in-time, and scenario-aware agents.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline" className="flex items-center gap-1 bg-primary/10 text-primary">
+                <Badge
+                  variant="outline"
+                  className="flex items-center gap-1 bg-primary/10 text-primary"
+                  title="Questions are answered against a live Memgraph regulatory graph."
+                >
+                  <Wand2 className="h-3.5 w-3.5" /> Graph-backed
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  title="Modelled support for IE, UK, EU, and selected cross-border cases."
+                >
                   <Globe2 className="h-3.5 w-3.5" /> Multi-jurisdiction
                 </Badge>
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <ShieldHalf className="h-3.5 w-3.5" /> Research only
+                <Badge
+                  variant="outline"
+                  className="flex items-center gap-1"
+                  title="Not legal / tax advice. See guardrails in the footer."
+                >
+                  <ShieldHalf className="h-3.5 w-3.5" /> Research-only
                 </Badge>
               </div>
             </div>
 
             <div className="grid gap-4 border-b px-6 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <div className="space-y-2">
-                <label className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Persona</label>
+                <label className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Persona (feeds into agent routing)</label>
                 <Select
                   value={profile.personaType}
-                  onValueChange={(value) =>
-                    setProfile({ ...profile, personaType: value as UserProfile['personaType'] })
-                  }
+                  onValueChange={(value) => setProfile({ ...profile, personaType: value as UserProfile['personaType'] })}
                 >
                   <SelectTrigger className="w-full md:w-[260px]">
                     <SelectValue placeholder="Choose persona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single-director">Single Director Company (IE)</SelectItem>
-                    <SelectItem value="self-employed">Self-Employed</SelectItem>
-                    <SelectItem value="paye-employee">PAYE Employee</SelectItem>
-                    <SelectItem value="investor">Investor (CGT)</SelectItem>
-                    <SelectItem value="advisor">Tax/Welfare Advisor</SelectItem>
+                    <SelectItem value="single-director-ie">Single-director company (IE)</SelectItem>
+                    <SelectItem value="self-employed-contractor-ie">Self-employed / contractor (IE)</SelectItem>
+                    <SelectItem value="paye-eu-ties">PAYE employee with EU ties</SelectItem>
+                    <SelectItem value="cross-border-ie-eu">Cross-border worker (IE–EU)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Jurisdictions</label>
+                <label className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Jurisdictions (feeds into graph & timeline filters)</label>
                 <div className="flex flex-wrap gap-2">
-                  {['IE', 'EU', 'MT', 'IM'].map((jur) => (
+                  {['IE', 'UK', 'EU', 'MT', 'IM'].map((jur) => (
                     <Badge
                       key={jur}
                       onClick={() => toggleJurisdiction(jur)}
@@ -282,23 +334,35 @@ export default function Home() {
                     </Badge>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Persona and jurisdictions are passed into the prompt builder and used to filter the graph, timeline, and scenario engine.
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 border-b bg-muted/25 px-6 py-3">
-              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Quick prompts</span>
-              {quickPrompts.map(prompt => (
-                <Button
-                  key={prompt}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full border-dashed px-3 text-xs"
-                  onClick={() => setInput(prompt)}
-                >
-                  <Wand2 className="mr-1 h-3.5 w-3.5" />
-                  {prompt}
-                </Button>
-              ))}
+            <div className="flex flex-wrap items-center gap-3 border-b bg-muted/25 px-6 py-3">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Scenario quick prompts</span>
+                <p className="text-xs text-muted-foreground">Jump into pre-modelled scenarios for this persona and jurisdiction.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {quickPrompts.map(({ prompt, scenarioHint: promptScenarioHint, label }) => (
+                  <Button
+                    key={promptScenarioHint}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border-dashed px-3 text-xs"
+                    onClick={() => {
+                      setInput(prompt)
+                      setScenarioHint(promptScenarioHint)
+                    }}
+                    title={label}
+                  >
+                    <Wand2 className="mr-1 h-3.5 w-3.5" />
+                    {prompt}
+                  </Button>
+                ))}
+              </div>
             </div>
 
             {chatMetadata && (
@@ -339,43 +403,35 @@ export default function Home() {
                       Vercel AI starter surface
                     </div>
                     <h2 className="text-xl font-semibold">Welcome to the Regulatory Intelligence Copilot</h2>
-                    <p className="text-sm text-muted-foreground">Grounded answers with shareable shadcn/ui components.</p>
+                    <p className="text-sm text-muted-foreground">Grounded answers from a regulatory graph, not a generic chatbot.</p>
                     <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
                       <Card className="border border-blue-100 bg-blue-50/60 dark:border-blue-950 dark:bg-blue-950/30">
                         <CardHeader className="p-4">
-                          <CardTitle className="text-base text-blue-600 dark:text-blue-300">Tax & Company Law</CardTitle>
-                          <CardDescription className="text-xs">
-                            Corporation tax, CGT, R&D credits, director obligations
-                          </CardDescription>
+                          <CardTitle className="text-base text-blue-600 dark:text-blue-300">Tax &amp; Company Law</CardTitle>
+                          <CardDescription className="text-xs">Corporation tax, PAYE, CGT, R&amp;D credits, director obligations.</CardDescription>
                         </CardHeader>
                       </Card>
                       <Card className="border border-green-100 bg-green-50/60 dark:border-green-950 dark:bg-green-950/30">
                         <CardHeader className="p-4">
                           <CardTitle className="text-base text-green-600 dark:text-green-300">Social Welfare</CardTitle>
-                          <CardDescription className="text-xs">
-                            PRSI, benefits, entitlements, contributions
-                          </CardDescription>
+                          <CardDescription className="text-xs">PRSI, benefits, entitlements, contributions.</CardDescription>
                         </CardHeader>
                       </Card>
                       <Card className="border border-purple-100 bg-purple-50/60 dark:border-purple-950 dark:bg-purple-950/30">
                         <CardHeader className="p-4">
                           <CardTitle className="text-base text-purple-600 dark:text-purple-300">Pensions</CardTitle>
-                          <CardDescription className="text-xs">
-                            State pension, occupational, personal pensions
-                          </CardDescription>
+                          <CardDescription className="text-xs">State pension, occupational and personal schemes, funding rules.</CardDescription>
                         </CardHeader>
                       </Card>
                       <Card className="border border-amber-100 bg-amber-50/60 dark:border-amber-950 dark:bg-amber-950/30">
                         <CardHeader className="p-4">
-                          <CardTitle className="text-base text-amber-600 dark:text-amber-300">EU & Cross-Border</CardTitle>
-                          <CardDescription className="text-xs">
-                            Social security coordination, EU regulations
-                          </CardDescription>
+                          <CardTitle className="text-base text-amber-600 dark:text-amber-300">EU &amp; Cross-Border</CardTitle>
+                          <CardDescription className="text-xs">Social security coordination, EU regulations, cross-border tax &amp; welfare effects.</CardDescription>
                         </CardHeader>
                       </Card>
                     </div>
                     <p className="max-w-md text-xs text-muted-foreground">
-                      ⚠️ This is a research tool, not legal/tax advice. Always verify with qualified professionals.
+                      This is a research tool built on a regulatory knowledge graph. It does not provide legal, tax, or financial advice. Always verify with qualified professionals.
                     </p>
                   </div>
                 </ChatWelcome>
@@ -386,6 +442,7 @@ export default function Home() {
                       key={message.id}
                       role={message.role}
                       content={message.content}
+                      metadata={message.metadata}
                     />
                   ))}
                   {isLoading && <MessageLoading />}
@@ -399,12 +456,12 @@ export default function Home() {
                 value={input}
                 onChange={setInput}
                 onSubmit={handleSubmit}
-                placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
+                placeholder="Ask about tax, welfare, pensions, or cross-border rules. The copilot will query the regulatory graph and timeline engine for you."
                 disabled={isLoading}
                 isLoading={isLoading}
               />
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                Research assistance only • Not legal, tax, or welfare advice • Verify with qualified professionals
+                Research assistance only · Not legal, tax, or welfare advice · All LLM calls pass through an egress guard with PII redaction.
               </p>
             </div>
           </section>
@@ -415,7 +472,7 @@ export default function Home() {
                 <CardTitle className="flex items-center gap-2 text-base">
                   <BookOpenCheck className="h-4 w-4 text-primary" /> Session context
                 </CardTitle>
-                <CardDescription>Profile selections feed directly into the chat context.</CardDescription>
+                <CardDescription>Profile and graph context for this conversation.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
@@ -428,8 +485,18 @@ export default function Home() {
                     {profile.jurisdictions.length > 0 ? profile.jurisdictions.join(', ') : 'None selected'}
                   </Badge>
                 </div>
+                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
+                  <span className="text-muted-foreground">Active graph nodes</span>
+                  <Badge variant="secondary" className="rounded-full">
+                    {chatMetadata?.referencedNodes?.length ? `${chatMetadata.referencedNodes.length} nodes from last answer` : 'Pending'}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
+                  <span className="text-muted-foreground">Timeline focus</span>
+                  <Badge variant="outline" className="rounded-full">Current tax year</Badge>
+                </div>
                 <div className="rounded-xl border bg-primary/5 px-3 py-2 text-xs text-primary">
-                  Changes apply instantly to the next prompt.
+                  These settings feed into the prompt builder, graph queries, and conversation context store. Changes take effect from the next question.
                 </div>
               </CardContent>
             </Card>
@@ -439,20 +506,32 @@ export default function Home() {
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Sparkles className="h-4 w-4 text-primary" /> AI element highlights
                 </CardTitle>
-                <CardDescription>Crafted with shadcn/ui, Tailwind v4, and Vercel-inspired chat chrome.</CardDescription>
+                <CardDescription>Aligned with the v0.6 architecture and engines.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  Glassy message surfaces, avatars, and guardrail badges.
+                  <div>
+                    <strong>Graph-backed answers</strong> – the copilot queries a Memgraph regulatory graph seeded with tax, welfare, pensions, and EU rules.
+                  </div>
                 </div>
                 <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  Quick prompt chips to jump into regulatory scenarios.
+                  <div>
+                    <strong>Timeline-aware</strong> – a timeline engine keeps track of when rules start, end, or overlap.
+                  </div>
                 </div>
                 <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  Metadata ribbon showing agent, jurisdictions, and uncertainty.
+                  <div>
+                    <strong>Scenario-aware agents</strong> – persona and jurisdiction drive which specialised agents are used.
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <strong>Guardrails on egress</strong> – all outbound LLM calls pass through an egress guard for redaction and policy checks.
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -462,12 +541,18 @@ export default function Home() {
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ArrowUpRight className="h-4 w-4 text-primary" /> Graph view
                 </CardTitle>
-                <CardDescription>Switch to the graph visualization to inspect relationships.</CardDescription>
+                <CardDescription>Inspect how rules, benefits, and obligations connect in the regulatory graph.</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2 text-sm">
+                <p className="text-muted-foreground">
+                  Open the graph experience to see the underlying Memgraph nodes and relationships used in this answer – including tax rules, welfare schemes, pension rules, and cross-border links.
+                </p>
                 <Button asChild className="w-full" variant="outline">
-                  <a href="/graph">Open graph experience</a>
+                  <a href={`/graph?conversationId=${conversationIdRef.current}`}>Open regulatory graph</a>
                 </Button>
+                <p className="text-xs text-muted-foreground">
+                  Opens a dedicated graph UI powered by Memgraph and the graph schema v0.6.
+                </p>
               </CardContent>
             </Card>
           </aside>
