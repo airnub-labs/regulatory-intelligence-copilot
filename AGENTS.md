@@ -348,3 +348,9 @@ When adding or modifying an agent, ensure:
 
 Following this spec keeps the agent layer consistent with the v0.6 architecture and allows the entire system to be reused in other host apps (e.g. separate Next.js/Supabase SaaS products) without rewriting core logic.
 
+
+### 5.8 Web app / shell responsibilities
+
+- The chat surface must call `/api/chat` with a `conversationId` once the first SSE metadata payload provides one, ensuring the backend `ConversationStore`/`ConversationContextStore` maintains continuity.
+- Conversation SSE streams are keyed per `(tenantId, conversationId)`; authorised users on the same tenant may subscribe concurrently to the same stream in single-instance deployments.
+- Dev mode may rely on in-memory stores; production shells should wire Supabase/Postgres-backed stores with RLS.

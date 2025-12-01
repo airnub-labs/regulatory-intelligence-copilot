@@ -185,6 +185,14 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
   - [ ] Keep the UI **stateless** w.r.t. conversation context; it only sends messages and renders streamed text/meta.
   - [ ] Optionally show `referencedNodes` and resolved concept labels as chips or side‑panel entries.
 
+### 3.5 ReBAC-ready sharing (OpenFGA path)
+
+- [ ] Finalise the `share_audience` + `tenant_access` plus `authorization_model`/`authorization_spec` envelope for conversations/messages so Supabase remains the source of truth while enabling external ReBAC engines and falling back to private/owner-only when OpenFGA (or similar) is unavailable.
+- [ ] Add an OpenFGA namespace modelling tenants, users, conversations, and public-read delegation; check in docker-compose for local OpenFGA.
+- [ ] Synchronise tuple writes from Supabase mutations when `authorization_model = 'openfga'` is enabled; keep RLS enforcement intact.
+- [ ] Gate conversation list/detail/chat APIs with OpenFGA `ListObjects`/`Check` before Supabase queries to align server-side filtering.
+- [ ] Update the chat SSE hub to carry access metadata so multi-device subscribers stay authorised during fan-out.
+
 **Exit criteria**
 - `/api/chat` uses SSE streaming with meta events (jurisdictions, uncertainty, referencedNodes).
 - Main chat path uses the `capture_concepts` tool to emit SKOS‑style concepts for at least one vertical (e.g. IE tax: VAT, VRT).

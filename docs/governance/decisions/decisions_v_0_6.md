@@ -208,8 +208,55 @@ interface ConversationContextStore {
 **Rationale:**
 
 - Makes answers **grounded and inspectable** without exposing internal SKOS JSON.
+
+### D-037 – Conversation persistence and SSE fan-out
+
+**Decision:**
+
+- Conversations/messages are persisted in Supabase/Postgres via a `ConversationStore`, with a dev-mode in-memory fallback to keep local demos running without external services.
+- Conversation context remains on the backend through `ConversationContextStore`; the Compliance Engine always reads/writes it, keeping the UI stateless.
+- SSE transport is **per conversation**: a hub broadcasts each streamed chunk to all subscribers for the same `(tenantId, conversationId)`.
+
+**Status:**
+
+- Schema and seed data added; production Supabase wiring and RLS are pending.
+- Event hub implemented as an in-process map suitable for single-instance dev. Production fan-out will require Redis/pub-sub or a managed equivalent.
 - Provides the basis for a "show your workings" experience in the graph view.
-- Reuses an existing field that was previously unpopulated, rather than inventing a new one.
+- Sharing is modelled via `share_audience` (private/tenant/public) and `tenant_access` (view/edit); `isShared` is derived in application code instead of being stored or exposed as a column to avoid redundant state.
+  - An `authorization_model` + `authorization_spec` envelope sits beside these columns so we can plug in OpenFGA (or similar Zanzibar-style ReBAC) later while keeping Supabase as the system of record and the UI/API contracts stable. When `authorization_model = 'openfga'` but the external service is unavailable, the effective audience **falls back to private/owner-only** until ReBAC checks succeed again.
+
+### D-040 – ReBAC trajectory (OpenFGA-ready)
+
+**Decision (future-facing):**
+
+- Use `authorization_model = 'openfga'` plus `authorization_spec` to carry principal/resource tuples so we can mirror conversation sharing into OpenFGA without rewriting persistence.
+- Keep Supabase/RLS as the enforcement source of truth; OpenFGA provides discovery (`ListObjects`, `ListUsers`) and caching for server-side filtering.
+
+**Status:**
+
+- Planning. Schema and API surfaces already include `authorization_model`/`authorization_spec` to avoid future breaking changes.
+
+**Next steps (tracked on the roadmap):**
+
+- Define the OpenFGA model (users, conversations, tenant membership, roles, public-read delegation).
+- Synchronise tuple writes alongside Supabase updates when `authorization_model = 'openfga'` is enabled for a tenant.
+- Gate authz in the chat/conversation APIs via OpenFGA checks before RLS queries.
+
+### D-041 – Shared conversation/authorisation package
+
+**Decision:**
+
+- Extract the conversation store/context interfaces, sharing/authorisation envelope, and per-conversation SSE event hub into a reusable package `@reg-copilot/reg-intel-conversations` so host shells beyond Next.js can consume the same logic without divergence.
+- Keep `@reg-copilot/reg-intel-next-adapter` thin: it re-exports these primitives but no longer owns their implementations.
+
+**Status:**
+
+- Implemented in v0.6; Next.js wiring now depends on the shared package while remaining API-compatible for callers.
+
+**Rationale:**
+
+- Avoids duplicated sharing/auth logic as ReBAC (OpenFGA) lands.
+- Simplifies adoption in other runtimes (CLI, different web shells) while keeping a single derivation for `share_audience` + `tenant_access` resolution and SSE fan-out semantics.
 
 ---
 

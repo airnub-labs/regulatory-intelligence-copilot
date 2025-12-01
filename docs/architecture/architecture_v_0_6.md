@@ -101,12 +101,18 @@ The system consists of:
      - External regulatory content (e.g. Revenue, TAC, EU regs) via HTTP.
    - All egress from sandboxes still flows through the **Egress Guard**.
 
-7. **Storage Layer (Host App)**
-   - Supabase (or similar Postgres) provides multi‑tenant application storage:
-     - Tenants, users, auth.
-     - Conversations and messages.
-     - Conversation‑level context (active node IDs, flags, scenario state).
-   - May store references to graph node IDs, but the graph never stores tenant/user identifiers.
+   7. **Storage Layer (Host App)**
+     - Supabase (or similar Postgres) provides multi‑tenant application storage:
+       - Tenants, users, auth.
+       - Conversations and messages.
+       - Conversation‑level context (active node IDs, flags, scenario state).
+       - Access envelopes for conversations that combine `share_audience` (private/tenant/public) and `tenant_access` (view/edit) with `authorization_model` + `authorization_spec` so Supabase RLS and external ReBAC engines (e.g., OpenFGA) can be swapped without reshaping the table later; when an external ReBAC engine is unavailable, the effective audience falls back to **private/owner-only**.
+     - May store references to graph node IDs, but the graph never stores tenant/user identifiers.
+    - A ConversationStore + ConversationContextStore abstraction sits between the web app and the Compliance Engine:
+      - Supabase/Postgres is the production target with read-only public views for safe exposure.
+      - An in-memory fallback keeps dev-mode working without external services.
+      - The shared package `@reg-copilot/reg-intel-conversations` owns the stores, share/authorisation envelope, and SSE event hub so other host shells (non-Next.js) can reuse the same logic without forking the adapter.
+    - SSE streams are keyed per `(tenantId, conversationId)` so multiple authorised viewers can consume the same live answer; the baseline implementation assumes a single instance, with Redis/pub-sub recommended for horizontal fan-out.
 
 ### 1.2 Privacy & Data Boundaries (Summary)
 

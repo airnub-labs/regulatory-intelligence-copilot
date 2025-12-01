@@ -19,8 +19,28 @@ import type {
   LlmRouter,
   LlmCompletionOptions,
 } from '@reg-copilot/reg-intel-llm';
+import type { ConversationContextStore } from '@reg-copilot/reg-intel-core';
+import {
+  ConversationEventHub,
+  InMemoryConversationContextStore,
+  InMemoryConversationStore,
+  deriveIsShared,
+  type AuthorizationModel,
+  type AuthorizationSpec,
+  type ConversationStore,
+  type ShareAudience,
+  type TenantAccess,
+} from '@reg-copilot/reg-intel-conversations';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
+
+export interface ChatRouteHandlerOptions {
+  tenantId?: string;
+  includeDisclaimer?: boolean;
+  conversationStore?: ConversationStore;
+  conversationContextStore?: ConversationContextStore;
+  eventHub?: ConversationEventHub;
+}
 
 /**
  * Adapter that wraps LlmRouter to match the LlmClient interface
@@ -146,6 +166,7 @@ function buildMetadataChunk(args: {
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   disclaimerKey?: string;
   referencedNodes: Array<{ id: string } | string>;
+  conversationId?: string;
 }) {
   return {
     agentId: args.agentId,
@@ -153,17 +174,8 @@ function buildMetadataChunk(args: {
     uncertaintyLevel: args.uncertaintyLevel ?? 'medium',
     disclaimerKey: args.disclaimerKey ?? DEFAULT_DISCLAIMER_KEY,
     referencedNodes: args.referencedNodes.map(node => (typeof node === 'string' ? node : node.id)),
+    conversationId: args.conversationId,
   };
-}
-
-/**
- * Configuration options for the chat route handler
- */
-export interface ChatRouteHandlerOptions {
-  /** Tenant identifier for multi-tenant deployments (default: 'default') */
-  tenantId?: string;
-  /** Whether to include disclaimer in system prompt and response (default: true) */
-  includeDisclaimer?: boolean;
 }
 
 /**
@@ -230,6 +242,10 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   // Lazy initialization to avoid build-time errors
   let llmRouter: LlmRouter | null = null;
   let complianceEngine: ComplianceEngine | null = null;
+  const conversationStore = options?.conversationStore ?? new InMemoryConversationStore();
+  const conversationContextStore =
+    options?.conversationContextStore ?? new InMemoryConversationContextStore();
+  const eventHub = options?.eventHub ?? new ConversationEventHub();
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
@@ -243,6 +259,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         egressGuard: new BasicEgressGuard(),
         graphWriteService: {} as never, // Graph writes not used in Next adapter baseline wiring
         canonicalConceptHandler: { resolveAndUpsert: async () => [] },
+        conversationContextStore,
       });
     }
     return { llmRouter: llmRouter!, complianceEngine };
@@ -258,37 +275,108 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return new Response('Invalid request body', { status: 400 });
       }
 
-      const { messages, profile } = body;
-
-      // Validate messages array
-      if (!Array.isArray(messages) || messages.length === 0) {
-        return new Response('No messages provided', { status: 400 });
-      }
-
-      // Validate message structure
-      for (const msg of messages) {
-        if (!msg || typeof msg !== 'object' ||
-            typeof msg.role !== 'string' ||
-            typeof msg.content !== 'string') {
-          return new Response('Invalid message format', { status: 400 });
-        }
-      }
+      const {
+        messages,
+        message,
+        profile,
+        conversationId: requestConversationId,
+        userId,
+        shareAudience,
+        tenantAccess,
+        authorizationModel,
+        authorizationSpec,
+      } = body;
 
       // Validate profile if provided
       if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
         return new Response('Invalid profile format', { status: 400 });
       }
 
-      const sanitizedMessages = sanitizeMessages(messages as Array<{ role: string; content: string }>);
+      const tenantId = body.tenantId ?? options?.tenantId ?? 'default';
+
+      const sanitizeIncomingMessages = Array.isArray(messages)
+        ? sanitizeMessages(messages as Array<{ role: string; content: string }>)
+        : [];
+      const incomingMessageContent =
+        typeof message === 'string'
+          ? message
+          : sanitizeIncomingMessages.filter(m => m.role === 'user').pop()?.content;
+      if (!incomingMessageContent) {
+        return new Response('No message provided', { status: 400 });
+      }
+
+      let conversationId = requestConversationId as string | undefined;
+      if (!conversationId) {
+        const created = await conversationStore.createConversation({
+          tenantId,
+          userId,
+          personaId: profile?.personaType,
+          jurisdictions: profile?.jurisdictions,
+          shareAudience: shareAudience as ShareAudience | undefined,
+          tenantAccess: tenantAccess as TenantAccess | undefined,
+          authorizationModel: authorizationModel as AuthorizationModel | undefined,
+          authorizationSpec: authorizationSpec as AuthorizationSpec | undefined,
+        });
+        conversationId = created.conversationId;
+      }
+
+      const conversationRecord = await conversationStore.getConversation({
+        tenantId,
+        conversationId,
+        userId,
+      });
+
+      if (!conversationRecord) {
+        return new Response('Conversation not found or access denied', { status: 404 });
+      }
+
+      const existingMessages = await conversationStore.getMessages({
+        tenantId,
+        conversationId,
+        userId,
+        limit: 50,
+      });
+
+      const sanitizedMessages = [
+        ...existingMessages.map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
+        { role: 'user', content: incomingMessageContent } as ChatMessage,
+      ];
+      await conversationStore.appendMessage({
+        tenantId,
+        conversationId,
+        role: 'user',
+        content: incomingMessageContent,
+        userId,
+      });
       const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
       const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
       const normalizedStandardDisclaimer = normalizeText(NON_ADVICE_DISCLAIMER);
       let streamedTextBuffer = '';
       let disclaimerAlreadyPresent = false;
+      let lastMetadata: Record<string, unknown> | null = null;
+
+      const subscriber = {
+        send: (event: string, data: unknown) => {
+          // placeholder replaced when writer is created
+        },
+      } as { send: (event: string, data: unknown) => void };
+      const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
+      const isShared = deriveIsShared(conversationRecord);
 
       const stream = new ReadableStream({
         async start(controller) {
           const writer = new SseStreamWriter(controller);
+          subscriber.send = (event: string, data: unknown) => writer.send(event, data);
+
+          // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
+          eventHub.broadcast(tenantId, conversationId, 'metadata', {
+            conversationId,
+            shareAudience: conversationRecord.shareAudience,
+            tenantAccess: conversationRecord.tenantAccess,
+            isShared,
+            authorizationModel: conversationRecord.authorizationModel,
+            authorizationSpec: conversationRecord.authorizationSpec,
+          });
 
           try {
             // Use ComplianceEngine to handle chat with streaming
@@ -296,7 +384,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             for await (const chunk of complianceEngine.handleChatStream({
               messages: sanitizedMessages,
               profile,
-              tenantId: options?.tenantId ?? 'default',
+              tenantId,
+              conversationId,
             })) {
               if (chunk.type === 'metadata') {
                 // Send metadata with agent info, jurisdictions, and referenced nodes
@@ -306,19 +395,37 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   uncertaintyLevel: chunk.metadata!.uncertaintyLevel,
                   disclaimerKey: DEFAULT_DISCLAIMER_KEY,
                   referencedNodes: chunk.metadata!.referencedNodes,
+                  conversationId,
                 });
-                writer.send('metadata', metadata);
+                lastMetadata = metadata;
+                eventHub.broadcast(tenantId, conversationId, 'metadata', {
+                  ...metadata,
+                  authorizationModel: conversationRecord.authorizationModel,
+                  authorizationSpec: conversationRecord.authorizationSpec,
+                  shareAudience: conversationRecord.shareAudience,
+                  tenantAccess: conversationRecord.tenantAccess,
+                  isShared,
+                });
               } else if (chunk.type === 'text' && chunk.delta) {
                 streamedTextBuffer += chunk.delta;
                 if (!disclaimerAlreadyPresent && normalizeText(streamedTextBuffer).includes(normalizedStandardDisclaimer)) {
                   disclaimerAlreadyPresent = true;
                 }
-                writer.send('message', { text: chunk.delta });
+                eventHub.broadcast(tenantId, conversationId, 'message', { text: chunk.delta });
               } else if (chunk.type === 'error') {
-                writer.send('error', { message: chunk.error || 'Unknown error' });
+                eventHub.broadcast(tenantId, conversationId, 'error', { message: chunk.error || 'Unknown error' });
                 writer.close();
+                unsubscribe();
                 return;
               } else if (chunk.type === 'done') {
+                await conversationStore.appendMessage({
+                  tenantId,
+                  conversationId,
+                  userId: conversationRecord.userId ?? userId,
+                  role: 'assistant',
+                  content: streamedTextBuffer,
+                  metadata: lastMetadata ?? undefined,
+                });
                 // Send disclaimer after response (if configured)
                 if (
                   shouldIncludeDisclaimer &&
@@ -326,18 +433,20 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   !disclaimerAlreadyPresent &&
                   !normalizeText(streamedTextBuffer).includes(normalizeText(chunk.disclaimer))
                 ) {
-                  writer.send('disclaimer', { text: chunk.disclaimer });
+                  eventHub.broadcast(tenantId, conversationId, 'disclaimer', { text: chunk.disclaimer });
                 }
-                writer.send('done', { status: 'ok' });
+                eventHub.broadcast(tenantId, conversationId, 'done', { status: 'ok' });
                 writer.close();
+                unsubscribe();
                 return;
               }
             }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            writer.send('error', { message });
-            writer.send('done', { status: 'error' });
+            eventHub.broadcast(tenantId, conversationId, 'error', { message });
+            eventHub.broadcast(tenantId, conversationId, 'done', { status: 'error' });
             writer.close();
+            unsubscribe();
           }
         },
       });
@@ -371,3 +480,14 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     }
   };
 }
+
+export {
+  InMemoryConversationStore,
+  InMemoryConversationContextStore,
+  ConversationEventHub,
+  type ConversationStore,
+  type ShareAudience,
+  type TenantAccess,
+  type AuthorizationModel,
+  type AuthorizationSpec,
+};

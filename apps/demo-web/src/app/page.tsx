@@ -47,6 +47,20 @@ interface ChatMessage {
   metadata?: ChatMetadata
 }
 
+type ShareAudience = 'private' | 'tenant' | 'public'
+type TenantAccess = 'view' | 'edit'
+type AuthorizationModel = 'supabase_rbac' | 'openfga'
+
+interface ConversationSummary {
+  id: string
+  title?: string | null
+  createdAt: string
+  lastMessageAt?: string | null
+  shareAudience: ShareAudience
+  tenantAccess: TenantAccess
+  authorizationModel?: AuthorizationModel
+}
+
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
   const lines = eventBlock.split('\n')
   let eventType = 'message'
@@ -101,6 +115,8 @@ const quickPrompts = [
   },
 ]
 
+const DEMO_USER_ID = '00000000-0000-0000-0000-00000000000a'
+
 const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director-ie'
 
 export default function Home() {
@@ -109,19 +125,60 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
+  const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
+  const [authorizationModel, setAuthorizationModel] = useState<AuthorizationModel>('supabase_rbac')
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
   })
+  const isShared = shareAudience !== 'private'
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
-  const conversationIdRef = useRef<string>(crypto.randomUUID())
+  const conversationIdRef = useRef<string | undefined>()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const loadConversations = async () => {
+    const response = await fetch(`/api/conversations?userId=${DEMO_USER_ID}`)
+    if (!response.ok) return
+    const payload = await response.json()
+    setConversations(payload.conversations ?? [])
+  }
+
+  const loadConversation = async (id: string) => {
+    const response = await fetch(`/api/conversations/${id}?userId=${DEMO_USER_ID}`)
+    if (!response.ok) return
+    const payload = await response.json()
+    const loadedMessages: ChatMessage[] = (payload.messages ?? []).map((msg: any) => ({
+      id: msg.id ?? crypto.randomUUID(),
+      role: msg.role,
+      content: msg.content,
+      metadata: msg.metadata,
+    }))
+    setMessages(loadedMessages)
+    setConversationId(id)
+    conversationIdRef.current = id
+    setShareAudience((payload.conversation?.shareAudience as ShareAudience | undefined) ?? 'private')
+    setTenantAccess((payload.conversation?.tenantAccess as TenantAccess | undefined) ?? 'edit')
+    setAuthorizationModel((payload.conversation?.authorizationModel as AuthorizationModel | undefined) ?? 'supabase_rbac')
+    if (payload.conversation?.personaId) {
+      setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
+    }
+    if (payload.conversation?.jurisdictions) {
+      setProfile(prev => ({ ...prev, jurisdictions: payload.conversation.jurisdictions }))
+    }
+  }
+
+  useEffect(() => {
+    loadConversations()
+  }, [])
 
   // Only scroll when a new message is added
   useEffect(() => {
@@ -130,6 +187,67 @@ export default function Home() {
     }
     prevMessageCountRef.current = messages.length
   }, [messages.length])
+
+  useEffect(() => {
+    if (!conversationId) return
+    const controller = new AbortController()
+
+    const subscribe = async () => {
+      const response = await fetch(`/api/conversations/${conversationId}/stream?userId=${DEMO_USER_ID}`, {
+        signal: controller.signal,
+      })
+      if (!response.ok || !response.body) return
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        let boundaryIndex
+        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, boundaryIndex).trim()
+          buffer = buffer.slice(boundaryIndex + 2)
+
+          if (!rawEvent) continue
+          const parsedEvent = parseSseEvent(rawEvent)
+          if (!parsedEvent) continue
+          const parsedData = parseJsonSafe(parsedEvent.data)
+
+          if (parsedEvent.type === 'metadata') {
+            if ((parsedData as any)?.conversationId) {
+              setConversationId((parsedData as any).conversationId)
+              conversationIdRef.current = (parsedData as any).conversationId
+            }
+            if ((parsedData as any)?.shareAudience) {
+              setShareAudience((parsedData as any).shareAudience as ShareAudience)
+            }
+            if ((parsedData as any)?.tenantAccess) {
+              setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
+            }
+            if ((parsedData as any)?.authorizationModel) {
+              setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
+            }
+            if (conversationIdRef.current) {
+              loadConversation(conversationIdRef.current)
+            }
+          } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
+            loadConversation(conversationIdRef.current)
+          }
+        }
+      }
+    }
+
+    subscribe()
+
+    return () => {
+      controller.abort()
+    }
+  }, [conversationId])
 
   const streamChatResponse = async (response: Response, assistantMessageId: string) => {
     if (!response.body) {
@@ -167,6 +285,19 @@ export default function Home() {
 
         switch (parsedEvent.type) {
           case 'metadata':
+            if ((parsedData as any)?.conversationId) {
+              setConversationId((parsedData as any).conversationId)
+              conversationIdRef.current = (parsedData as any).conversationId
+            }
+            if ((parsedData as any)?.shareAudience) {
+              setShareAudience((parsedData as any).shareAudience as ShareAudience)
+            }
+            if ((parsedData as any)?.tenantAccess) {
+              setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
+            }
+            if ((parsedData as any)?.authorizationModel) {
+              setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
+            }
             setChatMetadata(parsedData as ChatMetadata)
             setMessages(prev =>
               prev.map(message =>
@@ -227,9 +358,13 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: conversationIdRef.current,
-          messages: outgoingMessages.map(({ role, content }) => ({ role, content })),
+          message: input.trim(),
           profile,
           scenarioHint,
+          userId: DEMO_USER_ID,
+          shareAudience,
+          tenantAccess,
+          authorizationModel,
         }),
         signal: controller.signal,
       })
@@ -249,6 +384,7 @@ export default function Home() {
     } finally {
       setIsLoading(false)
       setScenarioHint(null)
+      loadConversations()
     }
   }
 
@@ -258,6 +394,22 @@ export default function Home() {
       setProfile({ ...profile, jurisdictions: current.filter(j => j !== jur) })
     } else {
       setProfile({ ...profile, jurisdictions: [...current, jur] })
+    }
+  }
+
+  const toggleSharing = async () => {
+    if (!conversationIdRef.current) return
+    const nextAudience: ShareAudience = shareAudience === 'private' ? 'tenant' : 'private'
+    const nextTenantAccess: TenantAccess = nextAudience === 'tenant' ? 'edit' : tenantAccess
+    const response = await fetch(`/api/conversations/${conversationIdRef.current}?userId=${DEMO_USER_ID}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shareAudience: nextAudience, tenantAccess: nextTenantAccess }),
+    })
+    if (response.ok) {
+      setShareAudience(nextAudience)
+      setTenantAccess(nextTenantAccess)
+      loadConversations()
     }
   }
 
@@ -478,6 +630,58 @@ export default function Home() {
           </section>
 
           <aside className="space-y-4">
+            <Card className="border bg-card/90 shadow-lg backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-base">Saved conversations</CardTitle>
+                <CardDescription className="text-sm">Resume recent threads and share SSE output in-session.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {conversationId && (
+                  <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">
+                      {!isShared
+                        ? 'Private to you'
+                        : shareAudience === 'public'
+                          ? 'Public read-only'
+                          : tenantAccess === 'view'
+                            ? 'Tenant shared (read-only)'
+                            : 'Tenant shared (edit)'}
+                    </span>
+                    <Button size="sm" variant="ghost" onClick={toggleSharing}>
+                      {shareAudience === 'private' ? 'Share with tenant' : 'Make private'}
+                    </Button>
+                  </div>
+                )}
+                {conversations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No saved conversations yet. Ask your first question to start one.</p>
+                )}
+                <div className="space-y-2">
+                  {conversations.map((conv) => (
+                    <Button
+                      key={conv.id}
+                      variant={conv.id === conversationId ? 'default' : 'outline'}
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => loadConversation(conv.id)}
+                    >
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
+                        {conv.shareAudience !== 'private' && (
+                          <Badge variant="secondary">
+                            {conv.shareAudience === 'public'
+                              ? 'Public read-only'
+                              : conv.tenantAccess === 'view'
+                                ? 'Tenant read-only'
+                                : 'Tenant shared'}
+                          </Badge>
+                        )}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border bg-card/90 shadow-lg backdrop-blur">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
