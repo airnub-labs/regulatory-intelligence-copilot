@@ -65,6 +65,10 @@ export interface EgressGuardContext {
   jurisdictions?: string[]; // e.g. ['IE', 'UK'] for policy decisions
   purpose?: string;        // e.g. 'regulatory-research', 'egress-guard', 'pii-scan'
 
+  // Requested vs effective mode for auditability
+  mode?: 'enforce' | 'report-only' | 'off';
+  effectiveMode?: 'enforce' | 'report-only' | 'off';
+
   metadata?: Record<string, unknown>;
 }
 
@@ -83,11 +87,11 @@ native request types and this context.
 - **Modes**
   - `enforce` (default): apply provider allowlisting, sanitisation, and blocking behaviour. Violations throw/block.
   - `report-only`: apply the **same sanitisation to the execution payload**, flag violations/changes in metadata and logs, but do not block.
-  - `off`: disable guarding/sanitisation entirely. Reserved for explicit test harness wiring, never production.
+  - `off`: disable sanitisation but still run provider allowlisting (throws on disallowed providers). Reserved for explicit test harness wiring, never production.
 - **Execution payload**
   - In both `enforce` and `report-only`, the **sanitised request is used for execution**. This avoids accidental leakage if downstream callers ignore metadata and keeps report-only behaviour safe.
   - `metadata.redactionApplied` indicates that the sanitiser changed the payload. `metadata.redactionReportOnly` flags that the run occurred in report-only mode.
-  - Provider allowlisting still executes in all modes; in `report-only`/`off` it records violations instead of blocking.
+  - Provider allowlisting executes and enforces in all modes.
 - **Original payloads**
   - `originalRequest` may be preserved (opt-in) for debugging/telemetry in non-production environments. It is not required for normal operation.
 - **Usage expectation**

@@ -58,7 +58,9 @@ describe('ComplianceEngine streaming', () => {
   const canonicalConceptHandler: CanonicalConceptHandler = {
     resolveAndUpsert: vi
       .fn()
-      .mockImplementation(async concepts => concepts.map(() => 'concept-node-1')),
+      .mockImplementation(async concepts =>
+        concepts.map((_, idx) => `concept-node-${idx + 1}`)
+      ),
   };
 
   const graphWriteService = {} as GraphWriteService;
@@ -74,6 +76,12 @@ describe('ComplianceEngine streaming', () => {
         altLabels: ['Value Added Tax'],
         definition: 'Tax on goods and services',
         sourceUrls: ['https://example.com/vat'],
+      },
+      {
+        label: 'Capital gains tax',
+        domain: 'TAX',
+        kind: 'CGT',
+        jurisdiction: 'IE',
       },
     ],
   };
@@ -157,7 +165,7 @@ describe('ComplianceEngine streaming', () => {
       (n: any) => n.id
     );
     expect(metadataReferencedIds).toEqual(
-      expect.arrayContaining(['concept-node-1', 'rule-1'])
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
     );
     expect(chunks[1]).toEqual({ type: 'text', delta: 'Hello ' });
     expect(chunks[2]).toEqual({ type: 'text', delta: 'world' });
@@ -171,12 +179,14 @@ describe('ComplianceEngine streaming', () => {
 
     const doneChunk = chunks[chunks.length - 1];
     const referencedIds = (doneChunk.referencedNodes || []).map((n: any) => n.id);
-    expect(referencedIds).toContain('concept-node-1');
+    expect(referencedIds).toEqual(
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
+    );
     expect(referencedIds).toContain('rule-1');
 
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-1', conversationId: 'conversation-1' },
-      expect.arrayContaining(['concept-node-1', 'rule-1'])
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
     );
   });
 
@@ -194,9 +204,30 @@ describe('ComplianceEngine streaming', () => {
 
     const parse = (engine as any).parseCapturedConcepts.bind(engine);
 
-    expect(parse(JSON.stringify(conceptPayload))).toHaveLength(1);
-    expect(parse({ concepts: conceptPayload.concepts })).toHaveLength(1);
-    expect(parse(conceptPayload.concepts)).toHaveLength(1);
+    expect(parse(JSON.stringify(conceptPayload))).toHaveLength(2);
+    expect(parse({ concepts: conceptPayload.concepts })).toHaveLength(2);
+    expect(parse(conceptPayload.concepts)).toHaveLength(2);
+  });
+
+  it('returns an empty array and logs a warning for invalid payloads', () => {
+    const engine = new ComplianceEngine({
+      llmRouter: createRouter(),
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    const parse = (engine as any).parseCapturedConcepts.bind(engine);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(parse(123)).toEqual([]);
+    expect(warnSpy).toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 
   it('merges concept nodes into referenced nodes for non-streaming chat', async () => {
@@ -226,7 +257,9 @@ describe('ComplianceEngine streaming', () => {
     );
 
     const referencedIds = response.referencedNodes.map(n => n.id);
-    expect(referencedIds).toContain('concept-node-1');
+    expect(referencedIds).toEqual(
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
+    );
     expect(response.agentUsed).toBe('test-agent');
   });
 });

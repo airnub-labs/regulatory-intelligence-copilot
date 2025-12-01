@@ -22,6 +22,7 @@ describe('EgressClient', () => {
     expect(JSON.stringify(executedCtx.request)).not.toContain('test@example.com');
     expect(executedCtx.sanitizedRequest).toBeDefined();
     expect(executedCtx.metadata?.redactionReportOnly).toBe(false);
+    expect(executedCtx.request).toEqual(executedCtx.sanitizedRequest);
     expect(JSON.stringify(result)).not.toContain('test@example.com');
   });
 
@@ -44,6 +45,7 @@ describe('EgressClient', () => {
     expect(JSON.stringify(executedCtx.request)).not.toContain('test@example.com');
     expect(executedCtx.metadata?.redactionReportOnly).toBe(true);
     expect(executedCtx.sanitizedRequest).toBeDefined();
+    expect(executedCtx.request).toEqual(executedCtx.sanitizedRequest);
   });
 
   it('skips sanitisation when effective mode is off', async () => {
@@ -65,5 +67,24 @@ describe('EgressClient', () => {
     expect(executedCtx.request).toBe(original);
     expect(executedCtx.sanitizedRequest).toBeUndefined();
     expect(result).toBe(original);
+  });
+
+  it('throws when provider is not allowlisted regardless of mode', async () => {
+    const client = new EgressClient({
+      mode: 'off',
+      allowedProviders: ['openai'],
+    });
+
+    await expect(
+      client.guardAndExecute(
+        {
+          target: 'llm',
+          providerId: 'groq',
+          request: { message: 'Hello' },
+          effectiveMode: 'off',
+        },
+        async ctx => ctx.request
+      )
+    ).rejects.toThrow(/not allowed/);
   });
 });

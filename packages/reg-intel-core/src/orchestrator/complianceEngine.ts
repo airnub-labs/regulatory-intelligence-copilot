@@ -303,19 +303,21 @@ export class ComplianceEngine {
       return payload as CapturedConcept[];
     }
 
-    console.warn('Unrecognized capture_concepts payload shape');
+    console.warn('Unrecognized capture_concepts payload shape', { payload });
     return [];
   }
 
   private async handleConceptChunk(chunk: ToolStreamChunk): Promise<string[]> {
-    const toolName = chunk.name || chunk.toolName;
+    const toolName = chunk.name ?? chunk.toolName;
     if (toolName !== 'capture_concepts') {
       return [];
     }
 
-    const concepts = this.parseCapturedConcepts(
-      chunk.argsJson ?? chunk.arguments ?? chunk.payload
-    );
+    const payload =
+      chunk.argsJson !== undefined
+        ? chunk.argsJson
+        : chunk.arguments ?? chunk.payload;
+    const concepts = this.parseCapturedConcepts(payload);
     if (!concepts.length) {
       return [];
     }

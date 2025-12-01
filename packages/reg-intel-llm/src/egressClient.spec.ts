@@ -28,25 +28,20 @@ describe('EgressClient', () => {
     expect(result).toBe('ok');
   });
 
-  it('passes original payload when mode is off but still runs allowlist', async () => {
+  it('enforces provider allowlist even when mode is off', async () => {
     const client = new EgressClient({ allowedProviders: ['openai'] });
 
-    const result = await client.guardAndExecute(
-      {
-        ...baseContext,
-        providerId: 'groq',
-        request: { message: 'Email me at test@example.com' },
-        effectiveMode: 'off',
-      },
-      async ctx => {
-        expect(ctx.request).toEqual({ message: 'Email me at test@example.com' });
-        expect(ctx.sanitizedRequest).toBeUndefined();
-        expect(ctx.metadata?.egressPolicyViolation).toBe(true);
-        return 'ok';
-      }
-    );
-
-    expect(result).toBe('ok');
+    await expect(
+      client.guardAndExecute(
+        {
+          ...baseContext,
+          providerId: 'groq',
+          request: { message: 'Email me at test@example.com' },
+          effectiveMode: 'off',
+        },
+        async ctx => ctx
+      )
+    ).rejects.toThrow(/not allowed/);
   });
 
   it('records sanitisation without blocking in report-only', async () => {
