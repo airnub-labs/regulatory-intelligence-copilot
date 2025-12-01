@@ -333,6 +333,18 @@ export class ComplianceEngine {
     }
   }
 
+  private wrapRouterError(error?: Error) {
+    const message = error?.message?.trim();
+    const friendlyMessage = message
+      ? `LLM/tool call failed: ${message}`
+      : 'LLM/tool call failed with an unknown error';
+
+    return new ComplianceError(
+      friendlyMessage,
+      error ? { cause: error } : undefined
+    );
+  }
+
   private async *routeThroughRouter(
     request: LlmChatRequest,
     conceptNodeIds: Set<string>,
@@ -353,7 +365,8 @@ export class ComplianceEngine {
       if (chunk.type === 'text') {
         yield { type: 'text', delta: chunk.delta };
       } else if (chunk.type === 'error') {
-        yield { type: 'error', error: chunk.error };
+        const wrappedError = this.wrapRouterError(chunk.error);
+        yield { type: 'error', error: wrappedError };
       } else if (chunk.type === 'done') {
         yield { type: 'done' };
       }
@@ -379,7 +392,8 @@ export class ComplianceEngine {
           if (chunk.type === 'text') {
             content += chunk.delta ?? '';
           } else if (chunk.type === 'error') {
-            throw chunk.error || new Error('LLM stream error');
+            const wrappedError = this.wrapRouterError(chunk.error);
+            throw wrappedError;
           }
         }
         return { content };
