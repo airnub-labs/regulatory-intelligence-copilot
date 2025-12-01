@@ -4,23 +4,37 @@ declare
   demo_password text := 'Password123!';
   demo_full_name text := 'Demo User';
   seeded_user record;
+  demo_conv_id uuid;
+  demo_conversation_title text := 'Demo conversation';
   demo_tenant_id uuid := coalesce(nullif(current_setting('app.demo_tenant_id', true), '')::uuid, gen_random_uuid());
 begin
-  insert into auth.users (email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
-  values (
-    demo_email,
-    crypt(demo_password, gen_salt('bf')),
-    now(),
-    jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-    jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
-  )
-  on conflict (email) do update
-    set encrypted_password = excluded.encrypted_password,
-        email_confirmed_at = excluded.email_confirmed_at,
-        raw_app_meta_data = excluded.raw_app_meta_data,
-        raw_user_meta_data = excluded.raw_user_meta_data
-  returning id, raw_user_meta_data
-  into seeded_user;
+  select id, raw_user_meta_data
+    into seeded_user
+    from auth.users
+   where email = demo_email
+   limit 1;
+
+  if not found then
+    insert into auth.users (email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+    values (
+      demo_email,
+      crypt(demo_password, gen_salt('bf')),
+      now(),
+      jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
+      jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
+    )
+    returning id, raw_user_meta_data
+    into seeded_user;
+  else
+    update auth.users
+       set encrypted_password = crypt(demo_password, gen_salt('bf')),
+           email_confirmed_at = now(),
+           raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
+           raw_user_meta_data = jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
+     where id = seeded_user.id
+    returning id, raw_user_meta_data
+      into seeded_user;
+  end if;
 
   -- Keep the tenant ID in sync even if the user already existed
   demo_tenant_id := coalesce((seeded_user.raw_user_meta_data ->> 'tenant_id')::uuid, demo_tenant_id);
@@ -41,16 +55,28 @@ begin
   );
 
   -- Demo conversation tied to the seeded user
-  with demo_conv as (
+  select id
+    into demo_conv_id
+    from copilot_internal.conversations
+   where tenant_id = demo_tenant_id
+     and user_id = seeded_user.id
+     and title = demo_conversation_title
+   order by created_at asc
+   limit 1;
+
+  if not found then
     insert into copilot_internal.conversations (tenant_id, user_id, share_audience, tenant_access, title, persona_id, jurisdictions)
-    values (demo_tenant_id, seeded_user.id, 'tenant', 'edit', 'Demo conversation', 'single-director-ie', array['IE'])
-    on conflict do nothing
-    returning id
-  )
+    values (demo_tenant_id, seeded_user.id, 'tenant', 'edit', demo_conversation_title, 'single-director-ie', array['IE'])
+    returning id into demo_conv_id;
+  end if;
+
+  delete from copilot_internal.conversation_messages
+   where conversation_id = demo_conv_id;
+
   insert into copilot_internal.conversation_messages (conversation_id, tenant_id, user_id, role, content, metadata)
-  select id, demo_tenant_id, seeded_user.id, 'user', 'How do PAYE and PRSI interact for a single-director company?', null from demo_conv
-  union all
-  select id, demo_tenant_id, null, 'assistant', 'Here is how PAYE and PRSI interact...', jsonb_build_object('jurisdictions', array['IE']) from demo_conv;
+  values
+    (demo_conv_id, demo_tenant_id, seeded_user.id, 'user', 'How do PAYE and PRSI interact for a single-director company?', null),
+    (demo_conv_id, demo_tenant_id, null, 'assistant', 'Here is how PAYE and PRSI interact...', jsonb_build_object('jurisdictions', array['IE']));
 
   raise notice 'Seeded demo user with id % and tenant id %', seeded_user.id, demo_tenant_id;
 end $$;
