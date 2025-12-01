@@ -292,6 +292,9 @@ interface ChatResponse {
 - `referencedNodes` is now explicitly populated via the concept pipeline and graph queries:
   - Includes IDs of rules/benefits/sections/concepts (e.g. `Rule:VAT_IE`, `Rule:VRT_IE`).
   - Intended for **UI evidence chips** and for syncing with the graph view.
+- When streamed over SSE, the non‑advice disclaimer is emitted as its own `disclaimer` event (in addition to `message`,
+  `metadata`, and `done`) so UIs can render it consistently without polluting the token stream; the underlying aspect still
+  guarantees its presence unless explicitly disabled.
 
 ### 5.2 Conversation Context (Backend‑Owned)
 
@@ -431,6 +434,7 @@ v0.6 fully incorporates the UI architecture additions from v0.5.
 - `/api/chat`
   - Thin adapter onto `ComplianceEngine.handleChat`.
   - Streams `text` chunks as SSE events.
+  - Emits `disclaimer` SSE events for safety messaging so downstream clients can render them separately from streamed text.
   - Emits a final metadata event with `referencedNodes`, `jurisdictions`, `uncertaintyLevel`, `disclaimerKey`.
 
 - `/api/graph/*`

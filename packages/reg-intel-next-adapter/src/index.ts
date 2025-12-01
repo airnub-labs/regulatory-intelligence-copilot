@@ -192,7 +192,7 @@ class SseStreamWriter {
    * @param event - Event type name
    * @param data - Event payload (will be JSON stringified if not a string)
    */
-  send(event: 'message' | 'metadata' | 'error' | 'done', data: unknown) {
+  send(event: 'message' | 'metadata' | 'error' | 'done' | 'disclaimer', data: unknown) {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
     this.controller.enqueue(this.encoder.encode(chunk));
@@ -326,7 +326,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   !disclaimerAlreadyPresent &&
                   !normalizeText(streamedTextBuffer).includes(normalizeText(chunk.disclaimer))
                 ) {
-                  writer.send('message', { text: `\n\n${chunk.disclaimer}` });
+                  writer.send('disclaimer', { text: chunk.disclaimer });
                 }
                 writer.send('done', { status: 'ok' });
                 writer.close();

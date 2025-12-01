@@ -43,6 +43,7 @@ interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  disclaimer?: string
   metadata?: ChatMetadata
 }
 
@@ -178,6 +179,15 @@ export default function Home() {
           case 'message': {
             const textChunk = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? ''
             appendAssistantText(textChunk)
+            break
+          }
+          case 'disclaimer': {
+            const disclaimerText = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? ''
+            setMessages(prev =>
+              prev.map(message =>
+                message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
+              )
+            )
             break
           }
           case 'error': {
@@ -442,6 +452,7 @@ export default function Home() {
                       key={message.id}
                       role={message.role}
                       content={message.content}
+                      disclaimer={message.disclaimer}
                       metadata={message.metadata}
                     />
                   ))}
