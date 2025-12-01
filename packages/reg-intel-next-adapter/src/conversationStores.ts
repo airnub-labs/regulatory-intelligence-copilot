@@ -1,9 +1,12 @@
 import type { ConversationContext, ConversationContextStore, ConversationIdentity, ChatMessage } from '@reg-copilot/reg-intel-core';
 
+export type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read';
+
 export interface ConversationRecord {
   id: string;
   tenantId: string;
   userId?: string | null;
+  sharingMode: SharingMode;
   isShared: boolean;
   personaId?: string | null;
   jurisdictions: string[];
@@ -28,6 +31,7 @@ export interface ConversationStore {
     jurisdictions?: string[];
     title?: string | null;
     isShared?: boolean;
+    sharingMode?: SharingMode;
   }): Promise<{ conversationId: string }>;
 
   appendMessage(input: {
@@ -50,7 +54,35 @@ export interface ConversationStore {
 
   getConversation(input: { tenantId: string; conversationId: string; userId?: string | null }): Promise<ConversationRecord | null>;
 
-  updateSharing(input: { tenantId: string; conversationId: string; userId?: string | null; isShared: boolean }): Promise<void>;
+  updateSharing(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+    isShared?: boolean;
+    sharingMode?: SharingMode;
+  }): Promise<void>;
+}
+
+function resolveSharingMode(input: { sharingMode?: SharingMode; isShared?: boolean }): SharingMode {
+  if (input.sharingMode) return input.sharingMode;
+  if (typeof input.isShared === 'boolean') {
+    return input.isShared ? 'tenant_write' : 'private';
+  }
+  return 'private';
+}
+
+function canRead(record: ConversationRecord, userId?: string | null) {
+  if (record.sharingMode === 'public_read') return true;
+  if (record.sharingMode === 'tenant_read' || record.sharingMode === 'tenant_write') return true;
+  if (!record.userId) return true;
+  return Boolean(userId && record.userId === userId);
+}
+
+function canWrite(record: ConversationRecord, userId?: string | null, role?: 'user' | 'assistant' | 'system') {
+  if (role === 'assistant' || role === 'system') return true;
+  if (record.sharingMode === 'tenant_write') return Boolean(userId);
+  if (!record.userId) return true;
+  return Boolean(userId && record.userId === userId);
 }
 
 export class InMemoryConversationStore implements ConversationStore {
@@ -64,14 +96,18 @@ export class InMemoryConversationStore implements ConversationStore {
     jurisdictions?: string[];
     title?: string | null;
     isShared?: boolean;
+    sharingMode?: SharingMode;
   }): Promise<{ conversationId: string }> {
     const id = crypto.randomUUID();
     const now = new Date();
+    const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode, isShared: input.isShared });
+
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
       userId: input.userId,
-      isShared: input.isShared ?? false,
+      sharingMode,
+      isShared: sharingMode !== 'private',
       personaId: input.personaId ?? null,
       jurisdictions: input.jurisdictions ?? [],
       title: input.title ?? null,
@@ -95,7 +131,7 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!record || record.tenantId !== input.tenantId) {
       throw new Error('Conversation not found for tenant');
     }
-    if (record.userId && !record.isShared && (!input.userId || record.userId !== input.userId)) {
+    if (!canWrite(record, input.userId, input.role)) {
       throw new Error('User not authorised for conversation');
     }
     const message: ConversationMessage = {
@@ -124,7 +160,7 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!record || record.tenantId !== input.tenantId) {
       return [];
     }
-    if (record.userId && !record.isShared && (!input.userId || record.userId !== input.userId)) {
+    if (!canRead(record, input.userId)) {
       return [];
     }
     const msgs = this.messages.get(input.conversationId) ?? [];
@@ -137,9 +173,8 @@ export class InMemoryConversationStore implements ConversationStore {
   async listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]> {
     const records = Array.from(this.conversations.values()).filter(record => {
       if (record.tenantId !== input.tenantId) return false;
-      if (!input.userId) return record.isShared;
-      if (record.isShared) return true;
-      return record.userId ? input.userId === record.userId : false;
+      if (!input.userId) return canRead(record, null);
+      return canRead(record, input.userId);
     });
 
     records.sort((a, b) => {
@@ -160,21 +195,34 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!record || record.tenantId !== input.tenantId) {
       return null;
     }
-    if (record.userId && !record.isShared && (!input.userId || input.userId !== record.userId)) {
+    if (!canRead(record, input.userId)) {
       return null;
     }
     return record;
   }
 
-  async updateSharing(input: { tenantId: string; conversationId: string; userId?: string | null; isShared: boolean }): Promise<void> {
+  async updateSharing(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+    isShared?: boolean;
+    sharingMode?: SharingMode;
+  }): Promise<void> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
       throw new Error('Conversation not found for tenant');
     }
-    if (record.userId && (!input.userId || input.userId !== record.userId)) {
+    const isOwner = record.userId ? input.userId === record.userId : true;
+    if (!isOwner) {
       throw new Error('User not authorised to update conversation');
     }
-    this.conversations.set(input.conversationId, { ...record, isShared: input.isShared, updatedAt: new Date() });
+    const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode, isShared: input.isShared });
+    this.conversations.set(input.conversationId, {
+      ...record,
+      sharingMode,
+      isShared: sharingMode !== 'private',
+      updatedAt: new Date(),
+    });
   }
 }
 

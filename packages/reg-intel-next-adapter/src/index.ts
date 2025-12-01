@@ -270,7 +270,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return new Response('Invalid request body', { status: 400 });
       }
 
-      const { messages, message, profile, conversationId: requestConversationId, userId, isShared } = body;
+      const { messages, message, profile, conversationId: requestConversationId, userId, isShared, sharingMode } = body;
 
       // Validate profile if provided
       if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
@@ -297,7 +297,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           userId,
           personaId: profile?.personaType,
           jurisdictions: profile?.jurisdictions,
-          isShared: Boolean(isShared),
+          sharingMode: sharingMode,
+          isShared: typeof isShared === 'boolean' ? Boolean(isShared) : undefined,
         });
         conversationId = created.conversationId;
       }
@@ -352,6 +353,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
             conversationId,
+            sharingMode: conversationRecord.sharingMode,
             isShared: conversationRecord.isShared,
           });
 
@@ -456,4 +458,5 @@ export {
   InMemoryConversationContextStore,
   ConversationEventHub,
   type ConversationStore,
+  type SharingMode,
 };

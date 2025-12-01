@@ -6,7 +6,8 @@ create table if not exists copilot_internal.conversations (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
   user_id uuid null,
-  is_shared boolean not null default false,
+  sharing_mode text not null default 'private' check (sharing_mode in ('private', 'tenant_read', 'tenant_write', 'public_read')),
+  is_shared boolean generated always as (sharing_mode <> 'private') stored,
   title text null,
   persona_id text null,
   jurisdictions text[] not null default '{}',
@@ -51,7 +52,7 @@ create table if not exists copilot_internal.quick_prompts (
 );
 
 create view if not exists public.conversations_view as
-  select id, tenant_id, user_id, is_shared, title, persona_id, jurisdictions, created_at, updated_at, last_message_at
+  select id, tenant_id, user_id, sharing_mode, is_shared, title, persona_id, jurisdictions, created_at, updated_at, last_message_at
   from copilot_internal.conversations;
 
 create view if not exists public.conversation_messages_view as

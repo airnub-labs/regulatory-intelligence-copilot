@@ -37,7 +37,11 @@ export async function GET(request: NextRequest, context: { params: { id: string 
 
       const unsubscribe = conversationEventHub.subscribe(tenantId, conversationId, subscriber);
       // provide immediate metadata payload with conversation id and sharing state
-      subscriber.send('metadata', { conversationId, isShared: conversation.isShared });
+      subscriber.send('metadata', {
+        conversationId,
+        sharingMode: conversation.sharingMode,
+        isShared: conversation.isShared,
+      });
 
       const abortHandler = () => {
         unsubscribe();

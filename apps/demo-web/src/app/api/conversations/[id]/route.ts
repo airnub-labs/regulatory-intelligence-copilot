@@ -33,12 +33,13 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
   }
   const body = await request.json().catch(() => null);
-  const isShared = body?.isShared;
-  if (typeof isShared !== 'boolean') {
-    return NextResponse.json({ error: 'isShared boolean required' }, { status: 400 });
+  const sharingMode = body?.sharingMode;
+  const allowedModes = ['private', 'tenant_read', 'tenant_write', 'public_read'];
+  if (sharingMode && !allowedModes.includes(sharingMode)) {
+    return NextResponse.json({ error: 'Invalid sharingMode' }, { status: 400 });
   }
   try {
-    await conversationStore.updateSharing({ tenantId, conversationId, userId, isShared });
+    await conversationStore.updateSharing({ tenantId, conversationId, userId, sharingMode });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 403 });

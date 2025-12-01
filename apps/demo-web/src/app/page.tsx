@@ -47,12 +47,14 @@ interface ChatMessage {
   metadata?: ChatMetadata
 }
 
+type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read'
+
 interface ConversationSummary {
   id: string
   title?: string | null
   createdAt: string
   lastMessageAt?: string | null
-  isShared: boolean
+  sharingMode: SharingMode
 }
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
@@ -121,7 +123,7 @@ export default function Home() {
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
-  const [isShared, setIsShared] = useState(false)
+  const [sharingMode, setSharingMode] = useState<SharingMode>('private')
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
@@ -156,7 +158,7 @@ export default function Home() {
     setMessages(loadedMessages)
     setConversationId(id)
     conversationIdRef.current = id
-    setIsShared(Boolean(payload.conversation?.isShared))
+    setSharingMode((payload.conversation?.sharingMode as SharingMode | undefined) ?? 'private')
     if (payload.conversation?.personaId) {
       setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
     }
@@ -212,8 +214,8 @@ export default function Home() {
               setConversationId((parsedData as any).conversationId)
               conversationIdRef.current = (parsedData as any).conversationId
             }
-            if ((parsedData as any)?.isShared !== undefined) {
-              setIsShared(Boolean((parsedData as any).isShared))
+            if ((parsedData as any)?.sharingMode) {
+              setSharingMode((parsedData as any).sharingMode as SharingMode)
             }
             if (conversationIdRef.current) {
               loadConversation(conversationIdRef.current)
@@ -272,8 +274,8 @@ export default function Home() {
               setConversationId((parsedData as any).conversationId)
               conversationIdRef.current = (parsedData as any).conversationId
             }
-            if ((parsedData as any)?.isShared !== undefined) {
-              setIsShared(Boolean((parsedData as any).isShared))
+            if ((parsedData as any)?.sharingMode) {
+              setSharingMode((parsedData as any).sharingMode as SharingMode)
             }
             setChatMetadata(parsedData as ChatMetadata)
             setMessages(prev =>
@@ -339,7 +341,7 @@ export default function Home() {
           profile,
           scenarioHint,
           userId: DEMO_USER_ID,
-          isShared,
+          sharingMode,
         }),
         signal: controller.signal,
       })
@@ -374,14 +376,14 @@ export default function Home() {
 
   const toggleSharing = async () => {
     if (!conversationIdRef.current) return
-    const next = !isShared
+    const next: SharingMode = sharingMode === 'private' ? 'tenant_write' : 'private'
     const response = await fetch(`/api/conversations/${conversationIdRef.current}?userId=${DEMO_USER_ID}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isShared: next }),
+      body: JSON.stringify({ sharingMode: next }),
     })
     if (response.ok) {
-      setIsShared(next)
+      setSharingMode(next)
       loadConversations()
     }
   }
@@ -612,10 +614,16 @@ export default function Home() {
                 {conversationId && (
                   <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
                     <span className="text-muted-foreground">
-                      {isShared ? 'Shared with tenant' : 'Private to you'}
+                      {sharingMode === 'private'
+                        ? 'Private to you'
+                        : sharingMode === 'public_read'
+                          ? 'Public read-only'
+                          : sharingMode === 'tenant_read'
+                            ? 'Tenant shared (read-only)'
+                            : 'Tenant shared (read/write)'}
                     </span>
                     <Button size="sm" variant="ghost" onClick={toggleSharing}>
-                      {isShared ? 'Make private' : 'Share with tenant'}
+                      {sharingMode === 'private' ? 'Share with tenant' : 'Make private'}
                     </Button>
                   </div>
                 )}
@@ -633,7 +641,15 @@ export default function Home() {
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
-                        {conv.isShared && <Badge variant="secondary">Shared</Badge>}
+                        {conv.sharingMode !== 'private' && (
+                          <Badge variant="secondary">
+                            {conv.sharingMode === 'public_read'
+                              ? 'Public read-only'
+                              : conv.sharingMode === 'tenant_read'
+                                ? 'Tenant read-only'
+                                : 'Tenant shared'}
+                          </Badge>
+                        )}
                       </span>
                     </Button>
                   ))}

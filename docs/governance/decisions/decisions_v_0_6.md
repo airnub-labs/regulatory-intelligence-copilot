@@ -222,7 +222,7 @@ interface ConversationContextStore {
 - Schema and seed data added; production Supabase wiring and RLS are pending.
 - Event hub implemented as an in-process map suitable for single-instance dev. Production fan-out will require Redis/pub-sub or a managed equivalent.
 - Provides the basis for a "show your workings" experience in the graph view.
-- Reuses an existing field that was previously unpopulated, rather than inventing a new one.
+- Sharing is modelled via a `sharing_mode` column (private, tenant read/write, public read) with a derived `is_shared` flag for backwards compatibility so future permissioned sharing (read-only/public) can be introduced without schema refactors.
 
 ---
 
