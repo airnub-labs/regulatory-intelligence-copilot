@@ -54,9 +54,10 @@ describe('EgressClient', () => {
         effectiveMode: 'report-only',
       },
       async ctx => {
-        expect(ctx.request).not.toBe('Reach me at 085-123-4567');
+        expect(ctx.request).toBe('Reach me at 085-123-4567');
         expect(ctx.sanitizedRequest).not.toBe('Reach me at 085-123-4567');
         expect(ctx.metadata?.redactionApplied).toBe(true);
+        expect(ctx.metadata?.redactionReportOnly).toBe(true);
         return 'ok';
       }
     );

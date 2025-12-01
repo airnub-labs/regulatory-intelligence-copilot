@@ -198,6 +198,24 @@ interface ConversationContextStore {
   - Populate `referencedNodes` using the canonical node IDs resolved from concept capture and graph queries.
   - Include both pre-existing nodes (e.g. `Rule:VAT_IE`, `Rule:VRT_IE`) and newly created concept nodes when available.
 
+### D-037 – Router-centric egress guard + `capture_concepts` wiring
+
+**Decision:**
+
+- All outbound LLM calls run through **LlmRouter → EgressClient** as the single choke point. Agents never talk to providers directly.
+- `LlmRouter` resolves a requested vs **effective egress mode** (global defaults → tenant → optional user → per-call override) and always enforces provider allowlisting, even when `effectiveMode === 'off'`.
+- **Mode semantics:**
+  - `enforce` executes the **sanitised** payload.
+  - `report-only` executes the **original** payload but records sanitisation deltas in `metadata` for audit/telemetry.
+  - `off` skips sanitisation but still rejects disallowed providers (test-only wiring).
+- Main-chat calls attach a `capture_concepts` tool; the Compliance Engine ingests `type: 'tool'` chunks (`name: 'capture_concepts'`, `argsJson`) off-stream, resolves/upsserts canonical concepts, and merges returned node IDs into `referencedNodes` + **Conversation Context** before returning results.
+
+**Trade-offs / rationale:**
+
+- Centralising egress guarantees consistent sanitisation + allowlisting across providers and future MCP/http targets while keeping per-tenant policy resolution visible via `EgressGuardContext` (tenant/user/mode metadata).
+- Executing originals in `report-only` keeps behaviour faithful to caller intent while still surfacing redaction signals for gradual rollouts.
+- Streaming concept capture via `capture_concepts` keeps the UI text-only while letting the engine self-populate graph context for subsequent turns.
+
 **UI responsibilities:**
 
 - The UI **may**:
