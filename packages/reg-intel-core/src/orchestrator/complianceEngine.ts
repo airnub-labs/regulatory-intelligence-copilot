@@ -175,7 +175,7 @@ export interface ConversationContextStore {
  * LLM tool stream chunk (from router providers)
  */
 type ToolStreamChunk = Extract<RouterStreamChunk, { type: 'tool' }> & {
-  argsJson?: unknown;
+  argsJson: unknown;
   /** Legacy fields kept for defensive parsing of older provider shapes. */
   toolName?: string;
   arguments?: unknown;
@@ -291,7 +291,11 @@ export class ComplianceEngine {
       }
     }
 
-    if (Array.isArray((payload as any).concepts)) {
+    if (
+      typeof payload === 'object' &&
+      payload !== null &&
+      Array.isArray((payload as { concepts?: CapturedConcept[] }).concepts)
+    ) {
       return (payload as { concepts: CapturedConcept[] }).concepts;
     }
 
@@ -670,12 +674,15 @@ export class ComplianceEngine {
         agentContext
       );
 
+      const streamIterator = agentResult.stream[Symbol.asyncIterator]();
+      const firstChunkResult = await streamIterator.next();
+
       const metadataReferencedNodes = this.mergeReferencedNodes(
         agentResult.referencedNodes,
         conceptNodeIds
       );
 
-      // Yield metadata first
+      // Yield metadata first (after processing any leading tool chunks)
       yield {
         type: 'metadata',
         metadata: {
@@ -686,14 +693,19 @@ export class ComplianceEngine {
         },
       };
 
-      // Stream the LLM response
-      for await (const chunk of agentResult.stream) {
+      let currentResult: IteratorResult<LlmStreamChunk> | undefined =
+        firstChunkResult;
+
+      while (currentResult && !currentResult.done) {
+        const chunk = currentResult.value;
         if (chunk.type === 'text' && chunk.delta) {
           yield { type: 'text', delta: chunk.delta };
         } else if (chunk.type === 'error') {
           yield { type: 'error', error: chunk.error?.message || 'Unknown error' };
-          return;
+          break;
         }
+
+        currentResult = await streamIterator.next();
       }
 
       const finalReferencedNodes = this.mergeReferencedNodes(

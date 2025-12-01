@@ -12,10 +12,10 @@ export interface EgressGuardContext {
   originalRequest?: unknown;
   tenantId?: string;
   userId?: string;
+  /** Optional mode requested by the caller before policy resolution. */
   task?: string;
   metadata?: Record<string, unknown>;
 
-  /** Requested mode before policy resolution. */
   mode?: EgressMode;
 
   /**
@@ -184,6 +184,10 @@ export class EgressClient {
     execute: (ctx: EgressGuardContext) => Promise<T>
   ): Promise<T> {
     const guarded = await this.guard(ctx);
-    return execute(guarded);
+    const executionCtx: EgressGuardContext = {
+      ...guarded,
+      request: guarded.sanitizedRequest ?? guarded.request,
+    };
+    return execute(executionCtx);
   }
 }

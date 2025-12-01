@@ -288,7 +288,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
   - Static/deterministic checks (PII patterns, domain allowlists, etc.).
   - Optional LLM‑powered inspectors (egress guard helper agents).
 - Agents must be written assuming that egress may be **blocked, redacted, or downgraded** depending on tenant policy.
-- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override) but still executes on the sanitised payload in `enforce`/`report-only`; provider allowlisting runs in every mode and `off` is a deliberate, test-only wiring.
+- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override) but still executes on the sanitised payload in `enforce`/`report-only`; provider allowlisting runs in every mode and `off` is a deliberate, test-only wiring. `EgressGuardContext` carries tenant/user IDs, the requested `mode`, and the resolved `effectiveMode` for observability.
 
 ### 5.5 Concept Capture & Self‑Populating Graph
 
