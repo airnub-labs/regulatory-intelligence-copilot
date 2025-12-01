@@ -6,8 +6,17 @@
  */
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
+import {
+  conversationContextStore,
+  conversationEventHub,
+  conversationStore,
+} from '@/lib/server/conversations';
 
 // Force dynamic rendering to avoid build-time initialization
 export const dynamic = 'force-dynamic';
 
-export const POST = createChatRouteHandler();
+export const POST = createChatRouteHandler({
+  conversationStore,
+  conversationContextStore,
+  eventHub: conversationEventHub,
+});

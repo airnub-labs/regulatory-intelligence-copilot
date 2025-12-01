@@ -47,6 +47,13 @@ interface ChatMessage {
   metadata?: ChatMetadata
 }
 
+interface ConversationSummary {
+  id: string
+  title?: string | null
+  createdAt: string
+  lastMessageAt?: string | null
+}
+
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
   const lines = eventBlock.split('\n')
   let eventType = 'message'
@@ -109,6 +116,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
@@ -117,11 +126,43 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
-  const conversationIdRef = useRef<string>(crypto.randomUUID())
+  const conversationIdRef = useRef<string | undefined>()
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  const loadConversations = async () => {
+    const response = await fetch('/api/conversations')
+    if (!response.ok) return
+    const payload = await response.json()
+    setConversations(payload.conversations ?? [])
+  }
+
+  const loadConversation = async (id: string) => {
+    const response = await fetch(`/api/conversations/${id}`)
+    if (!response.ok) return
+    const payload = await response.json()
+    const loadedMessages: ChatMessage[] = (payload.messages ?? []).map((msg: any) => ({
+      id: msg.id ?? crypto.randomUUID(),
+      role: msg.role,
+      content: msg.content,
+      metadata: msg.metadata,
+    }))
+    setMessages(loadedMessages)
+    setConversationId(id)
+    conversationIdRef.current = id
+    if (payload.conversation?.personaId) {
+      setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
+    }
+    if (payload.conversation?.jurisdictions) {
+      setProfile(prev => ({ ...prev, jurisdictions: payload.conversation.jurisdictions }))
+    }
+  }
+
+  useEffect(() => {
+    loadConversations()
+  }, [])
 
   // Only scroll when a new message is added
   useEffect(() => {
@@ -167,6 +208,10 @@ export default function Home() {
 
         switch (parsedEvent.type) {
           case 'metadata':
+            if ((parsedData as any)?.conversationId) {
+              setConversationId((parsedData as any).conversationId)
+              conversationIdRef.current = (parsedData as any).conversationId
+            }
             setChatMetadata(parsedData as ChatMetadata)
             setMessages(prev =>
               prev.map(message =>
@@ -227,7 +272,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: conversationIdRef.current,
-          messages: outgoingMessages.map(({ role, content }) => ({ role, content })),
+          message: input.trim(),
           profile,
           scenarioHint,
         }),
@@ -249,6 +294,7 @@ export default function Home() {
     } finally {
       setIsLoading(false)
       setScenarioHint(null)
+      loadConversations()
     }
   }
 
@@ -478,6 +524,31 @@ export default function Home() {
           </section>
 
           <aside className="space-y-4">
+            <Card className="border bg-card/90 shadow-lg backdrop-blur">
+              <CardHeader>
+                <CardTitle className="text-base">Saved conversations</CardTitle>
+                <CardDescription className="text-sm">Resume recent threads and share SSE output in-session.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {conversations.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No saved conversations yet. Ask your first question to start one.</p>
+                )}
+                <div className="space-y-2">
+                  {conversations.map((conv) => (
+                    <Button
+                      key={conv.id}
+                      variant={conv.id === conversationId ? 'default' : 'outline'}
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => loadConversation(conv.id)}
+                    >
+                      <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border bg-card/90 shadow-lg backdrop-blur">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">

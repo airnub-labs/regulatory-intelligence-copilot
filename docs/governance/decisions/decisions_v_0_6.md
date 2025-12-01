@@ -208,6 +208,19 @@ interface ConversationContextStore {
 **Rationale:**
 
 - Makes answers **grounded and inspectable** without exposing internal SKOS JSON.
+
+### D-037 – Conversation persistence and SSE fan-out
+
+**Decision:**
+
+- Conversations/messages are persisted in Supabase/Postgres via a `ConversationStore`, with a dev-mode in-memory fallback to keep local demos running without external services.
+- Conversation context remains on the backend through `ConversationContextStore`; the Compliance Engine always reads/writes it, keeping the UI stateless.
+- SSE transport is **per conversation**: a hub broadcasts each streamed chunk to all subscribers for the same `(tenantId, conversationId)`.
+
+**Status:**
+
+- Schema and seed data added; production Supabase wiring and RLS are pending.
+- Event hub implemented as an in-process map suitable for single-instance dev. Production fan-out will require Redis/pub-sub or a managed equivalent.
 - Provides the basis for a "show your workings" experience in the graph view.
 - Reuses an existing field that was previously unpopulated, rather than inventing a new one.
 

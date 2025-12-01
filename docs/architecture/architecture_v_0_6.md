@@ -107,6 +107,10 @@ The system consists of:
      - Conversations and messages.
      - Conversation‑level context (active node IDs, flags, scenario state).
    - May store references to graph node IDs, but the graph never stores tenant/user identifiers.
+   - A ConversationStore + ConversationContextStore abstraction sits between the web app and the Compliance Engine:
+     - Supabase/Postgres is the production target with read-only public views for safe exposure.
+     - An in-memory fallback keeps dev-mode working without external services.
+   - SSE streams are keyed per `(tenantId, conversationId)` so multiple authorised viewers can consume the same live answer; the baseline implementation assumes a single instance, with Redis/pub-sub recommended for horizontal fan-out.
 
 ### 1.2 Privacy & Data Boundaries (Summary)
 
