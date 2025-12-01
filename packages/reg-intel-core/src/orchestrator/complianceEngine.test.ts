@@ -268,4 +268,123 @@ describe('ComplianceEngine streaming', () => {
       expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
     );
   });
+
+  it('passes per-call LLM overrides through to the router for chat', async () => {
+    const streamChat = vi.fn(async function* (_messages: ChatMessage[], _options) {
+      yield { type: 'text', delta: 'Custom response' } satisfies LlmStreamChunk;
+      yield { type: 'done' } satisfies LlmStreamChunk;
+    });
+    const llmRouter = { streamChat } as unknown as LlmRouter;
+    const customTools = [{ name: 'custom-tool' }];
+
+    (GlobalRegulatoryComplianceAgent.handle as any).mockImplementationOnce(
+      async (_input: any, ctx: any) => {
+        const llmResponse = await ctx.llmClient.chat({
+          messages: [],
+          model: 'custom-model',
+          temperature: 0.2,
+          max_tokens: 42,
+          tools: customTools,
+          toolChoice: 'required',
+        });
+
+        return {
+          agentId: 'override-agent',
+          answer: llmResponse.content,
+          referencedNodes: [
+            { id: 'rule-1', label: 'Rule 1', type: 'Benefit' },
+          ],
+          jurisdictions: ['IE'],
+          uncertaintyLevel: 'low',
+          followUps: [],
+        };
+      }
+    );
+
+    const engine = new ComplianceEngine({
+      llmRouter,
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    await engine.handleChat({
+      messages: [{ role: 'user', content: 'Tell me about VAT' }],
+      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+      tenantId: 'tenant-override',
+      conversationId: 'conversation-override',
+    });
+
+    const [, options] = streamChat.mock.calls[0];
+    expect(options).toMatchObject({
+      task: 'main-chat',
+      tenantId: 'tenant-override',
+      model: 'custom-model',
+      temperature: 0.2,
+      maxTokens: 42,
+      tools: customTools,
+      toolChoice: 'required',
+    });
+  });
+
+  it('passes per-call LLM overrides through to the router for streaming chat', async () => {
+    const streamChat = vi.fn(async function* (_messages: ChatMessage[], _options) {
+      yield { type: 'text', delta: 'Streaming content' } satisfies LlmStreamChunk;
+      yield { type: 'done' } satisfies LlmStreamChunk;
+    });
+    const llmRouter = { streamChat } as unknown as LlmRouter;
+
+    (GlobalRegulatoryComplianceAgent.handleStream as any).mockImplementationOnce(
+      async (_input: any, ctx: any) => ({
+        agentId: 'override-agent',
+        referencedNodes: [
+          { id: 'rule-1', label: 'Rule 1', type: 'Benefit' },
+        ],
+        jurisdictions: ['IE'],
+        uncertaintyLevel: 'medium',
+        followUps: ['follow-up-1'],
+        stream: ctx.llmClient.streamChat!({
+          messages: [],
+          model: 'stream-model',
+          temperature: 0.5,
+          max_tokens: 24,
+        })!,
+      })
+    );
+
+    const engine = new ComplianceEngine({
+      llmRouter,
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    const chunks = [] as Array<{ type: string }>;
+    for await (const chunk of engine.handleChatStream({
+      messages: [{ role: 'user', content: 'Stream VAT' }],
+      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+      tenantId: 'tenant-stream',
+      conversationId: 'conversation-stream',
+    })) {
+      chunks.push(chunk as { type: string });
+    }
+
+    expect(chunks.some(chunk => chunk.type === 'text')).toBe(true);
+    const [, options] = streamChat.mock.calls[0];
+    expect(options).toMatchObject({
+      task: 'main-chat',
+      tenantId: 'tenant-stream',
+      model: 'stream-model',
+      temperature: 0.5,
+      maxTokens: 24,
+    });
+  });
 });

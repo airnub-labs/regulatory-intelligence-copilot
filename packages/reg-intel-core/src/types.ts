@@ -336,6 +336,8 @@ export interface LlmChatRequest {
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  tools?: Array<Record<string, unknown>>;
+  toolChoice?: 'auto' | 'required' | { type: string; function: { name: string } };
 }
 
 /**
