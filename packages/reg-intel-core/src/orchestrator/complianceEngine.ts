@@ -322,10 +322,15 @@ export class ComplianceEngine {
       return [];
     }
 
-    return this.deps.canonicalConceptHandler.resolveAndUpsert(
-      concepts,
-      this.deps.graphWriteService
-    );
+    try {
+      return await this.deps.canonicalConceptHandler.resolveAndUpsert(
+        concepts,
+        this.deps.graphWriteService
+      );
+    } catch (error) {
+      console.warn('Failed to resolve and upsert captured concepts', error);
+      return [];
+    }
   }
 
   private async *routeThroughRouter(
