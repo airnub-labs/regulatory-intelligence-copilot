@@ -121,11 +121,13 @@ export interface CanonicalConceptHandler {
  * Minimal representation of a captured concept
  */
 export interface CapturedConcept {
-  label: string;
-  type?: string;
-  jurisdiction?: string;
-  canonicalId?: string;
-  nodeId?: string;
+  domain: string;
+  kind: string;
+  jurisdiction: string;
+  prefLabel: string;
+  altLabels?: string[];
+  definition?: string;
+  sourceUrls?: string[];
 }
 
 /**
@@ -180,23 +182,36 @@ const CAPTURE_CONCEPTS_TOOL = {
   type: 'function',
   name: 'capture_concepts',
   description:
-    'Capture canonical regulatory concepts referenced in the assistant answer for graph enrichment',
+    'Capture SKOS-like regulatory concepts mentioned in this turn for graph enrichment and conversation context.',
   parameters: {
     type: 'object',
     properties: {
       concepts: {
         type: 'array',
-        description: 'List of canonical or candidate concepts referenced in the answer',
+        description: 'List of regulatory concepts detected in the user turn and assistant answer.',
         items: {
           type: 'object',
           properties: {
-            label: { type: 'string' },
-            type: { type: 'string' },
-            jurisdiction: { type: 'string' },
-            canonicalId: { type: 'string' },
-            nodeId: { type: 'string' },
+            domain: { type: 'string', description: 'Domain such as TAX, SOCIAL_WELFARE, VEHICLE_REG' },
+            kind: { type: 'string', description: 'Concept kind such as VAT, VRT, IMPORT_DUTY' },
+            jurisdiction: { type: 'string', description: 'Jurisdiction code e.g. IE, UK, EU' },
+            prefLabel: { type: 'string', description: 'Human readable preferred label for the concept' },
+            altLabels: {
+              type: 'array',
+              description: 'Alternative human readable labels and user phrasing.',
+              items: { type: 'string' },
+            },
+            definition: {
+              type: 'string',
+              description: 'Short description of what the concept covers.',
+            },
+            sourceUrls: {
+              type: 'array',
+              description: 'Evidence links for the concept when available.',
+              items: { type: 'string', format: 'uri' },
+            },
           },
-          required: ['label'],
+          required: ['domain', 'kind', 'jurisdiction', 'prefLabel'],
         },
       },
     },
@@ -261,14 +276,52 @@ export class ComplianceEngine {
     }
 
     if (Array.isArray((payload as any).concepts)) {
-      return (payload as { concepts: CapturedConcept[] }).concepts;
+      return this.normaliseCapturedConcepts((payload as { concepts: unknown[] }).concepts);
     }
 
     if (Array.isArray(payload)) {
-      return payload as CapturedConcept[];
+      return this.normaliseCapturedConcepts(payload as unknown[]);
     }
 
     return [];
+  }
+
+  private normaliseCapturedConcepts(rawConcepts: unknown[]): CapturedConcept[] {
+    return rawConcepts
+      .map(raw => {
+        if (!raw || typeof raw !== 'object') {
+          return null;
+        }
+
+        const concept = raw as Partial<CapturedConcept> & {
+          label?: string;
+          type?: string;
+          canonicalId?: string;
+          nodeId?: string;
+        };
+
+        const domain = concept.domain ?? concept.type;
+        const kind = concept.kind ?? concept.label;
+
+        if (!domain || !kind || !concept.jurisdiction || !(concept.prefLabel ?? concept.label)) {
+          return null;
+        }
+
+        return {
+          domain,
+          kind,
+          jurisdiction: concept.jurisdiction,
+          prefLabel: concept.prefLabel ?? concept.label!,
+          altLabels: Array.isArray(concept.altLabels)
+            ? concept.altLabels.filter((v): v is string => typeof v === 'string')
+            : undefined,
+          definition: typeof concept.definition === 'string' ? concept.definition : undefined,
+          sourceUrls: Array.isArray(concept.sourceUrls)
+            ? concept.sourceUrls.filter((v): v is string => typeof v === 'string')
+            : undefined,
+        } satisfies CapturedConcept;
+      })
+      .filter(Boolean) as CapturedConcept[];
   }
 
   private async handleConceptChunk(chunk: ToolStreamChunk): Promise<string[]> {
