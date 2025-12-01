@@ -59,6 +59,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.7)(react@19.2.0)
+      '@reg-copilot/reg-intel-conversations':
+        specifier: workspace:*
+        version: link:../../packages/reg-intel-conversations
       '@reg-copilot/reg-intel-core':
         specifier: workspace:*
         version: link:../../packages/reg-intel-core
@@ -148,6 +151,19 @@ importers:
         specifier: ^5.9.0
         version: 5.9.3
 
+  packages/reg-intel-conversations:
+    dependencies:
+      '@reg-copilot/reg-intel-core':
+        specifier: workspace:*
+        version: link:../reg-intel-core
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.10.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+
   packages/reg-intel-core:
     dependencies:
       '@e2b/code-interpreter':
@@ -231,6 +247,9 @@ importers:
 
   packages/reg-intel-next-adapter:
     dependencies:
+      '@reg-copilot/reg-intel-conversations':
+        specifier: workspace:*
+        version: link:../reg-intel-conversations
       '@reg-copilot/reg-intel-core':
         specifier: workspace:*
         version: link:../reg-intel-core
