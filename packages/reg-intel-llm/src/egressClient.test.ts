@@ -72,6 +72,33 @@ describe('EgressClient', () => {
     expect(executedCtx.metadata?.redactionApplied).toBe(true);
   });
 
+  it('does not flag metadata or warnings when payload is unchanged in report-only', async () => {
+    const client = new EgressClient({ mode: 'enforce' });
+    const execute = vi.fn(async ctx => ctx.request);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const original = { message: 'Hello world' };
+
+    try {
+      await client.guardAndExecute(
+        {
+          target: 'llm',
+          providerId: 'openai',
+          request: original,
+          effectiveMode: 'report-only',
+        },
+        async ctx => execute(ctx)
+      );
+
+      const executedCtx = execute.mock.calls[0][0];
+      expect(executedCtx.metadata?.redactionApplied).toBe(false);
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(executedCtx.sanitizedRequest).toEqual(original);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it('skips sanitisation when effective mode is off', async () => {
     const client = new EgressClient({ mode: 'enforce' });
     const execute = vi.fn(async ctx => ctx.request);
@@ -92,6 +119,29 @@ describe('EgressClient', () => {
     expect(executedCtx.sanitizedRequest).toBeUndefined();
     expect(executedCtx.metadata).toBeUndefined();
     expect(result).toBe(original);
+  });
+
+  it('handles nested unchanged structures without marking redactions', async () => {
+    const client = new EgressClient({ mode: 'enforce' });
+    const execute = vi.fn(async ctx => ctx.request);
+
+    const original = { nested: { value: 'safe' }, list: [1, { note: 'still safe' }] };
+
+    const result = await client.guardAndExecute(
+      {
+        target: 'llm',
+        providerId: 'openai',
+        request: original,
+        effectiveMode: 'enforce',
+      },
+      async ctx => execute(ctx)
+    );
+
+    const executedCtx = execute.mock.calls[0][0];
+    expect(executedCtx.metadata?.redactionApplied).toBe(false);
+    expect(executedCtx.request).toEqual(original);
+    expect(executedCtx.sanitizedRequest).toEqual(original);
+    expect(result).toEqual(original);
   });
 
   it('throws when provider is not allowlisted regardless of mode', async () => {
