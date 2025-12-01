@@ -262,6 +262,34 @@ service_role key: <key>
 
 Save these for your `.env` file.
 
+### Seed demo data and configure the app
+
+1. **Reset and seed** the local database so the demo tenant, user, personas, and quick prompts exist:
+
+   ```bash
+   supabase db reset --use-mig --seed supabase/seed/demo_seed.sql
+   ```
+
+   The seed will **generate IDs** for the demo tenant/user (so database sequences remain untouched). Capture them with:
+
+   ```bash
+   # Uses the default local Supabase Postgres port and password
+   PGPASSWORD=postgres psql "postgresql://postgres@localhost:54322/postgres" \
+     -c "select id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id from auth.users where email='demo.user@example.com';"
+   ```
+
+2. **Expose Supabase to the platform** by adding these values to `.env.local` (use the URLs/keys printed by `supabase start`):
+
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
+   SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
+   SUPABASE_DEMO_TENANT_ID=<demo_tenant_id-from-query-above>
+   NEXT_PUBLIC_SUPABASE_DEMO_USER_ID=<demo_user_id-from-query-above>
+   ```
+
+   The demo web app reads these values to call the API with the seeded Supabase user instead of the previous hardcoded demo header.
+
 ### Stop Supabase
 
 When done developing:
@@ -329,6 +357,13 @@ NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
 
+# Authentication (NextAuth + Supabase demo user)
+NEXTAUTH_SECRET=<generate-with-`openssl rand -hex 32`>
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_DEMO_EMAIL=demo.user@example.com
+# The demo seed sets password to Password123! for the seeded user in supabase/seed/demo_seed.sql
+# The tenant and user IDs are generated at seed time; pull them with the psql command above.
+
 # -----------------------------------------------------------------------------
 # E2B Configuration (optional)
 # -----------------------------------------------------------------------------
@@ -363,6 +398,8 @@ LOG_LEVEL=debug
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase API URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (server-side only) |
+| `SUPABASE_DEMO_TENANT_ID` | Yes (demo) | Tenant ID returned by the seed query for the demo user |
+| `NEXT_PUBLIC_SUPABASE_DEMO_USER_ID` | Yes (demo) | User ID returned by the seed query for the demo user |
 | `E2B_API_KEY` | No | E2B sandbox API key |
 
 \* At least one LLM provider required

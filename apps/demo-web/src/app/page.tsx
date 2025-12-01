@@ -1,7 +1,20 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, BookOpenCheck, Globe2, ShieldHalf, Sparkles, Wand2 } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { signOut, useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  BookOpenCheck,
+  Globe2,
+  PencilLine,
+  ShieldHalf,
+  Sparkles,
+  Wand2,
+  X,
+} from 'lucide-react'
 
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { Message, MessageLoading } from '@/components/chat/message'
@@ -11,6 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import {
   Select,
@@ -44,6 +58,11 @@ interface ChatMessage {
   metadata?: ChatMetadata & { deletedAt?: string; supersededBy?: string }
   deletedAt?: string | null
   supersededBy?: string | null
+}
+
+interface VersionedMessage {
+  latestId: string
+  versions: ChatMessage[]
 }
 
 type ShareAudience = 'private' | 'tenant' | 'public'
@@ -185,8 +204,6 @@ const quickPrompts = [
   },
 ]
 
-const DEMO_USER_ID = '00000000-0000-0000-0000-00000000000a'
-
 const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director'
 
 const normalizePersonaType = (value?: string | null): UserProfile['personaType'] => {
@@ -199,15 +216,70 @@ const normalizePersonaType = (value?: string | null): UserProfile['personaType']
   return DEFAULT_PERSONA
 }
 
+const buildVersionedMessages = (messages: ChatMessage[]): VersionedMessage[] => {
+  const messageMap = new Map(messages.map(message => [message.id, message]))
+  const predecessor = new Map<string, string>()
+
+  messages.forEach(message => {
+    const successorId = message.supersededBy ?? message.metadata?.supersededBy
+    if (successorId) {
+      predecessor.set(successorId, message.id)
+    }
+  })
+
+  const findLatest = (messageId: string): string => {
+    let current = messageId
+    let next = messageMap.get(current)?.supersededBy ?? messageMap.get(current)?.metadata?.supersededBy
+    while (next && messageMap.has(next)) {
+      current = next
+      next = messageMap.get(current)?.supersededBy ?? messageMap.get(current)?.metadata?.supersededBy
+    }
+    return current
+  }
+
+  const orderedLatestIds: string[] = []
+  const seenLatest = new Set<string>()
+  messages.forEach(message => {
+    const latestId = findLatest(message.id)
+    if (!seenLatest.has(latestId)) {
+      orderedLatestIds.push(latestId)
+      seenLatest.add(latestId)
+    }
+  })
+
+  const chains: VersionedMessage[] = orderedLatestIds.map(latestId => {
+    const versions: ChatMessage[] = []
+    let cursor: string | undefined = latestId
+
+    while (cursor) {
+      const current = messageMap.get(cursor)
+      if (current) {
+        versions.unshift(current)
+      }
+      cursor = predecessor.get(cursor)
+    }
+
+    return { latestId, versions }
+  })
+
+  return chains
+}
+
 export default function Home() {
+  const router = useRouter()
+  const { data: session, status } = useSession()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
+  const [editingContent, setEditingContent] = useState('')
+  const [activeVersionIndex, setActiveVersionIndex] = useState<Record<string, number>>({})
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [conversationTitle, setConversationTitle] = useState<string>('')
+  const [savedConversationTitle, setSavedConversationTitle] = useState<string>('')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
   const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
@@ -218,59 +290,70 @@ export default function Home() {
   })
   const isShared = shareAudience !== 'private'
 
+  const isAuthenticated = status === 'authenticated' && Boolean(session?.user?.id)
+  const isTitleDirty = conversationTitle !== savedConversationTitle
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
+  const versionedMessages = useMemo(() => buildVersionedMessages(messages), [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
+    if (!isAuthenticated) return
     const response = await fetch(`/api/conversations`, {
-      headers: { 'x-user-id': DEMO_USER_ID },
+      credentials: 'include',
     })
     if (!response.ok) return
     const payload = await response.json()
     setConversations(payload.conversations ?? [])
-  }
+  }, [isAuthenticated])
 
-  const loadConversation = async (id: string) => {
-    const response = await fetch(`/api/conversations/${id}`, {
-      headers: { 'x-user-id': DEMO_USER_ID },
-    })
-    if (!response.ok) return
-    const payload: ConversationPayload = await response.json()
-    const loadedMessages: ChatMessage[] = (payload.messages ?? []).map(msg => ({
-      id: msg.id ?? crypto.randomUUID(),
-      role: msg.role,
-      content: msg.content,
-      metadata: msg.metadata,
-      deletedAt: msg.deletedAt ?? msg.metadata?.deletedAt ?? null,
-      supersededBy: msg.supersededBy ?? msg.metadata?.supersededBy ?? null,
-    }))
-    setMessages(loadedMessages)
-    setConversationId(id)
-    conversationIdRef.current = id
-    setEditingMessageId(null)
-    setShareAudience(payload.conversation?.shareAudience ?? 'private')
-    setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
-    setAuthorizationModel(payload.conversation?.authorizationModel ?? 'supabase_rbac')
-    const personaId = payload.conversation?.personaId
-    if (personaId) {
-      setProfile(prev => ({ ...prev, personaType: normalizePersonaType(personaId) }))
-    }
-    const jurisdictions = payload.conversation?.jurisdictions
-    if (jurisdictions) {
-      setProfile(prev => ({ ...prev, jurisdictions }))
-    }
-    setConversationTitle(payload.conversation?.title ?? '')
-  }
+  const loadConversation = useCallback(
+    async (id: string) => {
+      if (!isAuthenticated) return
+      const response = await fetch(`/api/conversations/${id}`, {
+        credentials: 'include',
+      })
+      if (!response.ok) return
+      const payload: ConversationPayload = await response.json()
+      const loadedMessages: ChatMessage[] = (payload.messages ?? []).map(msg => ({
+        id: msg.id ?? crypto.randomUUID(),
+        role: msg.role,
+        content: msg.content,
+        metadata: msg.metadata,
+        deletedAt: msg.deletedAt ?? msg.metadata?.deletedAt ?? null,
+        supersededBy: msg.supersededBy ?? msg.metadata?.supersededBy ?? null,
+      }))
+      setMessages(loadedMessages)
+      setConversationId(id)
+      conversationIdRef.current = id
+      setEditingMessageId(null)
+      setShareAudience(payload.conversation?.shareAudience ?? 'private')
+      setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
+      setAuthorizationModel(payload.conversation?.authorizationModel ?? 'supabase_rbac')
+      const personaId = payload.conversation?.personaId
+      if (personaId) {
+        setProfile(prev => ({ ...prev, personaType: normalizePersonaType(personaId) }))
+      }
+      const jurisdictions = payload.conversation?.jurisdictions
+      if (jurisdictions) {
+        setProfile(prev => ({ ...prev, jurisdictions }))
+      }
+      const titleValue = payload.conversation?.title ?? ''
+      setConversationTitle(titleValue)
+      setSavedConversationTitle(titleValue)
+    },
+    [isAuthenticated]
+  )
 
   useEffect(() => {
     loadConversations()
-  }, [])
+  }, [loadConversations])
 
   // Only scroll when a new message is added
   useEffect(() => {
@@ -280,71 +363,84 @@ export default function Home() {
     prevMessageCountRef.current = messages.length
   }, [messages.length])
 
-    const applyMetadata = (metadata: ChatSseMetadata) => {
-      if (metadata.conversationId) {
-        setConversationId(metadata.conversationId)
-        conversationIdRef.current = metadata.conversationId
-      }
-      if (metadata.shareAudience) {
-        setShareAudience(metadata.shareAudience)
-      }
-      if (metadata.tenantAccess) {
-        setTenantAccess(metadata.tenantAccess)
-      }
-      if (metadata.authorizationModel) {
-        setAuthorizationModel(metadata.authorizationModel)
-      }
+  useEffect(() => {
+    setActiveVersionIndex(prev => {
+      const next = { ...prev }
+      versionedMessages.forEach(chain => {
+        const maxIndex = chain.versions.length - 1
+        if (!(chain.latestId in next) || next[chain.latestId] > maxIndex) {
+          next[chain.latestId] = maxIndex
+        }
+      })
+      return next
+    })
+  }, [versionedMessages])
+
+  const applyMetadata = (metadata: ChatSseMetadata) => {
+    if (metadata.conversationId) {
+      setConversationId(metadata.conversationId)
+      conversationIdRef.current = metadata.conversationId
     }
+    if (metadata.shareAudience) {
+      setShareAudience(metadata.shareAudience)
+    }
+    if (metadata.tenantAccess) {
+      setTenantAccess(metadata.tenantAccess)
+    }
+    if (metadata.authorizationModel) {
+      setAuthorizationModel(metadata.authorizationModel)
+    }
+  }
 
-    useEffect(() => {
-      if (!conversationId) return
-      const controller = new AbortController()
+  useEffect(() => {
+    if (!conversationId || !isAuthenticated) return
+    const controller = new AbortController()
 
-      const subscribe = async () => {
+    const subscribe = async () => {
       const response = await fetch(`/api/conversations/${conversationId}/stream`, {
-          signal: controller.signal,
-          headers: { 'x-user-id': DEMO_USER_ID },
-        })
-        if (!response.ok || !response.body) return
+        signal: controller.signal,
+        credentials: 'include',
+      })
+      if (!response.ok || !response.body) return
 
-        const reader = response.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
 
-        while (true) {
-          const { value, done } = await reader.read()
-          if (done) break
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
 
-          buffer += decoder.decode(value, { stream: true })
+        buffer += decoder.decode(value, { stream: true })
 
-          let boundaryIndex
-          while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-            const rawEvent = buffer.slice(0, boundaryIndex).trim()
-            buffer = buffer.slice(boundaryIndex + 2)
+        let boundaryIndex
+        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, boundaryIndex).trim()
+          buffer = buffer.slice(boundaryIndex + 2)
 
-            if (!rawEvent) continue
-            const parsedEvent = parseSseEvent(rawEvent)
-            if (!parsedEvent) continue
-            const parsedData = parseJsonSafe(parsedEvent.data)
+          if (!rawEvent) continue
+          const parsedEvent = parseSseEvent(rawEvent)
+          if (!parsedEvent) continue
+          const parsedData = parseJsonSafe(parsedEvent.data)
 
-            if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
-              applyMetadata(parsedData)
-              if (conversationIdRef.current) {
-                loadConversation(conversationIdRef.current)
-              }
-            } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
+          if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
+            applyMetadata(parsedData)
+            if (conversationIdRef.current) {
               loadConversation(conversationIdRef.current)
             }
+          } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
+            loadConversation(conversationIdRef.current)
           }
         }
       }
+    }
 
-      subscribe()
+    subscribe()
 
-      return () => {
-        controller.abort()
-      }
-    }, [conversationId])
+    return () => {
+      controller.abort()
+    }
+  }, [conversationId, isAuthenticated, loadConversation])
 
   const streamChatResponse = async (response: Response, assistantMessageId: string) => {
     if (!response.body) {
@@ -378,56 +474,94 @@ export default function Home() {
         const parsedEvent = parseSseEvent(rawEvent)
         if (!parsedEvent) continue
 
-          const parsedData = parseJsonSafe(parsedEvent.data)
+        const parsedData = parseJsonSafe(parsedEvent.data)
 
-          switch (parsedEvent.type) {
-            case 'metadata': {
-              if (!isChatSseMetadata(parsedData)) break
-              applyMetadata(parsedData)
-              setChatMetadata(parsedData)
-              setMessages(prev =>
-                prev.map(message =>
-                  message.id === assistantMessageId ? { ...message, metadata: parsedData } : message
-                )
+        switch (parsedEvent.type) {
+          case 'metadata': {
+            if (!isChatSseMetadata(parsedData)) break
+            applyMetadata(parsedData)
+            setChatMetadata(parsedData)
+            setMessages(prev =>
+              prev.map(message =>
+                message.id === assistantMessageId ? { ...message, metadata: parsedData } : message
               )
-              break
-            }
-            case 'message': {
-              const textChunk = extractText(parsedData)
-              appendAssistantText(textChunk)
-              break
-            }
-            case 'disclaimer': {
-              const disclaimerText = extractText(parsedData)
-              setMessages(prev =>
-                prev.map(message =>
-                  message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
-                )
-              )
-              break
-            }
-            case 'error': {
-              const errorMessage = extractErrorMessage(parsedData)
-              appendAssistantText(`Error: ${errorMessage}`)
-              return
-            }
-            case 'done':
-              return
-            default:
-              break
+            )
+            break
           }
+          case 'message': {
+            const textChunk = extractText(parsedData)
+            appendAssistantText(textChunk)
+            break
+          }
+          case 'disclaimer': {
+            const disclaimerText = extractText(parsedData)
+            setMessages(prev =>
+              prev.map(message =>
+                message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
+              )
+            )
+            break
+          }
+          case 'error': {
+            const errorMessage = extractErrorMessage(parsedData)
+            appendAssistantText(`Error: ${errorMessage}`)
+            return
+          }
+          case 'done':
+            return
+          default:
+            break
         }
       }
     }
+  }
 
   const handleSubmit = async () => {
-    if (!input.trim()) return
+    const messageText = (editingMessageId ? editingContent : input).trim()
+    if (!messageText) return
 
-    const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() }
+    if (!session?.user?.id) {
+      router.push('/login')
+      return
+    }
+
     const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' }
+    const nowIso = new Date().toISOString()
+    const newUserMessageId = editingMessageId ? crypto.randomUUID() : undefined
 
-      setMessages(prev => [...prev, userMessage, assistantMessage])
-    setInput('')
+    setMessages(prev => {
+      if (!editingMessageId) {
+        return [
+          ...prev,
+          { id: crypto.randomUUID(), role: 'user', content: messageText },
+          assistantMessage,
+        ]
+      }
+
+      return [
+        ...prev.map(message =>
+          message.id === editingMessageId
+            ? {
+                ...message,
+                deletedAt: message.deletedAt ?? nowIso,
+                supersededBy: newUserMessageId,
+                metadata: {
+                  ...message.metadata,
+                  deletedAt: message.metadata?.deletedAt ?? nowIso,
+                  supersededBy: newUserMessageId,
+                },
+              }
+            : message
+        ),
+        { id: newUserMessageId ?? crypto.randomUUID(), role: 'user', content: messageText },
+        assistantMessage,
+      ]
+    })
+
+    if (!editingMessageId) {
+      setInput('')
+    }
+    setEditingContent('')
     setIsLoading(true)
     setChatMetadata(null)
 
@@ -438,10 +572,11 @@ export default function Home() {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-user-id': DEMO_USER_ID },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           conversationId: conversationIdRef.current,
-          message: input.trim(),
+          message: messageText,
           profile,
           scenarioHint,
           shareAudience,
@@ -449,6 +584,7 @@ export default function Home() {
           authorizationModel,
           title: conversationTitle,
           replaceMessageId: editingMessageId,
+          userId: session.user.id,
         }),
         signal: controller.signal,
       })
@@ -469,6 +605,7 @@ export default function Home() {
       setIsLoading(false)
       setScenarioHint(null)
       setEditingMessageId(null)
+      setEditingContent('')
       loadConversations()
     }
   }
@@ -482,30 +619,41 @@ export default function Home() {
     }
   }
 
-  const lastEditableUserMessage = () =>
-    [...messages]
-      .reverse()
-      .find(msg => msg.role === 'user' && !msg.deletedAt && !msg.metadata?.deletedAt)
+  const lastEditableUserMessage = () => {
+    for (let i = versionedMessages.length - 1; i >= 0; i -= 1) {
+      const chain = versionedMessages[i]
+      const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
+      const candidate = chain.versions[currentIndex]
+      if (candidate.role === 'user' && !candidate.deletedAt && !candidate.metadata?.deletedAt) {
+        return candidate
+      }
+    }
+    return null
+  }
 
   const startEditingLastMessage = () => {
     const lastMessage = lastEditableUserMessage()
     if (!lastMessage) return
-    setInput(lastMessage.content)
     setEditingMessageId(lastMessage.id)
+    setEditingContent(lastMessage.content)
+    setInput('')
   }
 
   const cancelEditing = () => {
     setEditingMessageId(null)
+    setEditingContent('')
     setInput('')
   }
 
   const toggleSharing = async () => {
     if (!conversationIdRef.current) return
+    if (!isAuthenticated) return
     const nextAudience: ShareAudience = shareAudience === 'private' ? 'tenant' : 'private'
     const nextTenantAccess: TenantAccess = nextAudience === 'tenant' ? 'edit' : tenantAccess
     const response = await fetch(`/api/conversations/${conversationIdRef.current}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-user-id': DEMO_USER_ID },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ shareAudience: nextAudience, tenantAccess: nextTenantAccess }),
     })
     if (response.ok) {
@@ -517,22 +665,47 @@ export default function Home() {
 
   const saveConversationTitle = async () => {
     if (!conversationIdRef.current) return
+    if (!isAuthenticated) return
     const response = await fetch(`/api/conversations/${conversationIdRef.current}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-user-id': DEMO_USER_ID },
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ title: conversationTitle || null }),
     })
     if (response.ok) {
       loadConversations()
+      setSavedConversationTitle(conversationTitle)
+      setIsEditingTitle(false)
     }
   }
 
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
-      <AppHeader primaryAction={{ label: 'View Graph', href: `/graph?conversationId=${conversationIdRef.current}` }} />
+      <AppHeader
+        primaryAction={{ label: 'View Graph', href: `/graph?conversationId=${conversationIdRef.current}` }}
+        userEmail={session?.user?.email ?? session?.user?.id ?? null}
+        onSignOut={() => signOut({ callbackUrl: '/login' })}
+      />
 
       <main className="relative mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-12 pt-8">
+        {status === 'unauthenticated' && (
+          <Card className="border-amber-300/70 bg-amber-50 text-amber-900">
+            <CardHeader>
+              <CardTitle>Sign in to use the copilot</CardTitle>
+              <CardDescription>
+                Use the seeded Supabase credentials from <code className="rounded bg-amber-100 px-1 py-0.5">supabase/seed/demo_seed.sql</code>{' '}
+                to authenticate before chatting.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" onClick={() => router.push('/login')}>
+                Go to login
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.8fr)]">
           <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
             <div className="flex flex-col gap-4 border-b bg-gradient-to-r from-muted/60 via-background to-muted/40 px-6 py-5 md:flex-row md:items-center md:justify-between">
@@ -671,7 +844,7 @@ export default function Home() {
             )}
 
             <ChatContainer className="flex-1 bg-transparent px-4">
-              {messages.length === 0 ? (
+              {versionedMessages.length === 0 ? (
                 <ChatWelcome>
                   <div className="space-y-3 rounded-2xl border bg-muted/20 p-6 shadow-inner">
                     <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -713,17 +886,79 @@ export default function Home() {
                 </ChatWelcome>
               ) : (
                 <>
-                  {messages.map((message) => (
-                  <Message
-                    key={message.id}
-                    role={message.role}
-                    content={message.content}
-                    disclaimer={message.disclaimer}
-                    metadata={message.metadata}
-                    deletedAt={message.deletedAt}
-                    supersededBy={message.supersededBy}
-                  />
-                  ))}
+                  {versionedMessages.map(chain => {
+                    const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
+                    const currentMessage = chain.versions[currentIndex]
+                    const hasHistory = chain.versions.length > 1
+                    const goPrevious = () =>
+                      setActiveVersionIndex(prev => ({ ...prev, [chain.latestId]: Math.max(0, currentIndex - 1) }))
+                    const goNext = () =>
+                      setActiveVersionIndex(prev => ({
+                        ...prev,
+                        [chain.latestId]: Math.min(chain.versions.length - 1, currentIndex + 1),
+                      }))
+                    const isEditingChain = editingMessageId ? chain.versions.some(msg => msg.id === editingMessageId) : false
+                    const isEditingCurrent = isEditingChain && currentMessage.role === 'user'
+
+                    return (
+                      <div key={chain.latestId} className="relative">
+                        {hasHistory && (
+                          <div className="absolute -left-12 top-3 z-10 flex items-center gap-1 text-muted-foreground">
+                            <Button size="icon" variant="ghost" onClick={goPrevious} disabled={currentIndex === 0}>
+                              <ArrowLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-xs font-medium">
+                              {currentIndex + 1} / {chain.versions.length}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={goNext}
+                              disabled={currentIndex === chain.versions.length - 1}
+                            >
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+
+                        {isEditingCurrent ? (
+                          <div className="rounded-2xl border bg-muted/40 p-4 shadow-sm">
+                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                              <PencilLine className="h-4 w-4" /> Editing last message
+                            </div>
+                            <Label htmlFor={`edit-${chain.latestId}`} className="sr-only">
+                              Edit message
+                            </Label>
+                            <textarea
+                              id={`edit-${chain.latestId}`}
+                              value={editingContent}
+                              onChange={event => setEditingContent(event.target.value)}
+                              className="w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none"
+                              rows={3}
+                              disabled={isLoading}
+                            />
+                            <div className="mt-2 flex items-center justify-end gap-2">
+                              <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
+                                <X className="mr-1 h-4 w-4" /> Cancel
+                              </Button>
+                              <Button size="sm" onClick={handleSubmit} disabled={isLoading || !editingContent.trim()}>
+                                <PencilLine className="mr-1 h-4 w-4" /> Save edit
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <Message
+                            role={currentMessage.role}
+                            content={currentMessage.content}
+                            disclaimer={currentMessage.disclaimer}
+                            metadata={currentMessage.metadata}
+                            deletedAt={currentMessage.deletedAt}
+                            supersededBy={currentMessage.supersededBy}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
                   {isLoading && <MessageLoading />}
                 </>
               )}
@@ -735,7 +970,9 @@ export default function Home() {
                 <span>
                   {editingMessageId
                     ? 'Editing your last message. Submit to replace it, or cancel to keep the original.'
-                    : 'Send a new prompt or edit your last message to update the thread.'}
+                    : isAuthenticated
+                      ? 'Send a new prompt or edit your last message to update the thread.'
+                      : 'Sign in to start chatting with the copilot.'}
                 </span>
                 <div className="flex items-center gap-2">
                   {editingMessageId && (
@@ -743,9 +980,16 @@ export default function Home() {
                       Cancel edit
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={startEditingLastMessage} disabled={isLoading}>
-                    Edit last message
-                  </Button>
+                  {versionedMessages.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={startEditingLastMessage}
+                      disabled={isLoading || !isAuthenticated}
+                    >
+                      Edit last message
+                    </Button>
+                  )}
                 </div>
               </div>
               <PromptInput
@@ -753,7 +997,7 @@ export default function Home() {
                 onChange={setInput}
                 onSubmit={handleSubmit}
                 placeholder="Ask about tax, welfare, pensions, or cross-border rules. The copilot will query the regulatory graph and timeline engine for you."
-                disabled={isLoading}
+                disabled={isLoading || !isAuthenticated || Boolean(editingMessageId)}
                 isLoading={isLoading}
               />
               <p className="mt-3 text-center text-xs text-muted-foreground">
@@ -793,12 +1037,19 @@ export default function Home() {
                     <div className="flex gap-2">
                       <Input
                         value={conversationTitle}
-                        onChange={event => setConversationTitle(event.target.value)}
+                        onChange={event => {
+                          setConversationTitle(event.target.value)
+                          setIsEditingTitle(true)
+                        }}
+                        onFocus={() => setIsEditingTitle(true)}
+                        onBlur={() => setIsEditingTitle(false)}
                         placeholder="Add a title for this thread"
                       />
-                      <Button size="sm" onClick={saveConversationTitle}>
-                        Save
-                      </Button>
+                      {(isEditingTitle || isTitleDirty) && (
+                        <Button size="sm" onClick={saveConversationTitle} disabled={isLoading || !isAuthenticated}>
+                          Save
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
