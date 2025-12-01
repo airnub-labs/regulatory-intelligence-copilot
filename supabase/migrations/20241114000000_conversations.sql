@@ -2,6 +2,10 @@ create extension if not exists "pgcrypto";
 
 create schema if not exists copilot_internal;
 
+-- Ensure auth.identities supports upserts on provider/provider_id used in seeds
+create unique index if not exists identities_provider_provider_id_idx
+  on auth.identities(provider, provider_id);
+
 create table if not exists copilot_internal.conversations (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
