@@ -24,15 +24,18 @@ class MockEgressClient {
       options?: unknown;
     };
 
-    const sanitizedRequest = {
-      ...baseRequest,
-      messages: baseRequest.messages.map(message => ({
-        ...message,
-        content: '[sanitized]'.concat(
-          typeof message.content === 'string' ? ` ${message.content}` : ''
-        ),
-      })),
-    };
+    const sanitizedRequest =
+      effectiveMode === 'off'
+        ? undefined
+        : {
+            ...baseRequest,
+            messages: baseRequest.messages.map(message => ({
+              ...message,
+              content: '[sanitized]'.concat(
+                typeof message.content === 'string' ? ` ${message.content}` : ''
+              ),
+            })),
+          };
 
     const executionCtx = {
       ...ctx,
@@ -103,9 +106,10 @@ describe('LlmRouter egress resolution', () => {
     expect(ctx.effectiveMode).toBe('report-only');
     expect(ctx.tenantId).toBe('tenant-1');
     expect(ctx.userId).toBe('user-1');
+    expect(ctx.request.messages[0].content).toBe('Hi');
 
     const providerCall = providers.mock.chat.mock.calls[0];
-    expect(providerCall[0][0].content).toBe('Hi');
+    expect(providerCall[0][0].content).toContain('[sanitized]');
   });
 
   it('does not allow off mode when tenant forbids it', async () => {
@@ -192,5 +196,64 @@ describe('LlmRouter egress resolution', () => {
 
     const providerCall = providers.mock.chat.mock.calls[0];
     expect(providerCall[0][0].content).toContain('[sanitized]');
+  });
+
+  it('executes chat using sanitized payload even in report-only mode', async () => {
+    const policy: TenantLlmPolicy = {
+      tenantId: 'tenant-1',
+      defaultModel: 'model-a',
+      defaultProvider: 'mock',
+      allowRemoteEgress: true,
+      tasks: [],
+      egressMode: 'enforce',
+      allowOffMode: true,
+    };
+
+    const egressClient = new MockEgressClient('enforce');
+    const router = new LlmRouter(
+      providers,
+      new MockPolicyStore(policy) as any,
+      'mock',
+      'model-a',
+      egressClient as any
+    );
+
+    await router.chat(messages, {
+      tenantId: 'tenant-1',
+      egressModeOverride: 'report-only',
+    });
+
+    const providerCall = providers.mock.chat.mock.calls[0];
+    expect(providerCall[0][0].content).toContain('[sanitized]');
+  });
+
+  it('uses original payload for streaming when effective mode is off', async () => {
+    const policy: TenantLlmPolicy = {
+      tenantId: 'tenant-1',
+      defaultModel: 'model-a',
+      defaultProvider: 'mock',
+      allowRemoteEgress: true,
+      tasks: [],
+      egressMode: 'off',
+      allowOffMode: true,
+    };
+
+    const egressClient = new MockEgressClient('off');
+    const router = new LlmRouter(
+      providers,
+      new MockPolicyStore(policy) as any,
+      'mock',
+      'model-a',
+      egressClient as any
+    );
+
+    const stream = router.streamChat(messages, { tenantId: 'tenant-1' });
+
+    for await (const _chunk of stream) {
+      // consume stream
+    }
+
+    const providerCall = providers.mock.streamChat!.mock.calls[0];
+    expect(providerCall[0][0].content).toBe('Hi');
   });
 });

@@ -713,7 +713,7 @@ export class LlmRouter implements LlmClient {
         effectiveMode,
       },
       async sanitized => {
-        const payload = sanitized.request as {
+        const payload = (sanitized.sanitizedRequest ?? sanitized.request) as {
           messages: ChatMessage[];
           model: string;
           options?: typeof taskOptions;
@@ -760,7 +760,7 @@ export class LlmRouter implements LlmClient {
         effectiveMode,
       },
       async sanitized => {
-        const payload = sanitized.request as {
+        const payload = (sanitized.sanitizedRequest ?? sanitized.request) as {
           messages: ChatMessage[];
           model: string;
           options?: typeof taskOptions;
