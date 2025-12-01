@@ -24,9 +24,10 @@ import {
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   type ConversationStore,
+  type AuthorizationModel,
+  type AuthorizationSpec,
 } from './conversationStores.js';
 import { ConversationEventHub } from './eventHub.js';
-import type { AccessModel, AccessControl } from './conversationStores.js';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -277,10 +278,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         profile,
         conversationId: requestConversationId,
         userId,
-        isShared,
         sharingMode,
-        accessModel,
-        accessControl,
+        authorizationModel,
+        authorizationSpec,
       } = body;
 
       // Validate profile if provided
@@ -309,9 +309,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           personaId: profile?.personaType,
           jurisdictions: profile?.jurisdictions,
           sharingMode: sharingMode,
-          isShared: typeof isShared === 'boolean' ? Boolean(isShared) : undefined,
-          accessModel: accessModel as AccessModel | undefined,
-          accessControl: accessControl as AccessControl | undefined,
+          authorizationModel: authorizationModel as AuthorizationModel | undefined,
+          authorizationSpec: authorizationSpec as AuthorizationSpec | undefined,
         });
         conversationId = created.conversationId;
       }
@@ -368,8 +367,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             conversationId,
             sharingMode: conversationRecord.sharingMode,
             isShared: conversationRecord.isShared,
-            accessModel: conversationRecord.accessModel,
-            accessControl: conversationRecord.accessControl,
+            authorizationModel: conversationRecord.authorizationModel,
+            authorizationSpec: conversationRecord.authorizationSpec,
           });
 
           try {
@@ -394,8 +393,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 lastMetadata = metadata;
                 eventHub.broadcast(tenantId, conversationId, 'metadata', {
                   ...metadata,
-                  accessModel: conversationRecord.accessModel,
-                  accessControl: conversationRecord.accessControl,
+                  authorizationModel: conversationRecord.authorizationModel,
+                  authorizationSpec: conversationRecord.authorizationSpec,
                   sharingMode: conversationRecord.sharingMode,
                   isShared: conversationRecord.isShared,
                 });
@@ -480,6 +479,6 @@ export {
   ConversationEventHub,
   type ConversationStore,
   type SharingMode,
-  type AccessModel,
-  type AccessControl,
+  type AuthorizationModel,
+  type AuthorizationSpec,
 };

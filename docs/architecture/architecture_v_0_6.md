@@ -106,7 +106,7 @@ The system consists of:
       - Tenants, users, auth.
       - Conversations and messages.
       - Conversation‑level context (active node IDs, flags, scenario state).
-      - Access envelopes for conversations: a legacy `sharing_mode` (private/tenant/public) plus an `access_model` descriptor that can point at an external ReBAC engine (e.g., OpenFGA) without rewriting the table later.
+      - Access envelopes for conversations that combine `sharing_mode` (private/tenant/public) with `authorization_model` + `authorization_spec` so Supabase RLS and external ReBAC engines (e.g., OpenFGA) can be swapped without reshaping the table later.
     - May store references to graph node IDs, but the graph never stores tenant/user identifiers.
    - A ConversationStore + ConversationContextStore abstraction sits between the web app and the Compliance Engine:
      - Supabase/Postgres is the production target with read-only public views for safe exposure.

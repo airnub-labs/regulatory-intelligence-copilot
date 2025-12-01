@@ -1,11 +1,12 @@
 import type { ConversationContext, ConversationContextStore, ConversationIdentity, ChatMessage } from '@reg-copilot/reg-intel-core';
 
 export type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read';
-export type AccessModel = 'legacy_sharing' | 'external_rebac';
+export type AuthorizationModel = 'supabase_rbac' | 'openfga';
 
-export interface AccessControl {
+export interface AuthorizationSpec {
   provider?: 'openfga' | 'spicedb' | 'permify' | 'custom';
-  policyId?: string | null;
+  storeId?: string | null;
+  authorizationModelId?: string | null;
   tupleSetId?: string | null;
   fallbackSharingMode?: SharingMode;
   displayName?: string | null;
@@ -17,8 +18,8 @@ export interface ConversationRecord {
   userId?: string | null;
   sharingMode: SharingMode;
   isShared: boolean;
-  accessModel: AccessModel;
-  accessControl?: AccessControl | null;
+  authorizationModel: AuthorizationModel;
+  authorizationSpec?: AuthorizationSpec | null;
   personaId?: string | null;
   jurisdictions: string[];
   title?: string | null;
@@ -41,10 +42,9 @@ export interface ConversationStore {
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
-    isShared?: boolean;
     sharingMode?: SharingMode;
-    accessModel?: AccessModel;
-    accessControl?: AccessControl | null;
+    authorizationModel?: AuthorizationModel;
+    authorizationSpec?: AuthorizationSpec | null;
   }): Promise<{ conversationId: string }>;
 
   appendMessage(input: {
@@ -71,28 +71,20 @@ export interface ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
-    isShared?: boolean;
     sharingMode?: SharingMode;
-    accessModel?: AccessModel;
-    accessControl?: AccessControl | null;
+    authorizationModel?: AuthorizationModel;
+    authorizationSpec?: AuthorizationSpec | null;
   }): Promise<void>;
 }
 
-function resolveSharingMode(input: { sharingMode?: SharingMode; isShared?: boolean }): SharingMode {
+function resolveSharingMode(input: { sharingMode?: SharingMode }): SharingMode {
   if (input.sharingMode) return input.sharingMode;
-  if (typeof input.isShared === 'boolean') {
-    return input.isShared ? 'tenant_write' : 'private';
-  }
   return 'private';
 }
 
-function resolveAccessModel(input: { accessModel?: AccessModel }): AccessModel {
-  return input.accessModel ?? 'legacy_sharing';
-}
-
 function effectiveSharingMode(record: ConversationRecord) {
-  if (record.accessModel === 'legacy_sharing') return record.sharingMode;
-  return record.accessControl?.fallbackSharingMode ?? record.sharingMode;
+  if (record.authorizationModel === 'supabase_rbac') return record.sharingMode;
+  return record.authorizationSpec?.fallbackSharingMode ?? record.sharingMode;
 }
 
 function canRead(record: ConversationRecord, userId?: string | null) {
@@ -121,19 +113,18 @@ export class InMemoryConversationStore implements ConversationStore {
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
-    isShared?: boolean;
     sharingMode?: SharingMode;
-    accessModel?: AccessModel;
-    accessControl?: AccessControl | null;
+    authorizationModel?: AuthorizationModel;
+    authorizationSpec?: AuthorizationSpec | null;
   }): Promise<{ conversationId: string }> {
     const id = crypto.randomUUID();
     const now = new Date();
-    const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode, isShared: input.isShared });
-    const accessModel = resolveAccessModel({ accessModel: input.accessModel });
+    const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode });
+    const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
     const effectiveMode =
-      accessModel === 'legacy_sharing'
+      authorizationModel === 'supabase_rbac'
         ? sharingMode
-        : input.accessControl?.fallbackSharingMode ?? sharingMode;
+        : input.authorizationSpec?.fallbackSharingMode ?? sharingMode;
 
     this.conversations.set(id, {
       id,
@@ -141,8 +132,8 @@ export class InMemoryConversationStore implements ConversationStore {
       userId: input.userId,
       sharingMode,
       isShared: effectiveMode !== 'private',
-      accessModel,
-      accessControl: input.accessControl,
+      authorizationModel,
+      authorizationSpec: input.authorizationSpec,
       personaId: input.personaId ?? null,
       jurisdictions: input.jurisdictions ?? [],
       title: input.title ?? null,
@@ -240,10 +231,9 @@ export class InMemoryConversationStore implements ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
-    isShared?: boolean;
     sharingMode?: SharingMode;
-    accessModel?: AccessModel;
-    accessControl?: AccessControl | null;
+    authorizationModel?: AuthorizationModel;
+    authorizationSpec?: AuthorizationSpec | null;
   }): Promise<void> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
@@ -253,17 +243,17 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!isOwner) {
       throw new Error('User not authorised to update conversation');
     }
-    const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode, isShared: input.isShared });
-    const accessModel = resolveAccessModel({ accessModel: input.accessModel ?? record.accessModel });
-    const accessControl = input.accessControl ?? record.accessControl;
+    const sharingMode = input.sharingMode ?? record.sharingMode;
+    const authorizationModel = input.authorizationModel ?? record.authorizationModel;
+    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
     const effectiveMode =
-      accessModel === 'legacy_sharing' ? sharingMode : accessControl?.fallbackSharingMode ?? sharingMode;
+      authorizationModel === 'supabase_rbac' ? sharingMode : authorizationSpec?.fallbackSharingMode ?? sharingMode;
     this.conversations.set(input.conversationId, {
       ...record,
       sharingMode,
       isShared: effectiveMode !== 'private',
-      accessModel,
-      accessControl,
+      authorizationModel,
+      authorizationSpec,
       updatedAt: new Date(),
     });
   }

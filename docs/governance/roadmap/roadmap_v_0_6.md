@@ -187,9 +187,9 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 
 ### 3.5 ReBAC-ready sharing (OpenFGA path)
 
-- [ ] Finalise the `sharing_mode` + `access_model`/`access_control` envelope for conversations/messages so Supabase remains the source of truth while enabling external ReBAC engines.
+- [ ] Finalise the `sharing_mode` + `authorization_model`/`authorization_spec` envelope for conversations/messages so Supabase remains the source of truth while enabling external ReBAC engines.
 - [ ] Add an OpenFGA namespace modelling tenants, users, conversations, and public-read delegation; check in docker-compose for local OpenFGA.
-- [ ] Synchronise tuple writes from Supabase mutations when `access_model = 'external_rebac'` is enabled; keep RLS enforcement intact.
+- [ ] Synchronise tuple writes from Supabase mutations when `authorization_model = 'openfga'` is enabled; keep RLS enforcement intact.
 - [ ] Gate conversation list/detail/chat APIs with OpenFGA `ListObjects`/`Check` before Supabase queries to align server-side filtering.
 - [ ] Update the chat SSE hub to carry access metadata so multi-device subscribers stay authorised during fan-out.
 

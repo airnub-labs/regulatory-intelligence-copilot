@@ -41,8 +41,8 @@ export async function GET(request: NextRequest, context: { params: { id: string 
         conversationId,
         sharingMode: conversation.sharingMode,
         isShared: conversation.isShared,
-        accessModel: conversation.accessModel,
-        accessControl: conversation.accessControl,
+        authorizationModel: conversation.authorizationModel,
+        authorizationSpec: conversation.authorizationSpec,
       });
 
       const abortHandler = () => {

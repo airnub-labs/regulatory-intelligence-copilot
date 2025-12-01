@@ -34,17 +34,23 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
   }
   const body = await request.json().catch(() => null);
   const sharingMode = body?.sharingMode;
-  const accessModel = body?.accessModel;
+  const authorizationModel = body?.authorizationModel;
   const allowedModes = ['private', 'tenant_read', 'tenant_write', 'public_read'];
-  const allowedAccessModels = ['legacy_sharing', 'external_rebac'];
+  const allowedAuthorizationModels = ['supabase_rbac', 'openfga'];
   if (sharingMode && !allowedModes.includes(sharingMode)) {
     return NextResponse.json({ error: 'Invalid sharingMode' }, { status: 400 });
   }
-  if (accessModel && !allowedAccessModels.includes(accessModel)) {
-    return NextResponse.json({ error: 'Invalid accessModel' }, { status: 400 });
+  if (authorizationModel && !allowedAuthorizationModels.includes(authorizationModel)) {
+    return NextResponse.json({ error: 'Invalid authorizationModel' }, { status: 400 });
   }
   try {
-    await conversationStore.updateSharing({ tenantId, conversationId, userId, sharingMode, accessModel });
+    await conversationStore.updateSharing({
+      tenantId,
+      conversationId,
+      userId,
+      sharingMode,
+      authorizationModel,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 403 });
