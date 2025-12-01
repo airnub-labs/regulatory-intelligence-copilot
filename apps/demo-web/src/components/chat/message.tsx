@@ -150,9 +150,10 @@ interface MessageProps {
   content: string
   className?: string
   metadata?: MessageMetadata
+  disclaimer?: string
 }
 
-export function Message({ role, content, className, metadata }: MessageProps) {
+export function Message({ role, content, className, metadata, disclaimer }: MessageProps) {
   const isUser = role === "user"
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
@@ -204,7 +205,14 @@ export function Message({ role, content, className, metadata }: MessageProps) {
                 AI Elements
               </Badge>
             )}
-            <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
+            <div className="space-y-2">
+              <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
+              {!isUser && disclaimer && (
+                <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+                  {disclaimer}
+                </div>
+              )}
+            </div>
           </div>
           {!isUser && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium text-muted-foreground">
