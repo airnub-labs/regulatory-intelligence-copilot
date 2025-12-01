@@ -350,9 +350,22 @@ export class ComplianceEngine {
     conceptNodeIds: Set<string>,
     options: ToolAwareCompletionOptions
   ): AsyncIterable<LlmStreamChunk> {
+    const { messages, max_tokens, ...requestOptions } = request;
+    const mergedOptions: ToolAwareCompletionOptions = { ...options };
+
+    for (const [key, value] of Object.entries(requestOptions)) {
+      if (value !== undefined) {
+        (mergedOptions as Record<string, unknown>)[key] = value;
+      }
+    }
+
+    if (max_tokens !== undefined) {
+      mergedOptions.maxTokens = max_tokens;
+    }
+
     const stream = this.deps.llmRouter.streamChat(
-      request.messages,
-      options as LlmCompletionOptions
+      messages,
+      mergedOptions as LlmCompletionOptions
     );
 
     for await (const chunk of stream as AsyncIterable<RouterChunk>) {
