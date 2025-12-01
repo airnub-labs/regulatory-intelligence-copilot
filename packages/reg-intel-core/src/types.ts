@@ -154,9 +154,9 @@ export type LlmStreamChunk =
   | { type: 'text'; delta: string }
   | {
     type: 'tool';
-    name?: string;
+    name: string;
+    argsJson: unknown;
     toolName?: string;
-    argsJson?: unknown;
     arguments?: unknown;
     payload?: unknown;
   }

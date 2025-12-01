@@ -396,7 +396,7 @@ export class ComplianceEngine {
 
     conceptNodeIds.forEach(id => {
       if (!merged.has(id)) {
-        merged.set(id, { id, label: 'Concept', type: 'Concept' });
+        merged.set(id, { id, label: 'Captured concept', type: 'Concept' });
       }
     });
 

@@ -40,6 +40,8 @@ export interface ConversationMessage extends ChatMessage {
   metadata?: Record<string, unknown>;
   userId?: string | null;
   createdAt: Date;
+  deletedAt?: Date | null;
+  supersededBy?: string | null;
 }
 
 export interface ConversationStore {
@@ -62,6 +64,14 @@ export interface ConversationStore {
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
+  }): Promise<{ messageId: string }>;
+
+  softDeleteMessage(input: {
+    tenantId: string;
+    conversationId: string;
+    messageId: string;
+    userId?: string | null;
+    supersededBy?: string | null;
   }): Promise<void>;
 
   getMessages(input: {
@@ -83,6 +93,7 @@ export interface ConversationStore {
     tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
+    title?: string | null;
   }): Promise<void>;
 }
 
@@ -167,7 +178,7 @@ export class InMemoryConversationStore implements ConversationStore {
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
-  }): Promise<void> {
+  }): Promise<{ messageId: string }> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
       throw new Error('Conversation not found for tenant');
@@ -188,6 +199,45 @@ export class InMemoryConversationStore implements ConversationStore {
     this.messages.set(input.conversationId, existing);
     record.lastMessageAt = message.createdAt;
     record.updatedAt = message.createdAt;
+    this.conversations.set(input.conversationId, record);
+    return { messageId: message.id };
+  }
+
+  async softDeleteMessage(input: {
+    tenantId: string;
+    conversationId: string;
+    messageId: string;
+    userId?: string | null;
+    supersededBy?: string | null;
+  }): Promise<void> {
+    const record = this.conversations.get(input.conversationId);
+    if (!record || record.tenantId !== input.tenantId) {
+      throw new Error('Conversation not found for tenant');
+    }
+    if (!canWrite(record, input.userId)) {
+      throw new Error('User not authorised for conversation');
+    }
+
+    const existing = this.messages.get(input.conversationId) ?? [];
+    const targetIndex = existing.findIndex(msg => msg.id === input.messageId);
+    if (targetIndex === -1) {
+      throw new Error('Message not found');
+    }
+
+    const target = existing[targetIndex];
+    existing[targetIndex] = {
+      ...target,
+      deletedAt: new Date(),
+      supersededBy: input.supersededBy ?? target.supersededBy ?? null,
+      metadata: {
+        ...(target.metadata ?? {}),
+        deletedAt: new Date().toISOString(),
+        supersededBy: input.supersededBy ?? target.supersededBy,
+      },
+    };
+
+    this.messages.set(input.conversationId, existing);
+    record.updatedAt = new Date();
     this.conversations.set(input.conversationId, record);
   }
 
@@ -250,6 +300,7 @@ export class InMemoryConversationStore implements ConversationStore {
     tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
+    title?: string | null;
   }): Promise<void> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
@@ -263,12 +314,14 @@ export class InMemoryConversationStore implements ConversationStore {
     const tenantAccess = input.tenantAccess ?? record.tenantAccess;
     const authorizationModel = input.authorizationModel ?? record.authorizationModel;
     const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
+    const title = input.title !== undefined ? input.title : record.title;
     this.conversations.set(input.conversationId, {
       ...record,
       shareAudience,
       tenantAccess,
       authorizationModel,
       authorizationSpec,
+      title,
       updatedAt: new Date(),
     });
   }

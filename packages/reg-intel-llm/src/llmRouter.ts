@@ -51,7 +51,15 @@ export interface LlmCompletionOptions {
  */
 export type LlmStreamChunk =
   | { type: 'text'; delta: string }
-  | { type: 'tool'; name: string; argsJson: unknown }
+  | {
+      type: 'tool';
+      name: string;
+      argsJson: unknown;
+      /** Legacy aliases kept for downstream compatibility */
+      toolName?: string;
+      arguments?: unknown;
+      payload?: unknown;
+    }
   | { type: 'error'; error: Error }
   | { type: 'done' };
 
@@ -187,7 +195,15 @@ async function* streamTextPartsToLlmChunks(
 
       if (part?.type === 'tool-call' && 'toolName' in part) {
         const { toolName } = part as { toolName: string; input?: unknown };
-        yield { type: 'tool', name: toolName, argsJson: (part as { input?: unknown }).input };
+        const argsJson = (part as { input?: unknown }).input;
+        yield {
+          type: 'tool',
+          name: toolName,
+          argsJson,
+          toolName,
+          arguments: argsJson,
+          payload: argsJson,
+        };
         continue;
       }
 
@@ -197,7 +213,14 @@ async function* streamTextPartsToLlmChunks(
           'output' in part
             ? (part as { output?: unknown }).output
             : (part as { input?: unknown }).input;
-        yield { type: 'tool', name: toolName, argsJson };
+        yield {
+          type: 'tool',
+          name: toolName,
+          argsJson,
+          toolName,
+          arguments: argsJson,
+          payload: argsJson,
+        };
         continue;
       }
 
@@ -686,11 +709,11 @@ export class LlmRouter implements LlmClient {
         tenantId: options?.tenantId,
         userId: options?.userId,
         task: options?.task,
-        mode: requestedMode,
+        mode: requestedMode ?? effectiveMode,
         effectiveMode,
       },
       async sanitized => {
-        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+        const payload = sanitized.request as {
           messages: ChatMessage[];
           model: string;
           options?: typeof taskOptions;
@@ -733,11 +756,11 @@ export class LlmRouter implements LlmClient {
         tenantId: options?.tenantId,
         userId: options?.userId,
         task: options?.task,
-        mode: requestedMode,
+        mode: requestedMode ?? effectiveMode,
         effectiveMode,
       },
       async sanitized => {
-        const payload = (sanitized.sanitizedRequest || sanitized.request) as {
+        const payload = sanitized.request as {
           messages: ChatMessage[];
           model: string;
           options?: typeof taskOptions;
