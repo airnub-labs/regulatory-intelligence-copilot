@@ -47,7 +47,8 @@ interface ChatMessage {
   metadata?: ChatMetadata
 }
 
-type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read'
+type ShareAudience = 'private' | 'tenant' | 'public'
+type TenantAccess = 'view' | 'edit'
 type AuthorizationModel = 'supabase_rbac' | 'openfga'
 
 interface ConversationSummary {
@@ -55,7 +56,9 @@ interface ConversationSummary {
   title?: string | null
   createdAt: string
   lastMessageAt?: string | null
-  sharingMode: SharingMode
+  shareAudience: ShareAudience
+  tenantAccess: TenantAccess
+  isShared: boolean
   authorizationModel?: AuthorizationModel
 }
 
@@ -113,7 +116,7 @@ const quickPrompts = [
   },
 ]
 
-const DEMO_USER_ID = 'demo-user'
+const DEMO_USER_ID = '00000000-0000-0000-0000-00000000000a'
 
 const DEFAULT_PERSONA: UserProfile['personaType'] = 'single-director-ie'
 
@@ -125,7 +128,9 @@ export default function Home() {
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
-  const [sharingMode, setSharingMode] = useState<SharingMode>('private')
+  const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
+  const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
+  const [isShared, setIsShared] = useState(false)
   const [authorizationModel, setAuthorizationModel] = useState<AuthorizationModel>('supabase_rbac')
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
@@ -161,7 +166,9 @@ export default function Home() {
     setMessages(loadedMessages)
     setConversationId(id)
     conversationIdRef.current = id
-    setSharingMode((payload.conversation?.sharingMode as SharingMode | undefined) ?? 'private')
+    setShareAudience((payload.conversation?.shareAudience as ShareAudience | undefined) ?? 'private')
+    setTenantAccess((payload.conversation?.tenantAccess as TenantAccess | undefined) ?? 'edit')
+    setIsShared(Boolean(payload.conversation?.isShared))
     setAuthorizationModel((payload.conversation?.authorizationModel as AuthorizationModel | undefined) ?? 'supabase_rbac')
     if (payload.conversation?.personaId) {
       setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
@@ -218,8 +225,14 @@ export default function Home() {
               setConversationId((parsedData as any).conversationId)
               conversationIdRef.current = (parsedData as any).conversationId
             }
-            if ((parsedData as any)?.sharingMode) {
-              setSharingMode((parsedData as any).sharingMode as SharingMode)
+            if ((parsedData as any)?.shareAudience) {
+              setShareAudience((parsedData as any).shareAudience as ShareAudience)
+            }
+            if ((parsedData as any)?.tenantAccess) {
+              setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
+            }
+            if ((parsedData as any)?.isShared !== undefined) {
+              setIsShared(Boolean((parsedData as any).isShared))
             }
             if ((parsedData as any)?.authorizationModel) {
               setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
@@ -281,8 +294,14 @@ export default function Home() {
               setConversationId((parsedData as any).conversationId)
               conversationIdRef.current = (parsedData as any).conversationId
             }
-            if ((parsedData as any)?.sharingMode) {
-              setSharingMode((parsedData as any).sharingMode as SharingMode)
+            if ((parsedData as any)?.shareAudience) {
+              setShareAudience((parsedData as any).shareAudience as ShareAudience)
+            }
+            if ((parsedData as any)?.tenantAccess) {
+              setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
+            }
+            if ((parsedData as any)?.isShared !== undefined) {
+              setIsShared(Boolean((parsedData as any).isShared))
             }
             if ((parsedData as any)?.authorizationModel) {
               setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
@@ -351,7 +370,8 @@ export default function Home() {
           profile,
           scenarioHint,
           userId: DEMO_USER_ID,
-          sharingMode,
+          shareAudience,
+          tenantAccess,
           authorizationModel,
         }),
         signal: controller.signal,
@@ -387,14 +407,17 @@ export default function Home() {
 
   const toggleSharing = async () => {
     if (!conversationIdRef.current) return
-    const next: SharingMode = sharingMode === 'private' ? 'tenant_write' : 'private'
+    const nextAudience: ShareAudience = shareAudience === 'private' ? 'tenant' : 'private'
+    const nextTenantAccess: TenantAccess = nextAudience === 'tenant' ? 'edit' : tenantAccess
     const response = await fetch(`/api/conversations/${conversationIdRef.current}?userId=${DEMO_USER_ID}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sharingMode: next }),
+      body: JSON.stringify({ shareAudience: nextAudience, tenantAccess: nextTenantAccess }),
     })
     if (response.ok) {
-      setSharingMode(next)
+      setShareAudience(nextAudience)
+      setTenantAccess(nextTenantAccess)
+      setIsShared(nextAudience !== 'private')
       loadConversations()
     }
   }
@@ -625,16 +648,16 @@ export default function Home() {
                 {conversationId && (
                   <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
                     <span className="text-muted-foreground">
-                      {sharingMode === 'private'
+                      {!isShared
                         ? 'Private to you'
-                        : sharingMode === 'public_read'
+                        : shareAudience === 'public'
                           ? 'Public read-only'
-                          : sharingMode === 'tenant_read'
+                          : tenantAccess === 'view'
                             ? 'Tenant shared (read-only)'
-                            : 'Tenant shared (read/write)'}
+                            : 'Tenant shared (edit)'}
                     </span>
                     <Button size="sm" variant="ghost" onClick={toggleSharing}>
-                      {sharingMode === 'private' ? 'Share with tenant' : 'Make private'}
+                      {shareAudience === 'private' ? 'Share with tenant' : 'Make private'}
                     </Button>
                   </div>
                 )}
@@ -652,11 +675,11 @@ export default function Home() {
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
-                        {conv.sharingMode !== 'private' && (
+                        {conv.isShared && (
                           <Badge variant="secondary">
-                            {conv.sharingMode === 'public_read'
+                            {conv.shareAudience === 'public'
                               ? 'Public read-only'
-                              : conv.sharingMode === 'tenant_read'
+                              : conv.tenantAccess === 'view'
                                 ? 'Tenant read-only'
                                 : 'Tenant shared'}
                           </Badge>

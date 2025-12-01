@@ -222,8 +222,8 @@ interface ConversationContextStore {
 - Schema and seed data added; production Supabase wiring and RLS are pending.
 - Event hub implemented as an in-process map suitable for single-instance dev. Production fan-out will require Redis/pub-sub or a managed equivalent.
 - Provides the basis for a "show your workings" experience in the graph view.
-- Sharing is modelled via a `sharing_mode` column (private, tenant read/write, public read); the public view exposes a derived `is_shared` field (`sharing_mode <> 'private'`) so legacy consumers remain compatible without storing redundant state.
-  - An `authorization_model` + `authorization_spec` envelope now sits beside `sharing_mode` so we can plug in OpenFGA (or similar Zanzibar-style ReBAC) later while keeping Supabase as the system of record and the UI/API contracts stable. OpenFGA adoption is planned for the next milestone to add principal-aware permissions (owner/tenant read/write/public read) without further schema churn.
+- Sharing is modelled via `share_audience` (private/tenant/public) and `tenant_access` (view/edit); the public view exposes a derived `is_shared` field (`share_audience <> 'private'`) rather than storing redundant booleans.
+  - An `authorization_model` + `authorization_spec` envelope sits beside these columns so we can plug in OpenFGA (or similar Zanzibar-style ReBAC) later while keeping Supabase as the system of record and the UI/API contracts stable. When `authorization_model = 'openfga'` but the external service is unavailable, the effective audience **falls back to private/owner-only** until ReBAC checks succeed again.
 
 ### D-040 – ReBAC trajectory (OpenFGA-ready)
 

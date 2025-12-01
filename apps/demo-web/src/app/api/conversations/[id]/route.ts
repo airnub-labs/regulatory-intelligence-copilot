@@ -33,12 +33,17 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
   }
   const body = await request.json().catch(() => null);
-  const sharingMode = body?.sharingMode;
+  const shareAudience = body?.shareAudience;
+  const tenantAccess = body?.tenantAccess;
   const authorizationModel = body?.authorizationModel;
-  const allowedModes = ['private', 'tenant_read', 'tenant_write', 'public_read'];
+  const allowedAudiences = ['private', 'tenant', 'public'];
+  const allowedTenantAccess = ['view', 'edit'];
   const allowedAuthorizationModels = ['supabase_rbac', 'openfga'];
-  if (sharingMode && !allowedModes.includes(sharingMode)) {
-    return NextResponse.json({ error: 'Invalid sharingMode' }, { status: 400 });
+  if (shareAudience && !allowedAudiences.includes(shareAudience)) {
+    return NextResponse.json({ error: 'Invalid shareAudience' }, { status: 400 });
+  }
+  if (tenantAccess && !allowedTenantAccess.includes(tenantAccess)) {
+    return NextResponse.json({ error: 'Invalid tenantAccess' }, { status: 400 });
   }
   if (authorizationModel && !allowedAuthorizationModels.includes(authorizationModel)) {
     return NextResponse.json({ error: 'Invalid authorizationModel' }, { status: 400 });
@@ -48,7 +53,8 @@ export async function PATCH(request: NextRequest, context: { params: { id: strin
       tenantId,
       conversationId,
       userId,
-      sharingMode,
+      shareAudience,
+      tenantAccess,
       authorizationModel,
     });
   } catch (error) {

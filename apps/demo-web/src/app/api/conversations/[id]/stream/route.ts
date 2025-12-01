@@ -39,7 +39,8 @@ export async function GET(request: NextRequest, context: { params: { id: string 
       // provide immediate metadata payload with conversation id and sharing state
       subscriber.send('metadata', {
         conversationId,
-        sharingMode: conversation.sharingMode,
+        shareAudience: conversation.shareAudience,
+        tenantAccess: conversation.tenantAccess,
         isShared: conversation.isShared,
         authorizationModel: conversation.authorizationModel,
         authorizationSpec: conversation.authorizationSpec,

@@ -24,6 +24,8 @@ import {
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   type ConversationStore,
+  type ShareAudience,
+  type TenantAccess,
   type AuthorizationModel,
   type AuthorizationSpec,
 } from './conversationStores.js';
@@ -278,7 +280,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         profile,
         conversationId: requestConversationId,
         userId,
-        sharingMode,
+        shareAudience,
+        tenantAccess,
         authorizationModel,
         authorizationSpec,
       } = body;
@@ -308,7 +311,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           userId,
           personaId: profile?.personaType,
           jurisdictions: profile?.jurisdictions,
-          sharingMode: sharingMode,
+          shareAudience: shareAudience as ShareAudience | undefined,
+          tenantAccess: tenantAccess as TenantAccess | undefined,
           authorizationModel: authorizationModel as AuthorizationModel | undefined,
           authorizationSpec: authorizationSpec as AuthorizationSpec | undefined,
         });
@@ -365,7 +369,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
             conversationId,
-            sharingMode: conversationRecord.sharingMode,
+            shareAudience: conversationRecord.shareAudience,
+            tenantAccess: conversationRecord.tenantAccess,
             isShared: conversationRecord.isShared,
             authorizationModel: conversationRecord.authorizationModel,
             authorizationSpec: conversationRecord.authorizationSpec,
@@ -395,7 +400,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   ...metadata,
                   authorizationModel: conversationRecord.authorizationModel,
                   authorizationSpec: conversationRecord.authorizationSpec,
-                  sharingMode: conversationRecord.sharingMode,
+                  shareAudience: conversationRecord.shareAudience,
+                  tenantAccess: conversationRecord.tenantAccess,
                   isShared: conversationRecord.isShared,
                 });
               } else if (chunk.type === 'text' && chunk.delta) {
@@ -478,7 +484,8 @@ export {
   InMemoryConversationContextStore,
   ConversationEventHub,
   type ConversationStore,
-  type SharingMode,
+  type ShareAudience,
+  type TenantAccess,
   type AuthorizationModel,
   type AuthorizationSpec,
 };

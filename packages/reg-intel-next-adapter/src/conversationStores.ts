@@ -1,6 +1,12 @@
-import type { ConversationContext, ConversationContextStore, ConversationIdentity, ChatMessage } from '@reg-copilot/reg-intel-core';
+import type {
+  ConversationContext,
+  ConversationContextStore,
+  ConversationIdentity,
+  ChatMessage,
+} from '@reg-copilot/reg-intel-core';
 
-export type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read';
+export type ShareAudience = 'private' | 'tenant' | 'public';
+export type TenantAccess = 'view' | 'edit';
 export type AuthorizationModel = 'supabase_rbac' | 'openfga';
 
 export interface AuthorizationSpec {
@@ -8,7 +14,7 @@ export interface AuthorizationSpec {
   storeId?: string | null;
   authorizationModelId?: string | null;
   tupleSetId?: string | null;
-  fallbackSharingMode?: SharingMode;
+  fallbackShareAudience?: ShareAudience;
   displayName?: string | null;
 }
 
@@ -16,7 +22,8 @@ export interface ConversationRecord {
   id: string;
   tenantId: string;
   userId?: string | null;
-  sharingMode: SharingMode;
+  shareAudience: ShareAudience;
+  tenantAccess: TenantAccess;
   isShared: boolean;
   authorizationModel: AuthorizationModel;
   authorizationSpec?: AuthorizationSpec | null;
@@ -42,7 +49,8 @@ export interface ConversationStore {
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
-    sharingMode?: SharingMode;
+    shareAudience?: ShareAudience;
+    tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
   }): Promise<{ conversationId: string }>;
@@ -71,34 +79,40 @@ export interface ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
-    sharingMode?: SharingMode;
+    shareAudience?: ShareAudience;
+    tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
   }): Promise<void>;
 }
 
-function resolveSharingMode(input: { sharingMode?: SharingMode }): SharingMode {
-  if (input.sharingMode) return input.sharingMode;
+function resolveShareAudience(input: { shareAudience?: ShareAudience }): ShareAudience {
+  if (input.shareAudience) return input.shareAudience;
   return 'private';
 }
 
-function effectiveSharingMode(record: ConversationRecord) {
-  if (record.authorizationModel === 'supabase_rbac') return record.sharingMode;
-  return record.authorizationSpec?.fallbackSharingMode ?? record.sharingMode;
+function resolveTenantAccess(input: { tenantAccess?: TenantAccess }) {
+  if (input.tenantAccess) return input.tenantAccess;
+  return 'view';
+}
+
+function effectiveShareAudience(record: ConversationRecord) {
+  if (record.authorizationModel === 'supabase_rbac') return record.shareAudience;
+  return record.authorizationSpec?.fallbackShareAudience ?? 'private';
 }
 
 function canRead(record: ConversationRecord, userId?: string | null) {
-  const mode = effectiveSharingMode(record);
-  if (mode === 'public_read') return true;
-  if (mode === 'tenant_read' || mode === 'tenant_write') return true;
+  const audience = effectiveShareAudience(record);
+  if (audience === 'public') return true;
+  if (audience === 'tenant') return true;
   if (!record.userId) return true;
   return Boolean(userId && record.userId === userId);
 }
 
 function canWrite(record: ConversationRecord, userId?: string | null, role?: 'user' | 'assistant' | 'system') {
-  const mode = effectiveSharingMode(record);
+  const audience = effectiveShareAudience(record);
   if (role === 'assistant' || role === 'system') return true;
-  if (mode === 'tenant_write') return Boolean(userId);
+  if (audience === 'tenant' && record.tenantAccess === 'edit') return Boolean(userId);
   if (!record.userId) return true;
   return Boolean(userId && record.userId === userId);
 }
@@ -113,25 +127,28 @@ export class InMemoryConversationStore implements ConversationStore {
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
-    sharingMode?: SharingMode;
+    shareAudience?: ShareAudience;
+    tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
   }): Promise<{ conversationId: string }> {
     const id = crypto.randomUUID();
     const now = new Date();
-    const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode });
+    const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
+    const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
-    const effectiveMode =
+    const effectiveAudience =
       authorizationModel === 'supabase_rbac'
-        ? sharingMode
-        : input.authorizationSpec?.fallbackSharingMode ?? sharingMode;
+        ? shareAudience
+        : input.authorizationSpec?.fallbackShareAudience ?? 'private';
 
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
       userId: input.userId,
-      sharingMode,
-      isShared: effectiveMode !== 'private',
+      shareAudience,
+      tenantAccess,
+      isShared: effectiveAudience !== 'private',
       authorizationModel,
       authorizationSpec: input.authorizationSpec,
       personaId: input.personaId ?? null,
@@ -231,7 +248,8 @@ export class InMemoryConversationStore implements ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
-    sharingMode?: SharingMode;
+    shareAudience?: ShareAudience;
+    tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
   }): Promise<void> {
@@ -243,15 +261,17 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!isOwner) {
       throw new Error('User not authorised to update conversation');
     }
-    const sharingMode = input.sharingMode ?? record.sharingMode;
+    const shareAudience = input.shareAudience ?? record.shareAudience;
+    const tenantAccess = input.tenantAccess ?? record.tenantAccess;
     const authorizationModel = input.authorizationModel ?? record.authorizationModel;
     const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
-    const effectiveMode =
-      authorizationModel === 'supabase_rbac' ? sharingMode : authorizationSpec?.fallbackSharingMode ?? sharingMode;
+    const effectiveAudience =
+      authorizationModel === 'supabase_rbac' ? shareAudience : authorizationSpec?.fallbackShareAudience ?? 'private';
     this.conversations.set(input.conversationId, {
       ...record,
-      sharingMode,
-      isShared: effectiveMode !== 'private',
+      shareAudience,
+      tenantAccess,
+      isShared: effectiveAudience !== 'private',
       authorizationModel,
       authorizationSpec,
       updatedAt: new Date(),
