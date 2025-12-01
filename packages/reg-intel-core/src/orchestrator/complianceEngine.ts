@@ -124,6 +124,12 @@ export interface CapturedConcept {
   label: string;
   type?: string;
   jurisdiction?: string;
+  domain?: string;
+  kind?: string;
+  prefLabel?: string;
+  altLabels?: string[];
+  definition?: string;
+  sourceUrls?: string[];
   canonicalId?: string;
   nodeId?: string;
 }
@@ -159,6 +165,7 @@ interface ToolStreamChunk extends RouterStreamChunk {
   type: 'tool';
   name?: string;
   toolName?: string;
+  argsJson?: unknown;
   arguments?: unknown;
   payload?: unknown;
 }
@@ -268,6 +275,7 @@ export class ComplianceEngine {
       return payload as CapturedConcept[];
     }
 
+    console.warn('Unrecognized capture_concepts payload shape');
     return [];
   }
 
@@ -277,7 +285,9 @@ export class ComplianceEngine {
       return [];
     }
 
-    const concepts = this.parseCapturedConcepts(chunk.arguments ?? chunk.payload);
+    const concepts = this.parseCapturedConcepts(
+      chunk.argsJson ?? chunk.arguments ?? chunk.payload
+    );
     if (!concepts.length) {
       return [];
     }
@@ -339,7 +349,7 @@ export class ComplianceEngine {
         }
         return { content };
       },
-      streamChat: async (request: LlmChatRequest) =>
+      streamChat: (request: LlmChatRequest) =>
         this.routeThroughRouter(request, conceptNodeIds, options),
     };
   }
