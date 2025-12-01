@@ -150,11 +150,23 @@ export interface AgentResult {
 /**
  * Streaming chunk from LLM
  */
-export interface LlmStreamChunk {
-  type: 'text' | 'error' | 'done';
-  delta?: string;
-  error?: Error;
-}
+export type LlmStreamChunk =
+  | { type: 'text'; delta: string }
+  | {
+    type: 'tool';
+    name?: string;
+    toolName?: string;
+    argsJson?: unknown;
+    arguments?: unknown;
+    payload?: unknown;
+  }
+  | { type: 'error'; error: Error }
+  | {
+    type: 'done';
+    followUps?: string[];
+    referencedNodes?: string[];
+    disclaimer?: string;
+  };
 
 /**
  * Streaming result from an agent

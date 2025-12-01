@@ -36,6 +36,19 @@ import {
 } from '@reg-copilot/reg-intel-prompts';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 
+export type {
+  GraphClient,
+  TimelineEngine,
+  EgressGuard,
+  LlmClient,
+  ChatMessage,
+  UserProfile,
+  AgentContext,
+  AgentInput,
+  LlmStreamChunk,
+  LlmChatRequest,
+} from '../types.js';
+
 /**
  * Request to the compliance engine
  */
@@ -161,14 +174,14 @@ export interface ConversationContextStore {
 /**
  * LLM tool stream chunk (from router providers)
  */
-interface ToolStreamChunk extends RouterStreamChunk {
+type ToolStreamChunk = RouterStreamChunk & {
   type: 'tool';
   name?: string;
   toolName?: string;
   argsJson?: unknown;
   arguments?: unknown;
   payload?: unknown;
-}
+};
 
 type RouterChunk = RouterStreamChunk | ToolStreamChunk;
 
@@ -413,13 +426,13 @@ export class ComplianceEngine {
                     ? ((row as Record<string, unknown>).title as string)
                     : 'Unknown';
 
-            const typeCandidate =
-              typeof row.type === 'string'
-                ? row.type
-                : Array.isArray((row as Record<string, unknown>).labels) &&
-                    typeof (row as Record<string, unknown>).labels?.[0] === 'string'
-                  ? ((row as Record<string, unknown>).labels?.[0] as string)
-                  : 'Concept';
+              const labels = (row as { labels?: unknown }).labels;
+              const typeCandidate =
+                typeof row.type === 'string'
+                  ? row.type
+                  : Array.isArray(labels) && typeof labels[0] === 'string'
+                    ? (labels[0] as string)
+                    : 'Concept';
 
             return {
               id,
