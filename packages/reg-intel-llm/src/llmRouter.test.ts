@@ -256,4 +256,88 @@ describe('LlmRouter egress resolution', () => {
     const providerCall = providers.mock.streamChat!.mock.calls[0];
     expect(providerCall[0][0].content).toBe('Hi');
   });
+
+  it('uses a tenant-configured local model when remote egress is disabled', async () => {
+    const providersWithLocal: LlmProviderRegistry = {
+      mock: {
+        chat: vi.fn().mockResolvedValue('remote-should-not-be-used'),
+      },
+      local: {
+        chat: vi.fn().mockResolvedValue('ok'),
+      },
+    } as any;
+
+    const policy: TenantLlmPolicy = {
+      tenantId: 'tenant-1',
+      defaultModel: 'gpt-4',
+      defaultProvider: 'openai',
+      allowRemoteEgress: false,
+      tasks: [
+        {
+          task: 'main-chat',
+          provider: 'local',
+          model: 'llama-3-local',
+        },
+      ],
+    };
+
+    const egressClient = new MockEgressClient('enforce');
+    const router = new LlmRouter(
+      providersWithLocal,
+      new MockPolicyStore(policy) as any,
+      'local',
+      'llama-3-fallback',
+      egressClient as any
+    );
+
+    await router.chat(messages, { tenantId: 'tenant-1', task: 'main-chat' });
+
+    expect(providersWithLocal.local.chat).toHaveBeenCalledTimes(1);
+    expect(providersWithLocal.mock.chat).not.toHaveBeenCalled();
+    const providerCall = providersWithLocal.local.chat.mock.calls[0];
+    expect(providerCall[1]).toBe('llama-3-local');
+  });
+
+  it('throws a clear error when remote egress is disabled and no local model exists', async () => {
+    const providersWithLocal: LlmProviderRegistry = {
+      mock: {
+        chat: vi.fn().mockResolvedValue('remote-should-not-be-used'),
+      },
+      local: {
+        chat: vi.fn().mockResolvedValue('ok'),
+      },
+    } as any;
+
+    const policy: TenantLlmPolicy = {
+      tenantId: 'tenant-1',
+      defaultModel: 'gpt-4',
+      defaultProvider: 'openai',
+      allowRemoteEgress: false,
+      tasks: [
+        {
+          task: 'main-chat',
+          provider: 'openai',
+          model: 'gpt-4o',
+        },
+      ],
+    };
+
+    const egressClient = new MockEgressClient('enforce');
+    const router = new LlmRouter(
+      providersWithLocal,
+      new MockPolicyStore(policy) as any,
+      'local',
+      'llama-3-fallback',
+      egressClient as any
+    );
+
+    await expect(
+      router.chat(messages, { tenantId: 'tenant-1', task: 'main-chat' })
+    ).rejects.toThrow(
+      'Remote egress is disabled for this tenant but no local model is configured for the requested task'
+    );
+
+    expect(providersWithLocal.local.chat).not.toHaveBeenCalled();
+    expect(providersWithLocal.mock.chat).not.toHaveBeenCalled();
+  });
 });
