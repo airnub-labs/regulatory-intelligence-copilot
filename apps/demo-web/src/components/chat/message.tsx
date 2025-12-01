@@ -173,7 +173,7 @@ export function Message({ role, content, className }: MessageProps) {
                 : "bg-muted text-foreground border border-border"
             )}
           >
-            <MessageContent content={content} />
+            <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
           </div>
         </div>
       {isUser && (
@@ -189,11 +189,17 @@ export function Message({ role, content, className }: MessageProps) {
 
 interface MessageContentProps {
   content: string
+  tone: "user" | "assistant"
 }
 
-export function MessageContent({ content }: MessageContentProps) {
+export function MessageContent({ content, tone }: MessageContentProps) {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
+    <div
+      className={cn(
+        "prose prose-sm dark:prose-invert max-w-none",
+        tone === "assistant" ? "text-foreground" : "text-primary-foreground"
+      )}
+    >
       <div className="text-sm leading-relaxed">{renderMarkdown(content)}</div>
     </div>
   )
