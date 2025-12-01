@@ -64,6 +64,41 @@ export interface EgressClientConfig {
   preserveOriginalRequest?: boolean;
 }
 
+function areRequestsEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) {
+    return true;
+  }
+
+  if (typeof a !== typeof b) {
+    return false;
+  }
+
+  if (a === null || b === null) {
+    return a === b;
+  }
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, index) => areRequestsEqual(item, b[index]));
+  }
+
+  if (typeof a === 'object' && typeof b === 'object') {
+    const aEntries = Object.entries(a as Record<string, unknown>);
+    const bEntries = Object.entries(b as Record<string, unknown>);
+
+    if (aEntries.length !== bEntries.length) {
+      return false;
+    }
+
+    return aEntries.every(([key, value]) =>
+      Object.prototype.hasOwnProperty.call(b as Record<string, unknown>, key)
+        ? areRequestsEqual(value, (b as Record<string, unknown>)[key])
+        : false
+    );
+  }
+
+  return false;
+}
+
 function providerAllowlistAspect(
   allowed: string[] | undefined
 ): EgressAspect {
@@ -103,10 +138,11 @@ function sanitizeRequestAspect(
 
     const originalRequest = ctx.request;
     const sanitizedRequest = sanitizeObjectForEgress(originalRequest);
+    const redactionApplied = !areRequestsEqual(originalRequest, sanitizedRequest);
 
     const metadata = {
       ...ctx.metadata,
-      redactionApplied: sanitizedRequest !== originalRequest,
+      redactionApplied,
       redactionReportOnly: mode === 'report-only',
     };
 
@@ -128,7 +164,7 @@ function sanitizeRequestAspect(
         baseCtx.originalRequest = originalRequest;
       }
 
-      if (sanitizedRequest !== originalRequest) {
+      if (redactionApplied) {
         console.warn('[Egress][report-only] PII sanitiser changed payload', {
           tenantId: ctx.tenantId,
           task: ctx.task,
