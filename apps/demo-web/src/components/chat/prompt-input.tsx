@@ -18,7 +18,7 @@ export function PromptInput({
   value,
   onChange,
   onSubmit,
-  placeholder = "Ask anything about the regulatory graph...",
+  placeholder = "Ask about tax, welfare, pensions, or cross-border rules. The copilot will query the regulatory graph and timeline engine for you.",
   disabled = false,
   isLoading = false,
   className,
@@ -55,9 +55,9 @@ export function PromptInput({
         />
         <div className="flex items-center justify-between gap-3 border-t bg-card/70 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="rounded-full bg-primary/10 px-2 py-1 font-semibold text-primary">Vercel AI Elements shell</span>
-            <span className="rounded-full bg-muted px-2 py-1">Streaming SSE</span>
-            <span className="rounded-full bg-muted px-2 py-1">Grounded responses</span>
+            <span className="rounded-full bg-muted px-2 py-1" title="Responses streamed from the Compliance Engine via SSE.">Streaming SSE</span>
+            <span className="rounded-full bg-muted px-2 py-1" title="Answers are generated via the Compliance Engine, which queries the regulatory graph and timeline engine.">Graph-grounded</span>
+            <span className="rounded-full bg-muted px-2 py-1" title="Outbound LLM calls are sanitised and policy-checked by the egress guard.">Egress-guarded</span>
           </div>
           <Button
             type="submit"

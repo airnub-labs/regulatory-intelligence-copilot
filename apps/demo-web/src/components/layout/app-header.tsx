@@ -14,13 +14,15 @@ interface HeaderAction {
 
 interface AppHeaderProps {
   subtitle?: string
+  subtext?: string
   primaryAction?: HeaderAction
   secondaryAction?: HeaderAction
   className?: string
 }
 
 export function AppHeader({
-  subtitle = "Graph-powered regulatory research for tax, welfare, pensions, and EU rules",
+  subtitle = "Graph-powered research over tax, welfare, pensions, and EU rules using a live regulatory knowledge graph.",
+  subtext = "Answers are grounded in a Memgraph regulatory graph, a timeline engine for law-in-time, and scenario-aware agents.",
   primaryAction = { label: "View Graph", href: "/graph" },
   secondaryAction = { label: "Product docs", href: "https://github.com/saasbabs/regulatory-intelligence-copilot" },
   className,
@@ -43,17 +45,18 @@ export function AppHeader({
               <Badge variant="secondary" className="rounded-full">Preview</Badge>
             </div>
             <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p className="text-xs text-muted-foreground">{subtext}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {secondaryAction && (
-            <Button asChild variant="ghost" className="hidden sm:inline-flex">
+            <Button asChild variant="ghost" className="hidden sm:inline-flex" title="Open architecture, graph schema, and guardrail specs.">
               <Link href={secondaryAction.href}>{secondaryAction.label}</Link>
             </Button>
           )}
           {primaryAction && (
-            <Button asChild variant={primaryAction.variant ?? "default"}>
+            <Button asChild variant={primaryAction.variant ?? "default"} title="Open the graph UI for this conversation to inspect active nodes.">
               <Link href={primaryAction.href}>{primaryAction.label}</Link>
             </Button>
           )}
