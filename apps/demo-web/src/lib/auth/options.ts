@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const cookieStore = cookies()
+        const cookieStore = await cookies()
         const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
           cookies: {
             getAll() {
