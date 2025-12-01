@@ -232,6 +232,14 @@ This starts all Supabase services:
 
 **First run takes 5-10 minutes** to download Docker images.
 
+On the very first start you will also see a **notice** similar to:
+
+```
+NOTICE: Seeded demo user with id <user-id> and tenant id <tenant-id>
+```
+
+Copy these IDs into the **repository root** `.env.local` (the demo web app reads from the root env file; you do *not* need a separate `apps/demo-web/.env.local`).
+
 ### Access Supabase Studio
 
 Open your browser to:
