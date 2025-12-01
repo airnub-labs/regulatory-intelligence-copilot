@@ -226,6 +226,9 @@ The streaming model in v0.6 is:
 - **Error chunks (`type: 'error'`)**
   - Abort the stream and emit a safe error message to the UI.
 
+- **Done chunks (`type: 'done'`)**
+  - Router end-of-stream marker; Compliance Engine uses this to emit its own final `done` chunk with merged referenced nodes, disclaimer, and follow-ups.
+
 This ensures:
 
 - Streaming UX is preserved.
