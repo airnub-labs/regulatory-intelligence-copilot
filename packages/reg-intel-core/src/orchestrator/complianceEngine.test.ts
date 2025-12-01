@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ComplianceEngine } from './complianceEngine.js';
 import type {
@@ -13,6 +13,7 @@ import type {
 import type { GraphWriteService } from '@reg-copilot/reg-intel-graph';
 import type { LlmRouter, LlmStreamChunk } from '@reg-copilot/reg-intel-llm';
 import type { ChatMessage } from '../types.js';
+import { GlobalRegulatoryComplianceAgent } from '../agents/GlobalRegulatoryComplianceAgent.js';
 
 describe('ComplianceEngine streaming', () => {
   const graphClient: GraphClient = {
@@ -88,6 +89,42 @@ describe('ComplianceEngine streaming', () => {
     } as unknown as LlmRouter;
   }
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    vi.spyOn(GlobalRegulatoryComplianceAgent, 'handle').mockImplementation(
+      async (_input, ctx) => {
+        const llmResponse = await ctx.llmClient.chat({ messages: [] });
+
+        return {
+          agentId: 'test-agent',
+          answer: llmResponse.content,
+          referencedNodes: [
+            { id: 'rule-1', label: 'Rule 1', type: 'Benefit' },
+          ],
+          jurisdictions: ['IE'],
+          uncertaintyLevel: 'medium',
+          followUps: ['follow-up-1'],
+        };
+      }
+    );
+
+    vi.spyOn(GlobalRegulatoryComplianceAgent, 'handleStream').mockImplementation(
+      async (_input, ctx) => {
+        return {
+          agentId: 'test-agent',
+          referencedNodes: [
+            { id: 'rule-1', label: 'Rule 1', type: 'Benefit' },
+          ],
+          jurisdictions: ['IE'],
+          uncertaintyLevel: 'medium',
+          followUps: ['follow-up-1'],
+          stream: ctx.llmClient.streamChat!({ messages: [] })!,
+        };
+      }
+    );
+  });
+
   it('processes router tool chunks via argsJson and updates context', async () => {
     const llmRouter = createRouter();
 
@@ -135,5 +172,55 @@ describe('ComplianceEngine streaming', () => {
       { tenantId: 'tenant-1', conversationId: 'conversation-1' },
       expect.arrayContaining(['concept-node-1', 'rule-1'])
     );
+  });
+
+  it('parses captured concepts from multiple payload shapes', () => {
+    const engine = new ComplianceEngine({
+      llmRouter: createRouter(),
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    const parse = (engine as any).parseCapturedConcepts.bind(engine);
+
+    expect(parse(JSON.stringify(conceptPayload))).toHaveLength(1);
+    expect(parse({ concepts: conceptPayload.concepts })).toHaveLength(1);
+    expect(parse(conceptPayload.concepts)).toHaveLength(1);
+  });
+
+  it('merges concept nodes into referenced nodes for non-streaming chat', async () => {
+    const llmRouter = createRouter();
+
+    const engine = new ComplianceEngine({
+      llmRouter,
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    const response = await engine.handleChat({
+      messages: [{ role: 'user', content: 'Tell me about VAT' }],
+      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+      tenantId: 'tenant-1',
+      conversationId: 'conversation-1',
+    });
+
+    expect(canonicalConceptHandler.resolveAndUpsert).toHaveBeenCalledWith(
+      conceptPayload.concepts,
+      graphWriteService
+    );
+
+    const referencedIds = response.referencedNodes.map(n => n.id);
+    expect(referencedIds).toContain('concept-node-1');
+    expect(response.agentUsed).toBe('test-agent');
   });
 });

@@ -288,7 +288,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
   - Static/deterministic checks (PII patterns, domain allowlists, etc.).
   - Optional LLM‑powered inspectors (egress guard helper agents).
 - Agents must be written assuming that egress may be **blocked, redacted, or downgraded** depending on tenant policy.
-- `LlmRouter` resolves an `effectiveMode` per call (global defaults → tenant policy → optional per-call override) but still executes on the sanitised payload in `enforce`/`report-only`; `off` is a deliberate, test-only wiring.
+- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override) but still executes on the sanitised payload in `enforce`/`report-only`; provider allowlisting runs in every mode and `off` is a deliberate, test-only wiring.
 
 ### 5.5 Concept Capture & Self‑Populating Graph
 
@@ -296,6 +296,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - Tool output is parsed into SKOS‑like concept objects and processed by:
   - A **canonical concept resolver** (graph‑only in v0.1), and
   - **GraphWriteService** for new or incomplete concepts.
+- Tool chunks arrive as `type: 'tool'` with `name: 'capture_concepts'` and structured args in `argsJson`; other tool names are ignored for concept capture.
 - Agents:
   - Must not implement their own concept extraction pipelines.
   - Should use clear terminology and cite jurisdictions to help concept capture.
