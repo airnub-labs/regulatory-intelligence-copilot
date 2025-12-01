@@ -13,7 +13,7 @@ The roadmap must stay aligned with the following documents:
 - `docs/architecture/architecture_v_0_6.md` – **current canonical architecture** (backend + UI + v0.6 concept capture & conversation context).
 - `docs/architecture/versions/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
 - `docs/architecture/versions/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
-- `docs/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
+- `docs/governance/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
 - `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` + `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
 - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
@@ -32,7 +32,7 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 
 ## Phase 0 – Fork, Clean‑Up & Baseline (v0.3 → v0.4)
 
-**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all docs/decisions/architecture are aligned.
+**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all docs/governance/decisions/architecture are aligned.
 
 **Status:** Mostly done; this phase should be closed soon.
 
@@ -40,7 +40,7 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 - [ ] Confirm fork and rename:
   - [ ] `rfc-refactor` → `regulatory-intelligence-copilot` (done at repo level, verify everywhere in docs).
 - [ ] Documentation alignment:
-  - [ ] Update `README.md` to reference `architecture_v_0_6.md`, `decisions_v_0_6.md`, `roadmap_v_0_6.md`.
+  - [ ] Update `README.md` to reference `architecture/architecture_v_0_6.md`, `governance/decisions/decisions_v_0_6.md`, `governance/roadmap/roadmap_v_0_6.md`.
   - [ ] Ensure old v0.1/v0.2/v0.3 docs are clearly marked as archived or superseded.
 - [ ] Legacy HTTP/RFC auditor cleanup:
   - [ ] Confirm HTTP probe runners & sample REST API are archived under `legacy/` or removed.

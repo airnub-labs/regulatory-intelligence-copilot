@@ -833,7 +833,7 @@ ANALYZE=true pnpm build
 
 - **Architecture Documentation**: `docs/architecture/versions/architecture_v_0_5.md`
 - **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
-- **Architecture Decisions**: `docs/decisions_v_0_5.md`
+- **Architecture Decisions**: `docs/governance/decisions/decisions_v_0_5.md`
 - **Graph Schema**: `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
 - **Agent Design**: `AGENTS.md`
 
@@ -861,6 +861,6 @@ Once your local environment is running:
 2. **Inspect the graph** – Use Memgraph Lab to explore the knowledge graph
 3. **Read the architecture docs** – Understand the system design
 4. **Add sample data** – Create test scenarios in the graph
-5. **Implement features** – Follow the roadmap in `docs/roadmap_v_0_4.md`
+5. **Implement features** – Follow the roadmap in `docs/governance/roadmap/roadmap_v_0_4.md`
 
 Happy developing! 🚀

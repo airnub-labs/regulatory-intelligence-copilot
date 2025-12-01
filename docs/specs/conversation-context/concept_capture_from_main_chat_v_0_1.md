@@ -4,7 +4,7 @@
 
 This document specifies how the **main chat task** in the Regulatory Intelligence Copilot captures regulatory concepts (VAT, VRT, benefits, rules, etc.) as **SKOS‑style metadata** and uses them to **self‑populate the shared rules graph** and **inform conversation context**, without breaking streaming UX.
 
-It assumes the architecture in `architecture_v_0_6.md` and the decisions in `decisions_v_0_6.md`.
+It assumes the architecture in `architecture_v_0_6.md` and the decisions in `docs/governance/decisions/decisions_v_0_6.md`.
 
 ---
 

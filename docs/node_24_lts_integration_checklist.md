@@ -12,12 +12,12 @@ This document tracks which specs/docs must explicitly assume **Node.js 24 LTS as
        - Modern **AsyncLocalStorage** for per-request context.
        - The built-in **fetch/HTTP client** for outbound calls where possible.
    
-   - `docs/decisions_v_0_2.md`
+   - `docs/governance/decisions/decisions_v_0_2.md`
      - Add a decision entry referencing `node_24_lts_rationale.md`, e.g.:
        - *D-00X: Node.js 24 LTS is the minimum supported runtime for all services, based on the rationale in `docs/node_24_lts_rationale.md`.*
 
 2. **Roadmap & migration**
-   - `docs/roadmap_v_0_2.md`
+   - `docs/governance/roadmap/roadmap_v_0_2.md`
      - Add tasks to:
        - Update **CI** to use Node 24 LTS in all workflows.
        - Update **devcontainers / Codespaces** to Node 24 LTS.

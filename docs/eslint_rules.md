@@ -6,7 +6,7 @@ This document describes the ESLint rules configured to enforce v0.4 architecture
 
 ## Graph Write Discipline
 
-Per `docs/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go through `GraphWriteService`.
+Per `docs/governance/decisions/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go through `GraphWriteService`.
 
 ### Rules
 
@@ -84,5 +84,5 @@ Planned rules:
 
 **See Also:**
 - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
-- `docs/decisions_v_0_4.md` (D-026, D-028)
+- `docs/governance/decisions/decisions_v_0_4.md` (D-026, D-028)
 - `docs/PHASE_1_FIXES.md`

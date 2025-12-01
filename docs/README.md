@@ -138,8 +138,8 @@ When implementing or changing something, try to:
 
 1. Identify which **spec(s)** apply (graph schema, timeline, scenario, conversation context, safety, etc.).
 2. Check the **architecture** doc to see where the change belongs (reg-intel-core vs reg-intel-graph vs reg-intel-llm vs reg-intel-prompts).
-3. Check **decisions_v_0_6** to ensure you’re not contradicting an existing ADR.
-4. Check the **roadmap_v_0_6** to see if the work is planned and what phase it’s in.
+3. Check **governance/decisions/decisions_v_0_6.md** to ensure you’re not contradicting an existing ADR.
+4. Check the **governance/roadmap/roadmap_v_0_6.md** to see if the work is planned and what phase it’s in.
 
 If you find gaps or contradictions, update the relevant spec/decision/roadmap rather than letting code drift away from the docs.
 

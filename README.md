@@ -96,7 +96,7 @@ If you’re new to the repo, start here:
   - `docs/architecture/README.md` – high‑level architecture overview for v0.6, with links to `architecture_v_0_6.md`, diagrams, graph schema, change detection, engines, and integration guides.
 
 - 🗺 **Roadmap & decisions**  
-  - `docs/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).  
+  - `docs/governance/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).  
   - `docs/governance/decisions/decisions_v_0_6.md` – architectural decision records (ADRs) and design rationale.
 
 - 🤖 **Agents & prompts**  

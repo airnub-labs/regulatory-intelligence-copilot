@@ -30,8 +30,8 @@ This architecture extends v0.4 and adds UI layer specifications. It sits on top 
 
 ### Project-Level Docs
 
-- `docs/decisions_v_0_4.md`
-- `docs/roadmap_v_0_4.md`
+- `docs/governance/decisions/decisions_v_0_4.md`
+- `docs/governance/roadmap/roadmap_v_0_4.md`
 - `docs/node_24_lts_rationale.md`
 
 ### UI Implementation Docs
@@ -701,7 +701,7 @@ Migrate gradually:
 
 - `apps/demo-web/UI_IMPLEMENTATION.md` - Detailed UI implementation guide
 - `docs/architecture_v_0_4.md` - Backend architecture (unchanged)
-- `docs/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
+- `docs/governance/decisions/decisions_v_0_5.md` - Architecture decision records (new in v0.5)
 - [Tailwind CSS v4 Documentation](https://tailwindcss.com/)
 - [shadcn/ui Documentation](https://ui.shadcn.com/)
 - [Radix UI Documentation](https://www.radix-ui.com/)

@@ -15,8 +15,8 @@
 > - `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
 > - `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
 > - `docs/specs/scenario_engine_v_0_1.md`  
-> - `docs/decisions/decisions_v_0_6.md`
-> - `docs/roadmap/roadmap_v_0_6.md`
+> - `docs/governance/decisions/decisions_v_0_6.md`
+> - `docs/governance/roadmap/roadmap_v_0_6.md`
 
 > **Purpose:** Define the *logical agents* in the Regulatory Intelligence Copilot and how they should behave under the v0.6 architecture. Implementation details (files, classes, wiring) must follow this specification.
 

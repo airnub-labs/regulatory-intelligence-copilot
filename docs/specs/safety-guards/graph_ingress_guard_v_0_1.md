@@ -443,7 +443,7 @@ Implementers of the GraphWriteService and ingress aspects must consult:
 - `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
 - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 - `docs/architecture_v_0_3.md`
-- `docs/decisions_v_0_3.md`
+- `docs/governance/decisions/decisions_v_0_3.md`
 
 before making changes that affect Memgraph writes or the ingress aspect chain.
 
