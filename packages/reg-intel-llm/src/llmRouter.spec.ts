@@ -1,14 +1,28 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ChatMessage } from './types.js';
-import { LlmRouter, type LlmProviderClient, type LlmPolicyStore, type TenantLlmPolicy } from './llmRouter.js';
+import {
+  LlmRouter,
+  type LlmCompletionOptions,
+  type LlmProviderClient,
+  type LlmPolicyStore,
+  type LlmStreamChunk,
+  type TenantLlmPolicy,
+} from './llmRouter.js';
 import type { EgressClient, EgressMode } from './egressClient.js';
 
 class StubProvider implements LlmProviderClient {
-  chat = vi.fn(async () => 'ok');
-  streamChat = vi.fn(async function* () {
-    yield { type: 'text', delta: 'hi' };
-    yield { type: 'done' };
+  chat = vi.fn<
+    [ChatMessage[], string, LlmCompletionOptions | undefined],
+    Promise<string>
+  >(async () => 'ok');
+
+  streamChat = vi.fn<
+    [ChatMessage[], string, LlmCompletionOptions | undefined],
+    AsyncIterable<LlmStreamChunk>
+  >(async function* () {
+    yield { type: 'text', delta: 'hi' } as const;
+    yield { type: 'done' } as const;
   });
 }
 
