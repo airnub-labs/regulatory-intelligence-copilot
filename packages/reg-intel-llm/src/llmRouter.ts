@@ -805,19 +805,30 @@ export class LlmRouter implements LlmClient {
         }
 
         provider = 'local';
-        if (taskPolicy) {
-          // Honor task-specific settings only if they stay on local provider
-          if (taskPolicy.provider === 'local') {
-            model = taskPolicy.model;
-            if (taskPolicy.temperature !== undefined) {
-              taskOptions.temperature = taskPolicy.temperature;
-            }
-            if (taskPolicy.maxTokens !== undefined) {
-              taskOptions.maxTokens = taskPolicy.maxTokens;
-            }
+        const localTaskPolicy =
+          task && taskPolicy?.provider === 'local'
+            ? taskPolicy
+            : task
+              ? policy.tasks.find(
+                  tenantTask =>
+                    tenantTask.task === task && tenantTask.provider === 'local'
+                )
+              : undefined;
+
+        if (localTaskPolicy) {
+          model = localTaskPolicy.model;
+          if (localTaskPolicy.temperature !== undefined) {
+            taskOptions.temperature = localTaskPolicy.temperature;
           }
-        } else {
+          if (localTaskPolicy.maxTokens !== undefined) {
+            taskOptions.maxTokens = localTaskPolicy.maxTokens;
+          }
+        } else if (policy.defaultProvider === 'local') {
           model = policy.defaultModel;
+        } else {
+          throw new LlmError(
+            'Remote egress is disabled for this tenant but no local model is configured for the requested task'
+          );
         }
       } else {
         // Remote egress allowed - use task policy if present, else fall back to defaults
