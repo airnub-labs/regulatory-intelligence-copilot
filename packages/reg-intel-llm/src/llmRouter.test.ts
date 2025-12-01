@@ -168,7 +168,7 @@ describe('LlmRouter egress resolution', () => {
     await router.chat(messages, { tenantId: 'tenant-1' });
 
     const ctx = egressClient.guardAndExecute.mock.calls[0][0];
-    expect(ctx.mode).toBe('enforce');
+    expect(ctx.mode).toBe('off');
     expect(ctx.effectiveMode).toBe('enforce');
   });
 

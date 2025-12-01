@@ -144,4 +144,32 @@ describe('LlmRouter egress resolution', () => {
     expect(ctx.effectiveMode).toBe('report-only');
     expect(ctx.mode).toBe('report-only');
   });
+
+  it('allows per-user allowOffMode to enable off even when tenant forbids it', async () => {
+    const egress = new StubEgressClient('enforce');
+    const router = createRouter(
+      {
+        tenantId: 'tenant-1',
+        defaultModel: 'gpt-test',
+        defaultProvider: 'openai',
+        allowRemoteEgress: true,
+        tasks: [],
+        egressMode: 'enforce',
+        allowOffMode: false,
+        userPolicies: {
+          'user-123': { egressMode: 'off', allowOffMode: true },
+        },
+      },
+      egress as unknown as EgressClient
+    );
+
+    await router.chat(messages, {
+      tenantId: 'tenant-1',
+      userId: 'user-123',
+    });
+
+    const ctx = egress.guardAndExecute.mock.calls[0][0];
+    expect(ctx.effectiveMode).toBe('off');
+    expect(ctx.mode).toBe('off');
+  });
 });

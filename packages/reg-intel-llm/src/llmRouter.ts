@@ -27,6 +27,7 @@ import {
   type EgressClientConfig,
   type EgressMode,
 } from './egressClient.js';
+import { resolveEffectiveEgressMode } from './egressModeResolver.js';
 
 /**
  * LLM completion options
@@ -134,48 +135,6 @@ export interface LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): AsyncIterable<LlmStreamChunk>;
-}
-
-function resolveEffectiveEgressMode(
-  baseMode: EgressMode,
-  tenantPolicy: TenantLlmPolicy | null,
-  options?: LlmCompletionOptions
-): { requestedMode?: EgressMode; effectiveMode: EgressMode } {
-  const globalDefault: EgressMode = baseMode;
-
-  const clampMode = (current: EgressMode, candidate?: EgressMode) => {
-    if (!candidate) return current;
-    if (candidate === 'off' && tenantPolicy?.allowOffMode !== true) {
-      return current;
-    }
-    return candidate;
-  };
-
-  const tenantRequested = tenantPolicy?.egressMode;
-  const tenantAllowsOff = tenantPolicy?.allowOffMode === true;
-
-  let mode: EgressMode = tenantRequested ?? globalDefault;
-  if (mode === 'off' && !tenantAllowsOff) {
-    mode = globalDefault;
-  }
-
-  let requestedMode: EgressMode | undefined =
-    tenantRequested === 'off' && !tenantAllowsOff
-      ? globalDefault
-      : tenantRequested;
-
-  const userPolicy = options?.userId
-    ? tenantPolicy?.userPolicies?.[options.userId]
-    : undefined;
-
-  mode = clampMode(mode, userPolicy?.egressMode);
-  requestedMode = userPolicy?.egressMode ?? requestedMode;
-
-  const override = options?.egressModeOverride;
-  mode = clampMode(mode, override);
-  requestedMode = override ?? requestedMode;
-
-  return { requestedMode, effectiveMode: mode };
 }
 
 /**
