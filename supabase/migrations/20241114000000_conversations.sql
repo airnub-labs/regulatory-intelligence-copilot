@@ -53,36 +53,95 @@ create table if not exists copilot_internal.quick_prompts (
   jurisdictions text[] null
 );
 
-create view if not exists public.conversations_view as
-  select id,
-         tenant_id,
-         user_id,
-         share_audience,
-         tenant_access,
-         authorization_model,
-         authorization_spec,
-         title,
-         persona_id,
-         jurisdictions,
-         created_at,
-         updated_at,
-         last_message_at
-  from copilot_internal.conversations;
+create or replace function public.current_tenant_id()
+returns uuid
+language sql
+stable
+as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb -> 'app_metadata' ->> 'tenant_id',
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb -> 'user_metadata' ->> 'tenant_id'
+  )::uuid;
+$$;
 
-create view if not exists public.conversation_messages_view as
-  select id, conversation_id, tenant_id, user_id, role, content, metadata, created_at
-  from copilot_internal.conversation_messages;
+create or replace view public.conversations_view as
+  with request_context as (
+    select public.current_tenant_id() as tenant_id, auth.role() as requester_role
+  )
+  select c.id,
+         c.tenant_id,
+         c.user_id,
+         c.share_audience,
+         c.tenant_access,
+         c.authorization_model,
+         c.authorization_spec,
+         c.title,
+         c.persona_id,
+         c.jurisdictions,
+         c.created_at,
+         c.updated_at,
+         c.last_message_at
+  from copilot_internal.conversations c
+  cross join request_context ctx
+  where ctx.requester_role = 'service_role'
+     or (ctx.tenant_id is not null and c.tenant_id = ctx.tenant_id);
 
-create view if not exists public.conversation_contexts_view as
-  select conversation_id, tenant_id, active_node_ids, summary, updated_at
-  from copilot_internal.conversation_contexts;
+create or replace view public.conversation_messages_view as
+  with request_context as (
+    select public.current_tenant_id() as tenant_id, auth.role() as requester_role
+  )
+  select m.id,
+         m.conversation_id,
+         m.tenant_id,
+         m.user_id,
+         m.role,
+         m.content,
+         m.metadata,
+         m.created_at
+  from copilot_internal.conversation_messages m
+  cross join request_context ctx
+  where ctx.requester_role = 'service_role'
+     or (ctx.tenant_id is not null and m.tenant_id = ctx.tenant_id);
 
-create view if not exists public.personas_view as
+create or replace view public.conversation_contexts_view as
+  with request_context as (
+    select public.current_tenant_id() as tenant_id, auth.role() as requester_role
+  )
+  select cc.conversation_id,
+         cc.tenant_id,
+         cc.active_node_ids,
+         cc.summary,
+         cc.updated_at
+  from copilot_internal.conversation_contexts cc
+  cross join request_context ctx
+  where ctx.requester_role = 'service_role'
+     or (ctx.tenant_id is not null and cc.tenant_id = ctx.tenant_id);
+
+create or replace view public.personas_view as
   select id, label, description, jurisdictions from copilot_internal.personas;
 
-create view if not exists public.quick_prompts_view as
+create or replace view public.quick_prompts_view as
   select id, label, prompt, scenario_hint, persona_filter, jurisdictions from copilot_internal.quick_prompts;
 
 create index if not exists conversations_tenant_idx on copilot_internal.conversations(tenant_id, user_id, created_at desc);
 create index if not exists conversation_messages_conversation_idx on copilot_internal.conversation_messages(conversation_id, created_at asc);
 create index if not exists conversation_contexts_tenant_idx on copilot_internal.conversation_contexts(tenant_id);
+
+revoke all on schema copilot_internal from public, anon, authenticated;
+grant usage on schema copilot_internal to service_role;
+
+revoke all on all tables in schema copilot_internal from public, anon, authenticated;
+grant select, insert, update, delete on all tables in schema copilot_internal to service_role;
+
+revoke all on public.conversations_view from public, anon, authenticated, service_role;
+revoke all on public.conversation_messages_view from public, anon, authenticated, service_role;
+revoke all on public.conversation_contexts_view from public, anon, authenticated, service_role;
+revoke all on public.personas_view from public, anon, authenticated, service_role;
+revoke all on public.quick_prompts_view from public, anon, authenticated, service_role;
+
+grant select on public.conversations_view to authenticated, service_role;
+grant select on public.conversation_messages_view to authenticated, service_role;
+grant select on public.conversation_contexts_view to authenticated, service_role;
+grant select on public.personas_view to authenticated, service_role;
+grant select on public.quick_prompts_view to authenticated, service_role;
+
