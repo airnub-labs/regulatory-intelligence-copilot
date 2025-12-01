@@ -198,9 +198,10 @@ For local development you can either:
 
 The recommended path is described in **`docs/local_development.md`**, which covers:
 
-- Starting Supabase locally.  
-- Running database migrations.  
+- Starting Supabase locally.
+- Running database migrations.
 - Applying seed data for demo conversations and tenants.
+- Reading the first‑run Supabase notice that prints the **seeded demo user ID and tenant ID**; copy those values into the **repo root** `.env.local` (used by the demo web app) so the UI can authenticate as the seeded demo user.
 
 ### 6. Seed Memgraph with demo data
 
