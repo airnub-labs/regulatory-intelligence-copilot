@@ -1,3 +1,41 @@
+-- Seed demo Supabase user for local authentication
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+values
+  (
+    '00000000-0000-0000-0000-00000000000a',
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'demo.user@example.com',
+    crypt('Password123!', gen_salt('bf')),
+    now(),
+    jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', '00000000-0000-0000-0000-000000000001'),
+    jsonb_build_object('tenant_id', '00000000-0000-0000-0000-000000000001', 'full_name', 'Demo User')
+  )
+  on conflict (id) do update
+    set email = excluded.email,
+        encrypted_password = excluded.encrypted_password,
+        email_confirmed_at = excluded.email_confirmed_at,
+        raw_app_meta_data = excluded.raw_app_meta_data,
+        raw_user_meta_data = excluded.raw_user_meta_data;
+
+insert into auth.identities (id, user_id, identity_data, provider, provider_id, last_sign_in_at, created_at, updated_at)
+values
+  (
+    '10000000-0000-0000-0000-00000000000a',
+    '00000000-0000-0000-0000-00000000000a',
+    jsonb_build_object('sub', '00000000-0000-0000-0000-00000000000a', 'email', 'demo.user@example.com'),
+    'email',
+    'demo.user@example.com',
+    now(),
+    now(),
+    now()
+  )
+  on conflict (provider, provider_id) do update
+    set last_sign_in_at = excluded.last_sign_in_at,
+        updated_at = excluded.updated_at,
+        identity_data = excluded.identity_data;
+
 insert into copilot_internal.personas (id, label, description, jurisdictions)
 values
   ('single-director-ie', 'Single director company (IE)', 'Owner/director of an Irish limited company', array['IE'])

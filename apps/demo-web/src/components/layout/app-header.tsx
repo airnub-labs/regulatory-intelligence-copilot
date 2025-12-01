@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Sparkles } from "lucide-react"
+import { LogOut, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "../theme/theme-toggle"
@@ -17,6 +17,8 @@ interface AppHeaderProps {
   subtext?: string
   primaryAction?: HeaderAction
   secondaryAction?: HeaderAction
+  userEmail?: string | null
+  onSignOut?: () => void
   className?: string
 }
 
@@ -25,6 +27,8 @@ export function AppHeader({
   subtext = "Answers are grounded in a Memgraph regulatory graph, a timeline engine for law-in-time, and scenario-aware agents.",
   primaryAction = { label: "View Graph", href: "/graph" },
   secondaryAction = { label: "Product docs", href: "https://github.com/saasbabs/regulatory-intelligence-copilot" },
+  userEmail,
+  onSignOut,
   className,
 }: AppHeaderProps) {
   return (
@@ -59,6 +63,16 @@ export function AppHeader({
             <Button asChild variant={primaryAction.variant ?? "default"} title="Open the graph UI for this conversation to inspect active nodes.">
               <Link href={primaryAction.href}>{primaryAction.label}</Link>
             </Button>
+          )}
+          {userEmail && (
+            <div className="hidden items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground sm:flex">
+              <span className="truncate">{userEmail}</span>
+              {onSignOut && (
+                <Button size="icon" variant="ghost" onClick={onSignOut} title="Sign out">
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           )}
           <ThemeToggle />
         </div>

@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server';
 import type { ConversationEventType, SseSubscriber } from '@reg-copilot/reg-intel-conversations';
+import { getServerSession } from 'next-auth';
+
+import { authOptions } from '@/lib/auth/options';
 import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
 
 export const dynamic = 'force-dynamic';
@@ -12,13 +15,15 @@ function sseChunk(event: ConversationEventType, data: unknown) {
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const tenantId = 'default';
   const { id: conversationId } = await context.params;
-  const userId = request.headers.get('x-user-id') ?? new URL(request.url).searchParams.get('userId');
+  const session = await getServerSession(authOptions);
+  const userId = session?.user?.id;
 
   if (!userId) {
-    return new Response('userId required', { status: 400 });
+    return new Response('Unauthorized', { status: 401 });
   }
+
+  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
 
   const conversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
   if (!conversation) {
