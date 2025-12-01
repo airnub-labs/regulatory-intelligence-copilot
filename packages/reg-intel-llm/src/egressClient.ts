@@ -112,20 +112,27 @@ function sanitizeRequestAspect(
 
     const baseCtx: EgressGuardContext = {
       ...ctx,
-      request: sanitizedRequest,
       sanitizedRequest,
       metadata,
     };
 
-    if (options.preserveOriginalRequest) {
-      baseCtx.originalRequest = originalRequest;
-    }
+    if (mode === 'enforce') {
+      baseCtx.request = sanitizedRequest;
+      if (options.preserveOriginalRequest) {
+        baseCtx.originalRequest = originalRequest;
+      }
+    } else {
+      baseCtx.request = originalRequest;
+      if (options.preserveOriginalRequest) {
+        baseCtx.originalRequest = originalRequest;
+      }
 
-    if (mode === 'report-only' && sanitizedRequest !== originalRequest) {
-      console.warn('[Egress][report-only] PII sanitiser changed payload', {
-        tenantId: ctx.tenantId,
-        task: ctx.task,
-      });
+      if (sanitizedRequest !== originalRequest) {
+        console.warn('[Egress][report-only] PII sanitiser changed payload', {
+          tenantId: ctx.tenantId,
+          task: ctx.task,
+        });
+      }
     }
 
     return next(baseCtx);
@@ -168,10 +175,16 @@ export class EgressClient {
     execute: (ctx: EgressGuardContext) => Promise<T>
   ): Promise<T> {
     const guarded = await this.guard(ctx);
-    const executionCtx: EgressGuardContext = {
-      ...guarded,
-      request: guarded.sanitizedRequest ?? guarded.request,
-    };
+    const effectiveMode = guarded.effectiveMode ?? this.defaultMode;
+
+    const executionCtx: EgressGuardContext = { ...guarded };
+
+    if (effectiveMode === 'enforce') {
+      executionCtx.request = guarded.sanitizedRequest ?? guarded.request;
+    } else {
+      executionCtx.request = guarded.originalRequest ?? guarded.request;
+    }
+
     return execute(executionCtx);
   }
 }

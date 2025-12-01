@@ -262,5 +262,10 @@ describe('ComplianceEngine streaming', () => {
       expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
     );
     expect(response.agentUsed).toBe('test-agent');
+
+    expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
+      { tenantId: 'tenant-1', conversationId: 'conversation-1' },
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
+    );
   });
 });

@@ -85,15 +85,15 @@ native request types and this context.
 ### 2.1 Egress modes and sanitisation semantics
 
 - **Modes**
-  - `enforce` (default): apply provider allowlisting, sanitisation, and blocking behaviour. Violations throw/block.
-  - `report-only`: apply the **same sanitisation to the execution payload**, flag violations/changes in metadata and logs, but do not block.
-  - `off`: disable sanitisation but still run provider allowlisting (throws on disallowed providers). Reserved for explicit test harness wiring, never production.
+-  - `enforce` (default): apply provider allowlisting, sanitisation, and blocking behaviour. Violations throw/block. The **sanitised payload** is executed.
+-  - `report-only`: run sanitisation and record deltas in `metadata`, but still execute the **original payload**. This keeps observability while matching the caller’s raw intent.
+-  - `off`: skip sanitisation but still run provider allowlisting (throws on disallowed providers). Reserved for explicit test harness wiring, never production.
 - **Execution payload**
-  - In both `enforce` and `report-only`, the **sanitised request is used for execution**. This avoids accidental leakage if downstream callers ignore metadata and keeps report-only behaviour safe.
-  - `metadata.redactionApplied` indicates that the sanitiser changed the payload. `metadata.redactionReportOnly` flags that the run occurred in report-only mode.
-  - Provider allowlisting executes and enforces in all modes.
+-  - `enforce` executes the sanitised request (`ctx.request` is overwritten).
+-  - `report-only` executes the original request while exposing `sanitizedRequest` + `metadata.redactionApplied/redactionReportOnly` for logging/telemetry.
+-  - Provider allowlisting executes and enforces in all modes, including `off`.
 - **Original payloads**
-  - `originalRequest` may be preserved (opt-in) for debugging/telemetry in non-production environments. It is not required for normal operation.
+-  - `originalRequest` may be preserved (opt-in) for debugging/telemetry in non-production environments. It is not required for normal operation because report-only already keeps `ctx.request` untouched.
 - **Usage expectation**
   - Application code (ComplianceEngine, agents, API routes) must route outbound calls via `EgressClient` / `LlmRouter` rather than direct provider clients, so the mode and sanitisation guarantees apply uniformly.
   - `mode: 'off'` must be treated as a deliberate, test-only override.
@@ -107,7 +107,7 @@ native request types and this context.
   - Tenant policy (`TenantLlmPolicy.egressMode` + optional `allowOffMode`).
   - Optional per-user policy where defined on the tenant (cannot escalate beyond tenant `allowOffMode`).
   - Optional per-call overrides (e.g. user-specific `egressModeOverride`), constrained by tenant policy (no `off` unless allowed).
-- In all cases, `enforce` and `report-only` use the **sanitised payload** for execution; `off` skips sanitisation but still runs allowlisting.
+- Mode resolution only affects whether sanitisation mutates the execution payload. `enforce` executes the sanitised payload, `report-only` executes the original payload with sanitisation metadata attached, and `off` skips sanitisation entirely while still enforcing provider allowlisting.
 
 ---
 
@@ -194,7 +194,8 @@ Baseline aspects include:
 2. **PiiScrubbingAspect**
    - Applies deterministic PII stripping / redaction to the outbound
      `request`, populating `sanitizedRequest` and overwriting the execution
-     payload in `enforce` and `report-only` modes.
+     payload in `enforce` mode. In `report-only`, the sanitised payload is
+     recorded for telemetry but the **original request executes**.
    - Sets `metadata.redactionApplied` / `metadata.redactionReportOnly` to
      signal when changes occurred and whether the run was non-blocking.
    - Uses the same policies as

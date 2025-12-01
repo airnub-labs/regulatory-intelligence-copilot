@@ -388,16 +388,19 @@ export class ComplianceEngine {
     agentNodes: Array<{ id: string; label: string; type: string }>,
     conceptNodeIds: Set<string>
   ) {
-    const existingIds = new Set(agentNodes.map(n => n.id));
-    const merged = [...agentNodes];
+    const merged = new Map<string, { id: string; label: string; type: string }>();
 
-    for (const id of conceptNodeIds) {
-      if (!existingIds.has(id)) {
-        merged.push({ id, label: 'Concept', type: 'Concept' });
+    agentNodes.forEach(node => {
+      merged.set(node.id, node);
+    });
+
+    conceptNodeIds.forEach(id => {
+      if (!merged.has(id)) {
+        merged.set(id, { id, label: 'Concept', type: 'Concept' });
       }
-    }
+    });
 
-    return merged;
+    return Array.from(merged.values());
   }
 
   private async resolveActiveNodes(nodeIds: string[]): Promise<ResolvedNodeMeta[]> {
