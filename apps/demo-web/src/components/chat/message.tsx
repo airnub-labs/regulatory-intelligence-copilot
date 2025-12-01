@@ -1,5 +1,8 @@
 import * as React from "react"
+import { Bot, ShieldCheck, User } from "lucide-react"
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 type ListBuffer = {
@@ -147,40 +150,55 @@ export function Message({ role, content, className }: MessageProps) {
   return (
     <div
       className={cn(
-        "flex gap-3 w-full",
+        "group flex w-full gap-3", 
         isUser ? "justify-end" : "justify-start",
         className
       )}
     >
       {!isUser && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            AI
-          </AvatarFallback>
+        <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+          <AvatarFallback className="bg-primary text-primary-foreground text-xs">AI</AvatarFallback>
         </Avatar>
       )}
+      <div className={cn("flex max-w-[88%] flex-col gap-2", isUser && "items-end")}> 
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {isUser ? (
+            <>
+              <User className="h-3.5 w-3.5" />
+              You
+              <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+              Trusted input
+            </>
+          ) : (
+            <>
+              <Bot className="h-3.5 w-3.5" />
+              Copilot
+              <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+              Graph grounded
+            </>
+          )}
+        </div>
         <div
           className={cn(
-            "flex flex-col gap-1 max-w-[85%]",
-            isUser && "items-end"
+            "relative overflow-hidden rounded-2xl border px-4 py-3 shadow-sm transition", 
+            isUser
+              ? "bg-gradient-to-br from-primary to-primary/85 text-primary-foreground"
+              : "bg-card/90 text-foreground",
+            !isUser && "backdrop-blur supports-[backdrop-filter]:border-border/80"
           )}
         >
-          <div
-            className={cn(
-              "rounded-lg px-4 py-3",
-              isUser
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-foreground border border-border"
-            )}
-          >
-            <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
-          </div>
+          {!isUser && (
+            <Badge className="absolute right-3 top-3 flex items-center gap-1" variant="secondary">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              AI Elements
+            </Badge>
+          )}
+          <MessageContent content={content} tone={isUser ? "user" : "assistant"} />
         </div>
+      </div>
       {isUser && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-            U
-          </AvatarFallback>
+        <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">U</AvatarFallback>
         </Avatar>
       )}
     </div>
@@ -196,7 +214,7 @@ export function MessageContent({ content, tone }: MessageContentProps) {
   return (
     <div
       className={cn(
-        "prose prose-sm dark:prose-invert max-w-none",
+        "prose prose-sm max-w-none dark:prose-invert",
         tone === "assistant" ? "text-foreground" : "text-primary-foreground"
       )}
     >
@@ -207,18 +225,19 @@ export function MessageContent({ content, tone }: MessageContentProps) {
 
 export function MessageLoading() {
   return (
-    <div className="flex gap-3 w-full justify-start">
-      <Avatar className="h-8 w-8 shrink-0">
-        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-          AI
-        </AvatarFallback>
+    <div className="flex w-full justify-start gap-3">
+      <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+        <AvatarFallback className="bg-primary text-primary-foreground text-xs">AI</AvatarFallback>
       </Avatar>
-      <div className="flex flex-col gap-1 max-w-[85%]">
-        <div className="rounded-lg px-4 py-3 bg-muted border border-border">
-          <div className="flex gap-1">
-            <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" />
-            <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce [animation-delay:0.1s]" />
-            <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce [animation-delay:0.2s]" />
+      <div className="flex max-w-[88%] flex-col gap-2">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Bot className="h-3.5 w-3.5" /> Copilot <span className="h-1 w-1 rounded-full bg-muted-foreground" /> Streaming
+        </div>
+        <div className="relative overflow-hidden rounded-2xl border bg-card/90 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:border-border/80">
+          <div className="flex gap-2">
+            <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground" />
+            <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:120ms]" />
+            <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:240ms]" />
           </div>
         </div>
       </div>
