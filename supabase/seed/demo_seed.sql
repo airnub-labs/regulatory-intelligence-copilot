@@ -25,6 +25,12 @@ begin
   -- Keep the tenant ID in sync even if the user already existed
   demo_tenant_id := coalesce((seeded_user.raw_user_meta_data ->> 'tenant_id')::uuid, demo_tenant_id);
 
+  -- Supabase manages indexes on auth.identities. To avoid privilege errors
+  -- from creating a unique index ourselves, perform an explicit delete/insert
+  -- so the seed is idempotent without relying on ON CONFLICT.
+  delete from auth.identities
+   where provider = 'email' and provider_id = demo_email;
+
   insert into auth.identities (user_id, identity_data, provider, provider_id, last_sign_in_at)
   values (
     seeded_user.id,
@@ -32,11 +38,7 @@ begin
     'email',
     demo_email,
     now()
-  )
-  on conflict (provider, provider_id) do update
-    set last_sign_in_at = excluded.last_sign_in_at,
-        updated_at = now(),
-        identity_data = excluded.identity_data;
+  );
 
   -- Demo conversation tied to the seeded user
   with demo_conv as (
