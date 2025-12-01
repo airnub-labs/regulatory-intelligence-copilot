@@ -26,6 +26,7 @@ import {
   type ConversationStore,
 } from './conversationStores.js';
 import { ConversationEventHub } from './eventHub.js';
+import type { AccessModel, AccessControl } from './conversationStores.js';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -270,7 +271,17 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return new Response('Invalid request body', { status: 400 });
       }
 
-      const { messages, message, profile, conversationId: requestConversationId, userId, isShared, sharingMode } = body;
+      const {
+        messages,
+        message,
+        profile,
+        conversationId: requestConversationId,
+        userId,
+        isShared,
+        sharingMode,
+        accessModel,
+        accessControl,
+      } = body;
 
       // Validate profile if provided
       if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
@@ -299,6 +310,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           jurisdictions: profile?.jurisdictions,
           sharingMode: sharingMode,
           isShared: typeof isShared === 'boolean' ? Boolean(isShared) : undefined,
+          accessModel: accessModel as AccessModel | undefined,
+          accessControl: accessControl as AccessControl | undefined,
         });
         conversationId = created.conversationId;
       }
@@ -355,6 +368,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             conversationId,
             sharingMode: conversationRecord.sharingMode,
             isShared: conversationRecord.isShared,
+            accessModel: conversationRecord.accessModel,
+            accessControl: conversationRecord.accessControl,
           });
 
           try {
@@ -377,7 +392,13 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   conversationId,
                 });
                 lastMetadata = metadata;
-                eventHub.broadcast(tenantId, conversationId, 'metadata', metadata);
+                eventHub.broadcast(tenantId, conversationId, 'metadata', {
+                  ...metadata,
+                  accessModel: conversationRecord.accessModel,
+                  accessControl: conversationRecord.accessControl,
+                  sharingMode: conversationRecord.sharingMode,
+                  isShared: conversationRecord.isShared,
+                });
               } else if (chunk.type === 'text' && chunk.delta) {
                 streamedTextBuffer += chunk.delta;
                 if (!disclaimerAlreadyPresent && normalizeText(streamedTextBuffer).includes(normalizedStandardDisclaimer)) {
@@ -459,4 +480,6 @@ export {
   ConversationEventHub,
   type ConversationStore,
   type SharingMode,
+  type AccessModel,
+  type AccessControl,
 };

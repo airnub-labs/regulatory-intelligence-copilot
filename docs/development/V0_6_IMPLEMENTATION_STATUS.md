@@ -31,5 +31,6 @@ This tracker summarises what is implemented versus still pending for the v0.6 ar
 - Add RLS policies and auth scoping for multi-tenant Supabase usage.
 - Extend `/api/conversations` endpoints to page via Supabase views.
 - Harden SSE fan-out with Redis/pub-sub for horizontal scaling; add tests.
+- Wire `access_model`/`access_control` to a ReBAC service (OpenFGA or similar) alongside Supabase RLS when auth is added.
 - Broaden Timeline + Scenario engine coverage and connect to persisted context.
 - Expand UI to surface context summaries and referenced graph nodes visually.

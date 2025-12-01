@@ -48,6 +48,7 @@ interface ChatMessage {
 }
 
 type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read'
+type AccessModel = 'legacy_sharing' | 'external_rebac'
 
 interface ConversationSummary {
   id: string
@@ -55,6 +56,7 @@ interface ConversationSummary {
   createdAt: string
   lastMessageAt?: string | null
   sharingMode: SharingMode
+  accessModel?: AccessModel
 }
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
@@ -124,6 +126,7 @@ export default function Home() {
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [sharingMode, setSharingMode] = useState<SharingMode>('private')
+  const [accessModel, setAccessModel] = useState<AccessModel>('legacy_sharing')
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
@@ -159,6 +162,7 @@ export default function Home() {
     setConversationId(id)
     conversationIdRef.current = id
     setSharingMode((payload.conversation?.sharingMode as SharingMode | undefined) ?? 'private')
+    setAccessModel((payload.conversation?.accessModel as AccessModel | undefined) ?? 'legacy_sharing')
     if (payload.conversation?.personaId) {
       setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
     }
@@ -216,6 +220,9 @@ export default function Home() {
             }
             if ((parsedData as any)?.sharingMode) {
               setSharingMode((parsedData as any).sharingMode as SharingMode)
+            }
+            if ((parsedData as any)?.accessModel) {
+              setAccessModel((parsedData as any).accessModel as AccessModel)
             }
             if (conversationIdRef.current) {
               loadConversation(conversationIdRef.current)
@@ -276,6 +283,9 @@ export default function Home() {
             }
             if ((parsedData as any)?.sharingMode) {
               setSharingMode((parsedData as any).sharingMode as SharingMode)
+            }
+            if ((parsedData as any)?.accessModel) {
+              setAccessModel((parsedData as any).accessModel as AccessModel)
             }
             setChatMetadata(parsedData as ChatMetadata)
             setMessages(prev =>
@@ -342,6 +352,7 @@ export default function Home() {
           scenarioHint,
           userId: DEMO_USER_ID,
           sharingMode,
+          accessModel,
         }),
         signal: controller.signal,
       })

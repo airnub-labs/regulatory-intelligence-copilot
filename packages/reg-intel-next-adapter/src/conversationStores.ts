@@ -1,6 +1,15 @@
 import type { ConversationContext, ConversationContextStore, ConversationIdentity, ChatMessage } from '@reg-copilot/reg-intel-core';
 
 export type SharingMode = 'private' | 'tenant_read' | 'tenant_write' | 'public_read';
+export type AccessModel = 'legacy_sharing' | 'external_rebac';
+
+export interface AccessControl {
+  provider?: 'openfga' | 'spicedb' | 'permify' | 'custom';
+  policyId?: string | null;
+  tupleSetId?: string | null;
+  fallbackSharingMode?: SharingMode;
+  displayName?: string | null;
+}
 
 export interface ConversationRecord {
   id: string;
@@ -8,6 +17,8 @@ export interface ConversationRecord {
   userId?: string | null;
   sharingMode: SharingMode;
   isShared: boolean;
+  accessModel: AccessModel;
+  accessControl?: AccessControl | null;
   personaId?: string | null;
   jurisdictions: string[];
   title?: string | null;
@@ -32,6 +43,8 @@ export interface ConversationStore {
     title?: string | null;
     isShared?: boolean;
     sharingMode?: SharingMode;
+    accessModel?: AccessModel;
+    accessControl?: AccessControl | null;
   }): Promise<{ conversationId: string }>;
 
   appendMessage(input: {
@@ -60,6 +73,8 @@ export interface ConversationStore {
     userId?: string | null;
     isShared?: boolean;
     sharingMode?: SharingMode;
+    accessModel?: AccessModel;
+    accessControl?: AccessControl | null;
   }): Promise<void>;
 }
 
@@ -71,16 +86,27 @@ function resolveSharingMode(input: { sharingMode?: SharingMode; isShared?: boole
   return 'private';
 }
 
+function resolveAccessModel(input: { accessModel?: AccessModel }): AccessModel {
+  return input.accessModel ?? 'legacy_sharing';
+}
+
+function effectiveSharingMode(record: ConversationRecord) {
+  if (record.accessModel === 'legacy_sharing') return record.sharingMode;
+  return record.accessControl?.fallbackSharingMode ?? record.sharingMode;
+}
+
 function canRead(record: ConversationRecord, userId?: string | null) {
-  if (record.sharingMode === 'public_read') return true;
-  if (record.sharingMode === 'tenant_read' || record.sharingMode === 'tenant_write') return true;
+  const mode = effectiveSharingMode(record);
+  if (mode === 'public_read') return true;
+  if (mode === 'tenant_read' || mode === 'tenant_write') return true;
   if (!record.userId) return true;
   return Boolean(userId && record.userId === userId);
 }
 
 function canWrite(record: ConversationRecord, userId?: string | null, role?: 'user' | 'assistant' | 'system') {
+  const mode = effectiveSharingMode(record);
   if (role === 'assistant' || role === 'system') return true;
-  if (record.sharingMode === 'tenant_write') return Boolean(userId);
+  if (mode === 'tenant_write') return Boolean(userId);
   if (!record.userId) return true;
   return Boolean(userId && record.userId === userId);
 }
@@ -97,17 +123,26 @@ export class InMemoryConversationStore implements ConversationStore {
     title?: string | null;
     isShared?: boolean;
     sharingMode?: SharingMode;
+    accessModel?: AccessModel;
+    accessControl?: AccessControl | null;
   }): Promise<{ conversationId: string }> {
     const id = crypto.randomUUID();
     const now = new Date();
     const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode, isShared: input.isShared });
+    const accessModel = resolveAccessModel({ accessModel: input.accessModel });
+    const effectiveMode =
+      accessModel === 'legacy_sharing'
+        ? sharingMode
+        : input.accessControl?.fallbackSharingMode ?? sharingMode;
 
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
       userId: input.userId,
       sharingMode,
-      isShared: sharingMode !== 'private',
+      isShared: effectiveMode !== 'private',
+      accessModel,
+      accessControl: input.accessControl,
       personaId: input.personaId ?? null,
       jurisdictions: input.jurisdictions ?? [],
       title: input.title ?? null,
@@ -207,6 +242,8 @@ export class InMemoryConversationStore implements ConversationStore {
     userId?: string | null;
     isShared?: boolean;
     sharingMode?: SharingMode;
+    accessModel?: AccessModel;
+    accessControl?: AccessControl | null;
   }): Promise<void> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
@@ -217,10 +254,16 @@ export class InMemoryConversationStore implements ConversationStore {
       throw new Error('User not authorised to update conversation');
     }
     const sharingMode = resolveSharingMode({ sharingMode: input.sharingMode, isShared: input.isShared });
+    const accessModel = resolveAccessModel({ accessModel: input.accessModel ?? record.accessModel });
+    const accessControl = input.accessControl ?? record.accessControl;
+    const effectiveMode =
+      accessModel === 'legacy_sharing' ? sharingMode : accessControl?.fallbackSharingMode ?? sharingMode;
     this.conversations.set(input.conversationId, {
       ...record,
       sharingMode,
-      isShared: sharingMode !== 'private',
+      isShared: effectiveMode !== 'private',
+      accessModel,
+      accessControl,
       updatedAt: new Date(),
     });
   }
