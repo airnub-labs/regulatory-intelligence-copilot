@@ -153,6 +153,12 @@ describe('ComplianceEngine streaming', () => {
     }
 
     expect(chunks[0].type).toBe('metadata');
+    const metadataReferencedIds = (chunks[0].metadata?.referencedNodes || []).map(
+      (n: any) => n.id
+    );
+    expect(metadataReferencedIds).toEqual(
+      expect.arrayContaining(['concept-node-1', 'rule-1'])
+    );
     expect(chunks[1]).toEqual({ type: 'text', delta: 'Hello ' });
     expect(chunks[2]).toEqual({ type: 'text', delta: 'world' });
     expect(chunks[chunks.length - 1].type).toBe('done');

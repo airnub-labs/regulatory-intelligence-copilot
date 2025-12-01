@@ -85,7 +85,7 @@ native request types and this context.
   - `report-only`: apply the **same sanitisation to the execution payload**, flag violations/changes in metadata and logs, but do not block.
   - `off`: disable guarding/sanitisation entirely. Reserved for explicit test harness wiring, never production.
 - **Execution payload**
-  - In both `enforce` and `report-only`, the **sanitised request is used for execution**. This avoids accidental leakage if downstream callers ignore metadata.
+  - In both `enforce` and `report-only`, the **sanitised request is used for execution**. This avoids accidental leakage if downstream callers ignore metadata and keeps report-only behaviour safe.
   - `metadata.redactionApplied` indicates that the sanitiser changed the payload. `metadata.redactionReportOnly` flags that the run occurred in report-only mode.
   - Provider allowlisting still executes in all modes; in `report-only`/`off` it records violations instead of blocking.
 - **Original payloads**
@@ -96,12 +96,12 @@ native request types and this context.
 
 ### 2.2 Effective mode resolution
 
-- Each `EgressGuardContext` carries both an optional **requested** mode and the resolved `effectiveMode` so that per-call decisions can be made without changing the egress pipeline.
+- Each `EgressGuardContext` carries both an optional **requested** mode and the resolved `effectiveMode` plus tenant/user identifiers so that per-call decisions can be made without changing the egress pipeline.
 - `EgressClient` uses `effectiveMode` when provided, falling back to its configured default (usually `enforce`).
 - `LlmRouter` is responsible for resolving `effectiveMode` based on:
   - Global/default mode (production = `enforce`).
   - Tenant policy (`TenantLlmPolicy.egressMode` + optional `allowOffMode`).
-  - Optional per-user policy where defined on the tenant.
+  - Optional per-user policy where defined on the tenant (cannot escalate beyond tenant `allowOffMode`).
   - Optional per-call overrides (e.g. user-specific `egressModeOverride`), constrained by tenant policy (no `off` unless allowed).
 - In all cases, `enforce` and `report-only` use the **sanitised payload** for execution; `off` skips sanitisation but still runs allowlisting.
 

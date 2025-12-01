@@ -83,7 +83,7 @@ The system consists of:
    - `LlmRouter` with pluggable providers (OpenAI Responses, Groq, local/OSS models).
    - Uses OpenAI Responses API (incl. GPT‑OSS models) as a primary reference implementation.
   - All outbound calls (LLM, MCP, HTTP) go through `EgressClient` and the **Egress Guard**.
-  - Egress Guard supports `enforce` / `report-only` / `off` modes; production wiring uses **enforce** with optional report-only rollout in non-prod. Per-tenant/per-user preferences resolve to a requested and **effective** mode in `LlmRouter`, but execution payloads remain sanitised in enforce/report-only and provider allowlisting still runs in every mode.
+  - Egress Guard supports `enforce` / `report-only` / `off` modes; production wiring uses **enforce** with optional report-only rollout in non-prod. Per-tenant/per-user preferences resolve to a requested and **effective** mode in `LlmRouter`, execution payloads remain sanitised in enforce/report-only, and provider allowlisting still runs in every mode (even when effective mode is `off`).
    - Main‑chat calls can emit **streamed text** for the UI and **structured tool output** for concept capture and other metadata.
 
 5. **Graph Ingress & Ingestion**
@@ -220,7 +220,7 @@ The streaming model in v0.6 is:
   - Never forwarded to the UI.
   - Interpreted inside `ComplianceEngine`:
     - Tool `name` identifies `capture_concepts` or other tools.
-    - `argsJson` contains structured payload (e.g. SKOS concepts).
+    - `argsJson` contains structured payload (e.g. SKOS concepts) and is the primary source for parsing concept metadata.
   - Trigger self‑population, concept resolution, scenario updates, etc.
 
 - **Error chunks (`type: 'error'`)**
