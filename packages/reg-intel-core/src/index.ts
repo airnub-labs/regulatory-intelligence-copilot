@@ -175,6 +175,10 @@ export {
   type ComplianceResponse,
   type ComplianceStreamChunk,
   type ComplianceEngineDeps,
+  type ConversationContext,
+  type ConversationContextStore,
+  type ConversationIdentity,
+  EMPTY_CONVERSATION_CONTEXT,
 } from './orchestrator/complianceEngine.js';
 
 // Agents

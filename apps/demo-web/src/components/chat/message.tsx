@@ -50,11 +50,11 @@ function renderMarkdown(content: string) {
   let paragraphBuffer: string[] = []
   let listBuffer: ListBuffer | null = null
 
-  const flushParagraph = () => {
-    if (paragraphBuffer.length === 0) return
-    elements.push(
-      <p key={`paragraph-${elements.length}`}>
-        {renderInlineMarkdown(paragraphBuffer.join(" "), `paragraph-${elements.length}`)}
+    const flushParagraph = () => {
+      if (paragraphBuffer.length === 0) return
+      elements.push(
+        <p key={`paragraph-${elements.length}`}>
+          {renderInlineMarkdown(paragraphBuffer.join(" "), `paragraph-${elements.length}`)}
       </p>
     )
     paragraphBuffer = []
@@ -79,14 +79,14 @@ function renderMarkdown(content: string) {
     const orderedMatch = trimmed.match(/^\d+[.)]\s+(.*)$/)
     const headingMatch = trimmed.match(/^(#{1,3})\s+(.*)$/)
 
-    if (headingMatch) {
-      flushParagraph()
-      flushList()
-      const level = headingMatch[1].length
-      const Tag = (level === 1 ? "h1" : level === 2 ? "h2" : "h3") as keyof JSX.IntrinsicElements
-      elements.push(
-        <Tag key={`heading-${elements.length}`}>
-          {renderInlineMarkdown(headingMatch[2], `heading-${elements.length}`)}
+      if (headingMatch) {
+        flushParagraph()
+        flushList()
+        const level = headingMatch[1].length
+        const Tag = (level === 1 ? "h1" : level === 2 ? "h2" : "h3") as keyof React.JSX.IntrinsicElements
+        elements.push(
+          <Tag key={`heading-${elements.length}`}>
+            {renderInlineMarkdown(headingMatch[2], `heading-${elements.length}`)}
         </Tag>
       )
       return

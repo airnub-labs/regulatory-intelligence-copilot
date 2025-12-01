@@ -1,18 +1,19 @@
 import { NextRequest } from 'next/server';
+import type { ConversationEventType, SseSubscriber } from '@reg-copilot/reg-intel-conversations';
 import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
 
 export const dynamic = 'force-dynamic';
 
 const encoder = new TextEncoder();
 
-function sseChunk(event: string, data: unknown) {
+function sseChunk(event: ConversationEventType, data: unknown) {
   const payload = typeof data === 'string' ? data : JSON.stringify(data);
   return encoder.encode(`event: ${event}\n` + `data: ${payload}\n\n`);
 }
 
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const tenantId = 'default';
-  const conversationId = context.params.id;
+  const { id: conversationId } = await context.params;
   const userId = new URL(request.url).searchParams.get('userId');
 
   if (!userId) {
@@ -24,13 +25,13 @@ export async function GET(request: NextRequest, context: { params: { id: string 
     return new Response('Conversation not found or access denied', { status: 404 });
   }
 
-  const stream = new ReadableStream({
-    start(controller) {
-      const subscriber = {
-        send(event: string, data: unknown) {
-          controller.enqueue(sseChunk(event, data));
-        },
-        onClose() {
+    const stream = new ReadableStream({
+      start(controller) {
+        const subscriber: SseSubscriber = {
+          send(event: ConversationEventType, data: unknown) {
+            controller.enqueue(sseChunk(event, data));
+          },
+          onClose() {
           controller.close();
         },
       };

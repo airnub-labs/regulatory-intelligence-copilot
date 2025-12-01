@@ -1,3 +1,5 @@
+const path = require('path')
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: [
@@ -9,12 +11,17 @@ const nextConfig = {
   transpilePackages: [
     '@e2b-auditor/core',
     '@reg-copilot/reg-intel-prompts',
+    '@reg-copilot/reg-intel-conversations',
     '@reg-copilot/reg-intel-next-adapter'
   ],
   experimental: {
     turbopackUseSystemTlsCerts: true,
   },
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@reg-copilot/reg-intel-conversations': path.resolve(__dirname, '../..', 'packages/reg-intel-conversations'),
+    }
     if (!isServer) {
       // Don't bundle Node.js modules in the client bundle
       config.resolve.fallback = {

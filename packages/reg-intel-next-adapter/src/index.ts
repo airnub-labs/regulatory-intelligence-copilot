@@ -25,6 +25,8 @@ import {
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   deriveIsShared,
+  type ConversationEventType,
+  type SseSubscriber,
   type AuthorizationModel,
   type AuthorizationSpec,
   type ConversationStore,
@@ -355,18 +357,18 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       let disclaimerAlreadyPresent = false;
       let lastMetadata: Record<string, unknown> | null = null;
 
-      const subscriber = {
-        send: (event: string, data: unknown) => {
-          // placeholder replaced when writer is created
-        },
-      } as { send: (event: string, data: unknown) => void };
-      const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
+        const subscriber: SseSubscriber = {
+          send: (_event: ConversationEventType, _data: unknown) => {
+            // placeholder replaced when writer is created
+          },
+        };
+        const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
       const isShared = deriveIsShared(conversationRecord);
 
       const stream = new ReadableStream({
         async start(controller) {
           const writer = new SseStreamWriter(controller);
-          subscriber.send = (event: string, data: unknown) => writer.send(event, data);
+            subscriber.send = (event: ConversationEventType, data: unknown) => writer.send(event, data);
 
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
