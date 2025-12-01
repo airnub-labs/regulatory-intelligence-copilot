@@ -6,9 +6,9 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const tenantId = 'default';
-  const conversationId = context.params.id;
+  const { id: conversationId } = await context.params;
   const userId = new URL(request.url).searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
@@ -25,9 +25,9 @@ export async function GET(request: NextRequest, context: { params: { id: string 
   return NextResponse.json({ conversation, messages, context: contextState });
 }
 
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const tenantId = 'default';
-  const conversationId = context.params.id;
+  const { id: conversationId } = await context.params;
   const userId = new URL(request.url).searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });

@@ -82,13 +82,81 @@ function parseSseEvent(eventBlock: string): { type: string; data: string } | nul
   }
 }
 
-function parseJsonSafe(value: string) {
+type ParsedSseData = string | Record<string, unknown>
+
+function parseJsonSafe(value: string): ParsedSseData {
   try {
     return JSON.parse(value)
   } catch (error) {
     console.warn('Failed to parse SSE data', error)
     return value
   }
+}
+
+interface ApiMessage {
+  id?: string
+  role: ChatMessage['role']
+  content: string
+  metadata?: ChatMetadata
+}
+
+interface ConversationPayload {
+  messages?: ApiMessage[]
+  conversation?: {
+    shareAudience?: ShareAudience
+    tenantAccess?: TenantAccess
+    authorizationModel?: AuthorizationModel
+    personaId?: UserProfile['personaType']
+    jurisdictions?: string[]
+  }
+}
+
+interface ChatSseMetadata extends ChatMetadata {
+  conversationId?: string
+  shareAudience?: ShareAudience
+  tenantAccess?: TenantAccess
+  authorizationModel?: AuthorizationModel
+}
+
+const isChatMetadata = (value: unknown): value is ChatMetadata => {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.agentId === 'string' &&
+    Array.isArray(candidate.jurisdictions) &&
+    typeof candidate.uncertaintyLevel === 'string' &&
+    typeof candidate.disclaimerKey === 'string' &&
+    Array.isArray(candidate.referencedNodes)
+  )
+}
+
+const isChatSseMetadata = (value: unknown): value is ChatSseMetadata => {
+  if (!isChatMetadata(value)) return false
+  const candidate = value as Partial<ChatSseMetadata>
+  const isValidShareAudience =
+    candidate.shareAudience === 'private' || candidate.shareAudience === 'tenant' || candidate.shareAudience === 'public'
+  const isValidTenantAccess = candidate.tenantAccess === 'view' || candidate.tenantAccess === 'edit'
+  const isValidAuthorizationModel =
+    candidate.authorizationModel === 'supabase_rbac' || candidate.authorizationModel === 'openfga'
+
+  return (
+    (candidate.conversationId === undefined || typeof candidate.conversationId === 'string') &&
+    (candidate.shareAudience === undefined || isValidShareAudience) &&
+    (candidate.tenantAccess === undefined || isValidTenantAccess) &&
+    (candidate.authorizationModel === undefined || isValidAuthorizationModel)
+  )
+}
+
+const extractText = (parsedData: ParsedSseData): string => {
+  if (typeof parsedData === 'string') return parsedData
+  if ('text' in parsedData && typeof parsedData.text === 'string') return parsedData.text
+  return ''
+}
+
+const extractErrorMessage = (parsedData: ParsedSseData): string => {
+  if (typeof parsedData === 'string') return parsedData
+  if ('message' in parsedData && typeof parsedData.message === 'string') return parsedData.message
+  return 'Unknown error'
 }
 
 const quickPrompts = [
@@ -139,7 +207,7 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
-  const conversationIdRef = useRef<string | undefined>()
+  const conversationIdRef = useRef<string | undefined>(undefined)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -152,29 +220,31 @@ export default function Home() {
     setConversations(payload.conversations ?? [])
   }
 
-  const loadConversation = async (id: string) => {
-    const response = await fetch(`/api/conversations/${id}?userId=${DEMO_USER_ID}`)
-    if (!response.ok) return
-    const payload = await response.json()
-    const loadedMessages: ChatMessage[] = (payload.messages ?? []).map((msg: any) => ({
-      id: msg.id ?? crypto.randomUUID(),
-      role: msg.role,
-      content: msg.content,
-      metadata: msg.metadata,
-    }))
-    setMessages(loadedMessages)
-    setConversationId(id)
-    conversationIdRef.current = id
-    setShareAudience((payload.conversation?.shareAudience as ShareAudience | undefined) ?? 'private')
-    setTenantAccess((payload.conversation?.tenantAccess as TenantAccess | undefined) ?? 'edit')
-    setAuthorizationModel((payload.conversation?.authorizationModel as AuthorizationModel | undefined) ?? 'supabase_rbac')
-    if (payload.conversation?.personaId) {
-      setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
+    const loadConversation = async (id: string) => {
+      const response = await fetch(`/api/conversations/${id}?userId=${DEMO_USER_ID}`)
+      if (!response.ok) return
+      const payload: ConversationPayload = await response.json()
+      const loadedMessages: ChatMessage[] = (payload.messages ?? []).map(msg => ({
+        id: msg.id ?? crypto.randomUUID(),
+        role: msg.role,
+        content: msg.content,
+        metadata: msg.metadata,
+      }))
+      setMessages(loadedMessages)
+      setConversationId(id)
+      conversationIdRef.current = id
+      setShareAudience(payload.conversation?.shareAudience ?? 'private')
+      setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
+      setAuthorizationModel(payload.conversation?.authorizationModel ?? 'supabase_rbac')
+      const personaId = payload.conversation?.personaId
+      if (personaId) {
+        setProfile(prev => ({ ...prev, personaType: personaId }))
+      }
+      const jurisdictions = payload.conversation?.jurisdictions
+      if (jurisdictions) {
+        setProfile(prev => ({ ...prev, jurisdictions }))
+      }
     }
-    if (payload.conversation?.jurisdictions) {
-      setProfile(prev => ({ ...prev, jurisdictions: payload.conversation.jurisdictions }))
-    }
-  }
 
   useEffect(() => {
     loadConversations()
@@ -188,66 +258,70 @@ export default function Home() {
     prevMessageCountRef.current = messages.length
   }, [messages.length])
 
-  useEffect(() => {
-    if (!conversationId) return
-    const controller = new AbortController()
-
-    const subscribe = async () => {
-      const response = await fetch(`/api/conversations/${conversationId}/stream?userId=${DEMO_USER_ID}`, {
-        signal: controller.signal,
-      })
-      if (!response.ok || !response.body) return
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        let boundaryIndex
-        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-          const rawEvent = buffer.slice(0, boundaryIndex).trim()
-          buffer = buffer.slice(boundaryIndex + 2)
-
-          if (!rawEvent) continue
-          const parsedEvent = parseSseEvent(rawEvent)
-          if (!parsedEvent) continue
-          const parsedData = parseJsonSafe(parsedEvent.data)
-
-          if (parsedEvent.type === 'metadata') {
-            if ((parsedData as any)?.conversationId) {
-              setConversationId((parsedData as any).conversationId)
-              conversationIdRef.current = (parsedData as any).conversationId
-            }
-            if ((parsedData as any)?.shareAudience) {
-              setShareAudience((parsedData as any).shareAudience as ShareAudience)
-            }
-            if ((parsedData as any)?.tenantAccess) {
-              setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
-            }
-            if ((parsedData as any)?.authorizationModel) {
-              setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
-            }
-            if (conversationIdRef.current) {
-              loadConversation(conversationIdRef.current)
-            }
-          } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
-            loadConversation(conversationIdRef.current)
-          }
-        }
+    const applyMetadata = (metadata: ChatSseMetadata) => {
+      if (metadata.conversationId) {
+        setConversationId(metadata.conversationId)
+        conversationIdRef.current = metadata.conversationId
+      }
+      if (metadata.shareAudience) {
+        setShareAudience(metadata.shareAudience)
+      }
+      if (metadata.tenantAccess) {
+        setTenantAccess(metadata.tenantAccess)
+      }
+      if (metadata.authorizationModel) {
+        setAuthorizationModel(metadata.authorizationModel)
       }
     }
 
-    subscribe()
+    useEffect(() => {
+      if (!conversationId) return
+      const controller = new AbortController()
 
-    return () => {
-      controller.abort()
-    }
-  }, [conversationId])
+      const subscribe = async () => {
+        const response = await fetch(`/api/conversations/${conversationId}/stream?userId=${DEMO_USER_ID}`, {
+          signal: controller.signal,
+        })
+        if (!response.ok || !response.body) return
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+
+          let boundaryIndex
+          while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, boundaryIndex).trim()
+            buffer = buffer.slice(boundaryIndex + 2)
+
+            if (!rawEvent) continue
+            const parsedEvent = parseSseEvent(rawEvent)
+            if (!parsedEvent) continue
+            const parsedData = parseJsonSafe(parsedEvent.data)
+
+            if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
+              applyMetadata(parsedData)
+              if (conversationIdRef.current) {
+                loadConversation(conversationIdRef.current)
+              }
+            } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
+              loadConversation(conversationIdRef.current)
+            }
+          }
+        }
+      }
+
+      subscribe()
+
+      return () => {
+        controller.abort()
+      }
+    }, [conversationId])
 
   const streamChatResponse = async (response: Response, assistantMessageId: string) => {
     if (!response.body) {
@@ -281,59 +355,47 @@ export default function Home() {
         const parsedEvent = parseSseEvent(rawEvent)
         if (!parsedEvent) continue
 
-        const parsedData = parseJsonSafe(parsedEvent.data)
+          const parsedData = parseJsonSafe(parsedEvent.data)
 
-        switch (parsedEvent.type) {
-          case 'metadata':
-            if ((parsedData as any)?.conversationId) {
-              setConversationId((parsedData as any).conversationId)
-              conversationIdRef.current = (parsedData as any).conversationId
-            }
-            if ((parsedData as any)?.shareAudience) {
-              setShareAudience((parsedData as any).shareAudience as ShareAudience)
-            }
-            if ((parsedData as any)?.tenantAccess) {
-              setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
-            }
-            if ((parsedData as any)?.authorizationModel) {
-              setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
-            }
-            setChatMetadata(parsedData as ChatMetadata)
-            setMessages(prev =>
-              prev.map(message =>
-                message.id === assistantMessageId
-                  ? { ...message, metadata: parsedData as ChatMetadata }
-                  : message
+          switch (parsedEvent.type) {
+            case 'metadata': {
+              if (!isChatSseMetadata(parsedData)) break
+              applyMetadata(parsedData)
+              setChatMetadata(parsedData)
+              setMessages(prev =>
+                prev.map(message =>
+                  message.id === assistantMessageId ? { ...message, metadata: parsedData } : message
+                )
               )
-            )
-            break
-          case 'message': {
-            const textChunk = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? ''
-            appendAssistantText(textChunk)
-            break
-          }
-          case 'disclaimer': {
-            const disclaimerText = typeof parsedData === 'string' ? parsedData : parsedData?.text ?? ''
-            setMessages(prev =>
-              prev.map(message =>
-                message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
+              break
+            }
+            case 'message': {
+              const textChunk = extractText(parsedData)
+              appendAssistantText(textChunk)
+              break
+            }
+            case 'disclaimer': {
+              const disclaimerText = extractText(parsedData)
+              setMessages(prev =>
+                prev.map(message =>
+                  message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
+                )
               )
-            )
-            break
+              break
+            }
+            case 'error': {
+              const errorMessage = extractErrorMessage(parsedData)
+              appendAssistantText(`Error: ${errorMessage}`)
+              return
+            }
+            case 'done':
+              return
+            default:
+              break
           }
-          case 'error': {
-            const errorMessage = typeof parsedData === 'string' ? parsedData : parsedData?.message ?? 'Unknown error'
-            appendAssistantText(`Error: ${errorMessage}`)
-            return
-          }
-          case 'done':
-            return
-          default:
-            break
         }
       }
     }
-  }
 
   const handleSubmit = async () => {
     if (!input.trim()) return
@@ -341,9 +403,7 @@ export default function Home() {
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: input.trim() }
     const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' }
 
-    const outgoingMessages = [...messages, userMessage]
-
-    setMessages(prev => [...prev, userMessage, assistantMessage])
+      setMessages(prev => [...prev, userMessage, assistantMessage])
     setInput('')
     setIsLoading(true)
     setChatMetadata(null)

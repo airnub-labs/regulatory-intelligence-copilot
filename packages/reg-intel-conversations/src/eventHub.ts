@@ -1,5 +1,7 @@
+export type ConversationEventType = 'message' | 'metadata' | 'error' | 'done' | 'disclaimer';
+
 export interface SseSubscriber {
-  send(event: string, data: unknown): void;
+  send(event: ConversationEventType, data: unknown): void;
   onClose?(): void;
 }
 
@@ -30,7 +32,7 @@ export class ConversationEventHub {
     subscriber.onClose?.();
   }
 
-  broadcast(tenantId: string, conversationId: string, event: string, data: unknown) {
+  broadcast(tenantId: string, conversationId: string, event: ConversationEventType, data: unknown) {
     const key = this.key(tenantId, conversationId);
     const set = this.subscribers.get(key);
     if (!set) return;

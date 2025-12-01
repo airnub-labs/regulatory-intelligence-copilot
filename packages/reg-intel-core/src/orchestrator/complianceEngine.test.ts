@@ -9,6 +9,7 @@ import type {
   TimelineEngine,
   EgressGuard,
   LlmClient,
+  CapturedConcept,
 } from './complianceEngine.js';
 import type { GraphWriteService } from '@reg-copilot/reg-intel-graph';
 import type { LlmRouter, LlmStreamChunk } from '@reg-copilot/reg-intel-llm';
@@ -55,13 +56,13 @@ describe('ComplianceEngine streaming', () => {
     mergeActiveNodeIds: vi.fn(),
   };
 
-  const canonicalConceptHandler: CanonicalConceptHandler = {
-    resolveAndUpsert: vi
-      .fn()
-      .mockImplementation(async concepts =>
-        concepts.map((_, idx) => `concept-node-${idx + 1}`)
-      ),
-  };
+    const canonicalConceptHandler: CanonicalConceptHandler = {
+      resolveAndUpsert: vi
+        .fn()
+        .mockImplementation(async (concepts: CapturedConcept[], _graphWriteService: GraphWriteService) =>
+          concepts.map((_, idx) => `concept-node-${idx + 1}`)
+        ),
+    };
 
   const graphWriteService = {} as GraphWriteService;
 
