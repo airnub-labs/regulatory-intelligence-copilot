@@ -288,7 +288,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
   - Static/deterministic checks (PII patterns, domain allowlists, etc.).
   - Optional LLM‑powered inspectors (egress guard helper agents).
 - Agents must be written assuming that egress may be **blocked, redacted, or downgraded** depending on tenant policy.
-- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override) but still executes on the sanitised payload in `enforce`/`report-only`; provider allowlisting runs in every mode and `off` is a deliberate, test-only wiring. `EgressGuardContext` carries tenant/user IDs, the requested `mode`, and the resolved `effectiveMode` for observability.
+- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override) but still executes on the sanitised payload in `enforce`/`report-only`; provider allowlisting runs in every mode (rejecting disallowed providers even when effective mode is `off`) and `off` is a deliberate, test-only wiring. `EgressGuardContext` carries tenant/user IDs, the requested `mode`, and the resolved `effectiveMode` for observability.
 
 ### 5.5 Concept Capture & Self‑Populating Graph
 
@@ -308,7 +308,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - It typically includes:
   - `activeNodeIds` (graph nodes recently referenced in answers).
   - Scenario/what‑if metadata (where relevant).
-- Agents do not read or write Conversation Context directly; they benefit from it via prompt aspects that summarise the active concepts and nodes.
+- Agents do not read or write Conversation Context directly; they benefit from it via prompt aspects that summarise the active concepts and nodes. The Compliance Engine merges agent `referencedNodes` with captured concept node IDs before persisting `activeNodeIds`.
 
 ### 5.7 Privacy, Redaction, and Non‑Advice Line
 

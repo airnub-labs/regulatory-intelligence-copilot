@@ -113,4 +113,31 @@ describe('LlmRouter egress resolution', () => {
     expect(ctx.mode).toBe('off');
     expect(ctx.effectiveMode).toBe('enforce');
   });
+
+  it('clamps tenant default off mode when off is disallowed', async () => {
+    const policy: TenantLlmPolicy = {
+      tenantId: 'tenant-1',
+      defaultModel: 'model-a',
+      defaultProvider: 'mock',
+      allowRemoteEgress: true,
+      tasks: [],
+      egressMode: 'off',
+      allowOffMode: false,
+    };
+
+    const egressClient = new MockEgressClient('enforce');
+    const router = new LlmRouter(
+      providers,
+      new MockPolicyStore(policy) as any,
+      'mock',
+      'model-a',
+      egressClient as any
+    );
+
+    await router.chat(messages, { tenantId: 'tenant-1' });
+
+    const ctx = egressClient.guardAndExecute.mock.calls[0][0];
+    expect(ctx.mode).toBe('enforce');
+    expect(ctx.effectiveMode).toBe('enforce');
+  });
 });

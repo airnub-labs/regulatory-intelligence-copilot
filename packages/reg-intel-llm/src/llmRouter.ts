@@ -135,7 +135,7 @@ function resolveEffectiveEgressMode(
 ): { requestedMode?: EgressMode; effectiveMode: EgressMode } {
   const globalDefault: EgressMode = baseMode;
 
-  const applyOverride = (current: EgressMode, candidate?: EgressMode) => {
+  const clampMode = (current: EgressMode, candidate?: EgressMode) => {
     if (!candidate) return current;
     if (candidate === 'off' && tenantPolicy?.allowOffMode !== true) {
       return current;
@@ -143,18 +143,28 @@ function resolveEffectiveEgressMode(
     return candidate;
   };
 
-  let mode: EgressMode = tenantPolicy?.egressMode ?? globalDefault;
-  let requestedMode: EgressMode | undefined = tenantPolicy?.egressMode;
+  const tenantRequested = tenantPolicy?.egressMode;
+  const tenantAllowsOff = tenantPolicy?.allowOffMode === true;
+
+  let mode: EgressMode = tenantRequested ?? globalDefault;
+  if (mode === 'off' && !tenantAllowsOff) {
+    mode = globalDefault;
+  }
+
+  let requestedMode: EgressMode | undefined =
+    tenantRequested === 'off' && !tenantAllowsOff
+      ? globalDefault
+      : tenantRequested;
 
   const userPolicy = options?.userId
     ? tenantPolicy?.userPolicies?.[options.userId]
     : undefined;
 
-  mode = applyOverride(mode, userPolicy?.egressMode);
+  mode = clampMode(mode, userPolicy?.egressMode);
   requestedMode = userPolicy?.egressMode ?? requestedMode;
 
   const override = options?.egressModeOverride;
-  mode = applyOverride(mode, override);
+  mode = clampMode(mode, override);
   requestedMode = override ?? requestedMode;
 
   return { requestedMode, effectiveMode: mode };

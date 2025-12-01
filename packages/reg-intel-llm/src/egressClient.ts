@@ -12,10 +12,10 @@ export interface EgressGuardContext {
   originalRequest?: unknown;
   tenantId?: string;
   userId?: string;
-  /** Optional mode requested by the caller before policy resolution. */
   task?: string;
   metadata?: Record<string, unknown>;
 
+  /** Optional mode requested by the caller before policy resolution. */
   mode?: EgressMode;
 
   /**
@@ -65,38 +65,25 @@ export interface EgressClientConfig {
 }
 
 function providerAllowlistAspect(
-  allowed: string[] | undefined,
-  defaultMode: EgressMode
+  allowed: string[] | undefined
 ): EgressAspect {
   return async (ctx, next) => {
-    const mode = ctx.effectiveMode ?? defaultMode;
-
     if (!allowed || allowed.length === 0) {
       return next(ctx);
     }
 
     const isAllowed = allowed.includes(ctx.providerId);
 
-    if (!isAllowed && mode === 'enforce') {
-      throw new LlmError(
-        `Provider ${ctx.providerId} is not allowed by the current egress policy`
-      );
-    }
-
-    if (!isAllowed && (mode === 'report-only' || mode === 'off')) {
-      const metadata = {
-        ...ctx.metadata,
-        egressPolicyViolation: true,
-        egressPolicyViolationReason: `Provider ${ctx.providerId} is not allowed by the current egress policy`,
-      };
-
+    if (!isAllowed) {
       console.warn('[Egress] Disallowed provider used', {
         providerId: ctx.providerId,
         tenantId: ctx.tenantId,
         task: ctx.task,
       });
 
-      return next({ ...ctx, metadata });
+      throw new LlmError(
+        `Provider ${ctx.providerId} is not allowed by the current egress policy`
+      );
     }
 
     return next(ctx);
@@ -156,10 +143,7 @@ export class EgressClient {
       preserveOriginalRequest: config?.preserveOriginalRequest,
     });
 
-    const providerAspect = providerAllowlistAspect(
-      config?.allowedProviders,
-      this.defaultMode
-    );
+    const providerAspect = providerAllowlistAspect(config?.allowedProviders);
 
     const baselineAspects: EgressAspect[] = [sanitizeAspect, providerAspect];
 
