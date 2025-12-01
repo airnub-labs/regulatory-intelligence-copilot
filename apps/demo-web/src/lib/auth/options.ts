@@ -28,7 +28,19 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const supabase = createServerClient(supabaseUrl, supabaseAnonKey, { cookies })
+        const cookieStore = await cookies()
+        const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll()
+            },
+            setAll(cookies) {
+              cookies.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options)
+              })
+            },
+          },
+        })
         const { data, error } = await supabase.auth.signInWithPassword({
           email: credentials.email,
           password: credentials.password,
