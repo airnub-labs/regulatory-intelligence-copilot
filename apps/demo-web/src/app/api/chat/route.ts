@@ -33,5 +33,23 @@ export async function POST(request: Request) {
   const headers = new Headers(request.headers);
   headers.set('x-user-id', session.user.id);
 
-  return handler(new Request(request, { headers }));
+  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid request body';
+    return new Response(message, { status: 400 });
+  }
+
+  const serializedBody = JSON.stringify({ ...(typeof body === 'object' && body !== null ? body : {}), tenantId });
+
+  return handler(
+    new Request(request.url, {
+      method: request.method,
+      headers,
+      body: serializedBody,
+    }),
+  );
 }
