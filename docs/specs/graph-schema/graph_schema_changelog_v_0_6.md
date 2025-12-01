@@ -10,7 +10,7 @@
 ## v0.6 – Concept Layer & Self‑Populating Graph
 
 **Status:** Current  
-**Aligned with:** `architecture_v_0_6.md`, `decisions_v_0_6.md`  
+**Aligned with:** `docs/architecture/architecture_v_0_6.md`, `docs/governance/decisions/decisions_v_0_6.md`
 **Primary schema:** `graph_schema_v_0_6.md`  
 **Companion specs:**
 
@@ -235,7 +235,7 @@ For an existing v0.4 deployment:
 ## v0.5 – No Graph Schema Changes (UI‑Only Release)
 
 **Status:** Historical, fully compatible  
-**Aligned with:** `docs/architecture/versions/architecture_v_0_5.md`, `docs/decisions/versions/decisions_v_0_5.md`
+**Aligned with:** `docs/architecture/versions/architecture_v_0_5.md`, `docs/governance/decisions/versions/decisions_v_0_5.md`
 
 v0.5 focused on the **UI layer**:
 
@@ -253,7 +253,7 @@ Implementation note:
 ## v0.4 – Architecture Alignment & Ingress Guard Integration (Unchanged)
 
 **Status:** Historical, still compatible  
-**Aligned with:** `architecture_v_0_4.md`, `decisions_v_0_4.md`
+**Aligned with:** `docs/architecture/versions/architecture_v_0_4.md`, `docs/governance/decisions/decisions_v_0_4.md`
 
 v0.4 was an alignment release that:
 

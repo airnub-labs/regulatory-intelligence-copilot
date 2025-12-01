@@ -4,7 +4,7 @@ This document extends the v0.4 decisions with new UI layer architecture decision
 
 ## Previous Decisions
 
-All v0.4 backend architecture decisions remain unchanged. See `docs/decisions_v_0_4.md` for:
+All v0.4 backend architecture decisions remain unchanged. See `docs/governance/decisions/decisions_v_0_4.md` for:
 - ComplianceEngine architecture
 - LLM provider routing
 - Graph data boundaries

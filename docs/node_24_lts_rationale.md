@@ -184,5 +184,5 @@ From this point on:
 
 - **All new services and packages MUST target Node 24 LTS or higher.**
 - CI and devcontainers should be updated to use Node 24.
-- Any future Node upgrade decisions should be recorded as new entries in `docs/decisions_v_0_2.md` or a subsequent versioned decisions doc.
+- Any future Node upgrade decisions should be recorded as new entries in `docs/governance/decisions/decisions_v_0_2.md` or a subsequent versioned decisions doc.
 

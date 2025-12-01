@@ -9,7 +9,7 @@ Conversation context is the engine’s internal view of “what is already in pl
 This spec is aligned with:
 
 - `architecture_v_0_6.md`
-- `decisions_v_0_6.md`
+- `docs/governance/decisions/decisions_v_0_6.md`
 - `concept_capture_from_main_chat_v_0_1.md`
 - `data_privacy_and_architecture_boundaries_v_0_1.md`
 

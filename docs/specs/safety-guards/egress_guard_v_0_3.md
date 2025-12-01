@@ -330,7 +330,7 @@ This spec should be referenced from:
 
 - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
 - `docs/architecture_v_0_3.md`
-- `docs/decisions_v_0_3.md`
+- `docs/governance/decisions/decisions_v_0_3.md`
 
 with a short note that:
 

@@ -300,9 +300,9 @@ This document provides a high-level overview of outstanding work and Phase 3 goa
 - `docs/PHASE_1_FIXES.md` - Phase 1 critical fixes
 
 **Architecture:**
-- `docs/roadmap_v_0_4.md` - Complete roadmap
+- `docs/governance/roadmap/roadmap_v_0_4.md` - Complete roadmap
 - `docs/architecture_v_0_4.md` - System architecture
-- `docs/decisions_v_0_4.md` - ADRs
+- `docs/governance/decisions/decisions_v_0_4.md` - ADRs
 - `docs/V0_4_IMPLEMENTATION_STATUS.md` - Current status
 
 **Code:**

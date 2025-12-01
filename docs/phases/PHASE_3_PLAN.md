@@ -5,7 +5,7 @@
 > **Branch:** `claude/phase-3-implementation-01SkpBxYZmSPvq2wGC99kqP5`
 > **Status:** Ready to implement
 
-This phase implements the Web App Integration & Streaming milestone from `roadmap_v_0_4.md` Phase 3.
+This phase implements the Web App Integration & Streaming milestone from `docs/governance/roadmap/roadmap_v_0_4.md` Phase 3.
 
 ---
 
@@ -482,9 +482,9 @@ After Phase 3 is complete, the recommended path is:
 
 ## References
 
-- `docs/roadmap_v_0_4.md` - Phase 3 definition
+- `docs/governance/roadmap/roadmap_v_0_4.md` - Phase 3 definition
 - `docs/architecture_v_0_4.md` - Architecture overview
-- `docs/decisions_v_0_4.md` - ADRs
+- `docs/governance/decisions/decisions_v_0_4.md` - ADRs
 - `packages/reg-intel-core/src/orchestrator/complianceEngine.ts` - Engine interface
 - `apps/demo-web/src/app/api/` - Current API implementation
 

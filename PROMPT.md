@@ -58,8 +58,8 @@ For any non‑trivial task, mentally load these files first (from `docs/` and `d
    - `docs/specs/scenario_engine_v_0_1.md` (if scenario/what‑if related)
 
 6. **Roadmap & decisions**
-   - `docs/decisions/decisions_v_0_6.md`
-   - `docs/roadmap/roadmap_v_0_6.md`
+   - `docs/governance/decisions/decisions_v_0_6.md`
+   - `docs/governance/roadmap/roadmap_v_0_6.md`
 
 If you are unsure how to implement something, prefer **checking these docs again** over improvising a new design.
 

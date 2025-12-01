@@ -6,8 +6,8 @@
 
 This document tracks the implementation of the v0.4 architecture as defined in:
 - `docs/architecture_v_0_4.md`
-- `docs/decisions_v_0_4.md`
-- `docs/roadmap_v_0_4.md`
+- `docs/governance/decisions/decisions_v_0_4.md`
+- `docs/governance/roadmap/roadmap_v_0_4.md`
 
 ---
 
@@ -187,7 +187,7 @@ Per `graph_algorithms_v_0_1.md` and D-030:
 **Current Blocker:** None - can be done alongside Phase 2.
 
 ### Phase 5: Content & Seeding
-Per `roadmap_v_0_4.md` Phase 4:
+Per `docs/governance/roadmap/roadmap_v_0_4.md` Phase 4:
 - [ ] Seed IE/UK/NI/IM/EU/CTA graph using GraphWriteService
 - [ ] Implement special jurisdiction models (NI as Region under UK, etc.)
 - [ ] Add domain-specific agents (CGT, R&D, EU coordination)
@@ -201,7 +201,7 @@ Per `roadmap_v_0_4.md` Phase 4:
 **Current Blocker:** Requires Phase 2 (package split) for cleaner separation of ingestion logic.
 
 ### Phase 6: Web App Integration
-Per `roadmap_v_0_4.md` Phase 3:
+Per `docs/governance/roadmap/roadmap_v_0_4.md` Phase 3:
 - [ ] Wire `/api/chat` to ComplianceEngine.handleChat via reg-intel-next-adapter
 - [ ] Implement SSE streaming for chat responses
 - [ ] Implement WebSocket patch-based graph updates

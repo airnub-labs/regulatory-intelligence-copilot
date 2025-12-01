@@ -6,8 +6,8 @@
 > This roadmap reflects the **v0.4 architecture and decisions**: Node 24 LTS baseline, jurisdiction‑neutral prompts + prompt aspects, provider‑agnostic LLM routing (OpenAI Responses + GPT‑OSS + Groq + local/OSS models), direct Memgraph `GraphClient`, read‑only Memgraph MCP, `GraphWriteService` + Graph Ingress Guard, `EgressClient` + AI SDK v5 as an **edge implementation detail**, patch‑based graph streaming, and a reusable engine + demo app split.
 >
 > Normative references:
-> - `docs/architecture_v_0_4.md`
-> - `docs/decisions_v_0_4.md`
+> - `docs/architecture/versions/architecture_v_0_4.md`
+> - `docs/governance/decisions/decisions_v_0_4.md`
 > - `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
 > - `docs/specs/graph_schema_changelog_v_0_3.md`
 > - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
@@ -29,7 +29,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
 
 ## Phase 0 – Fork, Clean-Up & Baseline (v0.3 → v0.4)
 
-**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all docs/decisions/architecture are aligned.
+**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all docs/governance/decisions/architecture are aligned.
 
 **Status:** Mostly done; this phase should be closed soon.
 
@@ -37,7 +37,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
 - [ ] Confirm fork and rename:
   - [ ] `rfc-refactor` → `regulatory-intelligence-copilot` (done at repo level, verify everywhere in docs).
 - [ ] Documentation alignment:
-  - [ ] Update `README.md` to reference `architecture_v_0_4.md`, `decisions_v_0_4.md`, `roadmap_v_0_4.md`.
+  - [ ] Update `README.md` to reference `architecture/versions/architecture_v_0_4.md`, `governance/decisions/decisions_v_0_4.md`, `governance/roadmap/roadmap_v_0_4.md`.
   - [ ] Ensure old v0.1/v0.2/v0.3 docs are clearly marked as archived or superseded.
 - [ ] Legacy HTTP/RFC auditor cleanup:
   - [ ] Confirm HTTP probe runners & sample REST API are archived under `legacy/` or removed.

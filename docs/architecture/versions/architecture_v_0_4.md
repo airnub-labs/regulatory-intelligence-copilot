@@ -28,8 +28,8 @@ This architecture sits on top of, and must remain consistent with, the following
 
 And the project‑level docs:
 
-- `docs/decisions_v_0_3.md`
-- `docs/roadmap_v_0_2.md`
+- `docs/governance/decisions/decisions_v_0_3.md`
+- `docs/governance/roadmap/roadmap_v_0_2.md`
 - `docs/node_24_lts_rationale.md`
 
 Where there is ambiguity, these specs take precedence over this document.
