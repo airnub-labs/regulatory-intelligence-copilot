@@ -6,6 +6,7 @@ declare
   seeded_user record;
   demo_conv_id uuid;
   demo_conversation_title text := 'Demo conversation';
+  demo_user_id uuid;
   demo_tenant_id uuid := coalesce(nullif(current_setting('app.demo_tenant_id', true), '')::uuid, gen_random_uuid());
 begin
   select id, raw_user_meta_data
@@ -15,8 +16,11 @@ begin
    limit 1;
 
   if not found then
-    insert into auth.users (email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+    demo_user_id := gen_random_uuid();
+
+    insert into auth.users (id, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
     values (
+      demo_user_id,
       demo_email,
       crypt(demo_password, gen_salt('bf')),
       now(),
@@ -26,6 +30,8 @@ begin
     returning id, raw_user_meta_data
     into seeded_user;
   else
+    demo_user_id := seeded_user.id;
+
     update auth.users
        set encrypted_password = crypt(demo_password, gen_salt('bf')),
            email_confirmed_at = now(),
@@ -35,6 +41,8 @@ begin
     returning id, raw_user_meta_data
       into seeded_user;
   end if;
+
+  demo_user_id := coalesce(demo_user_id, seeded_user.id);
 
   -- Keep the tenant ID in sync even if the user already existed
   demo_tenant_id := coalesce((seeded_user.raw_user_meta_data ->> 'tenant_id')::uuid, demo_tenant_id);
@@ -47,8 +55,8 @@ begin
 
   insert into auth.identities (user_id, identity_data, provider, provider_id, last_sign_in_at)
   values (
-    seeded_user.id,
-    jsonb_build_object('sub', seeded_user.id, 'email', demo_email),
+    demo_user_id,
+    jsonb_build_object('sub', demo_user_id, 'email', demo_email),
     'email',
     demo_email,
     now()
@@ -59,14 +67,14 @@ begin
     into demo_conv_id
     from copilot_internal.conversations
    where tenant_id = demo_tenant_id
-     and user_id = seeded_user.id
+     and user_id = demo_user_id
      and title = demo_conversation_title
    order by created_at asc
    limit 1;
 
   if not found then
     insert into copilot_internal.conversations (tenant_id, user_id, share_audience, tenant_access, title, persona_id, jurisdictions)
-    values (demo_tenant_id, seeded_user.id, 'tenant', 'edit', demo_conversation_title, 'single-director-ie', array['IE'])
+    values (demo_tenant_id, demo_user_id, 'tenant', 'edit', demo_conversation_title, 'single-director-ie', array['IE'])
     returning id into demo_conv_id;
   end if;
 
@@ -75,10 +83,10 @@ begin
 
   insert into copilot_internal.conversation_messages (conversation_id, tenant_id, user_id, role, content, metadata)
   values
-    (demo_conv_id, demo_tenant_id, seeded_user.id, 'user', 'How do PAYE and PRSI interact for a single-director company?', null),
+    (demo_conv_id, demo_tenant_id, demo_user_id, 'user', 'How do PAYE and PRSI interact for a single-director company?', null),
     (demo_conv_id, demo_tenant_id, null, 'assistant', 'Here is how PAYE and PRSI interact...', jsonb_build_object('jurisdictions', array['IE']));
 
-  raise notice 'Seeded demo user with id % and tenant id %', seeded_user.id, demo_tenant_id;
+  raise notice 'Seeded demo user with id % and tenant id %', demo_user_id, demo_tenant_id;
 end $$;
 
 insert into copilot_internal.personas (id, label, description, jurisdictions)
