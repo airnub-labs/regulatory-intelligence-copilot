@@ -12,9 +12,13 @@ import {
   type LlmClient,
   type LlmChatRequest,
   type LlmChatResponse,
+  type LlmStreamChunk,
   type RedactedPayload,
 } from '@reg-copilot/reg-intel-core';
-import type { LlmRouter, LlmCompletionOptions } from '@reg-copilot/reg-intel-llm';
+import type {
+  LlmRouter,
+  LlmCompletionOptions,
+} from '@reg-copilot/reg-intel-llm';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -41,7 +45,7 @@ class LlmRouterClientAdapter implements LlmClient {
     };
   }
 
-  async *streamChat(request: LlmChatRequest): AsyncIterable<{ type: 'text' | 'error' | 'done'; delta?: string; error?: Error }> {
+  streamChat(request: LlmChatRequest): AsyncIterable<LlmStreamChunk> {
     const options: LlmCompletionOptions = {
       temperature: request.temperature,
       maxTokens: request.max_tokens,
@@ -49,10 +53,39 @@ class LlmRouterClientAdapter implements LlmClient {
       task: 'main-chat',
     };
 
-    // Stream from LlmRouter
-    for await (const chunk of this.router.streamChat(request.messages, options)) {
-      yield chunk;
-    }
+    const routerStream = this.router.streamChat(request.messages, options) as AsyncIterable<unknown>;
+
+    const normalizeStream: AsyncIterable<LlmStreamChunk> = (async function* (): AsyncGenerator<
+      LlmStreamChunk,
+      void,
+      undefined
+    > {
+      for await (const chunk of routerStream) {
+        const routerChunk = chunk as { type?: string; delta?: string; error?: unknown };
+
+        if (routerChunk.type === 'tool') {
+          continue;
+        }
+
+        if (routerChunk.type === 'text') {
+          yield { type: 'text', delta: routerChunk.delta ?? '' } satisfies LlmStreamChunk;
+          continue;
+        }
+
+        if (routerChunk.type === 'done') {
+          yield { type: 'done' } satisfies LlmStreamChunk;
+          continue;
+        }
+
+        const error =
+          routerChunk.error instanceof Error
+            ? routerChunk.error
+            : new Error(String(routerChunk.error));
+        yield { type: 'error', error } satisfies LlmStreamChunk;
+      }
+    })();
+
+    return normalizeStream;
   }
 }
 
@@ -203,10 +236,13 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       llmRouter = createDefaultLlmRouter();
       const llmClient = new LlmRouterClientAdapter(llmRouter);
       complianceEngine = createComplianceEngine({
+        llmRouter,
         llmClient: llmClient,
         graphClient: createGraphClient(),
         timelineEngine: createTimelineEngine(),
         egressGuard: new BasicEgressGuard(),
+        graphWriteService: {} as never, // Graph writes not used in Next adapter baseline wiring
+        canonicalConceptHandler: { resolveAndUpsert: async () => [] },
       });
     }
     return { llmRouter: llmRouter!, complianceEngine };

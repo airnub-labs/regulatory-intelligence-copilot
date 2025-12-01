@@ -55,7 +55,7 @@ describe('GlobalRegulatoryComplianceAgent.handleStream', () => {
       profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
     };
 
-    const result = await GlobalRegulatoryComplianceAgent.handleStream(input, ctx);
+    const result = await GlobalRegulatoryComplianceAgent.handleStream!(input, ctx);
 
     const streamedChunks = [] as Array<{ type: string; delta?: string }>;
     for await (const chunk of result.stream) {

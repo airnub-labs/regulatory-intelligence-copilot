@@ -28,8 +28,8 @@ export type EgressAspect = (
 export function composeEgressAspects(
   aspects: EgressAspect[],
   terminal: (ctx: EgressGuardContext) => Promise<EgressGuardContext>
-) {
-  return aspects.reduceRight(
+): (ctx: EgressGuardContext) => Promise<EgressGuardContext> {
+  return aspects.reduceRight<(ctx: EgressGuardContext) => Promise<EgressGuardContext>>(
     (next, aspect) => async (ctx: EgressGuardContext) => aspect(ctx, next),
     terminal
   );
