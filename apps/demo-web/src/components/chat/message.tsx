@@ -4,7 +4,42 @@ import { cn } from "@/lib/utils"
 
 type ListBuffer = {
   type: "ul" | "ol"
-  items: string[]
+  items: React.ReactNode[]
+}
+
+function renderInlineMarkdown(text: string, keyPrefix: string) {
+  const elements: React.ReactNode[] = []
+  const regex = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(text.slice(lastIndex, match.index))
+    }
+
+    if (match[1] && match[2]) {
+      elements.push(
+        <a key={`${keyPrefix}-link-${elements.length}`} href={match[2]} target="_blank" rel="noreferrer">
+          {match[1]}
+        </a>
+      )
+    } else if (match[3]) {
+      elements.push(<strong key={`${keyPrefix}-strong-${elements.length}`}>{match[3]}</strong>)
+    } else if (match[4]) {
+      elements.push(<em key={`${keyPrefix}-em-${elements.length}`}>{match[4]}</em>)
+    } else if (match[5]) {
+      elements.push(<code key={`${keyPrefix}-code-${elements.length}`}>{match[5]}</code>)
+    }
+
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    elements.push(text.slice(lastIndex))
+  }
+
+  return elements
 }
 
 function renderMarkdown(content: string) {
@@ -15,7 +50,9 @@ function renderMarkdown(content: string) {
   const flushParagraph = () => {
     if (paragraphBuffer.length === 0) return
     elements.push(
-      <p key={`paragraph-${elements.length}`}>{paragraphBuffer.join(" ")}</p>
+      <p key={`paragraph-${elements.length}`}>
+        {renderInlineMarkdown(paragraphBuffer.join(" "), `paragraph-${elements.length}`)}
+      </p>
     )
     paragraphBuffer = []
   }
@@ -37,6 +74,20 @@ function renderMarkdown(content: string) {
     const trimmed = line.trim()
     const bulletMatch = trimmed.match(/^[-*+]\s+(.*)$/)
     const orderedMatch = trimmed.match(/^\d+[.)]\s+(.*)$/)
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.*)$/)
+
+    if (headingMatch) {
+      flushParagraph()
+      flushList()
+      const level = headingMatch[1].length
+      const Tag = (level === 1 ? "h1" : level === 2 ? "h2" : "h3") as keyof JSX.IntrinsicElements
+      elements.push(
+        <Tag key={`heading-${elements.length}`}>
+          {renderInlineMarkdown(headingMatch[2], `heading-${elements.length}`)}
+        </Tag>
+      )
+      return
+    }
 
     if (bulletMatch) {
       flushParagraph()
@@ -45,7 +96,11 @@ function renderMarkdown(content: string) {
         flushList()
         listBuffer = { type: "ul", items: [] }
       }
-      listBuffer.items.push(item)
+      listBuffer.items.push(
+        <span key={`list-item-content-${listBuffer.items.length}`}>
+          {renderInlineMarkdown(item, `list-${elements.length}-${listBuffer?.items.length ?? 0}`)}
+        </span>
+      )
       return
     }
 
@@ -56,7 +111,11 @@ function renderMarkdown(content: string) {
         flushList()
         listBuffer = { type: "ol", items: [] }
       }
-      listBuffer.items.push(item)
+      listBuffer.items.push(
+        <span key={`ordered-item-content-${listBuffer.items.length}`}>
+          {renderInlineMarkdown(item, `list-${elements.length}-${listBuffer?.items.length ?? 0}`)}
+        </span>
+      )
       return
     }
 
