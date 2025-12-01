@@ -58,7 +58,6 @@ interface ConversationSummary {
   lastMessageAt?: string | null
   shareAudience: ShareAudience
   tenantAccess: TenantAccess
-  isShared: boolean
   authorizationModel?: AuthorizationModel
 }
 
@@ -130,12 +129,12 @@ export default function Home() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
   const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
-  const [isShared, setIsShared] = useState(false)
   const [authorizationModel, setAuthorizationModel] = useState<AuthorizationModel>('supabase_rbac')
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
   })
+  const isShared = shareAudience !== 'private'
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
@@ -168,7 +167,6 @@ export default function Home() {
     conversationIdRef.current = id
     setShareAudience((payload.conversation?.shareAudience as ShareAudience | undefined) ?? 'private')
     setTenantAccess((payload.conversation?.tenantAccess as TenantAccess | undefined) ?? 'edit')
-    setIsShared(Boolean(payload.conversation?.isShared))
     setAuthorizationModel((payload.conversation?.authorizationModel as AuthorizationModel | undefined) ?? 'supabase_rbac')
     if (payload.conversation?.personaId) {
       setProfile(prev => ({ ...prev, personaType: payload.conversation.personaId }))
@@ -230,9 +228,6 @@ export default function Home() {
             }
             if ((parsedData as any)?.tenantAccess) {
               setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
-            }
-            if ((parsedData as any)?.isShared !== undefined) {
-              setIsShared(Boolean((parsedData as any).isShared))
             }
             if ((parsedData as any)?.authorizationModel) {
               setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
@@ -299,9 +294,6 @@ export default function Home() {
             }
             if ((parsedData as any)?.tenantAccess) {
               setTenantAccess((parsedData as any).tenantAccess as TenantAccess)
-            }
-            if ((parsedData as any)?.isShared !== undefined) {
-              setIsShared(Boolean((parsedData as any).isShared))
             }
             if ((parsedData as any)?.authorizationModel) {
               setAuthorizationModel((parsedData as any).authorizationModel as AuthorizationModel)
@@ -417,7 +409,6 @@ export default function Home() {
     if (response.ok) {
       setShareAudience(nextAudience)
       setTenantAccess(nextTenantAccess)
-      setIsShared(nextAudience !== 'private')
       loadConversations()
     }
   }
@@ -675,7 +666,7 @@ export default function Home() {
                     >
                       <span className="flex w-full items-center justify-between gap-2">
                         <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
-                        {conv.isShared && (
+                        {conv.shareAudience !== 'private' && (
                           <Badge variant="secondary">
                             {conv.shareAudience === 'public'
                               ? 'Public read-only'

@@ -24,7 +24,6 @@ export interface ConversationRecord {
   userId?: string | null;
   shareAudience: ShareAudience;
   tenantAccess: TenantAccess;
-  isShared: boolean;
   authorizationModel: AuthorizationModel;
   authorizationSpec?: AuthorizationSpec | null;
   personaId?: string | null;
@@ -96,9 +95,13 @@ function resolveTenantAccess(input: { tenantAccess?: TenantAccess }) {
   return 'view';
 }
 
-function effectiveShareAudience(record: ConversationRecord) {
+export function effectiveShareAudience(record: ConversationRecord) {
   if (record.authorizationModel === 'supabase_rbac') return record.shareAudience;
   return record.authorizationSpec?.fallbackShareAudience ?? 'private';
+}
+
+export function deriveIsShared(record: ConversationRecord) {
+  return effectiveShareAudience(record) !== 'private';
 }
 
 function canRead(record: ConversationRecord, userId?: string | null) {
@@ -137,18 +140,12 @@ export class InMemoryConversationStore implements ConversationStore {
     const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
-    const effectiveAudience =
-      authorizationModel === 'supabase_rbac'
-        ? shareAudience
-        : input.authorizationSpec?.fallbackShareAudience ?? 'private';
-
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
       userId: input.userId,
       shareAudience,
       tenantAccess,
-      isShared: effectiveAudience !== 'private',
       authorizationModel,
       authorizationSpec: input.authorizationSpec,
       personaId: input.personaId ?? null,
@@ -265,13 +262,10 @@ export class InMemoryConversationStore implements ConversationStore {
     const tenantAccess = input.tenantAccess ?? record.tenantAccess;
     const authorizationModel = input.authorizationModel ?? record.authorizationModel;
     const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
-    const effectiveAudience =
-      authorizationModel === 'supabase_rbac' ? shareAudience : authorizationSpec?.fallbackShareAudience ?? 'private';
     this.conversations.set(input.conversationId, {
       ...record,
       shareAudience,
       tenantAccess,
-      isShared: effectiveAudience !== 'private',
       authorizationModel,
       authorizationSpec,
       updatedAt: new Date(),

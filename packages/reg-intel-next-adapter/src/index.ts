@@ -23,6 +23,7 @@ import type { ConversationContextStore } from '@reg-copilot/reg-intel-core';
 import {
   InMemoryConversationContextStore,
   InMemoryConversationStore,
+  deriveIsShared,
   type ConversationStore,
   type ShareAudience,
   type TenantAccess,
@@ -360,6 +361,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         },
       } as { send: (event: string, data: unknown) => void };
       const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
+      const isShared = deriveIsShared(conversationRecord);
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -371,7 +373,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             conversationId,
             shareAudience: conversationRecord.shareAudience,
             tenantAccess: conversationRecord.tenantAccess,
-            isShared: conversationRecord.isShared,
+            isShared,
             authorizationModel: conversationRecord.authorizationModel,
             authorizationSpec: conversationRecord.authorizationSpec,
           });
@@ -402,7 +404,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   authorizationSpec: conversationRecord.authorizationSpec,
                   shareAudience: conversationRecord.shareAudience,
                   tenantAccess: conversationRecord.tenantAccess,
-                  isShared: conversationRecord.isShared,
+                  isShared,
                 });
               } else if (chunk.type === 'text' && chunk.delta) {
                 streamedTextBuffer += chunk.delta;

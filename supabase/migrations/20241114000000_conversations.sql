@@ -59,7 +59,6 @@ create view if not exists public.conversations_view as
          user_id,
          share_audience,
          tenant_access,
-         share_audience <> 'private' as is_shared,
          authorization_model,
          authorization_spec,
          title,
