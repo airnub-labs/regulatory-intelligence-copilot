@@ -222,8 +222,25 @@ interface ConversationContextStore {
 - Schema and seed data added; production Supabase wiring and RLS are pending.
 - Event hub implemented as an in-process map suitable for single-instance dev. Production fan-out will require Redis/pub-sub or a managed equivalent.
 - Provides the basis for a "show your workings" experience in the graph view.
-- Sharing is modelled via a `sharing_mode` column (private, tenant read/write, public read) with a derived `is_shared` flag for backwards compatibility so future permissioned sharing (read-only/public) can be introduced without schema refactors.
-  - An `access_model` + `access_control` envelope now sits beside `sharing_mode` so we can plug in OpenFGA (or similar Zanzibar-style ReBAC) later while keeping Supabase as the system of record and the UI/API contracts stable.
+- Sharing is modelled via a `sharing_mode` column (private, tenant read/write, public read); the public view exposes a derived `is_shared` field (`sharing_mode <> 'private'`) so legacy consumers remain compatible without storing redundant state.
+  - An `access_model` + `access_control` envelope now sits beside `sharing_mode` so we can plug in OpenFGA (or similar Zanzibar-style ReBAC) later while keeping Supabase as the system of record and the UI/API contracts stable. OpenFGA adoption is planned for the next milestone to add principal-aware permissions (owner/tenant read/write/public read) without further schema churn.
+
+### D-040 – ReBAC trajectory (OpenFGA-ready)
+
+**Decision (future-facing):**
+
+- Use `access_model = 'external_rebac'` plus `access_control` to carry principal/resource tuples so we can mirror conversation sharing into OpenFGA without rewriting persistence.
+- Keep Supabase/RLS as the enforcement source of truth; OpenFGA provides discovery (`ListObjects`, `ListUsers`) and caching for server-side filtering.
+
+**Status:**
+
+- Planning. Schema and API surfaces already include `access_model`/`access_control` to avoid future breaking changes.
+
+**Next steps (tracked on the roadmap):**
+
+- Define the OpenFGA model (users, conversations, tenant membership, roles, public-read delegation).
+- Synchronise tuple writes alongside Supabase updates when `access_model = 'external_rebac'` is enabled for a tenant.
+- Gate authz in the chat/conversation APIs via OpenFGA checks before RLS queries.
 
 ---
 
