@@ -27,6 +27,11 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        // Use a stateless client so credential verification never depends on
+        // cookie persistence. NextAuth executes this call on the server, where
+        // Supabase's browser session helpers are not available; disabling
+        // session persistence avoids 401s caused by missing/expired cookies and
+        // lets us validate the raw email/password pair deterministically.
         const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           auth: {
             autoRefreshToken: false,
