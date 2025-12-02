@@ -77,14 +77,15 @@ begin
   -- from creating a unique index ourselves, perform an explicit delete/insert
   -- so the seed is idempotent without relying on ON CONFLICT.
   delete from auth.identities
-   where provider = 'email' and provider_id = demo_email;
+   where provider = 'email'
+     and (provider_id = demo_email or provider_id = demo_user_id or user_id = demo_user_id);
 
   insert into auth.identities (user_id, identity_data, provider, provider_id, last_sign_in_at)
   values (
     demo_user_id,
-    jsonb_build_object('sub', demo_user_id, 'email', demo_email),
+    jsonb_build_object('sub', demo_user_id, 'email', demo_email, 'email_verified', true, 'phone_verified', false),
     'email',
-    demo_email,
+    demo_user_id,
     now()
   );
 
