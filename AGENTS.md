@@ -280,7 +280,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - Agents never call providers directly; they always go through the **LLM router**.
 - Tenant and task policies determine which models/providers are used and whether remote egress is allowed.
 - AI SDK v5, Responses API, and other provider specifics are implementation details behind the `LlmProvider` abstraction.
-- The router resolves requested vs effective egress modes (global defaults → tenant policy → optional per-user policy → per-call override), injects `tenantId`/`userId` into the `EgressGuardContext`, and enforces provider allowlisting even when sanitisation mode is `off`.
+- The router resolves requested vs effective egress modes **in strict order**: global defaults → tenant policy → optional per-user policy → per-call override. Each scope runs its own `allowOff` check; if a scope disallows `off`, later candidates cannot resurrect it. `requestedMode` and `effectiveMode` must both be set on the context with the base default as the fallback, and provider allowlisting is always enforced (even when sanitisation mode is `off`).
 
 ### 5.4 Egress Guard
 
@@ -289,7 +289,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
   - Static/deterministic checks (PII patterns, domain allowlists, etc.).
   - Optional LLM‑powered inspectors (egress guard helper agents).
 - Agents must be written assuming that egress may be **blocked, redacted, or downgraded** depending on tenant policy.
-- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override). `enforce` executes the sanitised payload, `report-only` logs redactions but executes the original request, and provider allowlisting runs in every mode (rejecting disallowed providers even when effective mode is `off`). `off` is a deliberate, test-only wiring. `EgressGuardContext` carries tenant/user IDs, the requested `mode`, and the resolved `effectiveMode` for observability.
+- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override). `enforce` executes the sanitised payload, `report-only` logs redactions but executes the original request, and provider allowlisting runs in every mode (rejecting disallowed providers even when effective mode is `off`). `off` is a deliberate, test-only wiring. `EgressGuardContext` carries tenant/user IDs, the requested `mode`, and the resolved `effectiveMode` for observability. **Do not regress the ordering or `allowOff` scoping**; user-level `off` must only be honoured when explicitly allowed even if the tenant forbids it.
 
 ### 5.5 Concept Capture & Self‑Populating Graph
 

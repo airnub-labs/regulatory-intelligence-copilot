@@ -109,11 +109,8 @@ The implementation mirrors this table:
 
 - Each `EgressGuardContext` carries both an optional **requested** mode and the resolved `effectiveMode` plus tenant/user identifiers so that per-call decisions can be made without changing the egress pipeline.
 - `EgressClient` uses `effectiveMode` when provided, falling back to its configured default (usually `enforce`).
-- `LlmRouter` is responsible for resolving `effectiveMode` based on:
-  - Global/default mode (production = `enforce`).
-  - Tenant policy (`TenantLlmPolicy.egressMode` + optional `allowOffMode`).
-  - Optional per-user policy where defined on the tenant (cannot escalate beyond tenant `allowOffMode`).
-  - Optional per-call overrides (e.g. user-specific `egressModeOverride`), constrained by tenant policy (no `off` unless allowed).
+- `LlmRouter` resolves modes in the **exact order**: **global/base default → tenant policy → user policy → per-call override**. Every step runs its own `allowOff` check; if an `off` candidate is disallowed at that scope, the resolver keeps the last permitted mode instead of silently skipping back to a later candidate.
+- Global/base default is always the starting `requestedMode` and `effectiveMode` fallback. Tenant policy can replace it and can optionally disallow `off` for everyone. User policy runs after the tenant and can tighten or loosen `allowOff` for that user; per-call overrides are applied last and only take effect if allowed by the user+tenant `allowOff` combination.
 - Mode resolution only affects whether sanitisation mutates the execution payload. `enforce` executes the sanitised payload, `report-only` executes the original payload with sanitisation metadata attached, and `off` skips sanitisation entirely while still enforcing provider allowlisting.
 - The router populates `tenantId`, `userId`, the requested mode, and the resolved `effectiveMode` into `EgressGuardContext` for observability and downstream auditing.
 
