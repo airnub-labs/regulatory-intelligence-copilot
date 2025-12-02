@@ -1,6 +1,7 @@
 import CredentialsProvider from 'next-auth/providers/credentials'
 import type { NextAuthOptions } from 'next-auth'
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -27,15 +28,17 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        // Use a stateless client so credential verification never depends on
-        // cookie persistence. NextAuth executes this call on the server, where
-        // Supabase's browser session helpers are not available; disabling
-        // session persistence avoids 401s caused by missing/expired cookies and
-        // lets us validate the raw email/password pair deterministically.
-        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false,
+        const cookieStore = await cookies()
+        const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll()
+            },
+            setAll(cookies) {
+              cookies.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options)
+              })
+            },
           },
         })
         const { data, error } = await supabase.auth.signInWithPassword({
