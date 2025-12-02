@@ -1,7 +1,6 @@
 import CredentialsProvider from 'next-auth/providers/credentials'
 import type { NextAuthOptions } from 'next-auth'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -28,17 +27,10 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const cookieStore = await cookies()
-        const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-          cookies: {
-            getAll() {
-              return cookieStore.getAll()
-            },
-            setAll(cookies) {
-              cookies.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options)
-              })
-            },
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
           },
         })
         const { data, error } = await supabase.auth.signInWithPassword({
