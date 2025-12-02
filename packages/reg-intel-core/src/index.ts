@@ -141,6 +141,8 @@ export {
   type UpsertAgreementDto,
   type UpsertRegimeDto,
   type CreateRelationshipDto,
+  createCanonicalConceptHandler,
+  type CapturedConceptInput,
 } from '@reg-copilot/reg-intel-graph';
 
 // LLM Client (legacy MCP-based)
