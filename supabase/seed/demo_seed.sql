@@ -18,14 +18,32 @@ begin
   if not found then
     demo_user_id := gen_random_uuid();
 
-    insert into auth.users (id, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+    insert into auth.users (
+      id,
+      instance_id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_app_meta_data,
+      raw_user_meta_data
+    )
     values (
       demo_user_id,
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated',
+      'authenticated',
       demo_email,
       crypt(demo_password, gen_salt('bf')),
       now(),
       jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-      jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
+      jsonb_build_object(
+        'tenant_id', demo_tenant_id,
+        'full_name', demo_full_name,
+        'email_verified', true,
+        'phone_verified', false
+      )
     )
     returning id, raw_user_meta_data
     into seeded_user;
@@ -34,9 +52,17 @@ begin
 
     update auth.users
        set encrypted_password = crypt(demo_password, gen_salt('bf')),
+           instance_id = '00000000-0000-0000-0000-000000000000',
+           aud = 'authenticated',
+           role = 'authenticated',
            email_confirmed_at = now(),
            raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-           raw_user_meta_data = jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
+           raw_user_meta_data = jsonb_build_object(
+             'tenant_id', demo_tenant_id,
+             'full_name', demo_full_name,
+             'email_verified', true,
+             'phone_verified', false
+           )
      where id = seeded_user.id
     returning id, raw_user_meta_data
       into seeded_user;
