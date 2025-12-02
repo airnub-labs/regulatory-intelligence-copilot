@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
+  AlertTriangle,
   BookOpenCheck,
   Globe2,
   PencilLine,
@@ -48,6 +49,7 @@ interface ChatMetadata {
   uncertaintyLevel: 'low' | 'medium' | 'high'
   disclaimerKey: string
   referencedNodes: string[]
+  warnings?: string[]
 }
 
 interface ChatMessage {
@@ -142,12 +144,16 @@ interface ChatSseMetadata extends ChatMetadata {
 const isChatMetadata = (value: unknown): value is ChatMetadata => {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Record<string, unknown>
+  const hasValidWarnings =
+    candidate.warnings === undefined ||
+    (Array.isArray(candidate.warnings) && candidate.warnings.every(item => typeof item === 'string'))
   return (
     typeof candidate.agentId === 'string' &&
     Array.isArray(candidate.jurisdictions) &&
     typeof candidate.uncertaintyLevel === 'string' &&
     typeof candidate.disclaimerKey === 'string' &&
-    Array.isArray(candidate.referencedNodes)
+    Array.isArray(candidate.referencedNodes) &&
+    hasValidWarnings
   )
 }
 
@@ -178,6 +184,25 @@ const extractErrorMessage = (parsedData: ParsedSseData): string => {
   if (typeof parsedData === 'string') return parsedData
   if ('message' in parsedData && typeof parsedData.message === 'string') return parsedData.message
   return 'Unknown error'
+}
+
+const extractWarnings = (parsedData: ParsedSseData): string[] => {
+  if (Array.isArray(parsedData) && parsedData.every(item => typeof item === 'string')) {
+    return parsedData
+  }
+  if (
+    typeof parsedData === 'object' &&
+    parsedData !== null &&
+    'warnings' in parsedData &&
+    Array.isArray((parsedData as { warnings?: unknown }).warnings)
+  ) {
+    const candidate = (parsedData as { warnings?: unknown }).warnings
+    return Array.isArray(candidate) ? candidate.filter((item): item is string => typeof item === 'string') : []
+  }
+  if (typeof parsedData === 'string' && parsedData.trim().length > 0) {
+    return [parsedData]
+  }
+  return []
 }
 
 const quickPrompts = [
@@ -272,6 +297,7 @@ export default function Home() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
+  const [warnings, setWarnings] = useState<string[]>([])
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
@@ -347,6 +373,10 @@ export default function Home() {
       const titleValue = payload.conversation?.title ?? ''
       setConversationTitle(titleValue)
       setSavedConversationTitle(titleValue)
+      const latestWarningMetadata = [...loadedMessages]
+        .reverse()
+        .find(message => message.role === 'assistant' && message.metadata?.warnings?.length)
+      setWarnings(latestWarningMetadata?.metadata?.warnings ?? [])
     },
     [isAuthenticated]
   )
@@ -390,6 +420,9 @@ export default function Home() {
     if (metadata.authorizationModel) {
       setAuthorizationModel(metadata.authorizationModel)
     }
+    if (metadata.warnings !== undefined) {
+      setWarnings(metadata.warnings)
+    }
   }
 
   useEffect(() => {
@@ -427,6 +460,12 @@ export default function Home() {
             applyMetadata(parsedData)
             if (conversationIdRef.current) {
               loadConversation(conversationIdRef.current)
+            }
+          } else if (parsedEvent.type === 'warning') {
+            const warningList = extractWarnings(parsedData)
+            if (warningList.length) {
+              setWarnings(warningList)
+              setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
             }
           } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
             loadConversation(conversationIdRef.current)
@@ -481,11 +520,29 @@ export default function Home() {
             if (!isChatSseMetadata(parsedData)) break
             applyMetadata(parsedData)
             setChatMetadata(parsedData)
+            if (parsedData.warnings !== undefined) {
+              setWarnings(parsedData.warnings)
+            }
             setMessages(prev =>
               prev.map(message =>
                 message.id === assistantMessageId ? { ...message, metadata: parsedData } : message
               )
             )
+            break
+          }
+          case 'warning': {
+            const warningList = extractWarnings(parsedData)
+            if (warningList.length) {
+              setWarnings(warningList)
+              setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
+              setMessages(prev =>
+                prev.map(message =>
+                  message.id === assistantMessageId
+                    ? { ...message, metadata: { ...message.metadata, warnings: warningList } }
+                    : message
+                )
+              )
+            }
             break
           }
           case 'message': {
@@ -564,6 +621,7 @@ export default function Home() {
     setEditingContent('')
     setIsLoading(true)
     setChatMetadata(null)
+    setWarnings([])
 
     abortControllerRef.current?.abort()
     const controller = new AbortController()
@@ -840,6 +898,23 @@ export default function Home() {
                     <span className="text-foreground">{chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.length : 'none'}</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {warnings.length > 0 && (
+              <div className="mx-4 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Graph unavailable</span>
+                </div>
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {warnings.map((warning, index) => (
+                    <li key={`${warning}-${index}`}>{warning}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-amber-800">
+                  Chat will continue, but referenced relationships may be missing until the Memgraph service is reachable.
+                </p>
               </div>
             )}
 
