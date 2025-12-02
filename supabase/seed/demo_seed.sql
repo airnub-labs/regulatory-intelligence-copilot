@@ -9,85 +9,84 @@ declare
   demo_user_id uuid;
   demo_tenant_id uuid := coalesce(nullif(current_setting('app.demo_tenant_id', true), '')::uuid, gen_random_uuid());
 begin
-  select id, raw_user_meta_data
-    into seeded_user
-    from auth.users
-   where email = demo_email
-   limit 1;
+  demo_user_id := gen_random_uuid();
 
-  if not found then
-    demo_user_id := gen_random_uuid();
-
-    insert into auth.users (
-      id,
-      instance_id,
-      aud,
-      role,
-      email,
-      encrypted_password,
-      email_confirmed_at,
-      raw_app_meta_data,
-      raw_user_meta_data
-    )
-    values (
-      demo_user_id,
-      '00000000-0000-0000-0000-000000000000',
-      'authenticated',
-      'authenticated',
-      demo_email,
-      crypt(demo_password, gen_salt('bf')),
-      now(),
-      jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-      jsonb_build_object(
-        'tenant_id', demo_tenant_id,
-        'full_name', demo_full_name,
-        'email_verified', true,
-        'phone_verified', false
-      )
-    )
-    returning id, raw_user_meta_data
+  insert into auth.users (
+    id,
+    instance_id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at,
+    last_sign_in_at
+  )
+  values (
+    demo_user_id,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    demo_email,
+    crypt(demo_password, gen_salt('bf')),
+    now(),
+    jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
+    jsonb_build_object(
+      'tenant_id', demo_tenant_id,
+      'full_name', demo_full_name,
+      'email', demo_email,
+      'email_verified', true,
+      'phone_verified', false
+    ),
+    now(),
+    now(),
+    now()
+  )
+  on conflict (instance_id, email) do update
+    set instance_id = excluded.instance_id,
+        email = excluded.email,
+        encrypted_password = excluded.encrypted_password,
+        aud = excluded.aud,
+        role = excluded.role,
+        email_confirmed_at = excluded.email_confirmed_at,
+        raw_app_meta_data = excluded.raw_app_meta_data,
+        raw_user_meta_data = excluded.raw_user_meta_data,
+        updated_at = excluded.updated_at,
+        last_sign_in_at = excluded.last_sign_in_at
+  returning id, raw_user_meta_data
     into seeded_user;
-  else
-    demo_user_id := seeded_user.id;
 
-    update auth.users
-       set encrypted_password = crypt(demo_password, gen_salt('bf')),
-           instance_id = '00000000-0000-0000-0000-000000000000',
-           aud = 'authenticated',
-           role = 'authenticated',
-           email_confirmed_at = now(),
-           raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-           raw_user_meta_data = jsonb_build_object(
-             'tenant_id', demo_tenant_id,
-             'full_name', demo_full_name,
-             'email_verified', true,
-             'phone_verified', false
-           )
-     where id = seeded_user.id
-    returning id, raw_user_meta_data
-      into seeded_user;
-  end if;
-
-  demo_user_id := coalesce(demo_user_id, seeded_user.id);
+  demo_user_id := seeded_user.id;
 
   -- Keep the tenant ID in sync even if the user already existed
   demo_tenant_id := coalesce((seeded_user.raw_user_meta_data ->> 'tenant_id')::uuid, demo_tenant_id);
 
-  -- Supabase manages indexes on auth.identities. To avoid privilege errors
-  -- from creating a unique index ourselves, perform an explicit delete/insert
-  -- so the seed is idempotent without relying on ON CONFLICT.
-  delete from auth.identities
-   where provider = 'email'
-     and (provider_id = demo_email or provider_id = demo_user_id::text or user_id = demo_user_id);
-
-  insert into auth.identities (user_id, identity_data, provider, provider_id, last_sign_in_at)
+  insert into auth.identities (
+    user_id,
+    identity_data,
+    provider,
+    provider_id,
+    last_sign_in_at,
+    created_at,
+    updated_at
+  )
   values (
     demo_user_id,
     jsonb_build_object('sub', demo_user_id, 'email', demo_email, 'email_verified', true, 'phone_verified', false),
     'email',
-    demo_user_id::text,
+    demo_email,
+    now(),
+    now(),
     now()
-  );
+  )
+  on conflict (provider, provider_id) do update
+    set user_id = excluded.user_id,
+        identity_data = excluded.identity_data,
+        last_sign_in_at = excluded.last_sign_in_at,
+        updated_at = excluded.updated_at;
 
   -- Demo conversation tied to the seeded user
   select id
