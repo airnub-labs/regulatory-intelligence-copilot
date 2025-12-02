@@ -170,6 +170,7 @@ function buildMetadataChunk(args: {
   disclaimerKey?: string;
   referencedNodes: Array<{ id: string } | string>;
   conversationId?: string;
+  warnings?: string[];
 }) {
   return {
     agentId: args.agentId,
@@ -178,6 +179,7 @@ function buildMetadataChunk(args: {
     disclaimerKey: args.disclaimerKey ?? DEFAULT_DISCLAIMER_KEY,
     referencedNodes: args.referencedNodes.map(node => (typeof node === 'string' ? node : node.id)),
     conversationId: args.conversationId,
+    warnings: args.warnings,
   };
 }
 
@@ -207,7 +209,7 @@ class SseStreamWriter {
    * @param event - Event type name
    * @param data - Event payload (will be JSON stringified if not a string)
    */
-  send(event: 'message' | 'metadata' | 'error' | 'done' | 'disclaimer', data: unknown) {
+  send(event: 'message' | 'metadata' | 'error' | 'done' | 'disclaimer' | 'warning', data: unknown) {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
     this.controller.enqueue(this.encoder.encode(chunk));
@@ -397,6 +399,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       let streamedTextBuffer = '';
       let disclaimerAlreadyPresent = false;
       let lastMetadata: Record<string, unknown> | null = null;
+      let accumulatedWarnings: string[] = [];
 
         const subscriber: SseSubscriber = {
           send: (_event: ConversationEventType, _data: unknown) => {
@@ -439,6 +442,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   disclaimerKey: DEFAULT_DISCLAIMER_KEY,
                   referencedNodes: chunk.metadata!.referencedNodes,
                   conversationId,
+                  warnings: accumulatedWarnings,
                 });
                 lastMetadata = metadata;
                 eventHub.broadcast(tenantId, conversationId, 'metadata', {
@@ -448,6 +452,14 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   shareAudience: conversationRecord.shareAudience,
                   tenantAccess: conversationRecord.tenantAccess,
                   isShared,
+                });
+              } else if (chunk.type === 'warning' && chunk.warnings?.length) {
+                accumulatedWarnings = chunk.warnings;
+                if (lastMetadata) {
+                  lastMetadata = { ...lastMetadata, warnings: accumulatedWarnings };
+                }
+                eventHub.broadcast(tenantId, conversationId, 'warning', {
+                  warnings: accumulatedWarnings,
                 });
               } else if (chunk.type === 'text' && chunk.delta) {
                 streamedTextBuffer += chunk.delta;
@@ -467,7 +479,11 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   userId: conversationRecord.userId ?? userId,
                   role: 'assistant',
                   content: streamedTextBuffer,
-                  metadata: lastMetadata ?? undefined,
+                  metadata: lastMetadata
+                    ? { ...lastMetadata, warnings: accumulatedWarnings }
+                    : accumulatedWarnings.length
+                      ? { warnings: accumulatedWarnings }
+                      : undefined,
                 });
                 // Send disclaimer after response (if configured)
                 if (

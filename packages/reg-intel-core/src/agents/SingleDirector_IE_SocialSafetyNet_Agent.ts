@@ -233,6 +233,7 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
 
     // Query graph for relevant rules
     let graphContext: GraphContext = { nodes: [], edges: [] };
+    const warnings: string[] = [];
 
     try {
       // Get rules for profile and jurisdiction
@@ -253,6 +254,9 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
       }
     } catch (error) {
       console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      warnings.push(
+        'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
+      );
     }
 
     // Deduplicate nodes
@@ -354,6 +358,7 @@ Please provide a research-based response that:
     return {
       answer: response.content,
       referencedNodes,
+      warnings: warnings.length ? warnings : undefined,
       uncertaintyLevel,
       agentId: AGENT_ID,
       notes: graphContext.nodes.length === 0

@@ -142,6 +142,7 @@ export interface AgentResult {
     type: string;
   }>;
   notes?: string[];
+  warnings?: string[];
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   followUps?: string[];
   agentId: string;
@@ -179,6 +180,7 @@ export interface AgentStreamResult {
     label: string;
     type: string;
   }>;
+  warnings?: string[];
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   followUps?: string[];
   stream: AsyncIterable<LlmStreamChunk>;

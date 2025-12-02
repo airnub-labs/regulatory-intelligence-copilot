@@ -1,4 +1,10 @@
-export type ConversationEventType = 'message' | 'metadata' | 'error' | 'done' | 'disclaimer';
+export type ConversationEventType =
+  | 'message'
+  | 'metadata'
+  | 'error'
+  | 'done'
+  | 'disclaimer'
+  | 'warning';
 
 export interface SseSubscriber {
   send(event: ConversationEventType, data: unknown): void;

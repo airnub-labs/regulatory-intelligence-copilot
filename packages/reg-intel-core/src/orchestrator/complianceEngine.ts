@@ -71,6 +71,7 @@ export interface ComplianceResponse {
   }>;
   agentUsed: string;
   jurisdictions: string[];
+  warnings?: string[];
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   followUps?: string[];
   disclaimer: string;
@@ -80,7 +81,7 @@ export interface ComplianceResponse {
  * Streaming chunk from compliance engine
  */
 export interface ComplianceStreamChunk {
-  type: 'metadata' | 'text' | 'done' | 'error';
+  type: 'metadata' | 'text' | 'done' | 'error' | 'warning';
   // Metadata (sent first)
   metadata?: {
     agentUsed: string;
@@ -94,6 +95,7 @@ export interface ComplianceStreamChunk {
   };
   // Text delta (streamed during response)
   delta?: string;
+  warnings?: string[];
   // Final data (sent at end)
   followUps?: string[];
   disclaimer?: string;
@@ -638,6 +640,7 @@ export class ComplianceEngine {
       referencedNodes,
       agentUsed: agentResult.agentId,
       jurisdictions: promptMetadata.jurisdictions,
+      warnings: agentResult.warnings,
       uncertaintyLevel: agentResult.uncertaintyLevel,
       followUps: agentResult.followUps,
       disclaimer: promptMetadata.disclaimer,
@@ -711,6 +714,8 @@ export class ComplianceEngine {
         agentContext
       );
 
+      const warnings = agentResult.warnings ?? [];
+
       const streamIterator = agentResult.stream[Symbol.asyncIterator]();
       const firstChunkResult = await streamIterator.next();
 
@@ -729,6 +734,10 @@ export class ComplianceEngine {
           referencedNodes: metadataReferencedNodes,
         },
       };
+
+      if (warnings.length) {
+        yield { type: 'warning', warnings };
+      }
 
       let currentResult: IteratorResult<LlmStreamChunk> | undefined =
         firstChunkResult;
@@ -760,6 +769,7 @@ export class ComplianceEngine {
         type: 'done',
         followUps: agentResult.followUps,
         referencedNodes: finalReferencedNodes,
+        warnings: warnings.length ? warnings : undefined,
         disclaimer: promptMetadata.disclaimer,
       };
     } catch (error) {

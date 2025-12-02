@@ -101,6 +101,7 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
     let graphContext: GraphContext = { nodes: [], edges: [] };
+    const warnings: string[] = [];
 
     try {
       if (jurisdictions.length > 1) {
@@ -115,6 +116,9 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
       }
     } catch (error) {
       console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      warnings.push(
+        'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
+      );
     }
 
     // Format context
@@ -152,6 +156,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
     return {
       answer: response.content,
       referencedNodes,
+      warnings: warnings.length ? warnings : undefined,
       uncertaintyLevel: graphContext.nodes.length > 0 ? 'medium' : 'high',
       agentId: AGENT_ID,
       notes: graphContext.nodes.length === 0
@@ -179,6 +184,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
       return {
         agentId: result.agentId,
         referencedNodes: result.referencedNodes,
+        warnings: result.warnings,
         uncertaintyLevel: result.uncertaintyLevel,
         followUps: result.followUps,
         stream: stream(),
@@ -214,6 +220,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
     let graphContext: GraphContext = { nodes: [], edges: [] };
+    const warnings: string[] = [];
 
     try {
       if (jurisdictions.length > 1) {
@@ -228,6 +235,9 @@ Please provide a comprehensive response considering all relevant regulatory doma
       }
     } catch (error) {
       console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      warnings.push(
+        'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
+      );
     }
 
     // Format context
@@ -266,6 +276,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
         return {
           agentId: AGENT_ID,
           referencedNodes,
+          warnings: warnings.length ? warnings : undefined,
           uncertaintyLevel: graphContext.nodes.length > 0 ? 'medium' : 'high',
           followUps: [
             'Would you like me to focus on a specific area (tax, welfare, pensions)?',
