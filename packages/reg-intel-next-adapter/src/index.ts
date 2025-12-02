@@ -25,6 +25,7 @@ import {
   ConversationEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
+  SupabaseConversationStore,
   deriveIsShared,
   type ConversationEventType,
   type SseSubscriber,
@@ -43,6 +44,7 @@ export interface ChatRouteHandlerOptions {
   conversationStore?: ConversationStore;
   conversationContextStore?: ConversationContextStore;
   eventHub?: ConversationEventHub;
+  useSupabaseConversationStore?: boolean;
 }
 
 /**
@@ -247,7 +249,10 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   // Lazy initialization to avoid build-time errors
   let llmRouter: LlmRouter | null = null;
   let complianceEngine: ComplianceEngine | null = null;
-  const conversationStore = options?.conversationStore ?? new InMemoryConversationStore();
+  const conversationStore =
+    options?.conversationStore ??
+    ((options?.useSupabaseConversationStore ?? true) ? SupabaseConversationStore.fromEnv() : null) ??
+    new InMemoryConversationStore();
   const conversationContextStore =
     options?.conversationContextStore ?? new InMemoryConversationContextStore();
   const eventHub = options?.eventHub ?? new ConversationEventHub();
@@ -401,18 +406,18 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       let lastMetadata: Record<string, unknown> | null = null;
       let accumulatedWarnings: string[] = [];
 
-        const subscriber: SseSubscriber = {
-          send: (_event: ConversationEventType, _data: unknown) => {
-            // placeholder replaced when writer is created
-          },
-        };
-        const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
+      const subscriber: SseSubscriber = {
+        send: (_event: ConversationEventType, _data: unknown) => {
+          // placeholder replaced when writer is created
+        },
+      };
+      const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
       const isShared = deriveIsShared(conversationRecord);
 
       const stream = new ReadableStream({
         async start(controller) {
           const writer = new SseStreamWriter(controller);
-            subscriber.send = (event: ConversationEventType, data: unknown) => writer.send(event, data);
+          subscriber.send = (event: ConversationEventType, data: unknown) => writer.send(event, data);
 
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
@@ -544,6 +549,7 @@ export {
   InMemoryConversationStore,
   InMemoryConversationContextStore,
   ConversationEventHub,
+  SupabaseConversationStore,
   type ConversationStore,
   type ShareAudience,
   type TenantAccess,
