@@ -18,14 +18,32 @@ begin
   if not found then
     demo_user_id := gen_random_uuid();
 
-    insert into auth.users (id, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data)
+    insert into auth.users (
+      id,
+      instance_id,
+      aud,
+      role,
+      email,
+      encrypted_password,
+      email_confirmed_at,
+      raw_app_meta_data,
+      raw_user_meta_data
+    )
     values (
       demo_user_id,
+      '00000000-0000-0000-0000-000000000000',
+      'authenticated',
+      'authenticated',
       demo_email,
       crypt(demo_password, gen_salt('bf')),
       now(),
       jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-      jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
+      jsonb_build_object(
+        'tenant_id', demo_tenant_id,
+        'full_name', demo_full_name,
+        'email_verified', true,
+        'phone_verified', false
+      )
     )
     returning id, raw_user_meta_data
     into seeded_user;
@@ -34,9 +52,17 @@ begin
 
     update auth.users
        set encrypted_password = crypt(demo_password, gen_salt('bf')),
+           instance_id = '00000000-0000-0000-0000-000000000000',
+           aud = 'authenticated',
+           role = 'authenticated',
            email_confirmed_at = now(),
            raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
-           raw_user_meta_data = jsonb_build_object('tenant_id', demo_tenant_id, 'full_name', demo_full_name)
+           raw_user_meta_data = jsonb_build_object(
+             'tenant_id', demo_tenant_id,
+             'full_name', demo_full_name,
+             'email_verified', true,
+             'phone_verified', false
+           )
      where id = seeded_user.id
     returning id, raw_user_meta_data
       into seeded_user;
@@ -51,14 +77,15 @@ begin
   -- from creating a unique index ourselves, perform an explicit delete/insert
   -- so the seed is idempotent without relying on ON CONFLICT.
   delete from auth.identities
-   where provider = 'email' and provider_id = demo_email;
+   where provider = 'email'
+     and (provider_id = demo_email or provider_id = demo_user_id or user_id = demo_user_id);
 
   insert into auth.identities (user_id, identity_data, provider, provider_id, last_sign_in_at)
   values (
     demo_user_id,
-    jsonb_build_object('sub', demo_user_id, 'email', demo_email),
+    jsonb_build_object('sub', demo_user_id, 'email', demo_email, 'email_verified', true, 'phone_verified', false),
     'email',
-    demo_email,
+    demo_user_id,
     now()
   );
 
