@@ -12,11 +12,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: conversationId } = await context.params;
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
+  const user = session?.user;
+  const userId = user?.id;
+  if (!userId || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
   const conversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
 
   if (!conversation) {
@@ -32,11 +33,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: conversationId } = await context.params;
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
+  const user = session?.user;
+  const userId = user?.id;
+  if (!userId || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
   const body = await request.json().catch(() => null);
   const shareAudience = body?.shareAudience;
   const tenantAccess = body?.tenantAccess;

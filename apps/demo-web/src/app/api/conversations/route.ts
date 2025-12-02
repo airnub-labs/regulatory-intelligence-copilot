@@ -6,13 +6,14 @@ import { authOptions } from '@/lib/auth/options';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
+  const user = session?.user;
+  const userId = user?.id;
+  if (!userId || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
   const conversations = await conversationStore.listConversations({ tenantId, limit: 50, userId });
   return NextResponse.json({ conversations });
 }
