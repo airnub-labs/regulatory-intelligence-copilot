@@ -3,12 +3,15 @@ import {
   createComplianceEngine,
   createDefaultLlmRouter,
   createGraphClient,
+  createGraphWriteService,
   createTimelineEngine,
+  createCanonicalConceptHandler,
   normalizeProfileType,
   sanitizeObjectForEgress,
   sanitizeTextForEgress,
   type ChatMessage,
   type ComplianceEngine,
+  type GraphWriteService,
   type EgressGuard,
   type LlmClient,
   type LlmChatRequest,
@@ -16,6 +19,7 @@ import {
   type LlmStreamChunk,
   type RedactedPayload,
 } from '@reg-copilot/reg-intel-core';
+import neo4j from 'neo4j-driver';
 import type {
   LlmRouter,
   LlmCompletionOptions,
@@ -253,22 +257,38 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     options?.conversationStore ??
     ((options?.useSupabaseConversationStore ?? true) ? SupabaseConversationStore.fromEnv() : null) ??
     new InMemoryConversationStore();
+  let graphWriteService: GraphWriteService | null = null;
+//   const conversationStore = options?.conversationStore ?? new InMemoryConversationStore();
   const conversationContextStore =
     options?.conversationContextStore ?? new InMemoryConversationContextStore();
   const eventHub = options?.eventHub ?? new ConversationEventHub();
+  const canonicalConceptHandler = createCanonicalConceptHandler();
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
       llmRouter = createDefaultLlmRouter();
       const llmClient = new LlmRouterClientAdapter(llmRouter);
+      if (!graphWriteService) {
+        const uri = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
+        const username = process.env.MEMGRAPH_USERNAME;
+        const password = process.env.MEMGRAPH_PASSWORD;
+        const auth =
+          username && password ? neo4j.auth.basic(username, password) : undefined;
+
+        graphWriteService = createGraphWriteService({
+          driver: neo4j.driver(uri, auth),
+          tenantId: options?.tenantId ?? 'default',
+          defaultSource: 'agent',
+        });
+      }
       complianceEngine = createComplianceEngine({
         llmRouter,
         llmClient: llmClient,
         graphClient: createGraphClient(),
         timelineEngine: createTimelineEngine(),
         egressGuard: new BasicEgressGuard(),
-        graphWriteService: {} as never, // Graph writes not used in Next adapter baseline wiring
-        canonicalConceptHandler: { resolveAndUpsert: async () => [] },
+        graphWriteService: graphWriteService,
+        canonicalConceptHandler,
         conversationContextStore,
       });
     }

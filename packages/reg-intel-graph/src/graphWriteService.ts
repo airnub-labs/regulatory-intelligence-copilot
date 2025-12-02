@@ -125,6 +125,23 @@ export interface UpsertRegimeDto {
 }
 
 /**
+ * DTO for upserting a captured concept
+ */
+export interface UpsertConceptDto {
+  id: string;
+  domain: string;
+  kind: string;
+  jurisdiction: string;
+  pref_label: string;
+  alt_labels?: string[];
+  definition?: string;
+  source_urls?: string[];
+  created_at?: string;
+  updated_at?: string;
+  last_verified_at?: string;
+}
+
+/**
  * DTO for creating a relationship
  */
 export interface CreateRelationshipDto {
@@ -527,6 +544,26 @@ export class GraphWriteService {
         toId: dto.toId,
       },
     };
+    await this.executeWrite(ctx);
+  }
+
+  /**
+   * Upsert a SKOS-style concept captured from chat
+   */
+  async upsertConcept(dto: UpsertConceptDto): Promise<void> {
+    const now = new Date().toISOString();
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Concept',
+      properties: {
+        ...dto,
+        created_at: dto.created_at || now,
+        updated_at: dto.updated_at || now,
+      },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+
     await this.executeWrite(ctx);
   }
 

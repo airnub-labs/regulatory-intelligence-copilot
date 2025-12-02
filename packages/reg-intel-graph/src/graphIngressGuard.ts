@@ -71,6 +71,8 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'Case',
     'Update',
     'ChangeEvent',
+    'Concept',
+    'Label',
   ];
 
   const allowedRelTypes = [
@@ -109,6 +111,10 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'IMPLEMENTED_VIA',
     'SUBJECT_TO_REGIME',
     'AVAILABLE_VIA_REGIME',
+    'HAS_ALT_LABEL',
+    'ALIGNS_WITH',
+    'DERIVED_FROM',
+    'HAS_SOURCE',
   ];
 
   if (ctx.nodeLabel && !allowedNodeLabels.includes(ctx.nodeLabel)) {
@@ -257,6 +263,20 @@ export const propertyWhitelistAspect: GraphIngressAspect = async (ctx, next) => 
     Case: ['id', 'title', 'citation', 'court', 'decision_date', 'summary'],
     Update: ['id', 'kind', 'description', 'effective_from', 'effective_to', 'source_url'],
     ChangeEvent: ['id', 'kind', 'description', 'effective_from', 'effective_to', 'source_url'],
+    Concept: [
+      'id',
+      'domain',
+      'kind',
+      'jurisdiction',
+      'pref_label',
+      'alt_labels',
+      'definition',
+      'source_urls',
+      'created_at',
+      'updated_at',
+      'last_verified_at',
+    ],
+    Label: ['id', 'value', 'language', 'kind', 'created_at', 'updated_at'],
   };
 
   // Algorithm-derived properties that are allowed on any node
