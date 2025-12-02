@@ -56,8 +56,11 @@ export {
   type UpsertTimelineDto,
   type UpsertAgreementDto,
   type UpsertRegimeDto,
+  type UpsertConceptDto,
   type CreateRelationshipDto,
 } from './graphWriteService.js';
+
+export { createCanonicalConceptHandler, type CapturedConceptInput } from './canonicalConceptHandler.js';
 
 // Graph Change Detector
 export {
