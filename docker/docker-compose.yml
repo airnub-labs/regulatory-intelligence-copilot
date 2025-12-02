@@ -1,4 +1,4 @@
-name: rfc-refactor
+name: regulatory-intelligence-copilot
 
 services:
   # Memgraph database with Lab UI and MAGE, schema info enabled (required for MCP)
