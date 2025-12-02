@@ -8,7 +8,7 @@ export interface EgressModeResolution {
 
 /**
  * Resolve requested vs effective egress modes with priority:
- * per-user override (including allowOffMode) → tenant policy → global default.
+ * base default → tenant policy → per-user policy → per-call override.
  * Returns both requested and effective values for observability/logging.
  */
 export function resolveEffectiveEgressMode(
@@ -20,13 +20,13 @@ export function resolveEffectiveEgressMode(
     ? tenantPolicy?.userPolicies?.[options.userId]
     : undefined;
 
-  const allowOff =
-    userPolicy?.allowOffMode ?? tenantPolicy?.allowOffMode ?? false;
+  const tenantAllowOff = tenantPolicy?.allowOffMode ?? false;
+  const userAllowOff = userPolicy?.allowOffMode ?? tenantAllowOff;
 
   let requestedMode: EgressMode | undefined;
-  let effectiveMode: EgressMode = baseMode;
+  let effectiveMode: EgressMode | undefined;
 
-  const applyCandidate = (candidate?: EgressMode) => {
+  const applyCandidate = (candidate?: EgressMode, allowOff = true) => {
     if (!candidate) return;
 
     requestedMode = candidate;
@@ -38,9 +38,10 @@ export function resolveEffectiveEgressMode(
     effectiveMode = candidate;
   };
 
-  applyCandidate(tenantPolicy?.egressMode);
-  applyCandidate(userPolicy?.egressMode);
-  applyCandidate(options?.egressModeOverride);
+  applyCandidate(baseMode, true);
+  applyCandidate(tenantPolicy?.egressMode, tenantAllowOff);
+  applyCandidate(userPolicy?.egressMode, userAllowOff);
+  applyCandidate(options?.egressModeOverride, userAllowOff);
 
-  return { requestedMode, effectiveMode };
+  return { requestedMode, effectiveMode: effectiveMode ?? baseMode };
 }
