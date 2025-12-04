@@ -14,6 +14,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "types": ["node"],
+    "typeRoots": ["./types", "./node_modules/@types"],
     "baseUrl": ".",
     "paths": {
       "@reg-copilot/reg-intel-core": ["packages/reg-intel-core/dist/index.d.ts"],
