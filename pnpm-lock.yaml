@@ -265,6 +265,9 @@ importers:
       '@reg-copilot/reg-intel-llm':
         specifier: workspace:*
         version: link:../reg-intel-llm
+      '@supabase/supabase-js':
+        specifier: ^2.49.0
+        version: 2.86.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0

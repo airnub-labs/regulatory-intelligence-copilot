@@ -25,6 +25,8 @@ import {
   ConversationEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
+  SupabaseConversationContextStore,
+  SupabaseConversationStore,
   deriveIsShared,
   type ConversationEventType,
   type SseSubscriber,
@@ -34,6 +36,7 @@ import {
   type ShareAudience,
   type TenantAccess,
 } from '@reg-copilot/reg-intel-conversations';
+import { createClient } from '@supabase/supabase-js';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -183,6 +186,56 @@ function buildMetadataChunk(args: {
   };
 }
 
+function resolveSupabaseCredentials() {
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+  if (!supabaseUrl || !supabaseKey) return null;
+  return { supabaseUrl, supabaseKey };
+}
+
+function resolveConversationStoreMode(): 'auto' | 'memory' | 'supabase' {
+  const envValue =
+    process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto';
+  const normalized = envValue.trim().toLowerCase();
+  if (['memory', 'inmemory', 'in-memory'].includes(normalized)) return 'memory';
+  if (normalized === 'supabase') return 'supabase';
+  return 'auto';
+}
+
+function resolveConversationStores(options?: ChatRouteHandlerOptions) {
+  const providedConversationStore = options?.conversationStore;
+  const providedContextStore = options?.conversationContextStore;
+
+  if (providedConversationStore || providedContextStore) {
+    return {
+      conversationStore: providedConversationStore ?? new InMemoryConversationStore(),
+      conversationContextStore: providedContextStore ?? new InMemoryConversationContextStore(),
+    } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
+  }
+
+  const mode = resolveConversationStoreMode();
+
+  if (mode !== 'memory') {
+    const credentials = resolveSupabaseCredentials();
+    if (credentials) {
+      const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+        db: { schema: 'copilot_internal' },
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      return {
+        conversationStore: new SupabaseConversationStore(client),
+        conversationContextStore: new SupabaseConversationContextStore(client),
+      } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
+    }
+  }
+
+  return {
+    conversationStore: new InMemoryConversationStore(),
+    conversationContextStore: new InMemoryConversationContextStore(),
+  } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
+}
+
 /**
  * Helper class for writing Server-Sent Events (SSE) to a ReadableStream.
  * Follows the standard SSE format with event names and data payloads.
@@ -247,9 +300,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   // Lazy initialization to avoid build-time errors
   let llmRouter: LlmRouter | null = null;
   let complianceEngine: ComplianceEngine | null = null;
-  const conversationStore = options?.conversationStore ?? new InMemoryConversationStore();
-  const conversationContextStore =
-    options?.conversationContextStore ?? new InMemoryConversationContextStore();
+  const { conversationStore, conversationContextStore } = resolveConversationStores(options);
   const eventHub = options?.eventHub ?? new ConversationEventHub();
 
   const getOrCreateEngine = () => {
