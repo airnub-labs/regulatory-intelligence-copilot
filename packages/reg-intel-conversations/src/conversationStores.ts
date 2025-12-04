@@ -5,6 +5,7 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
 export type TenantAccess = 'view' | 'edit';
@@ -340,6 +341,404 @@ export class InMemoryConversationContextStore implements ConversationContextStor
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
     this.contexts.set(this.key(identity), { activeNodeIds: ctx.activeNodeIds ?? [] });
+  }
+
+  async mergeActiveNodeIds(identity: ConversationIdentity, nodeIds: string[]): Promise<void> {
+    const current = (await this.load(identity)) ?? { activeNodeIds: [] };
+    const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
+    await this.save(identity, { activeNodeIds: merged });
+  }
+}
+
+type SupabaseConversationRow = {
+  id: string;
+  tenant_id: string;
+  user_id?: string | null;
+  share_audience: ShareAudience;
+  tenant_access: TenantAccess;
+  authorization_model: AuthorizationModel;
+  authorization_spec: AuthorizationSpec | null;
+  persona_id?: string | null;
+  jurisdictions: string[];
+  title?: string | null;
+  created_at: string;
+  updated_at: string;
+  last_message_at?: string | null;
+};
+
+type SupabaseConversationMessageRow = {
+  id: string;
+  conversation_id: string;
+  tenant_id: string;
+  user_id?: string | null;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
+};
+
+type SupabaseConversationContextRow = {
+  conversation_id: string;
+  tenant_id: string;
+  active_node_ids: string[];
+  updated_at: string;
+};
+
+function mapConversationRow(row: SupabaseConversationRow): ConversationRecord {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    userId: row.user_id,
+    shareAudience: row.share_audience,
+    tenantAccess: row.tenant_access,
+    authorizationModel: row.authorization_model,
+    authorizationSpec: row.authorization_spec,
+    personaId: row.persona_id,
+    jurisdictions: row.jurisdictions ?? [],
+    title: row.title,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+    lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
+  };
+}
+
+function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage {
+  const metadata = row.metadata ?? undefined;
+  const deletedAtValue = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).deletedAt : undefined;
+  const supersededByValue = metadata && typeof metadata === 'object'
+    ? (metadata as Record<string, unknown>).supersededBy
+    : undefined;
+
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    metadata,
+    userId: row.user_id,
+    createdAt: new Date(row.created_at),
+    deletedAt: typeof deletedAtValue === 'string' ? new Date(deletedAtValue) : undefined,
+    supersededBy: typeof supersededByValue === 'string' ? supersededByValue : undefined,
+  };
+}
+
+export class SupabaseConversationStore implements ConversationStore {
+  constructor(private client: SupabaseClient) {}
+
+  private async getConversationRecord(
+    tenantId: string,
+    conversationId: string
+  ): Promise<ConversationRecord | null> {
+    const { data, error } = await this.client
+      .from('conversations')
+      .select(
+        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, created_at, updated_at, last_message_at'
+      )
+      .eq('id', conversationId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load conversation: ${error.message}`);
+    }
+
+    if (!data) return null;
+    return mapConversationRow(data as SupabaseConversationRow);
+  }
+
+  async createConversation(input: {
+    tenantId: string;
+    userId?: string | null;
+    personaId?: string | null;
+    jurisdictions?: string[];
+    title?: string | null;
+    shareAudience?: ShareAudience;
+    tenantAccess?: TenantAccess;
+    authorizationModel?: AuthorizationModel;
+    authorizationSpec?: AuthorizationSpec | null;
+  }): Promise<{ conversationId: string }> {
+    const now = new Date().toISOString();
+    const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
+    const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
+    const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
+
+    const { data, error } = await this.client
+      .from('conversations')
+      .insert({
+        tenant_id: input.tenantId,
+        user_id: input.userId ?? null,
+        share_audience: shareAudience,
+        tenant_access: tenantAccess,
+        authorization_model: authorizationModel,
+        authorization_spec: input.authorizationSpec ?? null,
+        persona_id: input.personaId ?? null,
+        jurisdictions: input.jurisdictions ?? [],
+        title: input.title ?? null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create conversation: ${error.message}`);
+    }
+
+    return { conversationId: (data as { id: string }).id };
+  }
+
+  async appendMessage(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ messageId: string }> {
+    const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found for tenant');
+    }
+    if (!canWrite(conversation, input.userId, input.role)) {
+      throw new Error('User not authorised for conversation');
+    }
+
+    const messageTimestamp = new Date().toISOString();
+    const { data, error } = await this.client
+      .from('conversation_messages')
+      .insert({
+        conversation_id: input.conversationId,
+        tenant_id: input.tenantId,
+        user_id: input.userId ?? null,
+        role: input.role,
+        content: input.content,
+        metadata: input.metadata ?? null,
+        created_at: messageTimestamp,
+      })
+      .select('id, created_at, metadata')
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to append message: ${error.message}`);
+    }
+
+    const createdAt = (data as SupabaseConversationMessageRow).created_at ?? messageTimestamp;
+
+    const { error: updateError } = await this.client
+      .from('conversations')
+      .update({ last_message_at: createdAt, updated_at: createdAt })
+      .eq('id', input.conversationId)
+      .eq('tenant_id', input.tenantId);
+
+    if (updateError) {
+      throw new Error(`Failed to update conversation timestamps: ${updateError.message}`);
+    }
+
+    return { messageId: (data as { id: string }).id };
+  }
+
+  async softDeleteMessage(input: {
+    tenantId: string;
+    conversationId: string;
+    messageId: string;
+    userId?: string | null;
+    supersededBy?: string | null;
+  }): Promise<void> {
+    const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
+    if (!conversation) {
+      throw new Error('Conversation not found for tenant');
+    }
+    if (!canWrite(conversation, input.userId)) {
+      throw new Error('User not authorised for conversation');
+    }
+
+    const { data: messageRow, error: messageError } = await this.client
+      .from('conversation_messages')
+      .select('id, metadata, tenant_id, conversation_id')
+      .eq('id', input.messageId)
+      .maybeSingle();
+
+    if (messageError) {
+      throw new Error(`Failed to load message: ${messageError.message}`);
+    }
+
+    if (!messageRow || messageRow.tenant_id !== input.tenantId || messageRow.conversation_id !== input.conversationId) {
+      throw new Error('Message not found for tenant conversation');
+    }
+
+    const deletedAt = new Date().toISOString();
+    const existingMetadata = (messageRow as { metadata?: Record<string, unknown> | null }).metadata ?? {};
+    const nextMetadata = {
+      ...existingMetadata,
+      deletedAt,
+      supersededBy: input.supersededBy ?? (existingMetadata as { supersededBy?: string }).supersededBy ?? null,
+    } satisfies Record<string, unknown>;
+
+    const { error: updateError } = await this.client
+      .from('conversation_messages')
+      .update({ metadata: nextMetadata })
+      .eq('id', input.messageId)
+      .eq('conversation_id', input.conversationId)
+      .eq('tenant_id', input.tenantId);
+
+    if (updateError) {
+      throw new Error(`Failed to soft delete message: ${updateError.message}`);
+    }
+
+    const { error: conversationUpdateError } = await this.client
+      .from('conversations')
+      .update({ updated_at: deletedAt })
+      .eq('id', input.conversationId)
+      .eq('tenant_id', input.tenantId);
+
+    if (conversationUpdateError) {
+      throw new Error(`Failed to update conversation metadata: ${conversationUpdateError.message}`);
+    }
+  }
+
+  async getMessages(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+    limit?: number;
+  }): Promise<ConversationMessage[]> {
+    const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
+    if (!conversation || !canRead(conversation, input.userId)) {
+      return [];
+    }
+
+    const query = this.client
+      .from('conversation_messages')
+      .select('id, conversation_id, tenant_id, user_id, role, content, metadata, created_at')
+      .eq('conversation_id', input.conversationId)
+      .eq('tenant_id', input.tenantId)
+      .order('created_at', { ascending: true });
+
+    if (input.limit) {
+      query.limit(input.limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to fetch conversation messages: ${error.message}`);
+    }
+
+    if (!data) return [];
+    return (data as SupabaseConversationMessageRow[]).map(mapMessageRow);
+  }
+
+  async listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]> {
+    const query = this.client
+      .from('conversations')
+      .select(
+        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, created_at, updated_at, last_message_at'
+      )
+      .eq('tenant_id', input.tenantId)
+      .order('last_message_at', { ascending: false, nulls: 'last' })
+      .order('created_at', { ascending: false });
+
+    if (input.limit) {
+      query.limit(input.limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to list conversations: ${error.message}`);
+    }
+
+    const records = (data as SupabaseConversationRow[]).map(mapConversationRow);
+    return records.filter(record => canRead(record, input.userId ?? null));
+  }
+
+  async getConversation(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+  }): Promise<ConversationRecord | null> {
+    const record = await this.getConversationRecord(input.tenantId, input.conversationId);
+    if (!record) return null;
+    if (!canRead(record, input.userId ?? null)) return null;
+    return record;
+  }
+
+  async updateSharing(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+    shareAudience?: ShareAudience;
+    tenantAccess?: TenantAccess;
+    authorizationModel?: AuthorizationModel;
+    authorizationSpec?: AuthorizationSpec | null;
+    title?: string | null;
+  }): Promise<void> {
+    const record = await this.getConversationRecord(input.tenantId, input.conversationId);
+    if (!record) {
+      throw new Error('Conversation not found for tenant');
+    }
+    const isOwner = record.userId ? input.userId === record.userId : true;
+    if (!isOwner) {
+      throw new Error('User not authorised to update conversation');
+    }
+
+    const shareAudience = input.shareAudience ?? record.shareAudience;
+    const tenantAccess = input.tenantAccess ?? record.tenantAccess;
+    const authorizationModel = input.authorizationModel ?? record.authorizationModel;
+    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
+    const title = input.title !== undefined ? input.title : record.title;
+
+    const { error } = await this.client
+      .from('conversations')
+      .update({
+        share_audience: shareAudience,
+        tenant_access: tenantAccess,
+        authorization_model: authorizationModel,
+        authorization_spec: authorizationSpec ?? null,
+        title,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.conversationId)
+      .eq('tenant_id', input.tenantId);
+
+    if (error) {
+      throw new Error(`Failed to update conversation sharing: ${error.message}`);
+    }
+  }
+}
+
+export class SupabaseConversationContextStore implements ConversationContextStore {
+  constructor(private client: SupabaseClient) {}
+
+  async load(identity: ConversationIdentity): Promise<ConversationContext | null> {
+    const { data, error } = await this.client
+      .from('conversation_contexts')
+      .select('conversation_id, tenant_id, active_node_ids, updated_at')
+      .eq('conversation_id', identity.conversationId)
+      .eq('tenant_id', identity.tenantId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load conversation context: ${error.message}`);
+    }
+
+    if (!data) return null;
+    const row = data as SupabaseConversationContextRow;
+    return { activeNodeIds: row.active_node_ids ?? [] } satisfies ConversationContext;
+  }
+
+  async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
+    const { error } = await this.client
+      .from('conversation_contexts')
+      .upsert({
+        conversation_id: identity.conversationId,
+        tenant_id: identity.tenantId,
+        active_node_ids: ctx.activeNodeIds ?? [],
+        updated_at: new Date().toISOString(),
+      });
+
+    if (error) {
+      throw new Error(`Failed to save conversation context: ${error.message}`);
+    }
   }
 
   async mergeActiveNodeIds(identity: ConversationIdentity, nodeIds: string[]): Promise<void> {
