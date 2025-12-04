@@ -25,6 +25,12 @@ import {
   ConversationEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
+  PostgresConversationContextStore,
+  PostgresConversationStore,
+  SupabaseConversationContextStore,
+  SupabaseConversationStore,
+  createSupabaseClient,
+  createPostgresClient,
   deriveIsShared,
   type ConversationEventType,
   type SseSubscriber,
@@ -36,6 +42,12 @@ import {
 } from '@reg-copilot/reg-intel-conversations';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
+const IN_MEMORY_STORE_FLAG = process.env.CONVERSATIONS_IN_MEMORY_ONLY === 'true';
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://localhost:54321';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const POSTGRES_CONNECTION_STRING =
+  process.env.CONVERSATIONS_PG_CONNECTION_STRING ?? process.env.DATABASE_URL;
 
 export interface ChatRouteHandlerOptions {
   tenantId?: string;
@@ -183,6 +195,46 @@ function buildMetadataChunk(args: {
   };
 }
 
+function resolveConversationStores(options?: ChatRouteHandlerOptions) {
+  if (options?.conversationStore || options?.conversationContextStore) {
+    return {
+      conversationStore: options.conversationStore ?? new InMemoryConversationStore(),
+      conversationContextStore: options.conversationContextStore ?? new InMemoryConversationContextStore(),
+    };
+  }
+
+  if (IN_MEMORY_STORE_FLAG) {
+    return {
+      conversationStore: new InMemoryConversationStore(),
+      conversationContextStore: new InMemoryConversationContextStore(),
+    };
+  }
+
+  if (POSTGRES_CONNECTION_STRING) {
+    const pgClient = createPostgresClient(POSTGRES_CONNECTION_STRING);
+    return {
+      conversationStore: new PostgresConversationStore(pgClient),
+      conversationContextStore: new PostgresConversationContextStore(pgClient),
+    };
+  }
+
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      'Missing SUPABASE_SERVICE_ROLE_KEY. Provide Supabase credentials or set CONVERSATIONS_IN_MEMORY_ONLY=true for in-memory stores.',
+    );
+  }
+
+  const supabaseClient = createSupabaseClient({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+  });
+
+  return {
+    conversationStore: new SupabaseConversationStore(supabaseClient),
+    conversationContextStore: new SupabaseConversationContextStore(supabaseClient),
+  };
+}
+
 /**
  * Helper class for writing Server-Sent Events (SSE) to a ReadableStream.
  * Follows the standard SSE format with event names and data payloads.
@@ -247,9 +299,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   // Lazy initialization to avoid build-time errors
   let llmRouter: LlmRouter | null = null;
   let complianceEngine: ComplianceEngine | null = null;
-  const conversationStore = options?.conversationStore ?? new InMemoryConversationStore();
-  const conversationContextStore =
-    options?.conversationContextStore ?? new InMemoryConversationContextStore();
+  const { conversationStore, conversationContextStore } = resolveConversationStores(options);
   const eventHub = options?.eventHub ?? new ConversationEventHub();
 
   const getOrCreateEngine = () => {

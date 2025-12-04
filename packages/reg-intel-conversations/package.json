@@ -18,7 +18,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@reg-copilot/reg-intel-core": "workspace:*"
+    "@reg-copilot/reg-intel-core": "workspace:*",
+    "pg": "^8.13.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
