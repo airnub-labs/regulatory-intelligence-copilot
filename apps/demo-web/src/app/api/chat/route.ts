@@ -26,15 +26,14 @@ const handler = createChatRouteHandler({
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
-  const userId = session?.user?.id;
-  if (!userId) {
+  if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 });
   }
 
   const headers = new Headers(request.headers);
-  headers.set('x-user-id', userId);
+  headers.set('x-user-id', session.user.id);
 
-  const tenantId = session?.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
 
   let body: unknown;
   try {

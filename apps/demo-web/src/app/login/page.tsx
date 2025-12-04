@@ -30,12 +30,12 @@ export default function LoginPage() {
     setIsSubmitting(true)
     setError(null)
 
-    const result = (await signIn('credentials', {
+    const result = await signIn('credentials', {
       email,
       password,
       redirect: false,
       callbackUrl: '/',
-    })) as { error?: string } | undefined
+    })
 
     if (result?.error) {
       setError('Sign-in failed. Check your credentials and Supabase configuration.')

@@ -23,7 +23,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials: Record<string, unknown> | null) {
+      async authorize(credentials) {
         if (!credentials?.email || !credentials?.password || !supabaseUrl || !supabaseAnonKey) {
           return null
         }
@@ -34,7 +34,7 @@ export const authOptions: NextAuthOptions = {
             getAll() {
               return cookieStore.getAll()
             },
-            setAll(cookies: { name: string; value: string; options?: Record<string, unknown> }[]) {
+            setAll(cookies) {
               cookies.forEach(({ name, value, options }) => {
                 cookieStore.set(name, value, options)
               })
@@ -66,7 +66,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
   callbacks: {
-    async jwt({ token, user }: { token: Record<string, unknown>; user?: Record<string, unknown> }) {
+    async jwt({ token, user }) {
       if (user) {
         token.sub = user.id
         token.email = user.email
@@ -75,7 +75,7 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    async session({ session, token }: { session: any; token: Record<string, unknown> }) {
+    async session({ session, token }) {
       if (session.user) {
         session.user.id = typeof token.sub === 'string' ? token.sub : ''
         session.user.email = typeof token.email === 'string' ? token.email : session.user.email

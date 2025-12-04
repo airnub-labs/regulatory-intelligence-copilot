@@ -44,11 +44,11 @@ interface UserProfile {
 }
 
 interface ChatMetadata {
-  agentId?: string
-  jurisdictions?: string[]
-  uncertaintyLevel?: 'low' | 'medium' | 'high'
-  disclaimerKey?: string
-  referencedNodes?: string[]
+  agentId: string
+  jurisdictions: string[]
+  uncertaintyLevel: 'low' | 'medium' | 'high'
+  disclaimerKey: string
+  referencedNodes: string[]
   warnings?: string[]
 }
 
@@ -538,10 +538,7 @@ export default function Home() {
               setMessages(prev =>
                 prev.map(message =>
                   message.id === assistantMessageId
-                    ? ({
-                        ...message,
-                        metadata: { ...message.metadata, warnings: warningList },
-                      } as ChatMessage)
+                    ? { ...message, metadata: { ...message.metadata, warnings: warningList } }
                     : message
                 )
               )
@@ -645,7 +642,7 @@ export default function Home() {
           authorizationModel,
           title: conversationTitle,
           replaceMessageId: editingMessageId,
-          userId: session?.user?.id,
+          userId: session.user.id,
         }),
         signal: controller.signal,
       })
@@ -886,7 +883,7 @@ export default function Home() {
                   <Separator orientation="vertical" className="h-5" />
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Jurisdictions</span>
-                    <span className="text-foreground">{chatMetadata.jurisdictions?.join(', ') ?? 'Unknown'}</span>
+                    <span className="text-foreground">{chatMetadata.jurisdictions.join(', ')}</span>
                   </div>
                   <Separator orientation="vertical" className="h-5" />
                   <div className="flex items-center gap-2">
@@ -898,7 +895,7 @@ export default function Home() {
                   <Separator orientation="vertical" className="h-5" />
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Referenced Nodes</span>
-                    <span className="text-foreground">{(chatMetadata.referencedNodes?.length ?? 0) > 0 ? chatMetadata.referencedNodes?.length : 'none'}</span>
+                    <span className="text-foreground">{chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.length : 'none'}</span>
                   </div>
                 </div>
               </div>
