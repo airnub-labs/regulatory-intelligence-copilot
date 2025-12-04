@@ -17,13 +17,15 @@ const nextConfig = {
   experimental: {
     turbopackUseSystemTlsCerts: true,
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@reg-copilot/reg-intel-conversations': path.resolve(__dirname, '../..', 'packages/reg-intel-conversations'),
+      '@supabase/supabase-js': path.resolve(__dirname, 'stubs/supabase-js'),
+      '@supabase/ssr': path.resolve(__dirname, 'stubs/supabase-ssr'),
+      'next-auth': path.resolve(__dirname, 'stubs/next-auth'),
+      'next-auth/react': path.resolve(__dirname, 'stubs/next-auth-react'),
+      'next-auth/providers/credentials': path.resolve(__dirname, 'stubs/next-auth-credentials'),
     }
     if (!isServer) {
       // Don't bundle Node.js modules in the client bundle

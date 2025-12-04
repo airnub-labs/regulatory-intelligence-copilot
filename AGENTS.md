@@ -31,6 +31,10 @@ v0.6 updates the v0.4 agent design by:
 
 ## 1. Agent Architecture Overview
 
+**Repository rules:**
+
+- Fix TypeScript and lint errors instead of masking them with `typescript.ignoreBuildErrors` (or similar) in `next.config.js`.
+
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.

@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "pnpm --filter @reg-copilot/reg-intel-core build",
     "dev": "next dev",
-    "build": "next build",
+    "build": "TURBOPACK=0 next build",
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit"

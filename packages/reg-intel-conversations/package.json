@@ -18,8 +18,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@reg-copilot/reg-intel-core": "workspace:*",
-    "@supabase/supabase-js": "^2.49.0"
+    "@reg-copilot/reg-intel-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

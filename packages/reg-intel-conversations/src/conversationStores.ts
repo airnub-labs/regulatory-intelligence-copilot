@@ -5,11 +5,16 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
 export type TenantAccess = 'view' | 'edit';
 export type AuthorizationModel = 'supabase_rbac' | 'openfga';
+
+export type SupabaseError = { message: string };
+
+export type SupabaseLikeClient = {
+  from(table: string): any;
+};
 
 export interface AuthorizationSpec {
   provider?: 'openfga' | 'spicedb' | 'permify' | 'custom';
@@ -422,7 +427,7 @@ function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage
 }
 
 export class SupabaseConversationStore implements ConversationStore {
-  constructor(private client: SupabaseClient) {}
+  constructor(private client: SupabaseLikeClient) {}
 
   private async getConversationRecord(
     tenantId: string,
@@ -551,11 +556,13 @@ export class SupabaseConversationStore implements ConversationStore {
       throw new Error('User not authorised for conversation');
     }
 
-    const { data: messageRow, error: messageError } = await this.client
+    const messageLookup = (await this.client
       .from('conversation_messages')
       .select('id, metadata, tenant_id, conversation_id')
       .eq('id', input.messageId)
-      .maybeSingle();
+      .maybeSingle()) as { data: SupabaseConversationMessageRow | null; error: SupabaseError | null };
+
+    const { data: messageRow, error: messageError } = messageLookup;
 
     if (messageError) {
       throw new Error(`Failed to load message: ${messageError.message}`);
@@ -707,7 +714,7 @@ export class SupabaseConversationStore implements ConversationStore {
 }
 
 export class SupabaseConversationContextStore implements ConversationContextStore {
-  constructor(private client: SupabaseClient) {}
+  constructor(private client: SupabaseLikeClient) {}
 
   async load(identity: ConversationIdentity): Promise<ConversationContext | null> {
     const { data, error } = await this.client
