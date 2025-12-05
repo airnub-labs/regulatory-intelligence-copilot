@@ -752,6 +752,20 @@ pnpm dev
 - Check for typos in variable names
 - For `NEXT_PUBLIC_*` vars, rebuild if changed
 
+**Problem**: `COPILOT_CONVERSATIONS_MODE=memory` throws an error
+
+```
+Error: COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments
+```
+
+**Solution**:
+- Memory mode is intentionally blocked in production builds. For local demos or tests, set a development-like environment:
+  - In `.env.local`, ensure `NODE_ENV=development` (or `NODE_ENV=test`).
+  - Restart the dev server after changing the value so the Next.js runtime picks it up.
+- If you are running a production build locally and do not want to change `NODE_ENV`, switch back to the default `auto` mode by
+  removing `COPILOT_CONVERSATIONS_MODE` (or setting it to `auto`) so the Supabase conversation store is used when credentials
+  are present.
+
 ### LLM Provider Issues
 
 **Problem**: OpenAI API errors
