@@ -49,6 +49,8 @@ interface ChatMetadata {
   disclaimerKey?: string
   referencedNodes?: string[]
   warnings?: string[]
+  timelineSummary?: string
+  timelineFocus?: string
 }
 
 interface ChatMessage {
@@ -129,6 +131,12 @@ interface ConversationPayload {
   }
 }
 
+interface ReferencedNodeSummary {
+  id: string
+  label: string
+  type?: string
+}
+
 interface ChatSseMetadata extends ChatMetadata {
   conversationId?: string
   shareAudience?: ShareAudience
@@ -207,6 +215,43 @@ const extractWarnings = (parsedData: ParsedSseData): string[] => {
     return [parsedData]
   }
   return []
+}
+
+const extractYearsFromText = (text: string): string[] => {
+  const matches = text.match(/\b(20\d{2})\b/g)
+  if (!matches) return []
+  return Array.from(new Set(matches)).slice(-3)
+}
+
+const extractQuarterFromText = (text: string): string | undefined => {
+  const match = text.match(/\b(q[1-4])\s*(20\d{2})/i)
+  if (!match) return undefined
+  return `${match[1].toUpperCase()} ${match[2]}`
+}
+
+const summarizeTimelineSignal = (metadata: ChatMetadata | null, latestAnswer?: string): string => {
+  if (metadata?.timelineSummary) return metadata.timelineSummary
+  if (metadata?.timelineFocus) return metadata.timelineFocus
+
+  if (!latestAnswer) {
+    return 'Timeline signals will appear after your next answer.'
+  }
+
+  const quarter = extractQuarterFromText(latestAnswer)
+  if (quarter) {
+    return `Focuses on ${quarter}`
+  }
+
+  const years = extractYearsFromText(latestAnswer)
+  if (years.length) {
+    return `Mentions ${years.join(', ')} timelines`
+  }
+
+  if (/upcoming|effective|commences|commencing|starts|next year|next month/i.test(latestAnswer)) {
+    return 'Highlights upcoming rule changes'
+  }
+
+  return 'Timeline signals will appear after your next answer.'
 }
 
 const quickPrompts = [
@@ -301,6 +346,8 @@ export default function Home() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
+  const [referencedNodeSummaries, setReferencedNodeSummaries] = useState<ReferencedNodeSummary[]>([])
+  const [isLoadingNodeSummaries, setIsLoadingNodeSummaries] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
@@ -318,7 +365,6 @@ export default function Home() {
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
   })
-  const isShared = shareAudience !== 'private'
 
   const isAuthenticated = status === 'authenticated' && Boolean((session?.user as { id?: string } | undefined)?.id)
   const isTitleDirty = conversationTitle !== savedConversationTitle
@@ -328,10 +374,63 @@ export default function Home() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
   const versionedMessages = useMemo(() => buildVersionedMessages(messages), [messages])
+  const latestAssistantMessage = useMemo(() => {
+    for (let i = versionedMessages.length - 1; i >= 0; i -= 1) {
+      const chain = versionedMessages[i]
+      const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
+      const candidate = chain.versions[currentIndex]
+      if (candidate.role === 'assistant' && !candidate.deletedAt && !candidate.metadata?.deletedAt) {
+        return candidate
+      }
+    }
+    return null
+  }, [activeVersionIndex, versionedMessages])
+  const timelineSummary = useMemo(
+    () => summarizeTimelineSignal(chatMetadata, latestAssistantMessage?.content),
+    [chatMetadata, latestAssistantMessage?.content]
+  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  useEffect(() => {
+    const ids = chatMetadata?.referencedNodes ?? []
+    if (!ids.length) {
+      setReferencedNodeSummaries([])
+      setIsLoadingNodeSummaries(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const fetchSummaries = async () => {
+      setIsLoadingNodeSummaries(true)
+      try {
+        const params = new URLSearchParams({ ids: ids.slice(0, 25).join(',') })
+        const response = await fetch(`/api/graph?${params.toString()}`, { signal: controller.signal })
+        if (!response.ok) {
+          throw new Error(`Lookup failed with status ${response.status}`)
+        }
+        const payload = (await response.json()) as { nodes?: ReferencedNodeSummary[] }
+        if (!controller.signal.aborted) {
+          setReferencedNodeSummaries(payload.nodes ?? [])
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Failed to fetch node summaries', error)
+          setReferencedNodeSummaries([])
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingNodeSummaries(false)
+        }
+      }
+    }
+
+    fetchSummaries()
+
+    return () => controller.abort()
+  }, [chatMetadata?.referencedNodes])
 
   const loadConversations = useCallback(async () => {
     if (!isAuthenticated) return
@@ -422,6 +521,46 @@ export default function Home() {
     }
     if (metadata.warnings !== undefined) {
       setWarnings(metadata.warnings)
+    }
+  }
+
+  const describeShareState = (audience: ShareAudience, access: TenantAccess) => {
+    if (audience === 'public') return 'Public (view only)'
+    if (audience === 'tenant' && access === 'view') return 'Tenant shared (view only)'
+    if (audience === 'tenant') return 'Tenant shared (edit)'
+    return 'Private to you'
+  }
+
+  const describeShareHint = (value: ShareOptionValue) => {
+    switch (value) {
+      case 'tenant-view':
+        return 'Tenant members can view this thread and watch SSE output live, but only you can edit.'
+      case 'tenant-edit':
+        return 'Tenant members can view and edit this thread in real time.'
+      case 'public':
+        return 'Anyone with the link can view this conversation and its SSE stream; edits remain tenant-only.'
+      default:
+        return 'Only you can view this conversation and its SSE stream.'
+    }
+  }
+
+  const selectValueFromShareState = (audience: ShareAudience, access: TenantAccess): ShareOptionValue => {
+    if (audience === 'public') return 'public'
+    if (audience === 'tenant' && access === 'view') return 'tenant-view'
+    if (audience === 'tenant') return 'tenant-edit'
+    return 'private'
+  }
+
+  const resolveShareState = (value: ShareOptionValue): { shareAudience: ShareAudience; tenantAccess: TenantAccess } => {
+    switch (value) {
+      case 'public':
+        return { shareAudience: 'public', tenantAccess: 'view' }
+      case 'tenant-view':
+        return { shareAudience: 'tenant', tenantAccess: 'view' }
+      case 'tenant-edit':
+        return { shareAudience: 'tenant', tenantAccess: 'edit' }
+      default:
+        return { shareAudience: 'private', tenantAccess: tenantAccess }
     }
   }
 
@@ -707,20 +846,19 @@ export default function Home() {
     setInput('')
   }
 
-  const toggleSharing = async () => {
+  const updateShareSettings = async (value: ShareOptionValue) => {
     if (!conversationIdRef.current) return
     if (!isAuthenticated) return
-    const nextAudience: ShareAudience = shareAudience === 'private' ? 'tenant' : 'private'
-    const nextTenantAccess: TenantAccess = nextAudience === 'tenant' ? 'edit' : tenantAccess
+    const nextState = resolveShareState(value)
     const response = await fetch(`/api/conversations/${conversationIdRef.current}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ shareAudience: nextAudience, tenantAccess: nextTenantAccess }),
+      body: JSON.stringify({ shareAudience: nextState.shareAudience, tenantAccess: nextState.tenantAccess }),
     })
     if (response.ok) {
-      setShareAudience(nextAudience)
-      setTenantAccess(nextTenantAccess)
+      setShareAudience(nextState.shareAudience)
+      setTenantAccess(nextState.tenantAccess)
       loadConversations()
     }
   }
@@ -1085,19 +1223,33 @@ export default function Home() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {conversationId && (
-                  <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">
-                      {!isShared
-                        ? 'Private to you'
-                        : shareAudience === 'public'
-                          ? 'Public read-only'
-                          : tenantAccess === 'view'
-                            ? 'Tenant shared (read-only)'
-                            : 'Tenant shared (edit)'}
-                    </span>
-                    <Button size="sm" variant="ghost" onClick={toggleSharing}>
-                      {shareAudience === 'private' ? 'Share with tenant' : 'Make private'}
-                    </Button>
+                  <div className="space-y-2 rounded-lg border px-3 py-2 text-xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1 text-left">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Sharing</p>
+                        <p className="font-medium text-foreground">
+                          {describeShareState(shareAudience, tenantAccess)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {describeShareHint(selectValueFromShareState(shareAudience, tenantAccess))}
+                        </p>
+                      </div>
+                      <Select
+                        value={selectValueFromShareState(shareAudience, tenantAccess)}
+                        onValueChange={value => updateShareSettings(value as ShareOptionValue)}
+                        disabled={!isAuthenticated}
+                      >
+                        <SelectTrigger className="w-[220px] text-left">
+                          <SelectValue placeholder="Select sharing" />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="private">Private (only you)</SelectItem>
+                          <SelectItem value="tenant-view">Tenant: view</SelectItem>
+                          <SelectItem value="tenant-edit">Tenant: view &amp; edit</SelectItem>
+                          <SelectItem value="public">Public: view</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
                 {conversationId && (
@@ -1140,11 +1292,7 @@ export default function Home() {
                         <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
                         {conv.shareAudience !== 'private' && (
                           <Badge variant="secondary">
-                            {conv.shareAudience === 'public'
-                              ? 'Public read-only'
-                              : conv.tenantAccess === 'view'
-                                ? 'Tenant read-only'
-                                : 'Tenant shared'}
+                            {describeShareState(conv.shareAudience, conv.tenantAccess)}
                           </Badge>
                         )}
                       </span>
@@ -1172,15 +1320,50 @@ export default function Home() {
                     {profile.jurisdictions.length > 0 ? profile.jurisdictions.join(', ') : 'None selected'}
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
-                  <span className="text-muted-foreground">Active graph nodes</span>
-                  <Badge variant="secondary" className="rounded-full">
-                    {chatMetadata?.referencedNodes?.length ? `${chatMetadata.referencedNodes.length} nodes from last answer` : 'Pending'}
-                  </Badge>
+                <div className="rounded-xl border bg-muted/30 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Active graph nodes</span>
+                    <Badge variant="secondary" className="rounded-full">
+                      {chatMetadata?.referencedNodes?.length
+                        ? `${chatMetadata.referencedNodes.length} linked`
+                        : 'Pending'}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {isLoadingNodeSummaries && (
+                      <div className="text-xs text-muted-foreground">Looking up node names…</div>
+                    )}
+                    {!isLoadingNodeSummaries && referencedNodeSummaries.length === 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        {chatMetadata?.referencedNodes?.length
+                          ? 'No labels found for the latest references.'
+                          : 'Ask a question to populate graph context.'}
+                      </div>
+                    )}
+                    {referencedNodeSummaries.map(node => (
+                      <div key={node.id} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="truncate" title={node.label}>
+                          <span className="font-medium text-foreground">{node.label}</span>
+                          {node.type && <span className="text-muted-foreground"> · {node.type}</span>}
+                        </div>
+                        <a
+                          className="shrink-0 text-primary hover:underline"
+                          href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
+                        >
+                          View
+                        </a>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
                   <span className="text-muted-foreground">Timeline focus</span>
-                  <Badge variant="outline" className="rounded-full">Current tax year</Badge>
+                  <Badge
+                    variant="outline"
+                    className="max-w-[240px] justify-center whitespace-normal rounded-full text-center"
+                  >
+                    {timelineSummary}
+                  </Badge>
                 </div>
                 <div className="rounded-xl border bg-primary/5 px-3 py-2 text-xs text-primary">
                   These settings feed into the prompt builder, graph queries, and conversation context store. Changes take effect from the next question.
