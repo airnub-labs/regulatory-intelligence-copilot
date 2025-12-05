@@ -2,6 +2,12 @@
 
 This plan focuses on end-to-end request correlation for the `/api/chat` entrypoint in `apps/demo-web/src/app/api/chat/route.ts` and the orchestrator in `packages/reg-intel-core/src/orchestrator/complianceEngine.ts`, with coverage for graph access, LLM routing, MCP/E2B calls, and conversation stores.
 
+## Existing documentation to anchor tracing/logging design
+- **Async context as a first-class primitive:** Node 24 is already justified in the stack because its improved AsyncLocalStorage underpins per-request/tenant context for APM and logging across agents, LLM router calls, graph/MCP access, and more. This provides the propagation substrate that the span-aware logger/tracer should reuse instead of bespoke context stores. 【F:docs/node_24_lts_rationale.md†L52-L64】
+- **Safety guard context already carries audit IDs:** Both ingress and egress guard contracts include `tenantId`/`userId` fields that are explicitly earmarked for logging/telemetry but never sent to providers. Spans and log bindings should read/write these IDs so policy decisions and payload sanitisation are traceable without leaking PII. 【F:docs/specs/safety-guards/graph_ingress_guard_v_0_1.md†L88-L111】【F:docs/specs/safety-guards/egress_guard_v_0_3.md†L62-L116】
+- **Operational guidance assumes structured log levels:** The local development guide already documents enabling debug-level logging via `LOG_LEVEL`, so the proposed Pino wrapper should honour this env var and maintain parity with existing guidance. 【F:docs/LOCAL_DEVELOPMENT.md†L889-L895】
+
+
 ## Goals
 - Correlate every chat request from ingress to response, including LLM calls, egress guard decisions, graph/timeline queries, and MCP gateway calls.
 - Emit structured logs that always carry `trace_id`, `span_id`, `tenantId`, `conversationId`, `userId`, and `agentId` when available.
