@@ -5,6 +5,8 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
+import { withSpan } from '@reg-copilot/reg-intel-observability';
+import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
 export type TenantAccess = 'view' | 'edit';
@@ -478,6 +480,24 @@ export class SupabaseConversationStore implements ConversationStore {
     this.internalClient = internalClient ?? client;
   }
 
+  private wrapMutation<T>(
+    input: { operation: string; table: string; tenantId: string; conversationId?: string },
+    fn: () => Promise<T>
+  ) {
+    return withSpan(
+      'db.supabase.mutation',
+      {
+        [SemanticAttributes.DB_SYSTEM]: 'postgresql',
+        [SemanticAttributes.DB_NAME]: 'supabase',
+        [SemanticAttributes.DB_OPERATION]: input.operation,
+        [SemanticAttributes.DB_SQL_TABLE]: input.table,
+        'app.tenant.id': input.tenantId,
+        ...(input.conversationId ? { 'app.conversation.id': input.conversationId } : {}),
+      },
+      fn
+    );
+  }
+
   private async getConversationRecord(
     tenantId: string,
     conversationId: string
@@ -510,36 +530,41 @@ export class SupabaseConversationStore implements ConversationStore {
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
   }): Promise<{ conversationId: string }> {
-    const now = new Date().toISOString();
-    const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
-    const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
-    const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
-    const authorizationSpec = input.authorizationSpec ?? {};
+    return this.wrapMutation(
+      { operation: 'insert', table: 'conversations', tenantId: input.tenantId },
+      async () => {
+        const now = new Date().toISOString();
+        const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
+        const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
+        const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
+        const authorizationSpec = input.authorizationSpec ?? {};
 
-    const { data, error } = await this.internalClient
-      .from('conversations')
-      .insert({
-        tenant_id: input.tenantId,
-        user_id: input.userId ?? null,
-        share_audience: shareAudience,
-        tenant_access: tenantAccess,
-        authorization_model: authorizationModel,
-        authorization_spec: authorizationSpec,
-        persona_id: input.personaId ?? null,
-        jurisdictions: input.jurisdictions ?? [],
-        title: input.title ?? null,
-        archived_at: null,
-        created_at: now,
-        updated_at: now,
-      })
-      .select('id')
-      .single();
+        const { data, error } = await this.internalClient
+          .from('conversations')
+          .insert({
+            tenant_id: input.tenantId,
+            user_id: input.userId ?? null,
+            share_audience: shareAudience,
+            tenant_access: tenantAccess,
+            authorization_model: authorizationModel,
+            authorization_spec: authorizationSpec,
+            persona_id: input.personaId ?? null,
+            jurisdictions: input.jurisdictions ?? [],
+            title: input.title ?? null,
+            archived_at: null,
+            created_at: now,
+            updated_at: now,
+          })
+          .select('id')
+          .single();
 
-    if (error) {
-      throw new Error(`Failed to create conversation: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to create conversation: ${error.message}`);
+        }
 
-    return { conversationId: (data as { id: string }).id };
+        return { conversationId: (data as { id: string }).id };
+      }
+    );
   }
 
   async appendMessage(input: {
@@ -550,46 +575,56 @@ export class SupabaseConversationStore implements ConversationStore {
     content: string;
     metadata?: Record<string, unknown>;
   }): Promise<{ messageId: string }> {
-    const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
-    if (!conversation) {
-      throw new Error('Conversation not found for tenant');
-    }
-    if (!canWrite(conversation, input.userId, input.role)) {
-      throw new Error('User not authorised for conversation');
-    }
+    return this.wrapMutation(
+      {
+        operation: 'insert',
+        table: 'conversation_messages',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+      },
+      async () => {
+        const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
+        if (!conversation) {
+          throw new Error('Conversation not found for tenant');
+        }
+        if (!canWrite(conversation, input.userId, input.role)) {
+          throw new Error('User not authorised for conversation');
+        }
 
-    const messageTimestamp = new Date().toISOString();
-    const { data, error } = await this.internalClient
-      .from('conversation_messages')
-      .insert({
-        conversation_id: input.conversationId,
-        tenant_id: input.tenantId,
-        user_id: input.userId ?? null,
-        role: input.role,
-        content: input.content,
-        metadata: input.metadata ?? null,
-        created_at: messageTimestamp,
-      })
-      .select('id, created_at, metadata')
-      .single();
+        const messageTimestamp = new Date().toISOString();
+        const { data, error } = await this.internalClient
+          .from('conversation_messages')
+          .insert({
+            conversation_id: input.conversationId,
+            tenant_id: input.tenantId,
+            user_id: input.userId ?? null,
+            role: input.role,
+            content: input.content,
+            metadata: input.metadata ?? null,
+            created_at: messageTimestamp,
+          })
+          .select('id, created_at, metadata')
+          .single();
 
-    if (error) {
-      throw new Error(`Failed to append message: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to append message: ${error.message}`);
+        }
 
-    const createdAt = (data as SupabaseConversationMessageRow).created_at ?? messageTimestamp;
+        const createdAt = (data as SupabaseConversationMessageRow).created_at ?? messageTimestamp;
 
-    const { error: updateError } = await this.internalClient
-      .from('conversations')
-      .update({ last_message_at: createdAt, updated_at: createdAt })
-      .eq('id', input.conversationId)
-      .eq('tenant_id', input.tenantId);
+        const { error: updateError } = await this.internalClient
+          .from('conversations')
+          .update({ last_message_at: createdAt, updated_at: createdAt })
+          .eq('id', input.conversationId)
+          .eq('tenant_id', input.tenantId);
 
-    if (updateError) {
-      throw new Error(`Failed to update conversation timestamps: ${updateError.message}`);
-    }
+        if (updateError) {
+          throw new Error(`Failed to update conversation timestamps: ${updateError.message}`);
+        }
 
-    return { messageId: (data as { id: string }).id };
+        return { messageId: (data as { id: string }).id };
+      }
+    );
   }
 
   async softDeleteMessage(input: {
@@ -599,58 +634,68 @@ export class SupabaseConversationStore implements ConversationStore {
     userId?: string | null;
     supersededBy?: string | null;
   }): Promise<void> {
-    const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
-    if (!conversation) {
-      throw new Error('Conversation not found for tenant');
-    }
-    if (!canWrite(conversation, input.userId)) {
-      throw new Error('User not authorised for conversation');
-    }
+    return this.wrapMutation(
+      {
+        operation: 'update',
+        table: 'conversation_messages',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+      },
+      async () => {
+        const conversation = await this.getConversationRecord(input.tenantId, input.conversationId);
+        if (!conversation) {
+          throw new Error('Conversation not found for tenant');
+        }
+        if (!canWrite(conversation, input.userId)) {
+          throw new Error('User not authorised for conversation');
+        }
 
-    const messageLookup = (await this.client
-      .from('conversation_messages_view')
-      .select('id, metadata, tenant_id, conversation_id')
-      .eq('id', input.messageId)
-      .maybeSingle()) as { data: SupabaseConversationMessageRow | null; error: SupabaseError | null };
+        const messageLookup = (await this.client
+          .from('conversation_messages_view')
+          .select('id, metadata, tenant_id, conversation_id')
+          .eq('id', input.messageId)
+          .maybeSingle()) as { data: SupabaseConversationMessageRow | null; error: SupabaseError | null };
 
-    const { data: messageRow, error: messageError } = messageLookup;
+        const { data: messageRow, error: messageError } = messageLookup;
 
-    if (messageError) {
-      throw new Error(`Failed to load message: ${messageError.message}`);
-    }
+        if (messageError) {
+          throw new Error(`Failed to load message: ${messageError.message}`);
+        }
 
-    if (!messageRow || messageRow.tenant_id !== input.tenantId || messageRow.conversation_id !== input.conversationId) {
-      throw new Error('Message not found for tenant conversation');
-    }
+        if (!messageRow || messageRow.tenant_id !== input.tenantId || messageRow.conversation_id !== input.conversationId) {
+          throw new Error('Message not found for tenant conversation');
+        }
 
-    const deletedAt = new Date().toISOString();
-    const existingMetadata = (messageRow as { metadata?: Record<string, unknown> | null }).metadata ?? {};
-    const nextMetadata = {
-      ...existingMetadata,
-      deletedAt,
-      supersededBy: input.supersededBy ?? (existingMetadata as { supersededBy?: string }).supersededBy ?? null,
-    } satisfies Record<string, unknown>;
+        const deletedAt = new Date().toISOString();
+        const existingMetadata = (messageRow as { metadata?: Record<string, unknown> | null }).metadata ?? {};
+        const nextMetadata = {
+          ...existingMetadata,
+          deletedAt,
+          supersededBy: input.supersededBy ?? (existingMetadata as { supersededBy?: string }).supersededBy ?? null,
+        } satisfies Record<string, unknown>;
 
-    const { error: updateError } = await this.internalClient
-      .from('conversation_messages')
-      .update({ metadata: nextMetadata })
-      .eq('id', input.messageId)
-      .eq('conversation_id', input.conversationId)
-      .eq('tenant_id', input.tenantId);
+        const { error: updateError } = await this.internalClient
+          .from('conversation_messages')
+          .update({ metadata: nextMetadata })
+          .eq('id', input.messageId)
+          .eq('conversation_id', input.conversationId)
+          .eq('tenant_id', input.tenantId);
 
-    if (updateError) {
-      throw new Error(`Failed to soft delete message: ${updateError.message}`);
-    }
+        if (updateError) {
+          throw new Error(`Failed to soft delete message: ${updateError.message}`);
+        }
 
-    const { error: conversationUpdateError } = await this.internalClient
-      .from('conversations')
-      .update({ updated_at: deletedAt })
-      .eq('id', input.conversationId)
-      .eq('tenant_id', input.tenantId);
+        const { error: conversationUpdateError } = await this.internalClient
+          .from('conversations')
+          .update({ updated_at: deletedAt })
+          .eq('id', input.conversationId)
+          .eq('tenant_id', input.tenantId);
 
-    if (conversationUpdateError) {
-      throw new Error(`Failed to update conversation metadata: ${conversationUpdateError.message}`);
-    }
+        if (conversationUpdateError) {
+          throw new Error(`Failed to update conversation metadata: ${conversationUpdateError.message}`);
+        }
+      }
+    );
   }
 
   async getMessages(input: {
@@ -742,62 +787,82 @@ export class SupabaseConversationStore implements ConversationStore {
     authorizationSpec?: AuthorizationSpec | null;
     title?: string | null;
   }): Promise<void> {
-    const record = await this.getConversationRecord(input.tenantId, input.conversationId);
-    if (!record) {
-      throw new Error('Conversation not found for tenant');
-    }
-    const isOwner = record.userId ? input.userId === record.userId : true;
-    if (!isOwner) {
-      throw new Error('User not authorised to update conversation');
-    }
+    return this.wrapMutation(
+      {
+        operation: 'update',
+        table: 'conversations',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+      },
+      async () => {
+        const record = await this.getConversationRecord(input.tenantId, input.conversationId);
+        if (!record) {
+          throw new Error('Conversation not found for tenant');
+        }
+        const isOwner = record.userId ? input.userId === record.userId : true;
+        if (!isOwner) {
+          throw new Error('User not authorised to update conversation');
+        }
 
-    const shareAudience = input.shareAudience ?? record.shareAudience;
-    const tenantAccess = input.tenantAccess ?? record.tenantAccess;
-    const authorizationModel = input.authorizationModel ?? record.authorizationModel;
-    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec ?? {};
-    const title = input.title !== undefined ? input.title : record.title;
+        const shareAudience = input.shareAudience ?? record.shareAudience;
+        const tenantAccess = input.tenantAccess ?? record.tenantAccess;
+        const authorizationModel = input.authorizationModel ?? record.authorizationModel;
+        const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec ?? {};
+        const title = input.title !== undefined ? input.title : record.title;
 
-    const { error } = await this.internalClient
-      .from('conversations')
-      .update({
-        share_audience: shareAudience,
-        tenant_access: tenantAccess,
-        authorization_model: authorizationModel,
-        authorization_spec: authorizationSpec,
-        title,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', input.conversationId)
-      .eq('tenant_id', input.tenantId);
+        const { error } = await this.internalClient
+          .from('conversations')
+          .update({
+            share_audience: shareAudience,
+            tenant_access: tenantAccess,
+            authorization_model: authorizationModel,
+            authorization_spec: authorizationSpec,
+            title,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', input.conversationId)
+          .eq('tenant_id', input.tenantId);
 
-    if (error) {
-      throw new Error(`Failed to update conversation sharing: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to update conversation sharing: ${error.message}`);
+        }
+      }
+    );
   }
 
   async setArchivedState(input: { tenantId: string; conversationId: string; userId?: string | null; archived: boolean }) {
-    const record = await this.getConversationRecord(input.tenantId, input.conversationId);
-    if (!record) {
-      throw new Error('Conversation not found for tenant');
-    }
+    return this.wrapMutation(
+      {
+        operation: 'update',
+        table: 'conversations',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+      },
+      async () => {
+        const record = await this.getConversationRecord(input.tenantId, input.conversationId);
+        if (!record) {
+          throw new Error('Conversation not found for tenant');
+        }
 
-    const isOwner = record.userId ? input.userId === record.userId : true;
-    if (!isOwner) {
-      throw new Error('User not authorised to update conversation');
-    }
+        const isOwner = record.userId ? input.userId === record.userId : true;
+        if (!isOwner) {
+          throw new Error('User not authorised to update conversation');
+        }
 
-    const { error } = await this.internalClient
-      .from('conversations')
-      .update({
-        archived_at: input.archived ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', input.conversationId)
-      .eq('tenant_id', input.tenantId);
+        const { error } = await this.internalClient
+          .from('conversations')
+          .update({
+            archived_at: input.archived ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', input.conversationId)
+          .eq('tenant_id', input.tenantId);
 
-    if (error) {
-      throw new Error(`Failed to update archived state: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to update archived state: ${error.message}`);
+        }
+      }
+    );
   }
 }
 
@@ -826,18 +891,31 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
-    const { error } = await this.internalClient
-      .from('conversation_contexts')
-      .upsert({
-        conversation_id: identity.conversationId,
-        tenant_id: identity.tenantId,
-        active_node_ids: ctx.activeNodeIds ?? [],
-        updated_at: new Date().toISOString(),
-      });
+    await withSpan(
+      'db.supabase.mutation',
+      {
+        [SemanticAttributes.DB_SYSTEM]: 'postgresql',
+        [SemanticAttributes.DB_NAME]: 'supabase',
+        [SemanticAttributes.DB_OPERATION]: 'upsert',
+        [SemanticAttributes.DB_SQL_TABLE]: 'conversation_contexts',
+        'app.tenant.id': identity.tenantId,
+        'app.conversation.id': identity.conversationId,
+      },
+      async () => {
+        const { error } = await this.internalClient
+          .from('conversation_contexts')
+          .upsert({
+            conversation_id: identity.conversationId,
+            tenant_id: identity.tenantId,
+            active_node_ids: ctx.activeNodeIds ?? [],
+            updated_at: new Date().toISOString(),
+          });
 
-    if (error) {
-      throw new Error(`Failed to save conversation context: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to save conversation context: ${error.message}`);
+        }
+      }
+    );
   }
 
   async mergeActiveNodeIds(identity: ConversationIdentity, nodeIds: string[]): Promise<void> {

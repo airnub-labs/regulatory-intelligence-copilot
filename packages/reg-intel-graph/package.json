@@ -21,6 +21,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@reg-copilot/reg-intel-observability": "workspace:*",
     "neo4j-driver": "^5.15.0"
   },
   "devDependencies": {

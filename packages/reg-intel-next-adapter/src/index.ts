@@ -46,6 +46,7 @@ import {
 } from '@reg-copilot/reg-intel-conversations';
 import { createClient } from '@supabase/supabase-js';
 import neo4j, { type Driver } from 'neo4j-driver';
+import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -285,12 +286,15 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
   if (mode !== 'memory') {
     const credentials = resolveSupabaseCredentials();
     if (credentials) {
+      const tracingFetch = createTracingFetch();
       const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
         auth: { autoRefreshToken: false, persistSession: false },
+        global: { fetch: tracingFetch },
       });
       const internalClient = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: 'copilot_internal' },
+        global: { fetch: tracingFetch },
       });
 
       logConversationStore(mode, 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });

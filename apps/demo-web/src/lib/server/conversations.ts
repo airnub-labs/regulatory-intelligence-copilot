@@ -8,6 +8,7 @@ import {
   SupabaseConversationContextStore,
   SupabaseConversationStore,
 } from '@reg-copilot/reg-intel-conversations';
+import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
 
@@ -25,6 +26,7 @@ const nextPhase = process.env.NEXT_PHASE;
 // accidental deployments with an in-memory store.
 const isDevPhase = nextPhase === PHASE_DEVELOPMENT_SERVER || nextPhase === PHASE_TEST;
 const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || isDevPhase;
+const tracingFetch = createTracingFetch();
 
 if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
   throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
@@ -44,6 +46,7 @@ const supabaseClient =
   normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
+        global: { fetch: tracingFetch },
       })
     : null;
 
@@ -52,6 +55,7 @@ const supabaseInternalClient =
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: 'copilot_internal' },
+        global: { fetch: tracingFetch },
       })
     : null;
 
