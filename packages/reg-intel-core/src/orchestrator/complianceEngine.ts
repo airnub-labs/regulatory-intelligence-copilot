@@ -35,6 +35,12 @@ import {
   conversationContextAspect,
 } from '@reg-copilot/reg-intel-prompts';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
+import {
+  createLogger,
+  requestContext,
+  withSpan,
+} from '@reg-copilot/reg-intel-observability';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
 
 export type {
   GraphClient,
@@ -246,6 +252,10 @@ export class ComplianceEngine {
   private conceptCaptureEnabled: boolean;
   private conceptCaptureWarning?: string;
   private conceptWarningLogged = false;
+  private logger = createLogger('ComplianceEngine');
+  private instrumentedGraphClient: GraphClient;
+  private instrumentedTimelineEngine: TimelineEngine;
+  private instrumentedEgressGuard: EgressGuard;
 
   constructor(deps: ComplianceEngineDeps) {
     this.deps = deps;
@@ -253,6 +263,56 @@ export class ComplianceEngine {
       deps.canonicalConceptHandler && deps.graphWriteService
     );
     this.conceptCaptureWarning = deps.conceptCaptureWarning;
+    this.instrumentedGraphClient = this.instrumentAsyncWithSpan(
+      'compliance.graph.query',
+      deps.graphClient
+    );
+    this.instrumentedTimelineEngine = this.instrumentSyncWithSpan(
+      'compliance.timeline.evaluate',
+      deps.timelineEngine
+    );
+    this.instrumentedEgressGuard = this.instrumentSyncWithSpan(
+      'compliance.egress.guard',
+      deps.egressGuard
+    );
+  }
+
+  private instrumentAsyncWithSpan<T extends Record<string, unknown>>(
+    name: string,
+    target: T
+  ): T {
+    return new Proxy(target, {
+      get: (obj, prop: string, receiver) => {
+        const value = Reflect.get(obj, prop, receiver);
+        if (typeof value !== 'function') return value;
+
+        return async (...args: unknown[]) =>
+          this.runWithTracing(
+            name,
+            { method: prop },
+            async () => value.apply(obj, args)
+          );
+      },
+    });
+  }
+
+  private instrumentSyncWithSpan<T extends Record<string, unknown>>(
+    name: string,
+    target: T
+  ): T {
+    return new Proxy(target, {
+      get: (obj, prop: string, receiver) => {
+        const value = Reflect.get(obj, prop, receiver);
+        if (typeof value !== 'function') return value;
+
+        return (...args: unknown[]) =>
+          this.runWithTracingSync(
+            name,
+            { method: prop },
+            () => (value as (...fnArgs: unknown[]) => unknown).apply(obj, args)
+          );
+      },
+    });
   }
 
   private async buildPromptMetadata(
@@ -319,39 +379,45 @@ export class ComplianceEngine {
 
   private async handleConceptChunk(chunk: ToolStreamChunk): Promise<string[]> {
     const toolName = chunk.name ?? chunk.toolName;
-    if (toolName !== 'capture_concepts') {
-      return [];
-    }
+    return this.runWithTracing(
+      'compliance.concepts.handle',
+      { toolName },
+      async () => {
+        if (toolName !== 'capture_concepts') {
+          return [];
+        }
 
-    if (!this.conceptCaptureEnabled || !this.deps.canonicalConceptHandler || !this.deps.graphWriteService) {
-      if (!this.conceptWarningLogged) {
-        console.warn(
-          this.conceptCaptureWarning ||
-            'Concept capture skipped: Graph write dependencies are not available.'
-        );
-        this.conceptWarningLogged = true;
+        if (!this.conceptCaptureEnabled || !this.deps.canonicalConceptHandler || !this.deps.graphWriteService) {
+          if (!this.conceptWarningLogged) {
+            console.warn(
+              this.conceptCaptureWarning ||
+                'Concept capture skipped: Graph write dependencies are not available.'
+            );
+            this.conceptWarningLogged = true;
+          }
+          return [];
+        }
+
+        const payload =
+          chunk.argsJson !== undefined
+            ? chunk.argsJson
+            : chunk.arguments ?? chunk.payload;
+        const concepts = this.parseCapturedConcepts(payload);
+        if (!concepts.length) {
+          return [];
+        }
+
+        try {
+          return await this.deps.canonicalConceptHandler.resolveAndUpsert(
+            concepts,
+            this.deps.graphWriteService
+          );
+        } catch (error) {
+          console.warn('Failed to resolve and upsert captured concepts', error);
+          return [];
+        }
       }
-      return [];
-    }
-
-    const payload =
-      chunk.argsJson !== undefined
-        ? chunk.argsJson
-        : chunk.arguments ?? chunk.payload;
-    const concepts = this.parseCapturedConcepts(payload);
-    if (!concepts.length) {
-      return [];
-    }
-
-    try {
-      return await this.deps.canonicalConceptHandler.resolveAndUpsert(
-        concepts,
-        this.deps.graphWriteService
-      );
-    } catch (error) {
-      console.warn('Failed to resolve and upsert captured concepts', error);
-      return [];
-    }
+    );
   }
 
   private wrapRouterError(error?: Error) {
@@ -384,9 +450,17 @@ export class ComplianceEngine {
       mergedOptions.maxTokens = max_tokens;
     }
 
-    const stream = this.deps.llmRouter.streamChat(
-      messages,
-      mergedOptions as LlmCompletionOptions
+    const streamSpanAttributes = {
+      task: mergedOptions.task ?? 'main-chat',
+      requestedModel: mergedOptions.model,
+      tenantId: mergedOptions.tenantId,
+      egressMode: mergedOptions.egressModeOverride ?? 'default',
+    };
+
+    const stream = await this.runWithTracing(
+      'compliance.llm.stream',
+      streamSpanAttributes,
+      async () => this.deps.llmRouter.streamChat(messages, mergedOptions as LlmCompletionOptions)
     );
 
     for await (const chunk of stream as AsyncIterable<RouterChunk>) {
@@ -472,49 +546,55 @@ export class ComplianceEngine {
     `;
 
     try {
-      const result = await this.deps.graphClient.executeCypher(query);
-      if (!Array.isArray(result)) {
-        return [];
-      }
+      return await this.runWithTracing(
+        'compliance.conversation.nodes',
+        { query },
+        async () => {
+          const result = await this.instrumentedGraphClient.executeCypher(query);
+          if (!Array.isArray(result)) {
+            return [];
+          }
 
-      return (
-        result
-          .map(raw => {
-            const row = raw as Record<string, unknown>;
-            const id =
-              typeof row.id === 'string'
-                ? row.id
-                : row.id !== undefined
-                  ? String(row.id)
-                  : undefined;
-            if (!id) {
-              return null;
-            }
+          return (
+            result
+              .map(raw => {
+                const row = raw as Record<string, unknown>;
+                const id =
+                  typeof row.id === 'string'
+                    ? row.id
+                    : row.id !== undefined
+                      ? String(row.id)
+                      : undefined;
+                if (!id) {
+                  return null;
+                }
 
-            const labelCandidate =
-              typeof row.label === 'string'
-                ? row.label
-                : typeof (row as Record<string, unknown>).name === 'string'
-                  ? ((row as Record<string, unknown>).name as string)
-                  : typeof (row as Record<string, unknown>).title === 'string'
-                    ? ((row as Record<string, unknown>).title as string)
-                    : 'Unknown';
+                const labelCandidate =
+                  typeof row.label === 'string'
+                    ? row.label
+                    : typeof (row as Record<string, unknown>).name === 'string'
+                      ? ((row as Record<string, unknown>).name as string)
+                      : typeof (row as Record<string, unknown>).title === 'string'
+                        ? ((row as Record<string, unknown>).title as string)
+                        : 'Unknown';
 
-              const labels = (row as { labels?: unknown }).labels;
-              const typeCandidate =
-                typeof row.type === 'string'
-                  ? row.type
-                  : Array.isArray(labels) && typeof labels[0] === 'string'
-                    ? (labels[0] as string)
-                    : 'Concept';
+                const labels = (row as { labels?: unknown }).labels;
+                const typeCandidate =
+                  typeof row.type === 'string'
+                    ? row.type
+                    : Array.isArray(labels) && typeof labels[0] === 'string'
+                      ? (labels[0] as string)
+                      : 'Concept';
 
-            return {
-              id,
-              label: labelCandidate,
-              type: typeCandidate,
-            } satisfies ResolvedNodeMeta;
-          })
-          .filter(Boolean) as ResolvedNodeMeta[]
+                return {
+                  id,
+                  label: labelCandidate,
+                  type: typeCandidate,
+                } satisfies ResolvedNodeMeta;
+              })
+              .filter(Boolean) as ResolvedNodeMeta[]
+          );
+        }
       );
     } catch (error) {
       console.warn('Failed to resolve conversation context nodes', error);
@@ -546,16 +626,22 @@ export class ComplianceEngine {
     }
 
     try {
-      const stored =
-        (await this.deps.conversationContextStore.load(identity)) ||
-        EMPTY_CONVERSATION_CONTEXT;
-      const nodes = await this.resolveActiveNodes(stored.activeNodeIds);
+      return await this.runWithTracing(
+        'compliance.conversation.load',
+        { tenantId: identity.tenantId, conversationId: identity.conversationId },
+        async () => {
+          const stored =
+            (await this.deps.conversationContextStore!.load(identity)) ||
+            EMPTY_CONVERSATION_CONTEXT;
+          const nodes = await this.resolveActiveNodes(stored.activeNodeIds);
 
-      return {
-        context: stored,
-        nodes,
-        summary: this.buildConversationContextSummary(nodes),
-      };
+          return {
+            context: stored,
+            nodes,
+            summary: this.buildConversationContextSummary(nodes),
+          };
+        }
+      );
     } catch (error) {
       console.warn('Failed to load conversation context', error);
       return { context: EMPTY_CONVERSATION_CONTEXT, nodes: [] };
@@ -571,21 +657,30 @@ export class ComplianceEngine {
     }
 
     try {
-      if (this.deps.conversationContextStore.mergeActiveNodeIds) {
-        await this.deps.conversationContextStore.mergeActiveNodeIds(identity, nodeIds);
-        return;
-      }
+      await this.runWithTracing(
+        'compliance.conversation.save',
+        { tenantId: identity.tenantId, conversationId: identity.conversationId },
+        async () => {
+          if (this.deps.conversationContextStore!.mergeActiveNodeIds) {
+            await this.deps.conversationContextStore!.mergeActiveNodeIds(
+              identity,
+              nodeIds
+            );
+            return;
+          }
 
-      const existingContext =
-        (await this.deps.conversationContextStore.load(identity)) ||
-        EMPTY_CONVERSATION_CONTEXT;
-      const mergedIds = Array.from(
-        new Set([...existingContext.activeNodeIds, ...nodeIds])
+          const existingContext =
+            (await this.deps.conversationContextStore!.load(identity)) ||
+            EMPTY_CONVERSATION_CONTEXT;
+          const mergedIds = Array.from(
+            new Set([...existingContext.activeNodeIds, ...nodeIds])
+          );
+
+          await this.deps.conversationContextStore!.save(identity, {
+            activeNodeIds: mergedIds,
+          });
+        }
       );
-
-      await this.deps.conversationContextStore.save(identity, {
-        activeNodeIds: mergedIds,
-      });
     } catch (error) {
       console.warn('Failed to persist conversation context', error);
     }
@@ -597,74 +692,89 @@ export class ComplianceEngine {
   async handleChat(request: ComplianceRequest): Promise<ComplianceResponse> {
     const { messages, profile, tenantId, conversationId } = request;
 
-    if (!messages || messages.length === 0) {
-      throw new ComplianceError('No messages provided');
-    }
+    return requestContext.run(
+      { tenantId, conversationId },
+      () =>
+        this.runWithTracing(
+          'compliance.route',
+          { tenantId, conversationId, streaming: false },
+          async () => {
+            if (!messages || messages.length === 0) {
+              throw new ComplianceError('No messages provided');
+            }
 
-    // Get the last user message as the question
-    const lastMessage = messages.filter(m => m.role === 'user').pop();
-    if (!lastMessage) {
-      throw new ComplianceError('No user message found');
-    }
+            // Get the last user message as the question
+            const lastMessage = messages.filter(m => m.role === 'user').pop();
+            if (!lastMessage) {
+              throw new ComplianceError('No user message found');
+            }
 
-    // Build agent input
-    const agentInput: AgentInput = {
-      question: lastMessage.content,
-      profile,
-      conversationHistory: messages.slice(0, -1), // All messages except the last
-      now: new Date(),
-    };
+            // Build agent input
+            const agentInput: AgentInput = {
+              question: lastMessage.content,
+              profile,
+              conversationHistory: messages.slice(0, -1), // All messages except the last
+              now: new Date(),
+            };
 
-    const conversationIdentity =
-      tenantId && conversationId
-        ? { tenantId, conversationId }
-        : undefined;
-    const conversationContext = await this.loadConversationContext(
-      conversationIdentity
+            const conversationIdentity =
+              tenantId && conversationId
+                ? { tenantId, conversationId }
+                : undefined;
+            const conversationContext = await this.loadConversationContext(
+              conversationIdentity
+            );
+            const promptMetadata = await this.buildPromptMetadata(profile, {
+              summary: conversationContext.summary,
+              nodes: conversationContext.nodes,
+            });
+            const conceptNodeIds = new Set<string>();
+            const conceptAwareClient = this.createConceptAwareLlmClient(
+              conceptNodeIds,
+              tenantId
+            );
+
+            // Build agent context
+            const agentContext: AgentContext = {
+              graphClient: this.instrumentedGraphClient,
+              timeline: this.instrumentedTimelineEngine,
+              egressGuard: this.instrumentedEgressGuard,
+              llmClient: conceptAwareClient,
+              now: new Date(),
+              profile,
+            };
+
+            // Use GlobalRegulatoryComplianceAgent to handle the request
+            // It will route to specialized agents as needed
+            const agentResult = await this.runWithTracing(
+              'compliance.agent',
+              { agent: 'GlobalRegulatoryComplianceAgent' },
+              async () =>
+                GlobalRegulatoryComplianceAgent.handle(agentInput, agentContext)
+            );
+
+            const referencedNodes = this.mergeReferencedNodes(
+              agentResult.referencedNodes,
+              conceptNodeIds
+            );
+            await this.updateConversationContext(
+              conversationIdentity,
+              referencedNodes.map(node => node.id)
+            );
+
+            return {
+              answer: agentResult.answer,
+              referencedNodes,
+              agentUsed: agentResult.agentId,
+              jurisdictions: promptMetadata.jurisdictions,
+              warnings: agentResult.warnings,
+              uncertaintyLevel: agentResult.uncertaintyLevel,
+              followUps: agentResult.followUps,
+              disclaimer: promptMetadata.disclaimer,
+            };
+          }
+        )
     );
-    const promptMetadata = await this.buildPromptMetadata(profile, {
-      summary: conversationContext.summary,
-      nodes: conversationContext.nodes,
-    });
-    const conceptNodeIds = new Set<string>();
-    const conceptAwareClient = this.createConceptAwareLlmClient(
-      conceptNodeIds,
-      tenantId
-    );
-
-    // Build agent context
-    const agentContext: AgentContext = {
-      graphClient: this.deps.graphClient,
-      timeline: this.deps.timelineEngine,
-      egressGuard: this.deps.egressGuard,
-      llmClient: conceptAwareClient,
-      now: new Date(),
-      profile,
-    };
-
-    // Use GlobalRegulatoryComplianceAgent to handle the request
-    // It will route to specialized agents as needed
-    const agentResult = await GlobalRegulatoryComplianceAgent.handle(
-      agentInput,
-      agentContext
-    );
-
-    const referencedNodes = this.mergeReferencedNodes(
-      agentResult.referencedNodes,
-      conceptNodeIds
-    );
-    await this.updateConversationContext(conversationIdentity, referencedNodes.map(node => node.id));
-
-    return {
-      answer: agentResult.answer,
-      referencedNodes,
-      agentUsed: agentResult.agentId,
-      jurisdictions: promptMetadata.jurisdictions,
-      warnings: agentResult.warnings,
-      uncertaintyLevel: agentResult.uncertaintyLevel,
-      followUps: agentResult.followUps,
-      disclaimer: promptMetadata.disclaimer,
-    };
   }
 
   /**
@@ -674,6 +784,26 @@ export class ComplianceEngine {
    * but streams the LLM response in real-time for better UX.
    */
   async *handleChatStream(request: ComplianceRequest): AsyncGenerator<ComplianceStreamChunk> {
+    const { tenantId, conversationId } = request;
+
+    const stream = await requestContext.run(
+      { tenantId, conversationId },
+      () =>
+        this.runWithTracing(
+          'compliance.route',
+          { tenantId, conversationId, streaming: true },
+          async () => this.handleChatStreamInternal(request)
+        )
+    );
+
+    for await (const chunk of stream) {
+      yield chunk;
+    }
+  }
+
+  private async *handleChatStreamInternal(
+    request: ComplianceRequest
+  ): AsyncGenerator<ComplianceStreamChunk> {
     const { messages, profile, tenantId, conversationId } = request;
 
     if (!messages || messages.length === 0) {
@@ -681,7 +811,6 @@ export class ComplianceEngine {
       return;
     }
 
-    // Get the last user message as the question
     const lastMessage = messages.filter(m => m.role === 'user').pop();
     if (!lastMessage) {
       yield { type: 'error', error: 'No user message found' };
@@ -706,32 +835,30 @@ export class ComplianceEngine {
         tenantId
       );
 
-      // Build agent input
       const agentInput: AgentInput = {
         question: lastMessage.content,
         profile,
-        conversationHistory: messages.slice(0, -1), // All messages except the last
+        conversationHistory: messages.slice(0, -1),
         now: new Date(),
       };
 
-      // Build agent context with streaming-capable LLM client
       const agentContext: AgentContext = {
-        graphClient: this.deps.graphClient,
-        timeline: this.deps.timelineEngine,
-        egressGuard: this.deps.egressGuard,
+        graphClient: this.instrumentedGraphClient,
+        timeline: this.instrumentedTimelineEngine,
+        egressGuard: this.instrumentedEgressGuard,
         llmClient: conceptAwareClient,
         now: new Date(),
         profile,
       };
 
-      // Use GlobalRegulatoryComplianceAgent to handle the request
-      // This will query the graph and route to specialized agents
       if (!GlobalRegulatoryComplianceAgent.handleStream) {
         throw new ComplianceError('Agent does not support streaming');
       }
-      const agentResult = await GlobalRegulatoryComplianceAgent.handleStream(
-        agentInput,
-        agentContext
+      const agentResult = await this.runWithTracing(
+        'compliance.agent',
+        { agent: 'GlobalRegulatoryComplianceAgent' },
+        async () =>
+          GlobalRegulatoryComplianceAgent.handleStream(agentInput, agentContext)
       );
 
       const warnings = agentResult.warnings ?? [];
@@ -744,7 +871,6 @@ export class ComplianceEngine {
         conceptNodeIds
       );
 
-      // Yield metadata first (after processing any leading tool chunks)
       yield {
         type: 'metadata',
         metadata: {
@@ -784,7 +910,6 @@ export class ComplianceEngine {
         finalReferencedNodes.map(node => node.id)
       );
 
-      // Yield done with follow-ups and disclaimer
       yield {
         type: 'done',
         followUps: agentResult.followUps,
@@ -796,6 +921,52 @@ export class ComplianceEngine {
       const message = error instanceof Error ? error.message : 'Unknown error';
       yield { type: 'error', error: message };
     }
+  }
+
+  private async runWithTracing<T>(
+    name: string,
+    attributes: Record<string, unknown>,
+    fn: () => Promise<T> | T
+  ): Promise<T> {
+    return withSpan(name, attributes, async () => {
+      this.logger.info({ span: name, event: 'start', attributes }, 'Span started');
+      try {
+        const result = await fn();
+        this.logger.info({ span: name, event: 'finish' }, 'Span finished');
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error({ span: name, event: 'error', error: message }, 'Span failed');
+        throw error;
+      }
+    });
+  }
+
+  private runWithTracingSync<T>(
+    name: string,
+    attributes: Record<string, unknown>,
+    fn: () => T
+  ): T {
+    const tracer = trace.getTracer('reg-intel-observability');
+    return tracer.startActiveSpan(name, { attributes }, (span) => {
+      requestContext.applyToSpan(span);
+      this.logger.info({ span: name, event: 'start', attributes }, 'Span started');
+
+      try {
+        const result = fn();
+        span.setStatus({ code: SpanStatusCode.OK });
+        this.logger.info({ span: name, event: 'finish' }, 'Span finished');
+        return result;
+      } catch (error) {
+        span.recordException(error as Error);
+        span.setStatus({ code: SpanStatusCode.ERROR });
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error({ span: name, event: 'error', error: message }, 'Span failed');
+        throw error;
+      } finally {
+        span.end();
+      }
+    });
   }
 }
 

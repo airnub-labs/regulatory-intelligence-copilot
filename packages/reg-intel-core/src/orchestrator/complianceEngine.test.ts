@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Writable } from 'node:stream';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
+import * as observability from '@reg-copilot/reg-intel-observability';
 
 import { ComplianceEngine } from './complianceEngine.js';
 import type {
@@ -438,5 +443,77 @@ describe('ComplianceEngine streaming', () => {
       temperature: 0.5,
       maxTokens: 24,
     });
+  });
+
+  it('emits spans and correlated logs for routed chat', async () => {
+    const exporter = new InMemorySpanExporter();
+    const provider = new BasicTracerProvider();
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+    const contextManager = new AsyncLocalStorageContextManager().enable();
+    provider.register({ contextManager });
+
+    const messages: Array<Record<string, unknown>> = [];
+    const destination = new Writable({
+      write(chunk, _encoding, callback) {
+        messages.push(JSON.parse(chunk.toString()));
+        callback();
+      },
+    });
+
+    const realCreateLogger = observability.createLogger;
+    const createLoggerSpy = vi
+      .spyOn(observability, 'createLogger')
+      .mockImplementation((scope: string, bindings?: any) =>
+        realCreateLogger(scope, { ...bindings, destination })
+      );
+
+    const llmRouter = createRouter();
+
+    const engine = new ComplianceEngine({
+      llmRouter,
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    await engine.handleChat({
+      messages: [{ role: 'user', content: 'Trace VAT' }],
+      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+      tenantId: 'tenant-span',
+      conversationId: 'conversation-span',
+    });
+
+    const spanNames = exporter.getFinishedSpans().map(span => span.name);
+    expect(spanNames).toEqual(
+      expect.arrayContaining([
+        'compliance.route',
+        'compliance.conversation.load',
+        'compliance.conversation.nodes',
+        'compliance.graph.query',
+        'compliance.llm.stream',
+        'compliance.concepts.handle',
+        'compliance.agent',
+      ])
+    );
+
+    const routeSpan = exporter
+      .getFinishedSpans()
+      .find(span => span.name === 'compliance.route');
+    expect(routeSpan?.status.code).toBe(SpanStatusCode.OK);
+
+    const correlatedLog = messages.find(
+      entry => entry.span === 'compliance.route' && entry.event === 'start'
+    );
+
+    expect(correlatedLog?.trace_id).toBe(routeSpan?.spanContext().traceId);
+    expect(correlatedLog?.conversationId).toBe('conversation-span');
+
+    await provider.shutdown();
+    contextManager.disable();
+    createLoggerSpy.mockRestore();
   });
 });
