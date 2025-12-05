@@ -185,7 +185,7 @@ Keep all secrets **out of source control**.
 - `COPILOT_GRAPH_WRITE_MODE` controls concept capture writes:
   - `auto` (default) – use Memgraph writes when `MEMGRAPH_URI` (+ credentials) are configured; disable writes and emit warnings otherwise.
   - `memgraph` – require Memgraph write connectivity; concept capture is blocked with a warning if unavailable.
-  - `memory`/`disabled` – never attempt graph writes; concept capture remains in memory only (useful for tests without Memgraph).
+  - `memory` – never attempt graph writes; concept capture remains in memory only (useful for tests without Memgraph).
 
 ### 4. Start Infra (Memgraph + MCP Gateway)
 

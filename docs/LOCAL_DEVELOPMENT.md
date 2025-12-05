@@ -413,7 +413,7 @@ LOG_LEVEL=debug
 | `SUPABASE_DEMO_TENANT_ID` | Yes (demo) | Tenant ID returned by the seed query for the demo user |
 | `NEXT_PUBLIC_SUPABASE_DEMO_USER_ID` | Yes (demo) | User ID returned by the seed query for the demo user |
 | `COPILOT_CONVERSATIONS_MODE` | No | Conversation store mode: `auto` (default) uses Supabase when credentials are set, otherwise memory; `supabase` forces Supabase; `memory` forces in-memory (testing only) |
-| `COPILOT_GRAPH_WRITE_MODE` | No | Concept capture write mode: `auto` (default) uses Memgraph when `MEMGRAPH_URI` is present, otherwise disables writes; `memgraph` requires Memgraph connectivity; `memory`/`disabled` forces in-memory no-op writes |
+| `COPILOT_GRAPH_WRITE_MODE` | No | Concept capture write mode: `auto` (default) uses Memgraph when `MEMGRAPH_URI` is present, otherwise disables writes; `memgraph` requires Memgraph connectivity; `memory` forces in-memory no-op writes |
 | `E2B_API_KEY` | No | E2B sandbox API key |
 
 \* At least one LLM provider required
@@ -421,7 +421,7 @@ LOG_LEVEL=debug
 #### Conversation & graph write modes
 
 - **Conversations**: By default (`COPILOT_CONVERSATIONS_MODE=auto`), the Next adapter uses Supabase/Postgres when `SUPABASE_*` credentials are present and falls back to an in-memory store when they are not. Set `supabase` to fail fast if credentials are missing, or `memory` to intentionally use the in-memory store for local tests and demos.
-- **Graph writes / concept capture**: `COPILOT_GRAPH_WRITE_MODE=auto` attempts to write captured concepts to Memgraph when `MEMGRAPH_URI` (and optional credentials) are configured. If Memgraph is not configured, concept capture downgrades to an in-memory no-op with a warning. Use `memgraph` to require connectivity, or `memory`/`disabled` to block writes for tests without Memgraph.
+- **Graph writes / concept capture**: `COPILOT_GRAPH_WRITE_MODE=auto` attempts to write captured concepts to Memgraph when `MEMGRAPH_URI` (and optional credentials) are configured. If Memgraph is not configured, concept capture downgrades to an in-memory no-op with a warning. Use `memgraph` to require connectivity, or `memory` to block writes for tests without Memgraph.
 
 ### Verify Configuration
 

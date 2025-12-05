@@ -212,7 +212,7 @@ function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
     process.env.COPILOT_GRAPH_WRITE_MODE ?? process.env.COPILOT_GRAPH_WRITES_MODE ?? 'auto';
   const normalized = envValue.trim().toLowerCase();
 
-  if (['memory', 'inmemory', 'in-memory', 'disabled', 'off'].includes(normalized)) return 'memory';
+  if (['memory', 'inmemory', 'in-memory'].includes(normalized)) return 'memory';
   if (['memgraph', 'neo4j', 'graph'].includes(normalized)) return 'memgraph';
   return 'auto';
 }
@@ -261,7 +261,7 @@ function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencie
   const graphWriteMode = resolveGraphWriteMode();
   if (graphWriteMode === 'memory') {
     console.info(
-      'Graph write path disabled: COPILOT_GRAPH_WRITE_MODE is set to memory/disabled. Concept capture will use in-memory fallbacks only.',
+      'Graph write path disabled: COPILOT_GRAPH_WRITE_MODE is set to memory. Concept capture will use in-memory fallbacks only.',
     );
     return null;
   }
