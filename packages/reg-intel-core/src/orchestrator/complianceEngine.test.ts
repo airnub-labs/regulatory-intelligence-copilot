@@ -6,6 +6,8 @@ import type {
   ComplianceRequest,
   ConversationContextStore,
   GraphClient,
+  AgentContext,
+  AgentInput,
   TimelineEngine,
   EgressGuard,
   LlmClient,
@@ -195,7 +197,7 @@ describe('ComplianceEngine streaming', () => {
     const llmRouter = createRouter();
 
     (GlobalRegulatoryComplianceAgent.handleStream as any).mockImplementationOnce(
-      async (_input, ctx) => ({
+      async (_input: AgentInput, ctx: AgentContext) => ({
         agentId: 'test-agent',
         referencedNodes: [],
         jurisdictions: ['IE'],
@@ -328,7 +330,7 @@ describe('ComplianceEngine streaming', () => {
     const customTools = [{ name: 'custom-tool' }];
 
     (GlobalRegulatoryComplianceAgent.handle as any).mockImplementationOnce(
-      async (_input: any, ctx: any) => {
+      async (_input: AgentInput, ctx: AgentContext) => {
         const llmResponse = await ctx.llmClient.chat({
           messages: [],
           model: 'custom-model',
@@ -389,7 +391,7 @@ describe('ComplianceEngine streaming', () => {
     const llmRouter = { streamChat } as unknown as LlmRouter;
 
     (GlobalRegulatoryComplianceAgent.handleStream as any).mockImplementationOnce(
-      async (_input: any, ctx: any) => ({
+      async (_input: AgentInput, ctx: AgentContext) => ({
         agentId: 'override-agent',
         referencedNodes: [
           { id: 'rule-1', label: 'Rule 1', type: 'Benefit' },
