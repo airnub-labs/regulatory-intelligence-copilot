@@ -138,26 +138,26 @@ create index if not exists conversation_messages_conversation_idx on copilot_int
 create index if not exists conversation_contexts_tenant_idx on copilot_internal.conversation_contexts(tenant_id);
 
 -- RLS policies for conversations
-create policy if not exists conversations_service_role_full_access
+create policy conversations_service_role_full_access
   on copilot_internal.conversations
   for all
   to service_role
   using (true)
   with check (true);
 
-create policy if not exists conversations_tenant_read
+create policy conversations_tenant_read
   on copilot_internal.conversations
   for select
   to authenticated
   using (tenant_id = public.current_tenant_id());
 
-create policy if not exists conversations_tenant_write
+create policy conversations_tenant_write
   on copilot_internal.conversations
   for insert
   to authenticated
   with check (tenant_id = public.current_tenant_id());
 
-create policy if not exists conversations_tenant_update
+create policy conversations_tenant_update
   on copilot_internal.conversations
   for update
   to authenticated
@@ -165,26 +165,26 @@ create policy if not exists conversations_tenant_update
   with check (tenant_id = public.current_tenant_id());
 
 -- RLS policies for conversation messages
-create policy if not exists conversation_messages_service_role_full_access
+create policy conversation_messages_service_role_full_access
   on copilot_internal.conversation_messages
   for all
   to service_role
   using (true)
   with check (true);
 
-create policy if not exists conversation_messages_tenant_read
+create policy conversation_messages_tenant_read
   on copilot_internal.conversation_messages
   for select
   to authenticated
   using (tenant_id = public.current_tenant_id());
 
-create policy if not exists conversation_messages_tenant_write
+create policy conversation_messages_tenant_write
   on copilot_internal.conversation_messages
   for insert
   to authenticated
   with check (tenant_id = public.current_tenant_id());
 
-create policy if not exists conversation_messages_tenant_update
+create policy conversation_messages_tenant_update
   on copilot_internal.conversation_messages
   for update
   to authenticated
