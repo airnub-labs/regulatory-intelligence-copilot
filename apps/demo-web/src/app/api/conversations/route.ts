@@ -6,7 +6,7 @@ import { authOptions } from '@/lib/auth/options';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const session = await getServerSession(authOptions);
   const user = session?.user;
   const userId = user?.id;

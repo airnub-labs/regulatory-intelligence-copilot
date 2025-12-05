@@ -359,7 +359,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         egressGuard: new BasicEgressGuard(),
         graphWriteService: graphDeps?.graphWriteService ?? ({} as GraphWriteService),
         canonicalConceptHandler:
-          graphDeps?.canonicalConceptHandler ?? ({ resolveAndUpsert: async () => [] } satisfies CanonicalConceptHandler),
+          graphDeps?.canonicalConceptHandler ??
+          createCanonicalConceptHandler({ driver: neo4j.driver('bolt://localhost:7687') }),
         conversationContextStore,
       });
     }
