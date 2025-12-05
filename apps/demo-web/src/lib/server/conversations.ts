@@ -9,11 +9,7 @@ import {
   SupabaseConversationStore,
 } from '@reg-copilot/reg-intel-conversations';
 import { createClient } from '@supabase/supabase-js';
-import {
-  PHASE_DEVELOPMENT_SERVER,
-  PHASE_PRODUCTION_BUILD,
-  PHASE_TEST,
-} from 'next/constants';
+import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
 
 const normalizeConversationStoreMode = (
   process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
@@ -24,11 +20,11 @@ const normalizeConversationStoreMode = (
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 const nextPhase = process.env.NEXT_PHASE;
-const isBuildOrDevPhase =
-  nextPhase === PHASE_PRODUCTION_BUILD ||
-  nextPhase === PHASE_DEVELOPMENT_SERVER ||
-  nextPhase === PHASE_TEST;
-const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || isBuildOrDevPhase;
+// Only allow dev-like behavior in actual dev/test phases, not during production builds.
+// This ensures production builds fail if database credentials are missing, preventing
+// accidental deployments with an in-memory store.
+const isDevPhase = nextPhase === PHASE_DEVELOPMENT_SERVER || nextPhase === PHASE_TEST;
+const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || isDevPhase;
 
 if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
   throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
