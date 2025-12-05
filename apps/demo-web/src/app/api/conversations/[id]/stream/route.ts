@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         cleanup();
       };
 
-      const subscriber: SseSubscriber = {
+      const subscriber: SseSubscriber<ConversationEventType> = {
         send(event: ConversationEventType, data: unknown) {
           controller.enqueue(sseChunk(event, data));
         },

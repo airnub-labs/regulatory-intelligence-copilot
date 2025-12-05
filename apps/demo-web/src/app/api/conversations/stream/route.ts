@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
         cleanup()
       }
 
-      const subscriber: SseSubscriber = {
+      const subscriber: SseSubscriber<ConversationListEventType> = {
         send(event: ConversationListEventType, data: unknown) {
           controller.enqueue(sseChunk(event, data))
         },
