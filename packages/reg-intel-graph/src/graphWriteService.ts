@@ -15,6 +15,27 @@ import {
   createBaselineAspects,
 } from './graphIngressGuard.js';
 
+export interface UpsertConceptDto {
+  id: string;
+  pref_label: string;
+  domain?: string;
+  kind?: string;
+  jurisdiction?: string;
+  definition?: string;
+  alt_labels?: string[];
+  source_urls?: string[];
+  ingestion_status?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_verified_at?: string;
+}
+
+export interface UpsertLabelDto {
+  id: string;
+  value: string;
+  kind?: string;
+}
+
 /**
  * DTO for upserting a jurisdiction
  */
@@ -278,6 +299,30 @@ export class GraphWriteService {
 
       await session.run(cypher, { ...properties, fromId, toId });
     }
+  }
+
+  async upsertConcept(dto: UpsertConceptDto): Promise<void> {
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Concept',
+      properties: { ...dto },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+
+    await this.executeWrite(ctx);
+  }
+
+  async upsertLabel(dto: UpsertLabelDto): Promise<void> {
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Label',
+      properties: { ...dto },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+
+    await this.executeWrite(ctx);
   }
 
   /**
