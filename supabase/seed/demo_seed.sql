@@ -43,6 +43,7 @@ begin
       demo_now,
       demo_now,
       demo_now,
+      demo_now,
       jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
       jsonb_build_object(
         'tenant_id', demo_tenant_id,
