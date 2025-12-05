@@ -70,10 +70,6 @@ interface VersionedMessage {
 
 type ShareAudience = 'private' | 'tenant' | 'public'
 type TenantAccess = 'view' | 'edit'
-type AuthorizationModel = 'supabase_rbac' | 'openfga'
-
-type ShareOptionValue = 'private' | 'tenant-view' | 'tenant-edit' | 'public'
-
 interface ConversationSummary {
   id: string
   title?: string | null
@@ -365,7 +361,6 @@ export default function Home() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
   const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
-  const [authorizationModel, setAuthorizationModel] = useState<AuthorizationModel>('supabase_rbac')
   const [profile, setProfile] = useState<UserProfile>({
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
@@ -469,7 +464,6 @@ export default function Home() {
       setEditingMessageId(null)
       setShareAudience(payload.conversation?.shareAudience ?? 'private')
       setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
-      setAuthorizationModel('supabase_rbac')
       const personaId = payload.conversation?.personaId
       if (personaId) {
         setProfile(prev => ({ ...prev, personaType: normalizePersonaType(personaId) }))
@@ -789,7 +783,6 @@ export default function Home() {
           scenarioHint,
           shareAudience,
           tenantAccess,
-          authorizationModel,
           title: conversationTitle,
           replaceMessageId: editingMessageId,
           userId: (session?.user as { id?: string } | undefined)?.id,
