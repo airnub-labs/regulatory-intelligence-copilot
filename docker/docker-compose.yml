@@ -31,6 +31,7 @@ services:
     environment:
       - MEMGRAPH_URL=bolt://memgraph:7687
       - MEMGRAPH_USER=memgraph
+      - MEMGRAPH_USERNAME=memgraph
       - MEMGRAPH_PASSWORD=memgraph
       - MCP_TRANSPORT=streamable-http
       - MCP_READ_ONLY=false

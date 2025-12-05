@@ -160,7 +160,7 @@ E2B_API_KEY=...
 OPENAI_API_KEY=...
 GROQ_API_KEY=...
 MEMGRAPH_URI=bolt://localhost:7687
-MEMGRAPH_USER=...
+MEMGRAPH_USERNAME=...
 MEMGRAPH_PASSWORD=...
 MCP_GATEWAY_URL=http://localhost:4000
 
@@ -168,6 +168,10 @@ MCP_GATEWAY_URL=http://localhost:4000
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 DATABASE_URL=...
+
+# Conversation + graph write modes
+# COPILOT_CONVERSATIONS_MODE=auto
+# COPILOT_GRAPH_WRITE_MODE=auto
 ```
 
 For non‑development deployments, always provide `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` so the platform can use the
@@ -175,6 +179,17 @@ Supabase/Postgres conversation store. Avoid forcing `COPILOT_CONVERSATIONS_MODE`
 `auto`) so the Supabase store is selected when credentials are present.
 
 Keep all secrets **out of source control**.
+
+#### Conversation & graph write modes
+
+- `COPILOT_CONVERSATIONS_MODE` mirrors the conversation store defaults:
+  - `auto` (default) – use Supabase/Postgres when credentials are present; fall back to in‑memory stores otherwise.
+  - `supabase` – force the Supabase/Postgres store (fails fast if credentials are missing).
+  - `memory` – force the in‑memory store (intended for local tests; **not** for production).
+- `COPILOT_GRAPH_WRITE_MODE` controls concept capture writes:
+  - `auto` (default) – use Memgraph writes when `MEMGRAPH_URI` (+ credentials) are configured; disable writes and emit warnings otherwise.
+  - `memgraph` – require Memgraph write connectivity; concept capture is blocked with a warning if unavailable.
+  - `memory` – never attempt graph writes; concept capture remains in memory only (useful for tests without Memgraph).
 
 ### 4. Start Infra (Memgraph + MCP Gateway)
 

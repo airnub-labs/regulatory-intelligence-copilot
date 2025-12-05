@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir .
 ENV MCP_TRANSPORT=streamable-http
 ENV MEMGRAPH_URL=bolt://host.docker.internal:7687
 ENV MEMGRAPH_USER=memgraph
+ENV MEMGRAPH_USERNAME=memgraph
 ENV MEMGRAPH_PASSWORD=
 ENV MCP_READ_ONLY=true
 

@@ -191,6 +191,56 @@ describe('ComplianceEngine streaming', () => {
     );
   });
 
+  it('surfaces captured concept IDs in metadata when the agent has no referenced nodes', async () => {
+    const llmRouter = createRouter();
+
+    (GlobalRegulatoryComplianceAgent.handleStream as any).mockImplementationOnce(
+      async (_input, ctx) => ({
+        agentId: 'test-agent',
+        referencedNodes: [],
+        jurisdictions: ['IE'],
+        uncertaintyLevel: 'medium',
+        followUps: [],
+        stream: ctx.llmClient.streamChat!({ messages: [] })!,
+      })
+    );
+
+    const engine = new ComplianceEngine({
+      llmRouter,
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    const request: ComplianceRequest = {
+      messages: [{ role: 'user', content: 'Tell me about VAT' }],
+      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+      tenantId: 'tenant-2',
+      conversationId: 'conversation-2',
+    };
+
+    const chunks = [] as any[];
+
+    for await (const chunk of engine.handleChatStream(request)) {
+      chunks.push(chunk);
+    }
+
+    const metadata = chunks.find(chunk => chunk.type === 'metadata') as any;
+    const metadataIds = (metadata?.metadata?.referencedNodes || []).map((n: any) => n.id);
+    expect(metadataIds).toEqual(
+      expect.arrayContaining(['concept-node-1', 'concept-node-2'])
+    );
+
+    expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
+      { tenantId: 'tenant-2', conversationId: 'conversation-2' },
+      expect.arrayContaining(['concept-node-1', 'concept-node-2'])
+    );
+  });
+
   it('parses captured concepts from multiple payload shapes', () => {
     const engine = new ComplianceEngine({
       llmRouter: createRouter(),

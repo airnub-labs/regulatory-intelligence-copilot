@@ -215,6 +215,17 @@ function resolveConversationStoreMode(): 'auto' | 'memory' | 'supabase' {
   return 'auto';
 }
 
+function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
+  const envValue =
+    process.env.COPILOT_GRAPH_WRITE_MODE ?? process.env.COPILOT_GRAPH_WRITES_MODE ?? 'auto';
+  const normalized = envValue.trim().toLowerCase();
+
+  if (['memory', 'inmemory', 'in-memory'].includes(normalized)) return 'memory';
+  if (['memgraph', 'neo4j', 'graph'].includes(normalized)) return 'memgraph';
+  return 'auto';
+}
+
+function resolveConversationStores(options?: ChatRouteHandlerOptions) {
 function logConversationStore(mode: string, message: string, payload?: Record<string, unknown>) {
   const context = payload ? ` ${JSON.stringify(payload)}` : '';
   console.info(`[conversation-store:${mode}] ${message}${context}`);
@@ -307,14 +318,40 @@ type GraphWriteDependencies = {
 };
 
 function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencies | null {
+  const graphWriteMode = resolveGraphWriteMode();
+  if (graphWriteMode === 'memory') {
+    console.info(
+      'Graph write path disabled: COPILOT_GRAPH_WRITE_MODE is set to memory. Concept capture will use in-memory fallbacks only.',
+    );
+    return null;
+  }
+
   const uri = process.env.MEMGRAPH_URI ?? process.env.NEO4J_URI;
-  if (!uri) return null;
+  if (!uri) {
+    const hint =
+      graphWriteMode === 'memgraph'
+        ? 'Graph write mode is set to memgraph but MEMGRAPH_URI is missing.'
+        : 'MEMGRAPH_URI is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.';
+    console.warn(`Graph write path disabled: ${hint}`);
+    return null;
+  }
 
   const username = process.env.MEMGRAPH_USERNAME ?? process.env.NEO4J_USERNAME;
   const password = process.env.MEMGRAPH_PASSWORD ?? process.env.NEO4J_PASSWORD;
   const auth = username && password ? neo4j.auth.basic(username, password) : undefined;
 
   const driver = neo4j.driver(uri, auth);
+  driver
+    .verifyConnectivity()
+    .then(() => {
+      console.info(`Graph write dependencies verified for ${uri}`);
+    })
+    .catch(error => {
+      console.warn(
+        'Graph write connectivity check failed; concept capture will be disabled unless configuration is fixed.',
+        error,
+      );
+    });
   const graphWriteService = createGraphWriteService({
     driver,
     tenantId,
@@ -410,7 +447,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   })();
   const graphWarning = graphDeps
     ? undefined
-    : 'Graph write service not configured; captured concepts will not be persisted to Memgraph.';
+    : 'Concept capture is disabled: configure MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD to persist captured concepts to Memgraph.';
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
@@ -422,10 +459,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         graphClient: createGraphClient(),
         timelineEngine: createTimelineEngine(),
         egressGuard: new BasicEgressGuard(),
-        graphWriteService: graphDeps?.graphWriteService ?? ({} as GraphWriteService),
-        canonicalConceptHandler:
-          graphDeps?.canonicalConceptHandler ??
-          createCanonicalConceptHandler({ driver: neo4j.driver('bolt://localhost:7687') }),
+        graphWriteService: graphDeps?.graphWriteService,
+        canonicalConceptHandler: graphDeps?.canonicalConceptHandler,
+        conceptCaptureWarning: graphWarning,
         conversationContextStore,
       });
     }
