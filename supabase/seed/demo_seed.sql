@@ -3,13 +3,14 @@ declare
   demo_email text := 'demo.user@example.com';
   demo_password text := 'Password123!';
   demo_full_name text := 'Demo User';
+  demo_now timestamptz := now();
   seeded_user record;
   demo_conv_id uuid;
   demo_conversation_title text := 'Demo conversation';
   demo_user_id uuid;
   demo_tenant_id uuid := coalesce(nullif(current_setting('app.demo_tenant_id', true), '')::uuid, gen_random_uuid());
 begin
-  select id, raw_user_meta_data
+  select id, raw_user_meta_data, created_at
     into seeded_user
     from auth.users
    where email = demo_email
@@ -26,6 +27,9 @@ begin
       email,
       encrypted_password,
       email_confirmed_at,
+      created_at,
+      updated_at,
+      last_sign_in_at,
       raw_app_meta_data,
       raw_user_meta_data
     )
@@ -36,10 +40,14 @@ begin
       'authenticated',
       demo_email,
       crypt(demo_password, gen_salt('bf')),
-      now(),
-      jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
+      demo_now,
+      demo_now,
+      demo_now,
+      jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
       jsonb_build_object(
         'tenant_id', demo_tenant_id,
+        'sub', demo_user_id,
+        'email', demo_email,
         'full_name', demo_full_name,
         'email_verified', true,
         'phone_verified', false
@@ -55,10 +63,15 @@ begin
            instance_id = '00000000-0000-0000-0000-000000000000',
            aud = 'authenticated',
            role = 'authenticated',
-           email_confirmed_at = now(),
-           raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email'], 'tenant_id', demo_tenant_id),
+           email_confirmed_at = demo_now,
+           created_at = coalesce(seeded_user.created_at, demo_now),
+           updated_at = demo_now,
+           last_sign_in_at = demo_now,
+           raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
            raw_user_meta_data = jsonb_build_object(
              'tenant_id', demo_tenant_id,
+             'sub', demo_user_id,
+             'email', demo_email,
              'full_name', demo_full_name,
              'email_verified', true,
              'phone_verified', false
@@ -80,13 +93,15 @@ begin
    where provider = 'email'
      and (provider_id = demo_email or provider_id = demo_user_id::text or user_id = demo_user_id);
 
-  insert into auth.identities (user_id, identity_data, provider, provider_id, last_sign_in_at)
+  insert into auth.identities (user_id, identity_data, provider, provider_id, created_at, updated_at, last_sign_in_at)
   values (
     demo_user_id,
     jsonb_build_object('sub', demo_user_id, 'email', demo_email, 'email_verified', true, 'phone_verified', false),
     'email',
     demo_user_id::text,
-    now()
+    demo_now,
+    demo_now,
+    demo_now
   );
 
   -- Demo conversation tied to the seeded user
