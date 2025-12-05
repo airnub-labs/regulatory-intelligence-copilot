@@ -7,6 +7,8 @@ alter table if exists copilot_internal.conversation_contexts
 create index if not exists conversations_archived_idx on copilot_internal.conversations(archived_at);
 create index if not exists conversation_contexts_archived_idx on copilot_internal.conversation_contexts(archived_at);
 
+drop view if exists public.conversations_view;
+
 create or replace view public.conversations_view as
   with request_context as (
     select public.current_tenant_id() as tenant_id, auth.role() as requester_role
@@ -29,6 +31,8 @@ create or replace view public.conversations_view as
   cross join request_context ctx
   where ctx.requester_role = 'service_role'
      or (ctx.tenant_id is not null and c.tenant_id = ctx.tenant_id);
+
+drop view if exists public.conversation_contexts_view;
 
 create or replace view public.conversation_contexts_view as
   with request_context as (
