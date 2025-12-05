@@ -207,6 +207,16 @@ function resolveConversationStoreMode(): 'auto' | 'memory' | 'supabase' {
   return 'auto';
 }
 
+function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
+  const envValue =
+    process.env.COPILOT_GRAPH_WRITE_MODE ?? process.env.COPILOT_GRAPH_WRITES_MODE ?? 'auto';
+  const normalized = envValue.trim().toLowerCase();
+
+  if (['memory', 'inmemory', 'in-memory', 'disabled', 'off'].includes(normalized)) return 'memory';
+  if (['memgraph', 'neo4j', 'graph'].includes(normalized)) return 'memgraph';
+  return 'auto';
+}
+
 function resolveConversationStores(options?: ChatRouteHandlerOptions) {
   const providedConversationStore = options?.conversationStore;
   const providedContextStore = options?.conversationContextStore;
@@ -248,11 +258,21 @@ type GraphWriteDependencies = {
 };
 
 function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencies | null {
+  const graphWriteMode = resolveGraphWriteMode();
+  if (graphWriteMode === 'memory') {
+    console.info(
+      'Graph write path disabled: COPILOT_GRAPH_WRITE_MODE is set to memory/disabled. Concept capture will use in-memory fallbacks only.',
+    );
+    return null;
+  }
+
   const uri = process.env.MEMGRAPH_URI ?? process.env.NEO4J_URI;
   if (!uri) {
-    console.warn(
-      'Graph write path disabled: MEMGRAPH_URI is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.'
-    );
+    const hint =
+      graphWriteMode === 'memgraph'
+        ? 'Graph write mode is set to memgraph but MEMGRAPH_URI is missing.'
+        : 'MEMGRAPH_URI is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.';
+    console.warn(`Graph write path disabled: ${hint}`);
     return null;
   }
 
