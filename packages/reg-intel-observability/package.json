@@ -1,0 +1,48 @@
+{
+  "name": "@reg-copilot/reg-intel-observability",
+  "version": "0.1.0",
+  "description": "Observability helpers for the regulatory intelligence copilot",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/context-async-hooks": "^1.19.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.52.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.52.1",
+    "@opentelemetry/instrumentation": "^0.52.1",
+    "@opentelemetry/instrumentation-fs": "^0.52.1",
+    "@opentelemetry/instrumentation-http": "^0.52.1",
+    "@opentelemetry/instrumentation-next": "^0.52.1",
+    "@opentelemetry/instrumentation-undici": "^0.52.1",
+    "@opentelemetry/resources": "^1.19.0",
+    "@opentelemetry/sdk-metrics": "^1.19.0",
+    "@opentelemetry/sdk-node": "^0.52.1",
+    "@opentelemetry/semantic-conventions": "^1.19.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@opentelemetry/sdk-trace-base": "^1.19.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
