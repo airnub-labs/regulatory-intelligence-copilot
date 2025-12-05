@@ -37,6 +37,7 @@ import {
   type AuthorizationModel,
   type AuthorizationSpec,
   type ConversationStore,
+  type SupabaseLikeClient,
   type ShareAudience,
   type TenantAccess,
 } from '@reg-copilot/reg-intel-conversations';
@@ -282,11 +283,15 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
         auth: { autoRefreshToken: false, persistSession: false },
       });
 
+      const supabaseConversationClient: SupabaseLikeClient = {
+        from: (...args) => client.from(...args),
+      };
+
       logConversationStore(mode, 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });
       return {
         mode: 'supabase',
-        conversationStore: new SupabaseConversationStore(client),
-        conversationContextStore: new SupabaseConversationContextStore(client),
+        conversationStore: new SupabaseConversationStore(supabaseConversationClient),
+        conversationContextStore: new SupabaseConversationContextStore(supabaseConversationClient),
         readinessCheck: () => validateSupabaseHealth(client),
       };
     }
