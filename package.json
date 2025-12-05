@@ -20,7 +20,8 @@
     "test:changes:add": "tsx scripts/test-graph-changes.ts add-node",
     "test:changes:update": "tsx scripts/test-graph-changes.ts update-node",
     "test:changes:remove": "tsx scripts/test-graph-changes.ts remove-node",
-    "test:changes:simulate": "tsx scripts/test-graph-changes.ts simulate"
+    "test:changes:simulate": "tsx scripts/test-graph-changes.ts simulate",
+    "check:supabase-store": "tsx scripts/manual-supabase-store-check.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

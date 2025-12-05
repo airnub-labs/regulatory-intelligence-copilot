@@ -7,21 +7,73 @@ import {
 } from '@reg-copilot/reg-intel-conversations';
 import { createClient } from '@supabase/supabase-js';
 
-const conversationStoreMode =
-  (process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto')
-    .trim()
-    .toLowerCase();
+const normalizeConversationStoreMode = (
+  process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
+)
+  .trim()
+  .toLowerCase();
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+const isDevLike = nodeEnv === 'development' || nodeEnv === 'test';
+
+if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
+  throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
+}
+
+if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseServiceKey)) {
+  const message =
+    'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable the Supabase conversation store';
+  if (isDevLike) {
+    console.warn(`[conversation-store:${normalizeConversationStoreMode}] ${message}`);
+  } else {
+    throw new Error(message);
+  }
+}
 
 const supabaseClient =
-  conversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         db: { schema: 'copilot_internal' },
         auth: { autoRefreshToken: false, persistSession: false },
       })
     : null;
+
+async function validateSupabaseHealth() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient.rpc('conversation_store_healthcheck');
+  if (error) {
+    throw new Error(`Supabase conversation healthcheck failed: ${error.message}`);
+  }
+
+  const rows = (data as Array<{ table_name: string; rls_enabled: boolean; policy_count: number }>) ?? [];
+  const missingTables = ['conversations', 'conversation_messages'].filter(
+    table => !rows.find(row => row.table_name === table)
+  );
+  if (missingTables.length > 0) {
+    throw new Error(`Supabase is missing required tables: ${missingTables.join(', ')}`);
+  }
+
+  const rlsIssues = rows.filter(row => !row.rls_enabled || row.policy_count === 0);
+  if (rlsIssues.length > 0) {
+    const detail = rlsIssues
+      .map(row => `${row.table_name} (rls: ${row.rls_enabled}, policies: ${row.policy_count})`)
+      .join('; ');
+    throw new Error(`Supabase RLS misconfigured for: ${detail}`);
+  }
+}
+
+if (supabaseClient) {
+  console.info(`[conversation-store:${normalizeConversationStoreMode}] Using SupabaseConversationStore`, {
+    supabaseUrl,
+  });
+  void validateSupabaseHealth().catch(error => {
+    console.error('[conversation-store] Supabase readiness check failed', error);
+  });
+} else {
+  console.info(`[conversation-store:${normalizeConversationStoreMode}] Using in-memory conversation store`);
+}
 
 export const conversationStore = supabaseClient
   ? new SupabaseConversationStore(supabaseClient)

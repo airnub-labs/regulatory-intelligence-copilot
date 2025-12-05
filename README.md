@@ -170,6 +170,10 @@ SUPABASE_SERVICE_ROLE_KEY=...
 DATABASE_URL=...
 ```
 
+For non‑development deployments, always provide `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` so the platform can use the
+Supabase/Postgres conversation store. Avoid forcing `COPILOT_CONVERSATIONS_MODE` to `memory` outside dev/test; leave it unset (or
+`auto`) so the Supabase store is selected when credentials are present.
+
 Keep all secrets **out of source control**.
 
 ### 4. Start Infra (Memgraph + MCP Gateway)
