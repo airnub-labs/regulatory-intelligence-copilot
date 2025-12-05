@@ -24,7 +24,7 @@ export function presentConversation(record: ConversationRecord): ClientConversat
   return clientConversationFields.reduce((acc, field) => {
     acc[field] = record[field]
     return acc
-  }, {} as Record<(typeof clientConversationFields)[number], ConversationRecord[(typeof clientConversationFields)[number]>>) as ClientConversation
+  }, {} as Record<(typeof clientConversationFields)[number], ConversationRecord[(typeof clientConversationFields)[number]]>) as ClientConversation
 }
 
 export function presentConversationMetadata(

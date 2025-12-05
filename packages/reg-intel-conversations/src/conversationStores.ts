@@ -685,7 +685,12 @@ export class SupabaseConversationStore implements ConversationStore {
     return (data as SupabaseConversationMessageRow[]).map(mapMessageRow);
   }
 
-  async listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]> {
+  async listConversations(input: {
+    tenantId: string
+    limit?: number
+    userId?: string | null
+    status?: 'active' | 'archived'
+  }): Promise<ConversationRecord[]> {
     const query = this.client
       .from('conversations_view')
       .select(
@@ -693,13 +698,14 @@ export class SupabaseConversationStore implements ConversationStore {
       )
       .eq('tenant_id', input.tenantId)
 
+
     if (input.status === 'active') {
       query.is('archived_at', null);
     } else if (input.status === 'archived') {
       query.not('archived_at', 'is', null);
     }
-      .order('last_message_at', { ascending: false, nulls: 'last' })
-      .order('created_at', { ascending: false });
+
+    query.order('last_message_at', { ascending: false, nulls: 'last' }).order('created_at', { ascending: false });
 
     if (input.limit) {
       query.limit(input.limit);
