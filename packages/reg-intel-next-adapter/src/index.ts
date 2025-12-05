@@ -1,15 +1,19 @@
 import {
   NON_ADVICE_DISCLAIMER,
+  createCanonicalConceptHandler,
   createComplianceEngine,
   createDefaultLlmRouter,
   createGraphClient,
+  createGraphWriteService,
   createTimelineEngine,
   normalizeProfileType,
   sanitizeObjectForEgress,
   sanitizeTextForEgress,
   type ChatMessage,
+  type CanonicalConceptHandler,
   type ComplianceEngine,
   type EgressGuard,
+  type GraphWriteService,
   type LlmClient,
   type LlmChatRequest,
   type LlmChatResponse,
@@ -37,6 +41,7 @@ import {
   type TenantAccess,
 } from '@reg-copilot/reg-intel-conversations';
 import { createClient } from '@supabase/supabase-js';
+import neo4j, { type Driver } from 'neo4j-driver';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -236,6 +241,34 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions) {
   } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
 }
 
+type GraphWriteDependencies = {
+  driver: Driver;
+  graphWriteService: GraphWriteService;
+  canonicalConceptHandler: CanonicalConceptHandler;
+};
+
+function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencies | null {
+  const uri = process.env.MEMGRAPH_URI ?? process.env.NEO4J_URI;
+  if (!uri) return null;
+
+  const username = process.env.MEMGRAPH_USERNAME ?? process.env.NEO4J_USERNAME;
+  const password = process.env.MEMGRAPH_PASSWORD ?? process.env.NEO4J_PASSWORD;
+  const auth = username && password ? neo4j.auth.basic(username, password) : undefined;
+
+  const driver = neo4j.driver(uri, auth);
+  const graphWriteService = createGraphWriteService({
+    driver,
+    tenantId,
+    defaultSource: 'agent',
+  });
+
+  return {
+    driver,
+    graphWriteService,
+    canonicalConceptHandler: createCanonicalConceptHandler({ driver }),
+  };
+}
+
 /**
  * Helper class for writing Server-Sent Events (SSE) to a ReadableStream.
  * Follows the standard SSE format with event names and data payloads.
@@ -302,6 +335,17 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   let complianceEngine: ComplianceEngine | null = null;
   const { conversationStore, conversationContextStore } = resolveConversationStores(options);
   const eventHub = options?.eventHub ?? new ConversationEventHub();
+  const graphDeps = (() => {
+    try {
+      return resolveGraphWriteDependencies(options?.tenantId);
+    } catch (error) {
+      console.warn('Graph write service unavailable; falling back to read-only mode', error);
+      return null;
+    }
+  })();
+  const graphWarning = graphDeps
+    ? undefined
+    : 'Graph write service not configured; captured concepts will not be persisted to Memgraph.';
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
@@ -313,8 +357,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         graphClient: createGraphClient(),
         timelineEngine: createTimelineEngine(),
         egressGuard: new BasicEgressGuard(),
-        graphWriteService: {} as never, // Graph writes not used in Next adapter baseline wiring
-        canonicalConceptHandler: { resolveAndUpsert: async () => [] },
+        graphWriteService: graphDeps?.graphWriteService ?? ({} as GraphWriteService),
+        canonicalConceptHandler:
+          graphDeps?.canonicalConceptHandler ?? ({ resolveAndUpsert: async () => [] } satisfies CanonicalConceptHandler),
         conversationContextStore,
       });
     }
@@ -450,7 +495,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       let streamedTextBuffer = '';
       let disclaimerAlreadyPresent = false;
       let lastMetadata: Record<string, unknown> | null = null;
-      let accumulatedWarnings: string[] = [];
+      let accumulatedWarnings: string[] = graphWarning ? [graphWarning] : [];
 
         const subscriber: SseSubscriber = {
           send: (_event: ConversationEventType, _data: unknown) => {

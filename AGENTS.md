@@ -34,6 +34,7 @@ v0.6 updates the v0.4 agent design by:
 **Repository rules:**
 
 - Fix TypeScript and lint errors instead of masking them with `typescript.ignoreBuildErrors` (or similar) in `next.config.js`.
+- When addressing TypeScript type errors, do not “fix” them by changing types to `any` unless a design decision explicitly requires `any`.
 
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
