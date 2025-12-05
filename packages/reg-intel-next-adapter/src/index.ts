@@ -277,7 +277,7 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
   if (mode !== 'memory') {
     const credentials = resolveSupabaseCredentials();
     if (credentials) {
-      const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+      const client = createClient<any, 'copilot_internal'>(credentials.supabaseUrl, credentials.supabaseKey, {
         db: { schema: 'copilot_internal' },
         auth: { autoRefreshToken: false, persistSession: false },
       });
