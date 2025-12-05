@@ -1,6 +1,8 @@
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { NextAuthOptions, Session } from 'next-auth'
+import { JWT } from 'next-auth/jwt'
 
 // Define extended types for our auth callbacks
 interface ExtendedJWT {
@@ -35,7 +37,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase URL or anon key missing. Authentication will not work until configured.')
 }
 
-export const authOptions = {
+export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: 'jwt' as const,
@@ -90,7 +92,7 @@ export const authOptions = {
     signIn: '/login',
   },
   callbacks: {
-    jwt({ token, user }: { token: unknown; user?: unknown }) {
+    jwt({ token, user }) {
       const extendedToken = token as ExtendedJWT
       const extendedUser = user as ExtendedUser | undefined
 
@@ -102,17 +104,19 @@ export const authOptions = {
       }
       return token
     },
-    session({ session, token }: { session: unknown; token: unknown }) {
-      const extendedSession = session as ExtendedSession
+    session({ session, token }) {
+      const sessionWithUser = session as Session & ExtendedSession
       const extendedToken = token as ExtendedJWT
 
-      if (extendedSession.user) {
-        extendedSession.user.id = typeof extendedToken.sub === 'string' ? extendedToken.sub : ''
-        extendedSession.user.email = typeof extendedToken.email === 'string' ? extendedToken.email : extendedSession.user.email
-        extendedSession.user.name = typeof extendedToken.name === 'string' ? extendedToken.name : extendedSession.user.name
-        extendedSession.user.tenantId = extendedToken.tenantId ?? fallbackTenantId
+      if (sessionWithUser.user) {
+        sessionWithUser.user.id = typeof extendedToken.sub === 'string' ? extendedToken.sub : ''
+        sessionWithUser.user.email =
+          typeof extendedToken.email === 'string' ? extendedToken.email : sessionWithUser.user.email
+        sessionWithUser.user.name =
+          typeof extendedToken.name === 'string' ? extendedToken.name : sessionWithUser.user.name
+        sessionWithUser.user.tenantId = extendedToken.tenantId ?? fallbackTenantId
       }
-      return session
+      return sessionWithUser
     },
   },
 }
