@@ -46,8 +46,6 @@ begin
       jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
       jsonb_build_object(
         'tenant_id', demo_tenant_id,
-        'sub', demo_user_id,
-        'email', demo_email,
         'full_name', demo_full_name,
         'email_verified', true,
         'phone_verified', false
@@ -70,8 +68,6 @@ begin
            raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
            raw_user_meta_data = jsonb_build_object(
              'tenant_id', demo_tenant_id,
-             'sub', demo_user_id,
-             'email', demo_email,
              'full_name', demo_full_name,
              'email_verified', true,
              'phone_verified', false
