@@ -463,8 +463,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     title: record.title,
     shareAudience: record.shareAudience,
     tenantAccess: record.tenantAccess,
-    authorizationModel: record.authorizationModel,
-    authorizationSpec: record.authorizationSpec,
+    jurisdictions: record.jurisdictions,
     lastMessageAt: record.lastMessageAt,
     createdAt: record.createdAt,
     archivedAt: record.archivedAt,
@@ -689,9 +688,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             shareAudience: conversationRecord.shareAudience,
             tenantAccess: conversationRecord.tenantAccess,
             title: conversationRecord.title,
+            jurisdictions: conversationRecord.jurisdictions,
             isShared,
-            authorizationModel: conversationRecord.authorizationModel,
-            authorizationSpec: conversationRecord.authorizationSpec,
           });
 
           try {

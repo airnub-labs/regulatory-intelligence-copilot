@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth'
 
 import { authOptions } from '@/lib/auth/options'
 import { conversationListEventHub, conversationStore } from '@/lib/server/conversations'
+import { toClientConversation } from '@/lib/server/conversationPresenter'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,7 +57,10 @@ export async function GET(request: NextRequest) {
       }
 
       unsubscribe = conversationListEventHub.subscribe(tenantId, subscriber)
-      subscriber.send('snapshot', { status, conversations: initialConversations })
+      subscriber.send('snapshot', {
+        status,
+        conversations: initialConversations.map(toClientConversation),
+      })
 
       request.signal.addEventListener('abort', abortHandler)
     },

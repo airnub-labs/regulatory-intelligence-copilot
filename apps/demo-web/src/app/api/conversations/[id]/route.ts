@@ -7,6 +7,7 @@ import {
   conversationStore,
   conversationListEventHub,
 } from '@/lib/server/conversations';
+import { toClientConversation } from '@/lib/server/conversationPresenter';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const messages = await conversationStore.getMessages({ tenantId, conversationId, userId, limit: 100 });
   const contextState = await conversationContextStore.load({ tenantId, conversationId });
 
-  return NextResponse.json({ conversation, messages, context: contextState });
+  return NextResponse.json({
+    conversation: toClientConversation(conversation),
+    messages,
+    context: contextState,
+  });
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -69,7 +74,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     });
     const updatedConversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
     if (updatedConversation) {
-      conversationListEventHub.broadcast(tenantId, 'upsert', { conversation: updatedConversation });
+      conversationListEventHub.broadcast(tenantId, 'upsert', {
+        conversation: toClientConversation(updatedConversation),
+      });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';

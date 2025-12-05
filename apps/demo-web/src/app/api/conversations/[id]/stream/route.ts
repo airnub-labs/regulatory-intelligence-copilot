@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
+import { toClientConversation } from '@/lib/server/conversationPresenter';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!conversation) {
     return new Response('Conversation not found or access denied', { status: 404 });
   }
+
+  const safeConversation = toClientConversation(conversation);
 
   const stream = new ReadableStream({
     start(controller) {
@@ -60,11 +63,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       // provide immediate metadata payload with conversation id and sharing state
       subscriber.send('metadata', {
         conversationId,
-        shareAudience: conversation.shareAudience,
-        tenantAccess: conversation.tenantAccess,
-        title: conversation.title,
-        authorizationModel: conversation.authorizationModel,
-        authorizationSpec: conversation.authorizationSpec,
+        shareAudience: safeConversation.shareAudience,
+        tenantAccess: safeConversation.tenantAccess,
+        title: safeConversation.title,
+        jurisdictions: safeConversation.jurisdictions,
+        archivedAt: safeConversation.archivedAt,
       });
 
       request.signal.addEventListener('abort', abortHandler);
