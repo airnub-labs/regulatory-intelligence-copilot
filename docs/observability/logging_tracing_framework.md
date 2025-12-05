@@ -62,6 +62,24 @@ Instrument the main orchestration stages in `ComplianceEngine`:
 - Add health/diagnostic endpoints or CLI flags to dump the active OTEL configuration for debugging miswired deployments.
 - Document runbooks: how to view a single conversation trace, how to correlate log lines to spans, and how to enable debug logging for one tenant.
 
+## Runbooks
+
+### Enable debug logs for a single tenant
+- Set `LOG_LEVEL=debug` on the service instance receiving the tenant's traffic.
+- Inject the tenant bindings into the request context early (e.g., in the Next.js route handler) so every log line includes `tenantId` and is filterable downstream.
+- For payload-heavy flows, keep `LOG_SAFE_PAYLOADS=false` unless developing locally to avoid leaking conversation content.
+
+### View a single conversation trace
+- Capture the `trace_id` from the `/api/chat` entrypoint logs or the diagnostic dump, then search for that trace in your APM backend.
+- The OTLP exporter targets are configurable via `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` / `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`; confirm the correct collector URL via the observability CLI below.
+- If the trace is missing, temporarily lower sampling with `OTEL_TRACES_SAMPLING_RATIO=1` or enable `OTEL_TRACES_ALWAYS_SAMPLE_ERRORS=true` to force capture while debugging.
+
+### Correlate logs to spans in the backend
+- Every log entry includes `trace_id`/`span_id` so you can pivot from a Loki/Datadog/Splunk query directly into your tracing UI.
+- Every environment exposes `GET /api/observability` to return the active OTEL exporter URLs, sampling policy, and instrumentation list without needing shell access.
+- The `reg-intel-observability` CLI (`pnpm --filter @reg-copilot/reg-intel-observability exec reg-intel-observability diagnostics`) prints the same data locally, which helps confirm the backend is receiving data.
+- When spans are dropped due to sampling, set `OTEL_TRACES_SAMPLING_RATIO` to a higher parent-based ratio or enable error overrides to ensure failures stay visible.
+
 ## Why this stack
 - **OpenTelemetry** is the dominant, vendor-neutral choice for tracing and metrics in Node/Next, with first-class AsyncLocalStorage support in Node 24 and broad ecosystem instrumentations.
 - **Pino** is the de facto structured logger for high-throughput Node services and integrates cleanly with OTEL correlation IDs via small hooks—no heavyweight agent required.
