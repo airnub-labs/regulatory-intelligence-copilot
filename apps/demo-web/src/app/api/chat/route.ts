@@ -6,6 +6,8 @@
  */
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
+import { requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { context, propagation } from '@opentelemetry/api';
 import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
@@ -26,6 +28,12 @@ const handler = createChatRouteHandler({
   conversationListEventHub,
 });
 
+const headerSetter = {
+  set(carrier: Headers, key: string, value: string) {
+    carrier.set(key, value);
+  },
+};
+
 export async function POST(request: Request) {
   const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
   if (!session?.user?.id) {
@@ -45,13 +53,29 @@ export async function POST(request: Request) {
     return new Response(message, { status: 400 });
   }
 
-  const serializedBody = JSON.stringify({ ...(typeof body === 'object' && body !== null ? body : {}), tenantId });
+  const normalizedBody = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+  const conversationId = typeof normalizedBody.conversationId === 'string' ? normalizedBody.conversationId : undefined;
 
-  return handler(
-    new Request(request.url, {
-      method: request.method,
-      headers,
-      body: serializedBody,
-    }),
+  const spanAttributes = {
+    'app.tenant.id': tenantId,
+    'app.user.id': session.user.id,
+    ...(conversationId ? { 'app.conversation.id': conversationId } : {}),
+  };
+
+  return requestContext.run(
+    { tenantId, conversationId, userId: session.user.id },
+    () =>
+      withSpan('api.chat', spanAttributes, () => {
+        const serializedBody = JSON.stringify({ ...normalizedBody, tenantId });
+        propagation.inject(context.active(), headers, headerSetter);
+
+        return handler(
+          new Request(request.url, {
+            method: request.method,
+            headers,
+            body: serializedBody,
+          }),
+        );
+      }),
   );
 }

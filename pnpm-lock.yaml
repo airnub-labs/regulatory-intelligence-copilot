@@ -59,6 +59,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.7)(react@19.2.0)
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.0
       '@reg-copilot/reg-intel-conversations':
         specifier: workspace:*
         version: link:../../packages/reg-intel-conversations
@@ -159,6 +162,9 @@ importers:
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@24.10.1)
 
   packages/reg-intel-conversations:
     dependencies:
