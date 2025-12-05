@@ -37,6 +37,7 @@ export interface ConversationRecord {
   personaId?: string | null;
   jurisdictions: string[];
   title?: string | null;
+  archivedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   lastMessageAt?: Date | null;
@@ -88,7 +89,12 @@ export interface ConversationStore {
     limit?: number;
   }): Promise<ConversationMessage[]>;
 
-  listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]>;
+  listConversations(input: {
+    tenantId: string;
+    limit?: number;
+    userId?: string | null;
+    status?: 'active' | 'archived' | 'all';
+  }): Promise<ConversationRecord[]>;
 
   getConversation(input: { tenantId: string; conversationId: string; userId?: string | null }): Promise<ConversationRecord | null>;
 
@@ -101,6 +107,13 @@ export interface ConversationStore {
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
     title?: string | null;
+  }): Promise<void>;
+
+  setArchivedState(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+    archived: boolean;
   }): Promise<void>;
 }
 
@@ -171,6 +184,7 @@ export class InMemoryConversationStore implements ConversationStore {
       personaId: input.personaId ?? null,
       jurisdictions: input.jurisdictions ?? [],
       title: input.title ?? null,
+      archivedAt: null,
       createdAt: now,
       updatedAt: now,
       lastMessageAt: null,
@@ -269,11 +283,20 @@ export class InMemoryConversationStore implements ConversationStore {
     return msgs;
   }
 
-  async listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]> {
+  async listConversations(input: {
+    tenantId: string;
+    limit?: number;
+    userId?: string | null;
+    status?: 'active' | 'archived' | 'all';
+  }): Promise<ConversationRecord[]> {
+    const status = input.status ?? 'active';
     const records = Array.from(this.conversations.values()).filter(record => {
       if (record.tenantId !== input.tenantId) return false;
       if (!input.userId) return canRead(record, null);
-      return canRead(record, input.userId);
+      if (!canRead(record, input.userId)) return false;
+      if (status === 'active') return !record.archivedAt;
+      if (status === 'archived') return Boolean(record.archivedAt);
+      return true;
     });
 
     records.sort((a, b) => {
@@ -333,6 +356,24 @@ export class InMemoryConversationStore implements ConversationStore {
       updatedAt: new Date(),
     });
   }
+
+  async setArchivedState(input: { tenantId: string; conversationId: string; userId?: string | null; archived: boolean }) {
+    const record = this.conversations.get(input.conversationId);
+    if (!record || record.tenantId !== input.tenantId) {
+      throw new Error('Conversation not found for tenant');
+    }
+    const isOwner = record.userId ? input.userId === record.userId : true;
+    if (!isOwner) {
+      throw new Error('User not authorised to update conversation');
+    }
+
+    const archivedAt = input.archived ? new Date() : null;
+    this.conversations.set(input.conversationId, {
+      ...record,
+      archivedAt,
+      updatedAt: new Date(),
+    });
+  }
 }
 
 export class InMemoryConversationContextStore implements ConversationContextStore {
@@ -368,6 +409,7 @@ type SupabaseConversationRow = {
   persona_id?: string | null;
   jurisdictions: string[];
   title?: string | null;
+  archived_at?: string | null;
   created_at: string;
   updated_at: string;
   last_message_at?: string | null;
@@ -403,6 +445,7 @@ function mapConversationRow(row: SupabaseConversationRow): ConversationRecord {
     personaId: row.persona_id,
     jurisdictions: row.jurisdictions ?? [],
     title: row.title,
+    archivedAt: row.archived_at ? new Date(row.archived_at) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     lastMessageAt: row.last_message_at ? new Date(row.last_message_at) : null,
@@ -442,7 +485,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const { data, error } = await this.client
       .from('conversations_view')
       .select(
-        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, created_at, updated_at, last_message_at'
+        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
       )
       .eq('id', conversationId)
       .eq('tenant_id', tenantId)
@@ -485,6 +528,7 @@ export class SupabaseConversationStore implements ConversationStore {
         persona_id: input.personaId ?? null,
         jurisdictions: input.jurisdictions ?? [],
         title: input.title ?? null,
+        archived_at: null,
         created_at: now,
         updated_at: now,
       })
@@ -645,9 +689,15 @@ export class SupabaseConversationStore implements ConversationStore {
     const query = this.client
       .from('conversations_view')
       .select(
-        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, created_at, updated_at, last_message_at'
+        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
       )
       .eq('tenant_id', input.tenantId)
+
+    if (input.status === 'active') {
+      query.is('archived_at', null);
+    } else if (input.status === 'archived') {
+      query.not('archived_at', 'is', null);
+    }
       .order('last_message_at', { ascending: false, nulls: 'last' })
       .order('created_at', { ascending: false });
 
@@ -716,6 +766,31 @@ export class SupabaseConversationStore implements ConversationStore {
 
     if (error) {
       throw new Error(`Failed to update conversation sharing: ${error.message}`);
+    }
+  }
+
+  async setArchivedState(input: { tenantId: string; conversationId: string; userId?: string | null; archived: boolean }) {
+    const record = await this.getConversationRecord(input.tenantId, input.conversationId);
+    if (!record) {
+      throw new Error('Conversation not found for tenant');
+    }
+
+    const isOwner = record.userId ? input.userId === record.userId : true;
+    if (!isOwner) {
+      throw new Error('User not authorised to update conversation');
+    }
+
+    const { error } = await this.internalClient
+      .from('conversations')
+      .update({
+        archived_at: input.archived ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.conversationId)
+      .eq('tenant_id', input.tenantId);
+
+    if (error) {
+      throw new Error(`Failed to update archived state: ${error.message}`);
     }
   }
 }

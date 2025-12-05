@@ -62,6 +62,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         conversationId,
         shareAudience: conversation.shareAudience,
         tenantAccess: conversation.tenantAccess,
+        title: conversation.title,
         authorizationModel: conversation.authorizationModel,
         authorizationSpec: conversation.authorizationSpec,
       });

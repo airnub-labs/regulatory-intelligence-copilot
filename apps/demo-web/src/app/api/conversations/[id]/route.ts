@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth/options';
 import {
   conversationContextStore,
   conversationStore,
+  conversationListEventHub,
 } from '@/lib/server/conversations';
 
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       authorizationModel,
       title,
     });
+    const updatedConversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
+    if (updatedConversation) {
+      conversationListEventHub.broadcast(tenantId, 'upsert', { conversation: updatedConversation });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 403 });

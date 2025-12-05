@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   ConversationEventHub,
+  ConversationListEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   SupabaseConversationContextStore,
@@ -93,3 +94,4 @@ export const conversationContextStore = supabaseClient
   : new InMemoryConversationContextStore();
 
 export const conversationEventHub = new ConversationEventHub();
+export const conversationListEventHub = new ConversationListEventHub();
