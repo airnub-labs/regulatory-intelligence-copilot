@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   AlertTriangle,
   BookOpenCheck,
+  CircleHelp,
   Globe2,
   PencilLine,
   ShieldHalf,
@@ -26,7 +26,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import {
   Select,
   SelectContent,
@@ -313,6 +312,7 @@ export default function Home() {
   const [conversationTitle, setConversationTitle] = useState<string>('')
   const [savedConversationTitle, setSavedConversationTitle] = useState<string>('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
   const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
@@ -786,10 +786,7 @@ export default function Home() {
                   <Badge variant="secondary" className="rounded-full">Live preview</Badge>
                 </div>
                 <p className="max-w-2xl text-sm text-muted-foreground">
-                  Persona-aware answers grounded on the regulatory graph, with timeline- and scenario-aware reasoning.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Answers are grounded in a Memgraph regulatory graph, a timeline engine for law-in-time, and scenario-aware agents.
+                  Persona-aware answers grounded on the regulatory graph with timeline and scenario awareness.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -850,16 +847,13 @@ export default function Home() {
                     </Badge>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Persona and jurisdictions are passed into the prompt builder and used to filter the graph, timeline, and scenario engine.
-                </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 border-b bg-muted/25 px-6 py-3">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Scenario quick prompts</span>
-                <p className="text-xs text-muted-foreground">Jump into pre-modelled scenarios for this persona and jurisdiction.</p>
+                <p className="text-xs text-muted-foreground">Jump into pre-modelled scenarios without crafting a full query.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {quickPrompts.map(({ prompt, scenarioHint: promptScenarioHint, label }) => (
@@ -883,29 +877,27 @@ export default function Home() {
 
             {chatMetadata && (
               <div className="border-b bg-muted/30 px-6 py-4 text-sm">
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">Live context</div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-medium">Agent</span>
-                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold">{chatMetadata.agentId || 'N/A'}</span>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                    <span>Agent</span>
+                    <Badge variant="secondary" className="text-[11px]">{chatMetadata.agentId || 'N/A'}</Badge>
                   </div>
-                  <Separator orientation="vertical" className="h-5" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-medium">Jurisdictions</span>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                    <span>Jurisdictions</span>
                     <span className="text-foreground">{chatMetadata.jurisdictions?.join(', ') || 'N/A'}</span>
                   </div>
-                  <Separator orientation="vertical" className="h-5" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-medium">Uncertainty</span>
-                    <Badge variant={chatMetadata.uncertaintyLevel === 'high' ? 'destructive' : 'secondary'} className="ml-1">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                    <span>Confidence</span>
+                    <Badge variant={chatMetadata.uncertaintyLevel === 'high' ? 'destructive' : 'secondary'} className="text-[11px]">
                       {chatMetadata.uncertaintyLevel || 'medium'}
                     </Badge>
                   </div>
-                  <Separator orientation="vertical" className="h-5" />
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-medium">Referenced Nodes</span>
-                    <span className="text-foreground">{chatMetadata.referencedNodes && chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.length : 'none'}</span>
-                  </div>
+                  {chatMetadata.referencedNodes && chatMetadata.referencedNodes.length > 0 && (
+                    <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+                      {chatMetadata.referencedNodes.length} graph refs
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -1201,59 +1193,51 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            <Card className="border bg-gradient-to-b from-muted/50 via-card to-background shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Sparkles className="h-4 w-4 text-primary" /> AI element highlights
-                </CardTitle>
-                <CardDescription>Aligned with the v0.6 architecture and engines.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  <div>
-                    <strong>Graph-backed answers</strong> – the copilot queries a Memgraph regulatory graph seeded with tax, welfare, pensions, and EU rules.
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  <div>
-                    <strong>Timeline-aware</strong> – a timeline engine keeps track of when rules start, end, or overlap.
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  <div>
-                    <strong>Scenario-aware agents</strong> – persona and jurisdiction drive which specialised agents are used.
-                  </div>
-                </div>
-                <div className="flex items-start gap-2 rounded-xl bg-muted/40 px-3 py-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" />
-                  <div>
-                    <strong>Guardrails on egress</strong> – all outbound LLM calls pass through an egress guard for redaction and policy checks.
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card className="border bg-card/90 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <ArrowUpRight className="h-4 w-4 text-primary" /> Graph view
-                </CardTitle>
-                <CardDescription>Inspect how rules, benefits, and obligations connect in the regulatory graph.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p className="text-muted-foreground">
-                  Open the graph experience to see the underlying Memgraph nodes and relationships used in this answer – including tax rules, welfare schemes, pension rules, and cross-border links.
-                </p>
-                <Button asChild className="w-full" variant="outline">
-                  <a href={`/graph?conversationId=${conversationIdRef.current}`}>Open regulatory graph</a>
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CircleHelp className="h-4 w-4 text-primary" /> Help & guardrails
+                  </CardTitle>
+                  <CardDescription>Key details without crowding the main view.</CardDescription>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setShowHelp((prev) => !prev)}>
+                  {showHelp ? 'Hide' : 'Show'}
                 </Button>
-                <p className="text-xs text-muted-foreground">
-                  Opens a dedicated graph UI powered by Memgraph and the graph schema v0.6.
-                </p>
-              </CardContent>
+              </CardHeader>
+              {showHelp && (
+                <CardContent className="space-y-3 text-sm">
+                  <div className="rounded-xl border bg-muted/30 px-3 py-2">
+                    Persona and jurisdictions feed the prompt builder, graph filters, and scenario engine. Update them before your next question for tailored answers.
+                  </div>
+                  <div className="rounded-xl border bg-muted/30 px-3 py-2">
+                    Scenario quick prompts are pre-modelled starting points; edit the text after selecting one to refine the query.
+                  </div>
+                  <div className="space-y-2 rounded-xl border bg-muted/40 px-3 py-2">
+                    <div className="font-semibold">Architecture highlights</div>
+                    <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+                      <li>Graph-backed answers grounded in Memgraph.</li>
+                      <li>Timeline engine tracks when rules start, end, or overlap.</li>
+                      <li>Scenario-aware agents based on persona and jurisdiction.</li>
+                      <li>Egress guard screens outbound LLM calls.</li>
+                    </ul>
+                  </div>
+                  <div className="space-y-2 rounded-xl border bg-muted/30 px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">Graph view</span>
+                      <Button asChild size="sm" variant="outline">
+                        <a href={`/graph?conversationId=${conversationIdRef.current}`}>Open</a>
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Inspect the nodes and relationships referenced in this conversation without cluttering the chat panel.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    Research assistance only. Verify outputs with qualified professionals; this UI is optimised for clarity over exhaustiveness.
+                  </div>
+                </CardContent>
+              )}
             </Card>
           </aside>
         </div>
