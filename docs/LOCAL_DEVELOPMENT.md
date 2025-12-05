@@ -115,6 +115,20 @@ Using the provided Docker Compose configuration:
 docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
 ```
 
+### Seed the graph for local testing
+
+The repository ships with a guard-railed seeding script that uses `GraphWriteService` (and therefore the Graph Ingress Guard)
+to load a minimal Ireland/EU test dataset. This is safe for local use and keeps Memgraph PII-free.
+
+```bash
+# Requires Memgraph to be running locally
+# Uses MEMGRAPH_URI / MEMGRAPH_USERNAME / MEMGRAPH_PASSWORD if set
+pnpm dlx tsx scripts/seed-graph.ts
+```
+
+The script clears existing data in the target Memgraph instance before inserting the sample dataset. Comment out the `clear`
+step inside `scripts/seed-graph.ts` if you want to preserve existing local data between runs.
+
 ### Verify Memgraph is Running
 
 ```bash
@@ -145,12 +159,8 @@ Memgraph Lab provides:
 
 ### Initial Graph Schema Setup
 
-Load the initial schema and sample data:
-
-```bash
-# TODO: Add schema loading script when available
-# For now, you can run Cypher queries manually in Memgraph Lab
-```
+The `scripts/seed-graph.ts` script (see above) is the recommended way to stand up a fresh local dataset with the correct guard
+rails. If you want to inspect or extend the schema manually, you can run Cypher in Memgraph Lab.
 
 Example schema setup queries:
 
@@ -887,11 +897,12 @@ ANALYZE=true pnpm build
 
 ## Additional Resources
 
-- **Architecture Documentation**: `docs/architecture/versions/architecture_v_0_5.md`
-- **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
-- **Architecture Decisions**: `docs/governance/decisions/decisions_v_0_5.md`
-- **Graph Schema**: `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
+- **Architecture Documentation**: `docs/architecture/architecture_v_0_6.md`
 - **Agent Design**: `AGENTS.md`
+- **Graph Schema**: `docs/specs/graph-schema/graph_schema_v_0_6.md`
+- **Concept Capture & Conversation Context**: `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md` and `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`
+- **Roadmap & Decisions**: `docs/roadmap/roadmap_v_0_6.md` and `docs/decisions/decisions_v_0_6.md`
+- **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
 
 ---
 
@@ -917,6 +928,6 @@ Once your local environment is running:
 2. **Inspect the graph** – Use Memgraph Lab to explore the knowledge graph
 3. **Read the architecture docs** – Understand the system design
 4. **Add sample data** – Create test scenarios in the graph
-5. **Implement features** – Follow the roadmap in `docs/governance/roadmap/roadmap_v_0_4.md`
+5. **Implement features** – Follow the roadmap in `docs/roadmap/roadmap_v_0_6.md`
 
 Happy developing! 🚀
