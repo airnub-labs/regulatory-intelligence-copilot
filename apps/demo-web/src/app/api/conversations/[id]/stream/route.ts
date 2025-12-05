@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import type { ConversationEventType, SseSubscriber } from '@reg-copilot/reg-intel-conversations';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
@@ -14,8 +14,8 @@ function sseChunk(event: ConversationEventType, data: unknown) {
   return encoder.encode(`event: ${event}\n` + `data: ${payload}\n\n`);
 }
 
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: conversationId } = await context.params;
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
+  const { id: conversationId } = context.params;
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
 

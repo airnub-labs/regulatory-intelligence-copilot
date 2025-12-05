@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 
 import { conversationStore } from '@/lib/server/conversations';
 import { authOptions } from '@/lib/auth/options';

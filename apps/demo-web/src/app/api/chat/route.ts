@@ -6,7 +6,7 @@
  */
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import {
@@ -9,8 +9,8 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: conversationId } = await context.params;
+export async function GET(request: NextRequest, context: { params: { id: string } }) {
+  const { id: conversationId } = context.params;
   const session = await getServerSession(authOptions);
   const user = session?.user;
   const userId = user?.id;
@@ -30,8 +30,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   return NextResponse.json({ conversation, messages, context: contextState });
 }
 
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const { id: conversationId } = await context.params;
+export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
+  const { id: conversationId } = context.params;
   const session = await getServerSession(authOptions);
   const user = session?.user;
   const userId = user?.id;
