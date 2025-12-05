@@ -32,7 +32,8 @@ import {
   InMemoryConversationStore,
   SupabaseConversationContextStore,
   SupabaseConversationStore,
-  deriveIsShared,
+  presentConversation,
+  presentConversationMetadata,
   type ConversationEventType,
   type ConversationListEventType,
   type ConversationRecord,
@@ -458,17 +459,6 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     ? undefined
     : 'Concept capture is disabled: configure MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD to persist captured concepts to Memgraph.';
 
-  const summarizeConversation = (record: ConversationRecord) => ({
-    id: record.id,
-    title: record.title,
-    shareAudience: record.shareAudience,
-    tenantAccess: record.tenantAccess,
-    jurisdictions: record.jurisdictions,
-    lastMessageAt: record.lastMessageAt,
-    createdAt: record.createdAt,
-    archivedAt: record.archivedAt,
-  });
-
   const generateConversationTitle = (text: string) => {
     const cleaned = text.replace(/\s+/g, ' ').trim();
     if (!cleaned) return 'New conversation';
@@ -483,7 +473,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     record: ConversationRecord
   ) => {
     conversationListHub.broadcast(tenantId, event, {
-      conversation: summarizeConversation(record),
+      conversation: presentConversation(record),
     });
   };
 
@@ -675,7 +665,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           },
         };
         const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
-      const isShared = deriveIsShared(conversationRecord);
+      const conversationMetadata = presentConversationMetadata(conversationRecord);
+      const isShared = conversationMetadata.isShared;
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -685,10 +676,12 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
             conversationId,
-            shareAudience: conversationRecord.shareAudience,
-            tenantAccess: conversationRecord.tenantAccess,
-            title: conversationRecord.title,
-            jurisdictions: conversationRecord.jurisdictions,
+            shareAudience: conversationMetadata.shareAudience,
+            tenantAccess: conversationMetadata.tenantAccess,
+            title: conversationMetadata.title,
+            jurisdictions: conversationMetadata.jurisdictions,
+            archivedAt: conversationMetadata.archivedAt ?? undefined,
+            lastMessageAt: conversationMetadata.lastMessageAt ?? undefined,
             isShared,
           });
 
@@ -715,11 +708,13 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 lastMetadata = metadata;
                 eventHub.broadcast(tenantId, conversationId, 'metadata', {
                   ...metadata,
-                  authorizationModel: conversationRecord.authorizationModel,
-                  authorizationSpec: conversationRecord.authorizationSpec,
-                  shareAudience: conversationRecord.shareAudience,
-                  tenantAccess: conversationRecord.tenantAccess,
-                  title: conversationRecord.title,
+                  conversationId,
+                  shareAudience: conversationMetadata.shareAudience,
+                  tenantAccess: conversationMetadata.tenantAccess,
+                  title: conversationMetadata.title,
+                  jurisdictions: conversationMetadata.jurisdictions,
+                  archivedAt: conversationMetadata.archivedAt ?? undefined,
+                  lastMessageAt: conversationMetadata.lastMessageAt ?? undefined,
                   isShared,
                 });
               } else if (chunk.type === 'warning' && chunk.warnings?.length) {
