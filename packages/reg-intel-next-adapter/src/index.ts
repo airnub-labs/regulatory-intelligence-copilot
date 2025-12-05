@@ -200,6 +200,9 @@ type ConversationStoreResolution = Required<
 };
 
 function resolveSupabaseCredentials() {
+  // Service-role credentials must never be initialized in a browser bundle.
+  if (typeof window !== 'undefined') return null;
+
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
   if (!supabaseUrl || !supabaseKey) return null;
@@ -280,12 +283,16 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
       const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
+      const internalClient = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: 'copilot_internal' },
+      });
 
       logConversationStore(mode, 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });
       return {
         mode: 'supabase',
-        conversationStore: new SupabaseConversationStore(client),
-        conversationContextStore: new SupabaseConversationContextStore(client),
+        conversationStore: new SupabaseConversationStore(client, internalClient),
+        conversationContextStore: new SupabaseConversationContextStore(client, internalClient),
       };
     }
 

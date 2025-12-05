@@ -1,3 +1,5 @@
+import 'server-only';
+
 import {
   ConversationEventHub,
   InMemoryConversationContextStore,
@@ -39,6 +41,14 @@ const supabaseClient =
       })
     : null;
 
+const supabaseInternalClient =
+  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: 'copilot_internal' },
+      })
+    : null;
+
 async function validateSupabaseHealth() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient.rpc('conversation_store_healthcheck');
@@ -75,11 +85,11 @@ if (supabaseClient) {
 }
 
 export const conversationStore = supabaseClient
-  ? new SupabaseConversationStore(supabaseClient)
+  ? new SupabaseConversationStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationStore();
 
 export const conversationContextStore = supabaseClient
-  ? new SupabaseConversationContextStore(supabaseClient)
+  ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationContextStore();
 
 export const conversationEventHub = new ConversationEventHub();

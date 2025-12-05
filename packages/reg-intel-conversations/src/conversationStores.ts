@@ -430,8 +430,8 @@ function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage
 export class SupabaseConversationStore implements ConversationStore {
   private readonly internalClient: SupabaseLikeClient;
 
-  constructor(private client: SupabaseLikeClient) {
-    this.internalClient = client.schema ? client.schema('copilot_internal') : client;
+  constructor(private client: SupabaseLikeClient, internalClient?: SupabaseLikeClient) {
+    this.internalClient = internalClient ?? client;
   }
 
   private async getConversationRecord(
@@ -721,8 +721,8 @@ export class SupabaseConversationStore implements ConversationStore {
 export class SupabaseConversationContextStore implements ConversationContextStore {
   private readonly internalClient: SupabaseLikeClient;
 
-  constructor(private client: SupabaseLikeClient) {
-    this.internalClient = client.schema ? client.schema('copilot_internal') : client;
+  constructor(private client: SupabaseLikeClient, internalClient?: SupabaseLikeClient) {
+    this.internalClient = internalClient ?? client;
   }
 
   async load(identity: ConversationIdentity): Promise<ConversationContext | null> {
