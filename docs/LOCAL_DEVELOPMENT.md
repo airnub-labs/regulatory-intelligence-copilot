@@ -350,7 +350,7 @@ LOCAL_LLM_API_KEY=dummy  # Some local servers require any value
 # -----------------------------------------------------------------------------
 
 MEMGRAPH_URI=bolt://localhost:7687
-MEMGRAPH_USER=
+MEMGRAPH_USERNAME=
 MEMGRAPH_PASSWORD=
 
 # Memgraph MCP Server
@@ -400,7 +400,7 @@ LOG_LEVEL=debug
 | `GROQ_API_KEY` | Yes* | Groq API key for Llama/Mixtral |
 | `LOCAL_LLM_BASE_URL` | Yes* | Local model endpoint (vLLM, Ollama) |
 | `MEMGRAPH_URI` | Yes | Memgraph Bolt connection URI |
-| `MEMGRAPH_USER` | No | Memgraph username (empty for local) |
+| `MEMGRAPH_USERNAME` | No | Memgraph username (empty for local) |
 | `MEMGRAPH_PASSWORD` | No | Memgraph password (empty for local) |
 | `MCP_GATEWAY_URL` | Yes | Memgraph MCP server URL |
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase API URL |

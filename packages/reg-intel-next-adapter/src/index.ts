@@ -249,13 +249,29 @@ type GraphWriteDependencies = {
 
 function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencies | null {
   const uri = process.env.MEMGRAPH_URI ?? process.env.NEO4J_URI;
-  if (!uri) return null;
+  if (!uri) {
+    console.warn(
+      'Graph write path disabled: MEMGRAPH_URI is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.'
+    );
+    return null;
+  }
 
   const username = process.env.MEMGRAPH_USERNAME ?? process.env.NEO4J_USERNAME;
   const password = process.env.MEMGRAPH_PASSWORD ?? process.env.NEO4J_PASSWORD;
   const auth = username && password ? neo4j.auth.basic(username, password) : undefined;
 
   const driver = neo4j.driver(uri, auth);
+  driver
+    .verifyConnectivity()
+    .then(() => {
+      console.info(`Graph write dependencies verified for ${uri}`);
+    })
+    .catch(error => {
+      console.warn(
+        'Graph write connectivity check failed; concept capture will be disabled unless configuration is fixed.',
+        error,
+      );
+    });
   const graphWriteService = createGraphWriteService({
     driver,
     tenantId,
@@ -345,7 +361,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   })();
   const graphWarning = graphDeps
     ? undefined
-    : 'Graph write service not configured; captured concepts will not be persisted to Memgraph.';
+    : 'Concept capture is disabled: configure MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD to persist captured concepts to Memgraph.';
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
@@ -357,9 +373,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         graphClient: createGraphClient(),
         timelineEngine: createTimelineEngine(),
         egressGuard: new BasicEgressGuard(),
-        graphWriteService: graphDeps?.graphWriteService ?? ({} as GraphWriteService),
-        canonicalConceptHandler:
-          graphDeps?.canonicalConceptHandler ?? ({ resolveAndUpsert: async () => [] } satisfies CanonicalConceptHandler),
+        graphWriteService: graphDeps?.graphWriteService,
+        canonicalConceptHandler: graphDeps?.canonicalConceptHandler,
+        conceptCaptureWarning: graphWarning,
         conversationContextStore,
       });
     }

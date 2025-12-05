@@ -85,7 +85,10 @@ export async function createSandbox(options?: {
       MEMGRAPH_URL: process.env.MEMGRAPH_HOST
         ? `bolt://${process.env.MEMGRAPH_HOST}:${process.env.MEMGRAPH_PORT || '7687'}`
         : '',
-      MEMGRAPH_USER: process.env.MEMGRAPH_USER || 'memgraph',
+      MEMGRAPH_USER:
+        process.env.MEMGRAPH_USERNAME || process.env.MEMGRAPH_USER || 'memgraph',
+      MEMGRAPH_USERNAME:
+        process.env.MEMGRAPH_USERNAME || process.env.MEMGRAPH_USER || 'memgraph',
       MEMGRAPH_PASSWORD: process.env.MEMGRAPH_PASSWORD || '',
       MCP_READ_ONLY: process.env.MCP_READ_ONLY || 'false',
     },

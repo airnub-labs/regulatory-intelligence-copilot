@@ -113,8 +113,9 @@ export interface ComplianceStreamChunk {
  */
 export interface ComplianceEngineDeps {
   llmRouter: LlmRouter;
-  graphWriteService: GraphWriteService;
-  canonicalConceptHandler: CanonicalConceptHandler;
+  graphWriteService?: GraphWriteService;
+  canonicalConceptHandler?: CanonicalConceptHandler;
+  conceptCaptureWarning?: string;
   conversationContextStore?: ConversationContextStore;
   llmClient: LlmClient;
   graphClient: GraphClient;
@@ -242,9 +243,16 @@ const CAPTURE_CONCEPTS_TOOL = {
  */
 export class ComplianceEngine {
   private deps: ComplianceEngineDeps;
+  private conceptCaptureEnabled: boolean;
+  private conceptCaptureWarning?: string;
+  private conceptWarningLogged = false;
 
   constructor(deps: ComplianceEngineDeps) {
     this.deps = deps;
+    this.conceptCaptureEnabled = Boolean(
+      deps.canonicalConceptHandler && deps.graphWriteService
+    );
+    this.conceptCaptureWarning = deps.conceptCaptureWarning;
   }
 
   private async buildPromptMetadata(
@@ -312,6 +320,17 @@ export class ComplianceEngine {
   private async handleConceptChunk(chunk: ToolStreamChunk): Promise<string[]> {
     const toolName = chunk.name ?? chunk.toolName;
     if (toolName !== 'capture_concepts') {
+      return [];
+    }
+
+    if (!this.conceptCaptureEnabled || !this.deps.canonicalConceptHandler || !this.deps.graphWriteService) {
+      if (!this.conceptWarningLogged) {
+        console.warn(
+          this.conceptCaptureWarning ||
+            'Concept capture skipped: Graph write dependencies are not available.'
+        );
+        this.conceptWarningLogged = true;
+      }
       return [];
     }
 
@@ -392,11 +411,12 @@ export class ComplianceEngine {
     conceptNodeIds: Set<string>,
     tenantId?: string
   ): LlmClient {
+    const tools = this.conceptCaptureEnabled ? [CAPTURE_CONCEPTS_TOOL] : [];
     const options: ToolAwareCompletionOptions = {
       task: 'main-chat',
       tenantId,
-      tools: [CAPTURE_CONCEPTS_TOOL],
-      toolChoice: 'auto',
+      tools: tools.length ? tools : undefined,
+      toolChoice: tools.length ? 'auto' : undefined,
     };
 
     return {
