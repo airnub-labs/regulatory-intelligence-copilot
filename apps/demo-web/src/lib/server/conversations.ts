@@ -35,7 +35,6 @@ if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseSer
 const supabaseClient =
   normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
-        db: { schema: 'copilot_internal' },
         auth: { autoRefreshToken: false, persistSession: false },
       })
     : null;
