@@ -68,6 +68,7 @@ interface VersionedMessage {
 
 type ShareAudience = 'private' | 'tenant' | 'public'
 type TenantAccess = 'view' | 'edit'
+type ShareOptionValue = 'private' | 'tenant-view' | 'tenant-edit' | 'public'
 type AuthorizationModel = 'supabase_rbac' | 'openfga'
 
 interface ConversationSummary {
@@ -211,6 +212,51 @@ const extractWarnings = (parsedData: ParsedSseData): string[] => {
   return []
 }
 
+const getShareLabel = (shareAudience: ShareAudience, tenantAccess: TenantAccess): string => {
+  if (shareAudience === 'public') return 'Public (view-only)'
+  if (shareAudience === 'tenant' && tenantAccess === 'view') return 'Tenant (view-only)'
+  if (shareAudience === 'tenant') return 'Tenant (view + edit)'
+  return 'Private'
+}
+
+const getShareDescription = (shareAudience: ShareAudience, tenantAccess: TenantAccess): string => {
+  if (shareAudience === 'public') {
+    return 'Anyone with the link can view this conversation. Edits are limited to the owner.'
+  }
+  if (shareAudience === 'tenant' && tenantAccess === 'view') {
+    return 'Members of your tenant can view this conversation in read-only mode.'
+  }
+  if (shareAudience === 'tenant') {
+    return 'Members of your tenant can view and edit this conversation.'
+  }
+  return 'Only you can view and edit this conversation.'
+}
+
+const getShareOptionValue = (
+  shareAudience: ShareAudience,
+  tenantAccess: TenantAccess
+): ShareOptionValue => {
+  if (shareAudience === 'public') return 'public'
+  if (shareAudience === 'tenant' && tenantAccess === 'view') return 'tenant-view'
+  if (shareAudience === 'tenant') return 'tenant-edit'
+  return 'private'
+}
+
+const getShareParamsFromOption = (
+  option: ShareOptionValue
+): { shareAudience: ShareAudience; tenantAccess: TenantAccess } => {
+  switch (option) {
+    case 'public':
+      return { shareAudience: 'public', tenantAccess: 'view' }
+    case 'tenant-view':
+      return { shareAudience: 'tenant', tenantAccess: 'view' }
+    case 'tenant-edit':
+      return { shareAudience: 'tenant', tenantAccess: 'edit' }
+    default:
+      return { shareAudience: 'private', tenantAccess: 'edit' }
+  }
+}
+
 const quickPrompts = [
   {
     label: 'Graph + welfare',
@@ -321,7 +367,6 @@ export default function Home() {
     personaType: DEFAULT_PERSONA,
     jurisdictions: ['IE'],
   })
-  const isShared = shareAudience !== 'private'
 
   const isAuthenticated = status === 'authenticated' && Boolean((session?.user as { id?: string } | undefined)?.id)
   const isTitleDirty = conversationTitle !== savedConversationTitle
@@ -712,20 +757,19 @@ export default function Home() {
     setInput('')
   }
 
-  const toggleSharing = async () => {
+  const updateSharing = async (option: ShareOptionValue) => {
     if (!conversationIdRef.current) return
     if (!isAuthenticated) return
-    const nextAudience: ShareAudience = shareAudience === 'private' ? 'tenant' : 'private'
-    const nextTenantAccess: TenantAccess = nextAudience === 'tenant' ? 'edit' : tenantAccess
+    const params = getShareParamsFromOption(option)
     const response = await fetch(`/api/conversations/${conversationIdRef.current}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ shareAudience: nextAudience, tenantAccess: nextTenantAccess }),
+      body: JSON.stringify(params),
     })
     if (response.ok) {
-      setShareAudience(nextAudience)
-      setTenantAccess(nextTenantAccess)
+      setShareAudience(params.shareAudience)
+      setTenantAccess(params.tenantAccess)
       loadConversations()
     }
   }
@@ -1090,19 +1134,33 @@ export default function Home() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {conversationId && (
-                  <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-xs">
-                    <span className="text-muted-foreground">
-                      {!isShared
-                        ? 'Private to you'
-                        : shareAudience === 'public'
-                          ? 'Public read-only'
-                          : tenantAccess === 'view'
-                            ? 'Tenant shared (read-only)'
-                            : 'Tenant shared (edit)'}
-                    </span>
-                    <Button size="sm" variant="ghost" onClick={toggleSharing}>
-                      {shareAudience === 'private' ? 'Share with tenant' : 'Make private'}
-                    </Button>
+                  <div className="space-y-2 rounded-lg border px-3 py-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      Sharing
+                    </label>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-2">
+                        <Badge variant="secondary">{getShareLabel(shareAudience, tenantAccess)}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {getShareDescription(shareAudience, tenantAccess)}
+                        </span>
+                      </div>
+                      <Select
+                        value={getShareOptionValue(shareAudience, tenantAccess)}
+                        onValueChange={value => updateSharing(value as ShareOptionValue)}
+                        disabled={!isAuthenticated}
+                      >
+                        <SelectTrigger className="w-full sm:w-[260px]">
+                          <SelectValue placeholder="Choose sharing" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="private">Private to you</SelectItem>
+                          <SelectItem value="tenant-view">Tenant — view-only</SelectItem>
+                          <SelectItem value="tenant-edit">Tenant — view + edit</SelectItem>
+                          <SelectItem value="public">Public — view-only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
                 {conversationId && (
@@ -1145,11 +1203,7 @@ export default function Home() {
                         <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
                         {conv.shareAudience !== 'private' && (
                           <Badge variant="secondary">
-                            {conv.shareAudience === 'public'
-                              ? 'Public read-only'
-                              : conv.tenantAccess === 'view'
-                                ? 'Tenant read-only'
-                                : 'Tenant shared'}
+                            {getShareLabel(conv.shareAudience, conv.tenantAccess)}
                           </Badge>
                         )}
                       </span>
