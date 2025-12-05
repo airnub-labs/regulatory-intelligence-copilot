@@ -33,7 +33,7 @@ export interface ConversationRecord {
   shareAudience: ShareAudience;
   tenantAccess: TenantAccess;
   authorizationModel: AuthorizationModel;
-  authorizationSpec?: AuthorizationSpec | null;
+  authorizationSpec: AuthorizationSpec;
   personaId?: string | null;
   jurisdictions: string[];
   title?: string | null;
@@ -159,6 +159,7 @@ export class InMemoryConversationStore implements ConversationStore {
     const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
+    const authorizationSpec = input.authorizationSpec ?? {};
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
@@ -166,7 +167,7 @@ export class InMemoryConversationStore implements ConversationStore {
       shareAudience,
       tenantAccess,
       authorizationModel,
-      authorizationSpec: input.authorizationSpec,
+      authorizationSpec,
       personaId: input.personaId ?? null,
       jurisdictions: input.jurisdictions ?? [],
       title: input.title ?? null,
@@ -320,7 +321,7 @@ export class InMemoryConversationStore implements ConversationStore {
     const shareAudience = input.shareAudience ?? record.shareAudience;
     const tenantAccess = input.tenantAccess ?? record.tenantAccess;
     const authorizationModel = input.authorizationModel ?? record.authorizationModel;
-    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
+    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec ?? {};
     const title = input.title !== undefined ? input.title : record.title;
     this.conversations.set(input.conversationId, {
       ...record,
@@ -363,7 +364,7 @@ type SupabaseConversationRow = {
   share_audience: ShareAudience;
   tenant_access: TenantAccess;
   authorization_model: AuthorizationModel;
-  authorization_spec: AuthorizationSpec | null;
+  authorization_spec: AuthorizationSpec;
   persona_id?: string | null;
   jurisdictions: string[];
   title?: string | null;
@@ -398,7 +399,7 @@ function mapConversationRow(row: SupabaseConversationRow): ConversationRecord {
     shareAudience: row.share_audience,
     tenantAccess: row.tenant_access,
     authorizationModel: row.authorization_model,
-    authorizationSpec: row.authorization_spec,
+    authorizationSpec: row.authorization_spec ?? {},
     personaId: row.persona_id,
     jurisdictions: row.jurisdictions ?? [],
     title: row.title,
@@ -470,6 +471,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const shareAudience = resolveShareAudience({ shareAudience: input.shareAudience });
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
+    const authorizationSpec = input.authorizationSpec ?? {};
 
     const { data, error } = await this.internalClient
       .from('conversations')
@@ -479,7 +481,7 @@ export class SupabaseConversationStore implements ConversationStore {
         share_audience: shareAudience,
         tenant_access: tenantAccess,
         authorization_model: authorizationModel,
-        authorization_spec: input.authorizationSpec ?? null,
+        authorization_spec: authorizationSpec,
         persona_id: input.personaId ?? null,
         jurisdictions: input.jurisdictions ?? [],
         title: input.title ?? null,
@@ -696,7 +698,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const shareAudience = input.shareAudience ?? record.shareAudience;
     const tenantAccess = input.tenantAccess ?? record.tenantAccess;
     const authorizationModel = input.authorizationModel ?? record.authorizationModel;
-    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
+    const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec ?? {};
     const title = input.title !== undefined ? input.title : record.title;
 
     const { error } = await this.internalClient
@@ -705,7 +707,7 @@ export class SupabaseConversationStore implements ConversationStore {
         share_audience: shareAudience,
         tenant_access: tenantAccess,
         authorization_model: authorizationModel,
-        authorization_spec: authorizationSpec ?? null,
+        authorization_spec: authorizationSpec,
         title,
         updated_at: new Date().toISOString(),
       })
