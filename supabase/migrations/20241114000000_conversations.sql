@@ -24,6 +24,8 @@ create table if not exists copilot_internal.conversations (
   last_message_at timestamptz null
 );
 
+alter table copilot_internal.conversations enable row level security;
+
 create table if not exists copilot_internal.conversation_messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references copilot_internal.conversations(id) on delete cascade,
@@ -34,6 +36,8 @@ create table if not exists copilot_internal.conversation_messages (
   metadata jsonb null,
   created_at timestamptz not null default now()
 );
+
+alter table copilot_internal.conversation_messages enable row level security;
 
 create table if not exists copilot_internal.conversation_contexts (
   conversation_id uuid primary key references copilot_internal.conversations(id) on delete cascade,
@@ -133,6 +137,60 @@ create index if not exists conversations_tenant_idx on copilot_internal.conversa
 create index if not exists conversation_messages_conversation_idx on copilot_internal.conversation_messages(conversation_id, created_at asc);
 create index if not exists conversation_contexts_tenant_idx on copilot_internal.conversation_contexts(tenant_id);
 
+-- RLS policies for conversations
+create policy if not exists conversations_service_role_full_access
+  on copilot_internal.conversations
+  for all
+  to service_role
+  using (true)
+  with check (true);
+
+create policy if not exists conversations_tenant_read
+  on copilot_internal.conversations
+  for select
+  to authenticated
+  using (tenant_id = public.current_tenant_id());
+
+create policy if not exists conversations_tenant_write
+  on copilot_internal.conversations
+  for insert
+  to authenticated
+  with check (tenant_id = public.current_tenant_id());
+
+create policy if not exists conversations_tenant_update
+  on copilot_internal.conversations
+  for update
+  to authenticated
+  using (tenant_id = public.current_tenant_id())
+  with check (tenant_id = public.current_tenant_id());
+
+-- RLS policies for conversation messages
+create policy if not exists conversation_messages_service_role_full_access
+  on copilot_internal.conversation_messages
+  for all
+  to service_role
+  using (true)
+  with check (true);
+
+create policy if not exists conversation_messages_tenant_read
+  on copilot_internal.conversation_messages
+  for select
+  to authenticated
+  using (tenant_id = public.current_tenant_id());
+
+create policy if not exists conversation_messages_tenant_write
+  on copilot_internal.conversation_messages
+  for insert
+  to authenticated
+  with check (tenant_id = public.current_tenant_id());
+
+create policy if not exists conversation_messages_tenant_update
+  on copilot_internal.conversation_messages
+  for update
+  to authenticated
+  using (tenant_id = public.current_tenant_id())
+  with check (tenant_id = public.current_tenant_id());
+
 revoke all on schema copilot_internal from public, anon, authenticated;
 grant usage on schema copilot_internal to service_role;
 
@@ -150,4 +208,26 @@ grant select on public.conversation_messages_view to authenticated, service_role
 grant select on public.conversation_contexts_view to authenticated, service_role;
 grant select on public.personas_view to authenticated, service_role;
 grant select on public.quick_prompts_view to authenticated, service_role;
+
+create or replace function public.conversation_store_healthcheck()
+returns table(table_name text, rls_enabled boolean, policy_count integer)
+language sql
+security definer
+set search_path = public, copilot_internal
+as $$
+  select c.relname as table_name,
+         c.relrowsecurity as rls_enabled,
+         coalesce(p.policy_count, 0) as policy_count
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  left join (
+    select polrelid, count(*) as policy_count
+    from pg_policy
+    group by polrelid
+  ) p on p.polrelid = c.oid
+  where n.nspname = 'copilot_internal'
+    and c.relname in ('conversations', 'conversation_messages');
+$$;
+
+grant execute on function public.conversation_store_healthcheck() to authenticated, service_role;
 
