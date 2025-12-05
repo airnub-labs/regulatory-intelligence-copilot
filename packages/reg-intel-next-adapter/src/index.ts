@@ -191,6 +191,14 @@ function buildMetadataChunk(args: {
   };
 }
 
+type ConversationStoreResolution = Required<
+  Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>
+> & {
+  mode: 'memory' | 'supabase' | 'provided';
+  warnings?: string[];
+  readinessCheck?: () => Promise<void>;
+};
+
 function resolveSupabaseCredentials() {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
@@ -218,17 +226,54 @@ function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
 }
 
 function resolveConversationStores(options?: ChatRouteHandlerOptions) {
+function logConversationStore(mode: string, message: string, payload?: Record<string, unknown>) {
+  const context = payload ? ` ${JSON.stringify(payload)}` : '';
+  console.info(`[conversation-store:${mode}] ${message}${context}`);
+}
+
+async function validateSupabaseHealth(client: ReturnType<typeof createClient>) {
+  const { data, error } = await client.rpc('conversation_store_healthcheck');
+  if (error) {
+    throw new Error(`Supabase conversation healthcheck failed: ${error.message}`);
+  }
+
+  const rows = (data as Array<{ table_name: string; rls_enabled: boolean; policy_count: number }>) ?? [];
+  const tables = new Map(rows.map(row => [row.table_name, row]));
+  const missingTables = ['conversations', 'conversation_messages'].filter(table => !tables.has(table));
+  if (missingTables.length > 0) {
+    throw new Error(`Supabase is missing required tables: ${missingTables.join(', ')}`);
+  }
+
+  const rlsIssues = rows.filter(row => !row.rls_enabled || row.policy_count === 0);
+  if (rlsIssues.length > 0) {
+    const detail = rlsIssues
+      .map(row => `${row.table_name} (rls: ${row.rls_enabled}, policies: ${row.policy_count})`)
+      .join('; ');
+    throw new Error(`Supabase RLS misconfigured for: ${detail}`);
+  }
+}
+
+function resolveConversationStores(options?: ChatRouteHandlerOptions): ConversationStoreResolution {
   const providedConversationStore = options?.conversationStore;
   const providedContextStore = options?.conversationContextStore;
 
   if (providedConversationStore || providedContextStore) {
+    logConversationStore('provided', 'Using caller-supplied conversation store implementations');
     return {
+      mode: 'provided',
       conversationStore: providedConversationStore ?? new InMemoryConversationStore(),
       conversationContextStore: providedContextStore ?? new InMemoryConversationContextStore(),
-    } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
+    };
   }
 
   const mode = resolveConversationStoreMode();
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const isDevLike = nodeEnv === 'development' || nodeEnv === 'test';
+  const warnings: string[] = [];
+
+  if (mode === 'memory' && !isDevLike) {
+    throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
+  }
 
   if (mode !== 'memory') {
     const credentials = resolveSupabaseCredentials();
@@ -238,17 +283,32 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions) {
         auth: { autoRefreshToken: false, persistSession: false },
       });
 
+      logConversationStore(mode, 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });
       return {
+        mode: 'supabase',
         conversationStore: new SupabaseConversationStore(client),
         conversationContextStore: new SupabaseConversationContextStore(client),
-      } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
+        readinessCheck: () => validateSupabaseHealth(client),
+      };
+    }
+
+    const message =
+      'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to use the Supabase conversation store';
+    if (isDevLike) {
+      warnings.push(message);
+      logConversationStore(mode, `${message}; falling back to in-memory store`);
+    } else {
+      throw new Error(message);
     }
   }
 
+  logConversationStore(mode, 'Using in-memory conversation store');
   return {
+    mode: 'memory',
+    warnings,
     conversationStore: new InMemoryConversationStore(),
     conversationContextStore: new InMemoryConversationContextStore(),
-  } satisfies Required<Pick<ChatRouteHandlerOptions, 'conversationStore' | 'conversationContextStore'>>;
+  };
 }
 
 type GraphWriteDependencies = {
@@ -369,7 +429,13 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   // Lazy initialization to avoid build-time errors
   let llmRouter: LlmRouter | null = null;
   let complianceEngine: ComplianceEngine | null = null;
-  const { conversationStore, conversationContextStore } = resolveConversationStores(options);
+  const {
+    conversationStore,
+    conversationContextStore,
+    warnings: conversationStoreWarnings,
+    readinessCheck,
+  } = resolveConversationStores(options);
+  const conversationStoreReady = readinessCheck?.();
   const eventHub = options?.eventHub ?? new ConversationEventHub();
   const graphDeps = (() => {
     try {
@@ -403,6 +469,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   };
 
   return async function POST(request: Request) {
+    if (conversationStoreReady) {
+      await conversationStoreReady;
+    }
     const { complianceEngine } = getOrCreateEngine();
     try {
       // Parse and validate request body
@@ -531,7 +600,10 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       let streamedTextBuffer = '';
       let disclaimerAlreadyPresent = false;
       let lastMetadata: Record<string, unknown> | null = null;
-      let accumulatedWarnings: string[] = graphWarning ? [graphWarning] : [];
+      let accumulatedWarnings: string[] = [
+        ...(conversationStoreWarnings ?? []),
+        ...(graphWarning ? [graphWarning] : []),
+      ];
 
         const subscriber: SseSubscriber = {
           send: (_event: ConversationEventType, _data: unknown) => {
