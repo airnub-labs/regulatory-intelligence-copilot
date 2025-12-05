@@ -663,7 +663,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         ...(graphWarning ? [graphWarning] : []),
       ];
 
-        const subscriber: SseSubscriber = {
+        const subscriber: SseSubscriber<ConversationEventType> = {
           send: (_event: ConversationEventType, _data: unknown) => {
             // placeholder replaced when writer is created
           },
