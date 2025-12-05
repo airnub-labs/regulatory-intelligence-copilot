@@ -6,6 +6,15 @@ export type ConversationEventType =
   | 'disclaimer'
   | 'warning';
 
+export type ConversationListEventType =
+  | 'snapshot'
+  | 'upsert'
+  | 'archived'
+  | 'unarchived'
+  | 'deleted'
+  | 'renamed'
+  | 'sharing';
+
 export interface SseSubscriber {
   send(event: ConversationEventType, data: unknown): void;
   onClose?(): void;
@@ -40,6 +49,43 @@ export class ConversationEventHub {
 
   broadcast(tenantId: string, conversationId: string, event: ConversationEventType, data: unknown) {
     const key = this.key(tenantId, conversationId);
+    const set = this.subscribers.get(key);
+    if (!set) return;
+    for (const subscriber of set) {
+      subscriber.send(event, data);
+    }
+  }
+}
+
+export class ConversationListEventHub {
+  private subscribers = new Map<string, Set<SseSubscriber>>();
+
+  private key(tenantId: string) {
+    return tenantId;
+  }
+
+  subscribe(tenantId: string, subscriber: SseSubscriber) {
+    const key = this.key(tenantId);
+    if (!this.subscribers.has(key)) {
+      this.subscribers.set(key, new Set());
+    }
+    this.subscribers.get(key)!.add(subscriber);
+    return () => this.unsubscribe(tenantId, subscriber);
+  }
+
+  unsubscribe(tenantId: string, subscriber: SseSubscriber) {
+    const key = this.key(tenantId);
+    const set = this.subscribers.get(key);
+    if (!set) return;
+    set.delete(subscriber);
+    if (!set.size) {
+      this.subscribers.delete(key);
+    }
+    subscriber.onClose?.();
+  }
+
+  broadcast(tenantId: string, event: ConversationListEventType, data: unknown) {
+    const key = this.key(tenantId);
     const set = this.subscribers.get(key);
     if (!set) return;
     for (const subscriber of set) {

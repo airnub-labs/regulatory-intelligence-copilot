@@ -12,6 +12,7 @@ import { authOptions } from '@/lib/auth/options';
 import {
   conversationContextStore,
   conversationEventHub,
+  conversationListEventHub,
   conversationStore,
 } from '@/lib/server/conversations';
 
@@ -22,6 +23,7 @@ const handler = createChatRouteHandler({
   conversationStore,
   conversationContextStore,
   eventHub: conversationEventHub,
+  conversationListEventHub,
 });
 
 export async function POST(request: Request) {

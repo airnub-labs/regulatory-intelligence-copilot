@@ -78,7 +78,6 @@ interface ConversationSummary {
   lastMessageAt?: string | null
   shareAudience: ShareAudience
   tenantAccess: TenantAccess
-  authorizationModel?: AuthorizationModel
 }
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
@@ -127,7 +126,6 @@ interface ConversationPayload {
   conversation?: {
     shareAudience?: ShareAudience
     tenantAccess?: TenantAccess
-    authorizationModel?: AuthorizationModel
     personaId?: UserProfile['personaType']
     jurisdictions?: string[]
     title?: string | null
@@ -138,7 +136,11 @@ interface ChatSseMetadata extends ChatMetadata {
   conversationId?: string
   shareAudience?: ShareAudience
   tenantAccess?: TenantAccess
-  authorizationModel?: AuthorizationModel
+  jurisdictions?: string[]
+  title?: string | null
+  archivedAt?: string | null
+  lastMessageAt?: string | null
+  isShared?: boolean
 }
 
 const isChatMetadata = (value: unknown): value is ChatMetadata => {
@@ -163,14 +165,19 @@ const isChatSseMetadata = (value: unknown): value is ChatSseMetadata => {
   const isValidShareAudience =
     candidate.shareAudience === 'private' || candidate.shareAudience === 'tenant' || candidate.shareAudience === 'public'
   const isValidTenantAccess = candidate.tenantAccess === 'view' || candidate.tenantAccess === 'edit'
-  const isValidAuthorizationModel =
-    candidate.authorizationModel === 'supabase_rbac' || candidate.authorizationModel === 'openfga'
+  const isValidJurisdictions =
+    candidate.jurisdictions === undefined ||
+    (Array.isArray(candidate.jurisdictions) && candidate.jurisdictions.every(item => typeof item === 'string'))
 
   return (
     (candidate.conversationId === undefined || typeof candidate.conversationId === 'string') &&
     (candidate.shareAudience === undefined || isValidShareAudience) &&
     (candidate.tenantAccess === undefined || isValidTenantAccess) &&
-    (candidate.authorizationModel === undefined || isValidAuthorizationModel)
+    (candidate.title === undefined || typeof candidate.title === 'string' || candidate.title === null) &&
+    (candidate.archivedAt === undefined || typeof candidate.archivedAt === 'string' || candidate.archivedAt === null) &&
+    (candidate.lastMessageAt === undefined || typeof candidate.lastMessageAt === 'string' || candidate.lastMessageAt === null) &&
+    (candidate.isShared === undefined || typeof candidate.isShared === 'boolean') &&
+    isValidJurisdictions
   )
 }
 
@@ -361,7 +368,7 @@ export default function Home() {
       setEditingMessageId(null)
       setShareAudience(payload.conversation?.shareAudience ?? 'private')
       setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
-      setAuthorizationModel(payload.conversation?.authorizationModel ?? 'supabase_rbac')
+      setAuthorizationModel('supabase_rbac')
       const personaId = payload.conversation?.personaId
       if (personaId) {
         setProfile(prev => ({ ...prev, personaType: normalizePersonaType(personaId) }))
@@ -416,9 +423,6 @@ export default function Home() {
     }
     if (metadata.tenantAccess) {
       setTenantAccess(metadata.tenantAccess)
-    }
-    if (metadata.authorizationModel) {
-      setAuthorizationModel(metadata.authorizationModel)
     }
     if (metadata.warnings !== undefined) {
       setWarnings(metadata.warnings)

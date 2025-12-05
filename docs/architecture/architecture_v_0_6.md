@@ -444,6 +444,11 @@ v0.6 fully incorporates the UI architecture additions from v0.5.
   - Emits `disclaimer` SSE events for safety messaging so downstream clients can render them separately from streamed text.
   - Emits a final metadata event with `referencedNodes`, `jurisdictions`, `uncertaintyLevel`, `disclaimerKey`.
 
+- `/api/conversations/stream` (tenant-scoped SSE feed)
+  - Streams conversation list changes (create/share/rename/archive) so the UI stays in sync across tabs/devices without manual refreshes.
+  - Each event carries identifiers, titles, and the share/authorisation envelope so clients can merge updates into cached lists without re-fetching full histories.
+  - Built on the same conversation event hub used for per-conversation SSE streams; production instances should fan out via Redis/pub-sub when horizontally scaled.
+
 - `/api/graph/*`
   - Read‑only routes for fetching initial graph snapshots and streaming patches.
 

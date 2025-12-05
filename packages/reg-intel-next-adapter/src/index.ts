@@ -27,12 +27,16 @@ import type {
 import type { ConversationContextStore } from '@reg-copilot/reg-intel-core';
 import {
   ConversationEventHub,
+  ConversationListEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   SupabaseConversationContextStore,
   SupabaseConversationStore,
-  deriveIsShared,
+  presentConversation,
+  presentConversationMetadata,
   type ConversationEventType,
+  type ConversationListEventType,
+  type ConversationRecord,
   type SseSubscriber,
   type AuthorizationModel,
   type AuthorizationSpec,
@@ -51,6 +55,7 @@ export interface ChatRouteHandlerOptions {
   conversationStore?: ConversationStore;
   conversationContextStore?: ConversationContextStore;
   eventHub?: ConversationEventHub;
+  conversationListEventHub?: ConversationListEventHub;
 }
 
 /**
@@ -445,6 +450,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   } = resolveConversationStores(options);
   const conversationStoreReady = readinessCheck?.();
   const eventHub = options?.eventHub ?? new ConversationEventHub();
+  const conversationListHub = options?.conversationListEventHub ?? new ConversationListEventHub();
   const graphDeps = (() => {
     try {
       return resolveGraphWriteDependencies(options?.tenantId);
@@ -456,6 +462,24 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   const graphWarning = graphDeps
     ? undefined
     : 'Concept capture is disabled: configure MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD to persist captured concepts to Memgraph.';
+
+  const generateConversationTitle = (text: string) => {
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    if (!cleaned) return 'New conversation';
+    const truncated = cleaned.length > 80 ? `${cleaned.slice(0, 77)}...` : cleaned;
+    const words = truncated.split(' ');
+    return words.slice(0, 12).join(' ');
+  };
+
+  const notifyListSubscribers = (
+    tenantId: string,
+    event: ConversationListEventType,
+    record: ConversationRecord
+  ) => {
+    conversationListHub.broadcast(tenantId, event, {
+      conversation: presentConversation(record),
+    });
+  };
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
@@ -593,6 +617,32 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         metadata: normalizedProfile ? { profile: normalizedProfile } : undefined,
       });
 
+      const conversationAfterUser = await conversationStore.getConversation({
+        tenantId,
+        conversationId,
+        userId,
+      });
+
+      if (conversationAfterUser && !conversationAfterUser.title) {
+        const generatedTitle = generateConversationTitle(incomingMessageContent);
+        await conversationStore.updateSharing({
+          tenantId,
+          conversationId,
+          userId,
+          title: generatedTitle,
+        });
+      }
+
+      const refreshedConversation = await conversationStore.getConversation({
+        tenantId,
+        conversationId,
+        userId,
+      });
+
+      if (refreshedConversation) {
+        notifyListSubscribers(tenantId, 'upsert', refreshedConversation);
+      }
+
       if (replaceMessageId) {
         await conversationStore.softDeleteMessage({
           tenantId,
@@ -619,7 +669,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           },
         };
         const unsubscribe = eventHub.subscribe(tenantId, conversationId, subscriber);
-      const isShared = deriveIsShared(conversationRecord);
+      const conversationMetadata = presentConversationMetadata(conversationRecord);
+      const isShared = conversationMetadata.isShared;
 
       const stream = new ReadableStream({
         async start(controller) {
@@ -629,11 +680,13 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
             conversationId,
-            shareAudience: conversationRecord.shareAudience,
-            tenantAccess: conversationRecord.tenantAccess,
+            shareAudience: conversationMetadata.shareAudience,
+            tenantAccess: conversationMetadata.tenantAccess,
+            title: conversationMetadata.title,
+            jurisdictions: conversationMetadata.jurisdictions,
+            archivedAt: conversationMetadata.archivedAt ?? undefined,
+            lastMessageAt: conversationMetadata.lastMessageAt ?? undefined,
             isShared,
-            authorizationModel: conversationRecord.authorizationModel,
-            authorizationSpec: conversationRecord.authorizationSpec,
           });
 
           try {
@@ -659,10 +712,13 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                 lastMetadata = metadata;
                 eventHub.broadcast(tenantId, conversationId, 'metadata', {
                   ...metadata,
-                  authorizationModel: conversationRecord.authorizationModel,
-                  authorizationSpec: conversationRecord.authorizationSpec,
-                  shareAudience: conversationRecord.shareAudience,
-                  tenantAccess: conversationRecord.tenantAccess,
+                  conversationId,
+                  shareAudience: conversationMetadata.shareAudience,
+                  tenantAccess: conversationMetadata.tenantAccess,
+                  title: conversationMetadata.title,
+                  jurisdictions: conversationMetadata.jurisdictions,
+                  archivedAt: conversationMetadata.archivedAt ?? undefined,
+                  lastMessageAt: conversationMetadata.lastMessageAt ?? undefined,
                   isShared,
                 });
               } else if (chunk.type === 'warning' && chunk.warnings?.length) {
@@ -697,6 +753,14 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                       ? { warnings: accumulatedWarnings }
                       : undefined,
                 });
+                const postAssistantConversation = await conversationStore.getConversation({
+                  tenantId,
+                  conversationId,
+                  userId,
+                });
+                if (postAssistantConversation) {
+                  notifyListSubscribers(tenantId, 'upsert', postAssistantConversation);
+                }
                 // Send disclaimer after response (if configured)
                 if (
                   shouldIncludeDisclaimer &&
