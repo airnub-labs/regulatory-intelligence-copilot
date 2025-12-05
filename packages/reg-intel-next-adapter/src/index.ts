@@ -45,6 +45,19 @@ import neo4j, { type Driver } from 'neo4j-driver';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
+type CopilotSupabaseSchema = {
+  Tables: Record<string, unknown>;
+  Views: Record<string, unknown>;
+  Functions: Record<string, unknown>;
+  Enums: Record<string, unknown>;
+  CompositeTypes: Record<string, unknown>;
+};
+
+type CopilotDatabase = {
+  public: CopilotSupabaseSchema;
+  copilot_internal: CopilotSupabaseSchema;
+};
+
 export interface ChatRouteHandlerOptions {
   tenantId?: string;
   includeDisclaimer?: boolean;
@@ -277,7 +290,7 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
   if (mode !== 'memory') {
     const credentials = resolveSupabaseCredentials();
     if (credentials) {
-      const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+      const client = createClient<CopilotDatabase, 'copilot_internal'>(credentials.supabaseUrl, credentials.supabaseKey, {
         db: { schema: 'copilot_internal' },
         auth: { autoRefreshToken: false, persistSession: false },
       });
