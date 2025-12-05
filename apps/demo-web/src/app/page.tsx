@@ -538,6 +538,7 @@ export default function Home() {
               setMessages(prev =>
                 prev.map(message =>
                   message.id === assistantMessageId
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     ? { ...message, metadata: { ...(message.metadata || {}), warnings: warningList } as any }
                     : message
                 )

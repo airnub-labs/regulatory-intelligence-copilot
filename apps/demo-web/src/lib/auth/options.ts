@@ -65,6 +65,7 @@ export const authOptions = {
     signIn: '/login',
   },
   callbacks: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async jwt({ token, user }: { token: any; user?: any }) {
       if (user) {
         token.sub = user.id
@@ -74,6 +75,7 @@ export const authOptions = {
       }
       return token
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     async session({ session, token }: { session: any; token: any }) {
       if (session.user) {
         session.user.id = typeof token.sub === 'string' ? token.sub : ''
