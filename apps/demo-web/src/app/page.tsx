@@ -49,6 +49,8 @@ interface ChatMetadata {
   disclaimerKey?: string
   referencedNodes?: string[]
   warnings?: string[]
+  timelineSummary?: string
+  timelineFocus?: string
 }
 
 interface ChatMessage {
@@ -131,6 +133,12 @@ interface ConversationPayload {
   }
 }
 
+interface ReferencedNodeSummary {
+  id: string
+  label: string
+  type?: string
+}
+
 interface ChatSseMetadata extends ChatMetadata {
   conversationId?: string
   shareAudience?: ShareAudience
@@ -209,6 +217,43 @@ const extractWarnings = (parsedData: ParsedSseData): string[] => {
     return [parsedData]
   }
   return []
+}
+
+const extractYearsFromText = (text: string): string[] => {
+  const matches = text.match(/\b(20\d{2})\b/g)
+  if (!matches) return []
+  return Array.from(new Set(matches)).slice(-3)
+}
+
+const extractQuarterFromText = (text: string): string | undefined => {
+  const match = text.match(/\b(q[1-4])\s*(20\d{2})/i)
+  if (!match) return undefined
+  return `${match[1].toUpperCase()} ${match[2]}`
+}
+
+const summarizeTimelineSignal = (metadata: ChatMetadata | null, latestAnswer?: string): string => {
+  if (metadata?.timelineSummary) return metadata.timelineSummary
+  if (metadata?.timelineFocus) return metadata.timelineFocus
+
+  if (!latestAnswer) {
+    return 'Timeline signals will appear after your next answer.'
+  }
+
+  const quarter = extractQuarterFromText(latestAnswer)
+  if (quarter) {
+    return `Focuses on ${quarter}`
+  }
+
+  const years = extractYearsFromText(latestAnswer)
+  if (years.length) {
+    return `Mentions ${years.join(', ')} timelines`
+  }
+
+  if (/upcoming|effective|commences|commencing|starts|next year|next month/i.test(latestAnswer)) {
+    return 'Highlights upcoming rule changes'
+  }
+
+  return 'Timeline signals will appear after your next answer.'
 }
 
 const quickPrompts = [
@@ -303,6 +348,8 @@ export default function Home() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
+  const [referencedNodeSummaries, setReferencedNodeSummaries] = useState<ReferencedNodeSummary[]>([])
+  const [isLoadingNodeSummaries, setIsLoadingNodeSummaries] = useState(false)
   const [warnings, setWarnings] = useState<string[]>([])
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
@@ -331,10 +378,63 @@ export default function Home() {
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
   const versionedMessages = useMemo(() => buildVersionedMessages(messages), [messages])
+  const latestAssistantMessage = useMemo(() => {
+    for (let i = versionedMessages.length - 1; i >= 0; i -= 1) {
+      const chain = versionedMessages[i]
+      const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
+      const candidate = chain.versions[currentIndex]
+      if (candidate.role === 'assistant' && !candidate.deletedAt && !candidate.metadata?.deletedAt) {
+        return candidate
+      }
+    }
+    return null
+  }, [activeVersionIndex, versionedMessages])
+  const timelineSummary = useMemo(
+    () => summarizeTimelineSignal(chatMetadata, latestAssistantMessage?.content),
+    [chatMetadata, latestAssistantMessage?.content]
+  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
+
+  useEffect(() => {
+    const ids = chatMetadata?.referencedNodes ?? []
+    if (!ids.length) {
+      setReferencedNodeSummaries([])
+      setIsLoadingNodeSummaries(false)
+      return
+    }
+
+    const controller = new AbortController()
+    const fetchSummaries = async () => {
+      setIsLoadingNodeSummaries(true)
+      try {
+        const params = new URLSearchParams({ ids: ids.slice(0, 25).join(',') })
+        const response = await fetch(`/api/graph?${params.toString()}`, { signal: controller.signal })
+        if (!response.ok) {
+          throw new Error(`Lookup failed with status ${response.status}`)
+        }
+        const payload = (await response.json()) as { nodes?: ReferencedNodeSummary[] }
+        if (!controller.signal.aborted) {
+          setReferencedNodeSummaries(payload.nodes ?? [])
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error('Failed to fetch node summaries', error)
+          setReferencedNodeSummaries([])
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingNodeSummaries(false)
+        }
+      }
+    }
+
+    fetchSummaries()
+
+    return () => controller.abort()
+  }, [chatMetadata?.referencedNodes])
 
   const loadConversations = useCallback(async () => {
     if (!isAuthenticated) return
@@ -1177,15 +1277,50 @@ export default function Home() {
                     {profile.jurisdictions.length > 0 ? profile.jurisdictions.join(', ') : 'None selected'}
                   </Badge>
                 </div>
-                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
-                  <span className="text-muted-foreground">Active graph nodes</span>
-                  <Badge variant="secondary" className="rounded-full">
-                    {chatMetadata?.referencedNodes?.length ? `${chatMetadata.referencedNodes.length} nodes from last answer` : 'Pending'}
-                  </Badge>
+                <div className="rounded-xl border bg-muted/30 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Active graph nodes</span>
+                    <Badge variant="secondary" className="rounded-full">
+                      {chatMetadata?.referencedNodes?.length
+                        ? `${chatMetadata.referencedNodes.length} linked`
+                        : 'Pending'}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    {isLoadingNodeSummaries && (
+                      <div className="text-xs text-muted-foreground">Looking up node names…</div>
+                    )}
+                    {!isLoadingNodeSummaries && referencedNodeSummaries.length === 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        {chatMetadata?.referencedNodes?.length
+                          ? 'No labels found for the latest references.'
+                          : 'Ask a question to populate graph context.'}
+                      </div>
+                    )}
+                    {referencedNodeSummaries.map(node => (
+                      <div key={node.id} className="flex items-center justify-between gap-2 text-xs">
+                        <div className="truncate" title={node.label}>
+                          <span className="font-medium text-foreground">{node.label}</span>
+                          {node.type && <span className="text-muted-foreground"> · {node.type}</span>}
+                        </div>
+                        <a
+                          className="shrink-0 text-primary hover:underline"
+                          href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
+                        >
+                          View
+                        </a>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
                   <span className="text-muted-foreground">Timeline focus</span>
-                  <Badge variant="outline" className="rounded-full">Current tax year</Badge>
+                  <Badge
+                    variant="outline"
+                    className="max-w-[240px] justify-center whitespace-normal rounded-full text-center"
+                  >
+                    {timelineSummary}
+                  </Badge>
                 </div>
                 <div className="rounded-xl border bg-primary/5 px-3 py-2 text-xs text-primary">
                   These settings feed into the prompt builder, graph queries, and conversation context store. Changes take effect from the next question.
