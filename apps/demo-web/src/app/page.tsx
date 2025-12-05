@@ -70,6 +70,7 @@ interface VersionedMessage {
 
 type ShareAudience = 'private' | 'tenant' | 'public'
 type TenantAccess = 'view' | 'edit'
+type ShareOptionValue = 'private' | 'tenant-view' | 'tenant-edit' | 'public'
 interface ConversationSummary {
   id: string
   title?: string | null

@@ -689,7 +689,7 @@ export class SupabaseConversationStore implements ConversationStore {
     tenantId: string
     limit?: number
     userId?: string | null
-    status?: 'active' | 'archived'
+    status?: 'active' | 'archived' | 'all'
   }): Promise<ConversationRecord[]> {
     const query = this.client
       .from('conversations_view')

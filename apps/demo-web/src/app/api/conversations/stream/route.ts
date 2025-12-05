@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import type { ConversationListEventType, SseSubscriber } from '@reg-copilot/reg-intel-conversations'
-import { getServerSession } from 'next-auth'
+import { getServerSession } from 'next-auth/next'
 
 import { authOptions } from '@/lib/auth/options'
 import { conversationListEventHub, conversationStore } from '@/lib/server/conversations'

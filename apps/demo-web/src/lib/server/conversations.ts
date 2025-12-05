@@ -19,7 +19,8 @@ const normalizeConversationStoreMode = (
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 const nodeEnv = process.env.NODE_ENV ?? 'development';
-const isDevLike = nodeEnv === 'development' || nodeEnv === 'test';
+const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+const isDevLike = nodeEnv === 'development' || nodeEnv === 'test' || isBuildPhase;
 
 if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
   throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');

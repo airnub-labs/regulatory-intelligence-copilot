@@ -2,7 +2,6 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextAuthOptions, Session } from 'next-auth'
-import { JWT } from 'next-auth/jwt'
 
 // Define extended types for our auth callbacks
 interface ExtendedJWT {
