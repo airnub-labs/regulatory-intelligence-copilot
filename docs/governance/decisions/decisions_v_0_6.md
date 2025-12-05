@@ -276,6 +276,20 @@ interface ConversationContextStore {
 - Avoids duplicated sharing/auth logic as ReBAC (OpenFGA) lands.
 - Simplifies adoption in other runtimes (CLI, different web shells) while keeping a single derivation for `share_audience` + `tenant_access` resolution and SSE fan-out semantics.
 
+### D-042 – Tenant-scoped SSE stream for conversation lists
+
+**Decision:**
+
+- Add a **tenant-scoped SSE endpoint** (tentatively `/api/conversations/stream`) that emits conversation list changes so UIs stay in sync across tabs/devices without manual refreshes.
+- Events cover creation, rename, archive/restore, and sharing/authorisation changes and include enough metadata (IDs, titles, share envelope) for clients to merge updates into cached lists without re-fetching entire histories.
+- The stream reuses the conversation event hub that already powers per-conversation chat SSE; production deployments should fan out via Redis/pub-sub when horizontally scaled.
+
+**Rationale:**
+
+- Keeps conversation pickers and sidebars **live** when users collaborate or switch devices.
+- Avoids **polling loops** and reduces Supabase query load for simple list updates.
+- Aligns web and non-Next.js shells on a single streaming contract for conversation discovery.
+
 ---
 
 ### D-037 – ConversationContext aspect for prompts (implicit, engine-side)
