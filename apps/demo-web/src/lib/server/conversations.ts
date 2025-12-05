@@ -35,8 +35,15 @@ if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseSer
 const supabaseClient =
   normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
-        db: { schema: 'copilot_internal' },
         auth: { autoRefreshToken: false, persistSession: false },
+      })
+    : null;
+
+const supabaseInternalClient =
+  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: 'copilot_internal' },
       })
     : null;
 
@@ -76,11 +83,11 @@ if (supabaseClient) {
 }
 
 export const conversationStore = supabaseClient
-  ? new SupabaseConversationStore(supabaseClient)
+  ? new SupabaseConversationStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationStore();
 
 export const conversationContextStore = supabaseClient
-  ? new SupabaseConversationContextStore(supabaseClient)
+  ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationContextStore();
 
 export const conversationEventHub = new ConversationEventHub();

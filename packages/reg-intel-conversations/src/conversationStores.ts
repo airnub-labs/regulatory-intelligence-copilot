@@ -14,6 +14,7 @@ export type SupabaseError = { message: string };
 
 export type SupabaseLikeClient = {
   from(table: string): any;
+  schema?(schema: string): SupabaseLikeClient;
 };
 
 export interface AuthorizationSpec {
@@ -427,14 +428,18 @@ function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage
 }
 
 export class SupabaseConversationStore implements ConversationStore {
-  constructor(private client: SupabaseLikeClient) {}
+  private readonly internalClient: SupabaseLikeClient;
+
+  constructor(private client: SupabaseLikeClient, internalClient?: SupabaseLikeClient) {
+    this.internalClient = internalClient ?? client;
+  }
 
   private async getConversationRecord(
     tenantId: string,
     conversationId: string
   ): Promise<ConversationRecord | null> {
     const { data, error } = await this.client
-      .from('conversations')
+      .from('conversations_view')
       .select(
         'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, created_at, updated_at, last_message_at'
       )
@@ -466,7 +471,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
 
-    const { data, error } = await this.client
+    const { data, error } = await this.internalClient
       .from('conversations')
       .insert({
         tenant_id: input.tenantId,
@@ -508,7 +513,7 @@ export class SupabaseConversationStore implements ConversationStore {
     }
 
     const messageTimestamp = new Date().toISOString();
-    const { data, error } = await this.client
+    const { data, error } = await this.internalClient
       .from('conversation_messages')
       .insert({
         conversation_id: input.conversationId,
@@ -528,7 +533,7 @@ export class SupabaseConversationStore implements ConversationStore {
 
     const createdAt = (data as SupabaseConversationMessageRow).created_at ?? messageTimestamp;
 
-    const { error: updateError } = await this.client
+    const { error: updateError } = await this.internalClient
       .from('conversations')
       .update({ last_message_at: createdAt, updated_at: createdAt })
       .eq('id', input.conversationId)
@@ -557,7 +562,7 @@ export class SupabaseConversationStore implements ConversationStore {
     }
 
     const messageLookup = (await this.client
-      .from('conversation_messages')
+      .from('conversation_messages_view')
       .select('id, metadata, tenant_id, conversation_id')
       .eq('id', input.messageId)
       .maybeSingle()) as { data: SupabaseConversationMessageRow | null; error: SupabaseError | null };
@@ -580,7 +585,7 @@ export class SupabaseConversationStore implements ConversationStore {
       supersededBy: input.supersededBy ?? (existingMetadata as { supersededBy?: string }).supersededBy ?? null,
     } satisfies Record<string, unknown>;
 
-    const { error: updateError } = await this.client
+    const { error: updateError } = await this.internalClient
       .from('conversation_messages')
       .update({ metadata: nextMetadata })
       .eq('id', input.messageId)
@@ -591,7 +596,7 @@ export class SupabaseConversationStore implements ConversationStore {
       throw new Error(`Failed to soft delete message: ${updateError.message}`);
     }
 
-    const { error: conversationUpdateError } = await this.client
+    const { error: conversationUpdateError } = await this.internalClient
       .from('conversations')
       .update({ updated_at: deletedAt })
       .eq('id', input.conversationId)
@@ -614,7 +619,7 @@ export class SupabaseConversationStore implements ConversationStore {
     }
 
     const query = this.client
-      .from('conversation_messages')
+      .from('conversation_messages_view')
       .select('id, conversation_id, tenant_id, user_id, role, content, metadata, created_at')
       .eq('conversation_id', input.conversationId)
       .eq('tenant_id', input.tenantId)
@@ -636,7 +641,7 @@ export class SupabaseConversationStore implements ConversationStore {
 
   async listConversations(input: { tenantId: string; limit?: number; userId?: string | null }): Promise<ConversationRecord[]> {
     const query = this.client
-      .from('conversations')
+      .from('conversations_view')
       .select(
         'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, created_at, updated_at, last_message_at'
       )
@@ -694,7 +699,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const authorizationSpec = input.authorizationSpec ?? record.authorizationSpec;
     const title = input.title !== undefined ? input.title : record.title;
 
-    const { error } = await this.client
+    const { error } = await this.internalClient
       .from('conversations')
       .update({
         share_audience: shareAudience,
@@ -714,11 +719,15 @@ export class SupabaseConversationStore implements ConversationStore {
 }
 
 export class SupabaseConversationContextStore implements ConversationContextStore {
-  constructor(private client: SupabaseLikeClient) {}
+  private readonly internalClient: SupabaseLikeClient;
+
+  constructor(private client: SupabaseLikeClient, internalClient?: SupabaseLikeClient) {
+    this.internalClient = internalClient ?? client;
+  }
 
   async load(identity: ConversationIdentity): Promise<ConversationContext | null> {
     const { data, error } = await this.client
-      .from('conversation_contexts')
+      .from('conversation_contexts_view')
       .select('conversation_id, tenant_id, active_node_ids, updated_at')
       .eq('conversation_id', identity.conversationId)
       .eq('tenant_id', identity.tenantId)
@@ -734,7 +743,7 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
-    const { error } = await this.client
+    const { error } = await this.internalClient
       .from('conversation_contexts')
       .upsert({
         conversation_id: identity.conversationId,

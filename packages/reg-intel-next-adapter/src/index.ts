@@ -278,15 +278,18 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
     const credentials = resolveSupabaseCredentials();
     if (credentials) {
       const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
-        db: { schema: 'copilot_internal' },
         auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const internalClient = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: 'copilot_internal' },
       });
 
       logConversationStore(mode, 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });
       return {
         mode: 'supabase',
-        conversationStore: new SupabaseConversationStore(client),
-        conversationContextStore: new SupabaseConversationContextStore(client),
+        conversationStore: new SupabaseConversationStore(client, internalClient),
+        conversationContextStore: new SupabaseConversationContextStore(client, internalClient),
       };
     }
 
