@@ -15,14 +15,18 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@reg-copilot/reg-intel-core": "workspace:*"
+    "@reg-copilot/reg-intel-core": "workspace:*",
+    "@reg-copilot/reg-intel-observability": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
   },
   "engines": {
     "node": ">=24.0.0"

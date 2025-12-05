@@ -19,7 +19,7 @@ export function getActiveSandboxId(): string | null {
 
 async function configureGatewayFromSandbox(sandbox: SandboxHandle): Promise<void> {
   if (!isMcpGatewayConfigured()) {
-    configureMcpGateway(sandbox.mcpUrl, sandbox.mcpToken);
+    configureMcpGateway(sandbox.mcpUrl, sandbox.mcpToken, sandbox.id);
   }
 }
 
@@ -29,7 +29,7 @@ export async function ensureMcpGatewayConfigured(): Promise<void> {
   }
 
   const sandbox = await getOrCreateActiveSandbox();
-  configureMcpGateway(sandbox.mcpUrl, sandbox.mcpToken);
+  configureMcpGateway(sandbox.mcpUrl, sandbox.mcpToken, sandbox.id);
 }
 
 /**
