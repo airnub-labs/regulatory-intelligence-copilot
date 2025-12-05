@@ -1,4 +1,4 @@
-export { createLogger } from './logger.js';
+export { createLogger, formatPayloadForLog } from './logger.js';
 export { initObservability, withSpan } from './tracing.js';
 export { requestContext, type RequestContextValues } from './requestContext.js';
 export { createTracingFetch, injectTraceContextHeaders } from './tracePropagation.js';
