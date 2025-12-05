@@ -14,16 +14,16 @@ function sseChunk(event: ConversationEventType, data: unknown) {
   return encoder.encode(`event: ${event}\n` + `data: ${payload}\n\n`);
 }
 
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const { id: conversationId } = context.params;
-  const session = await getServerSession(authOptions);
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: conversationId } = await context.params;
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
   const userId = session?.user?.id;
 
   if (!userId) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const tenantId = session.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
 
   const conversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
   if (!conversation) {

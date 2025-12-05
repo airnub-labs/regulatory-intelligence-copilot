@@ -25,7 +25,7 @@ const handler = createChatRouteHandler({
 });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
   if (!session?.user?.id) {
     return new Response('Unauthorized', { status: 401 });
   }

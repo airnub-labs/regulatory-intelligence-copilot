@@ -287,7 +287,6 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
         mode: 'supabase',
         conversationStore: new SupabaseConversationStore(client),
         conversationContextStore: new SupabaseConversationContextStore(client),
-        readinessCheck: () => validateSupabaseHealth(client),
       };
     }
 

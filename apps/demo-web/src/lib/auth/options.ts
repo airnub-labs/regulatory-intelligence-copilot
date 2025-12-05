@@ -1,5 +1,4 @@
 import CredentialsProvider from 'next-auth/providers/credentials'
-import type { NextAuthOptions } from 'next-auth'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
@@ -11,10 +10,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase URL or anon key missing. Authentication will not work until configured.')
 }
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: {
-    strategy: 'jwt',
+    strategy: 'jwt' as const,
   },
   providers: [
     CredentialsProvider({
@@ -66,7 +65,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: any; user?: any }) {
       if (user) {
         token.sub = user.id
         token.email = user.email
@@ -75,7 +74,7 @@ export const authOptions: NextAuthOptions = {
       }
       return token
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: any }) {
       if (session.user) {
         session.user.id = typeof token.sub === 'string' ? token.sub : ''
         session.user.email = typeof token.email === 'string' ? token.email : session.user.email

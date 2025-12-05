@@ -9,9 +9,9 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: NextRequest, context: { params: { id: string } }) {
-  const { id: conversationId } = context.params;
-  const session = await getServerSession(authOptions);
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: conversationId } = await context.params;
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
   const user = session?.user;
   const userId = user?.id;
   if (!userId || !user) {
@@ -30,9 +30,9 @@ export async function GET(request: NextRequest, context: { params: { id: string 
   return NextResponse.json({ conversation, messages, context: contextState });
 }
 
-export async function PATCH(request: NextRequest, context: { params: { id: string } }) {
-  const { id: conversationId } = context.params;
-  const session = await getServerSession(authOptions);
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: conversationId } = await context.params;
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
   const user = session?.user;
   const userId = user?.id;
   if (!userId || !user) {

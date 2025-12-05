@@ -44,11 +44,11 @@ interface UserProfile {
 }
 
 interface ChatMetadata {
-  agentId: string
-  jurisdictions: string[]
-  uncertaintyLevel: 'low' | 'medium' | 'high'
-  disclaimerKey: string
-  referencedNodes: string[]
+  agentId?: string
+  jurisdictions?: string[]
+  uncertaintyLevel?: 'low' | 'medium' | 'high'
+  disclaimerKey?: string
+  referencedNodes?: string[]
   warnings?: string[]
 }
 
@@ -316,7 +316,7 @@ export default function Home() {
   })
   const isShared = shareAudience !== 'private'
 
-  const isAuthenticated = status === 'authenticated' && Boolean(session?.user?.id)
+  const isAuthenticated = status === 'authenticated' && Boolean((session?.user as { id?: string } | undefined)?.id)
   const isTitleDirty = conversationTitle !== savedConversationTitle
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -538,7 +538,7 @@ export default function Home() {
               setMessages(prev =>
                 prev.map(message =>
                   message.id === assistantMessageId
-                    ? { ...message, metadata: { ...message.metadata, warnings: warningList } }
+                    ? { ...message, metadata: { ...(message.metadata || {}), warnings: warningList } as any }
                     : message
                 )
               )
@@ -577,7 +577,7 @@ export default function Home() {
     const messageText = (editingMessageId ? editingContent : input).trim()
     if (!messageText) return
 
-    if (!session?.user?.id) {
+    if (!(session?.user as { id?: string } | undefined)?.id) {
       router.push('/login')
       return
     }
@@ -642,7 +642,7 @@ export default function Home() {
           authorizationModel,
           title: conversationTitle,
           replaceMessageId: editingMessageId,
-          userId: session.user.id,
+          userId: (session?.user as { id?: string } | undefined)?.id,
         }),
         signal: controller.signal,
       })
@@ -742,7 +742,7 @@ export default function Home() {
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
       <AppHeader
         primaryAction={{ label: 'View Graph', href: `/graph?conversationId=${conversationIdRef.current}` }}
-        userEmail={session?.user?.email ?? session?.user?.id ?? null}
+        userEmail={session?.user?.email ?? (session?.user as { id?: string } | undefined)?.id ?? null}
         onSignOut={() => signOut({ callbackUrl: '/login' })}
       />
 
@@ -878,24 +878,24 @@ export default function Home() {
                   <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">Live context</div>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Agent</span>
-                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold">{chatMetadata.agentId}</span>
+                    <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold">{chatMetadata.agentId || 'N/A'}</span>
                   </div>
                   <Separator orientation="vertical" className="h-5" />
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Jurisdictions</span>
-                    <span className="text-foreground">{chatMetadata.jurisdictions.join(', ')}</span>
+                    <span className="text-foreground">{chatMetadata.jurisdictions?.join(', ') || 'N/A'}</span>
                   </div>
                   <Separator orientation="vertical" className="h-5" />
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Uncertainty</span>
                     <Badge variant={chatMetadata.uncertaintyLevel === 'high' ? 'destructive' : 'secondary'} className="ml-1">
-                      {chatMetadata.uncertaintyLevel}
+                      {chatMetadata.uncertaintyLevel || 'medium'}
                     </Badge>
                   </div>
                   <Separator orientation="vertical" className="h-5" />
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground font-medium">Referenced Nodes</span>
-                    <span className="text-foreground">{chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.length : 'none'}</span>
+                    <span className="text-foreground">{chatMetadata.referencedNodes && chatMetadata.referencedNodes.length > 0 ? chatMetadata.referencedNodes.length : 'none'}</span>
                   </div>
                 </div>
               </div>

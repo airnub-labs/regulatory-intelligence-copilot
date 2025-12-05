@@ -7,7 +7,7 @@ import { authOptions } from '@/lib/auth/options';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
   const user = session?.user;
   const userId = user?.id;
   if (!userId || !user) {
