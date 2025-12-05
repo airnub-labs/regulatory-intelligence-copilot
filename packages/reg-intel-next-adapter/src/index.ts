@@ -225,11 +225,10 @@ function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
   return 'auto';
 }
 
-function resolveConversationStores(options?: ChatRouteHandlerOptions) {
-function logConversationStore(mode: string, message: string, payload?: Record<string, unknown>) {
-  const context = payload ? ` ${JSON.stringify(payload)}` : '';
-  console.info(`[conversation-store:${mode}] ${message}${context}`);
-}
+  function logConversationStore(mode: string, message: string, payload?: Record<string, unknown>) {
+    const context = payload ? ` ${JSON.stringify(payload)}` : '';
+    console.info(`[conversation-store:${mode}] ${message}${context}`);
+  }
 
 async function validateSupabaseHealth(client: ReturnType<typeof createClient>) {
   const { data, error } = await client.rpc('conversation_store_healthcheck');
