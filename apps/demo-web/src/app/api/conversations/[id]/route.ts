@@ -50,6 +50,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const tenantAccess = body?.tenantAccess;
   const authorizationModel = body?.authorizationModel;
   const title = typeof body?.title === 'string' ? body.title : undefined;
+  const archived = typeof body?.archived === 'boolean' ? body.archived : undefined;
   const allowedAudiences = ['private', 'tenant', 'public'];
   const allowedTenantAccess = ['view', 'edit'];
   const allowedAuthorizationModels = ['supabase_rbac', 'openfga'];
@@ -63,15 +64,25 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: 'Invalid authorizationModel' }, { status: 400 });
   }
   try {
-    await conversationStore.updateSharing({
-      tenantId,
-      conversationId,
-      userId,
-      shareAudience,
-      tenantAccess,
-      authorizationModel,
-      title,
-    });
+    if (archived !== undefined) {
+      await conversationStore.setArchivedState({
+        tenantId,
+        conversationId,
+        userId,
+        archived,
+      });
+    }
+    if (shareAudience !== undefined || tenantAccess !== undefined || authorizationModel !== undefined || title !== undefined) {
+      await conversationStore.updateSharing({
+        tenantId,
+        conversationId,
+        userId,
+        shareAudience,
+        tenantAccess,
+        authorizationModel,
+        title,
+      });
+    }
     const updatedConversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
     if (updatedConversation) {
       conversationListEventHub.broadcast(tenantId, 'upsert', {

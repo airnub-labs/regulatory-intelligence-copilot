@@ -4,15 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { signOut, useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   ArrowRight,
   AlertTriangle,
-  BookOpenCheck,
-  CircleHelp,
-  Globe2,
   PencilLine,
-  ShieldHalf,
-  Sparkles,
+  Plus,
   Wand2,
   X,
 } from 'lucide-react'
@@ -78,6 +76,7 @@ interface ConversationSummary {
   lastMessageAt?: string | null
   shareAudience: ShareAudience
   tenantAccess: TenantAccess
+  archivedAt?: string | null
 }
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
@@ -358,8 +357,8 @@ export default function Home() {
   const [conversationTitle, setConversationTitle] = useState<string>('')
   const [savedConversationTitle, setSavedConversationTitle] = useState<string>('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
-  const [showHelp, setShowHelp] = useState(false)
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [conversationListTab, setConversationListTab] = useState<'active' | 'archived'>('active')
   const [shareAudience, setShareAudience] = useState<ShareAudience>('private')
   const [tenantAccess, setTenantAccess] = useState<TenantAccess>('edit')
   const [profile, setProfile] = useState<UserProfile>({
@@ -433,15 +432,15 @@ export default function Home() {
     return () => controller.abort()
   }, [chatMetadata?.referencedNodes])
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (status: 'active' | 'archived' = conversationListTab) => {
     if (!isAuthenticated) return
-    const response = await fetch(`/api/conversations`, {
+    const response = await fetch(`/api/conversations?status=${status}`, {
       credentials: 'include',
     })
     if (!response.ok) return
     const payload = await response.json()
     setConversations(payload.conversations ?? [])
-  }, [isAuthenticated])
+  }, [isAuthenticated, conversationListTab])
 
   const loadConversation = useCallback(
     async (id: string) => {
@@ -485,8 +484,8 @@ export default function Home() {
   )
 
   useEffect(() => {
-    loadConversations()
-  }, [loadConversations])
+    loadConversations(conversationListTab)
+  }, [loadConversations, conversationListTab])
 
   // Only scroll when a new message is added
   useEffect(() => {
@@ -880,6 +879,38 @@ export default function Home() {
     }
   }
 
+  const startNewConversation = () => {
+    setConversationId(undefined)
+    conversationIdRef.current = undefined
+    setMessages([])
+    setConversationTitle('')
+    setSavedConversationTitle('')
+    setShareAudience('private')
+    setTenantAccess('edit')
+    setChatMetadata(null)
+    setWarnings([])
+    setEditingMessageId(null)
+    setEditingContent('')
+    setInput('')
+    setConversationListTab('active')
+  }
+
+  const toggleArchiveConversation = async (convId: string, currentlyArchived: boolean) => {
+    if (!isAuthenticated) return
+    const response = await fetch(`/api/conversations/${convId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ archived: !currentlyArchived }),
+    })
+    if (response.ok) {
+      loadConversations()
+      if (convId === conversationId && !currentlyArchived) {
+        startNewConversation()
+      }
+    }
+  }
+
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
@@ -909,189 +940,109 @@ export default function Home() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.8fr)]">
           <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
-            <div className="flex flex-col gap-4 border-b bg-gradient-to-r from-muted/60 via-background to-muted/40 px-6 py-5 md:flex-row md:items-center md:justify-between">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  Vercel AI Elements experience
-                </div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-bold tracking-tight">Regulatory Intelligence Copilot</h1>
-                  <Badge variant="secondary" className="rounded-full">Live preview</Badge>
-                </div>
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                  Persona-aware answers grounded on the regulatory graph with timeline and scenario awareness.
-                </p>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge
-                  variant="outline"
-                  className="flex items-center gap-1 bg-primary/10 text-primary"
-                  title="Questions are answered against a live Memgraph regulatory graph."
-                >
-                  <Wand2 className="h-3.5 w-3.5" /> Graph-backed
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="flex items-center gap-1"
-                  title="Modelled support for IE, UK, EU, and selected cross-border cases."
-                >
-                  <Globe2 className="h-3.5 w-3.5" /> Multi-jurisdiction
-                </Badge>
-                <Badge
-                  variant="outline"
-                  className="flex items-center gap-1"
-                  title="Not legal / tax advice. See guardrails in the footer."
-                >
-                  <ShieldHalf className="h-3.5 w-3.5" /> Research-only
-                </Badge>
-              </div>
+            <div className="flex items-center justify-between border-b bg-gradient-to-r from-muted/60 via-background to-muted/40 px-6 py-4">
+              <h1 className="text-xl font-semibold tracking-tight">Regulatory Intelligence Copilot</h1>
+              <Badge variant="outline" className="text-xs">Research only</Badge>
             </div>
 
-            <div className="grid gap-4 border-b px-6 py-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="space-y-2">
-                <label className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Persona (feeds into agent routing)</label>
+            <div className="flex flex-wrap items-center gap-4 border-b px-6 py-3">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground">Persona</label>
                 <Select
                   value={profile.personaType}
                   onValueChange={(value) => setProfile({ ...profile, personaType: value as UserProfile['personaType'] })}
                 >
-                  <SelectTrigger className="w-full md:w-[260px]">
+                  <SelectTrigger className="h-8 w-[180px] text-xs">
                     <SelectValue placeholder="Choose persona" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="single-director">Single-director company (IE)</SelectItem>
-                    <SelectItem value="self-employed">Self-employed / contractor (IE)</SelectItem>
-                    <SelectItem value="paye-employee">PAYE employee with EU ties</SelectItem>
-                    <SelectItem value="advisor">Cross-border / advisor lens</SelectItem>
+                    <SelectItem value="single-director">Single-director (IE)</SelectItem>
+                    <SelectItem value="self-employed">Self-employed (IE)</SelectItem>
+                    <SelectItem value="paye-employee">PAYE employee</SelectItem>
+                    <SelectItem value="advisor">Advisor</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">Jurisdictions (feeds into graph & timeline filters)</label>
-                <div className="flex flex-wrap gap-2">
-                  {['IE', 'UK', 'EU', 'MT', 'IM'].map((jur) => (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-muted-foreground">Jurisdictions</label>
+                <div className="flex gap-1">
+                  {['IE', 'UK', 'EU'].map((jur) => (
                     <Badge
                       key={jur}
                       onClick={() => toggleJurisdiction(jur)}
                       variant={profile.jurisdictions.includes(jur) ? 'default' : 'outline'}
-                      className="cursor-pointer rounded-full px-3 py-1 text-sm transition hover:translate-y-[-1px] hover:shadow-sm"
+                      className="cursor-pointer px-2 py-0.5 text-xs"
                     >
                       {jur}
                     </Badge>
                   ))}
                 </div>
               </div>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-3 border-b bg-muted/25 px-6 py-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">Scenario quick prompts</span>
-                <p className="text-xs text-muted-foreground">Jump into pre-modelled scenarios without crafting a full query.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {quickPrompts.map(({ prompt, scenarioHint: promptScenarioHint, label }) => (
+              <div className="ml-auto flex gap-1">
+                {quickPrompts.slice(0, 2).map(({ scenarioHint: promptScenarioHint, label }) => (
                   <Button
                     key={promptScenarioHint}
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="rounded-full border-dashed px-3 text-xs"
+                    className="h-7 px-2 text-xs"
                     onClick={() => {
+                      const prompt = quickPrompts.find(p => p.scenarioHint === promptScenarioHint)?.prompt ?? ''
                       setInput(prompt)
                       setScenarioHint(promptScenarioHint)
                     }}
-                    title={label}
                   >
-                    <Wand2 className="mr-1 h-3.5 w-3.5" />
-                    {prompt}
+                    <Wand2 className="mr-1 h-3 w-3" />
+                    {label}
                   </Button>
                 ))}
               </div>
             </div>
 
             {chatMetadata && (
-              <div className="border-b bg-muted/30 px-6 py-4 text-sm">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">Live context</div>
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                    <span>Agent</span>
-                    <Badge variant="secondary" className="text-[11px]">{chatMetadata.agentId || 'N/A'}</Badge>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                    <span>Jurisdictions</span>
-                    <span className="text-foreground">{chatMetadata.jurisdictions?.join(', ') || 'N/A'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.08em] text-muted-foreground">
-                    <span>Confidence</span>
-                    <Badge variant={chatMetadata.uncertaintyLevel === 'high' ? 'destructive' : 'secondary'} className="text-[11px]">
-                      {chatMetadata.uncertaintyLevel || 'medium'}
-                    </Badge>
-                  </div>
-                  {chatMetadata.referencedNodes && chatMetadata.referencedNodes.length > 0 && (
-                    <span className="rounded-full bg-muted px-2 py-1 text-[11px] text-muted-foreground">
-                      {chatMetadata.referencedNodes.length} graph refs
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-center gap-3 border-b bg-muted/20 px-6 py-2 text-xs text-muted-foreground">
+                <span>Agent: <span className="text-foreground">{chatMetadata.agentId || 'default'}</span></span>
+                {chatMetadata.referencedNodes && chatMetadata.referencedNodes.length > 0 && (
+                  <span>{chatMetadata.referencedNodes.length} graph refs</span>
+                )}
+                {chatMetadata.uncertaintyLevel === 'high' && (
+                  <Badge variant="destructive" className="text-[10px]">High uncertainty</Badge>
+                )}
               </div>
             )}
 
             {warnings.length > 0 && (
-              <div className="mx-4 mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <div className="flex items-center gap-2 font-semibold">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>Graph unavailable</span>
-                </div>
-                <ul className="mt-2 list-disc space-y-1 pl-5">
-                  {warnings.map((warning, index) => (
-                    <li key={`${warning}-${index}`}>{warning}</li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-xs text-amber-800">
-                  Chat will continue, but referenced relationships may be missing until the Memgraph service is reachable.
-                </p>
+              <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{warnings[0]}</span>
               </div>
             )}
 
             <ChatContainer className="flex-1 bg-transparent px-4">
               {versionedMessages.length === 0 ? (
                 <ChatWelcome>
-                  <div className="space-y-3 rounded-2xl border bg-muted/20 p-6 shadow-inner">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                      <Sparkles className="h-4 w-4" />
-                      Vercel AI starter surface
-                    </div>
-                    <h2 className="text-xl font-semibold">Welcome to the Regulatory Intelligence Copilot</h2>
-                    <p className="text-sm text-muted-foreground">Grounded answers from a regulatory graph, not a generic chatbot.</p>
-                    <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
-                      <Card className="border border-blue-100 bg-blue-50/60 dark:border-blue-950 dark:bg-blue-950/30">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-base text-blue-600 dark:text-blue-300">Tax &amp; Company Law</CardTitle>
-                          <CardDescription className="text-xs">Corporation tax, PAYE, CGT, R&amp;D credits, director obligations.</CardDescription>
-                        </CardHeader>
-                      </Card>
-                      <Card className="border border-green-100 bg-green-50/60 dark:border-green-950 dark:bg-green-950/30">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-base text-green-600 dark:text-green-300">Social Welfare</CardTitle>
-                          <CardDescription className="text-xs">PRSI, benefits, entitlements, contributions.</CardDescription>
-                        </CardHeader>
-                      </Card>
-                      <Card className="border border-purple-100 bg-purple-50/60 dark:border-purple-950 dark:bg-purple-950/30">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-base text-purple-600 dark:text-purple-300">Pensions</CardTitle>
-                          <CardDescription className="text-xs">State pension, occupational and personal schemes, funding rules.</CardDescription>
-                        </CardHeader>
-                      </Card>
-                      <Card className="border border-amber-100 bg-amber-50/60 dark:border-amber-950 dark:bg-amber-950/30">
-                        <CardHeader className="p-4">
-                          <CardTitle className="text-base text-amber-600 dark:text-amber-300">EU &amp; Cross-Border</CardTitle>
-                          <CardDescription className="text-xs">Social security coordination, EU regulations, cross-border tax &amp; welfare effects.</CardDescription>
-                        </CardHeader>
-                      </Card>
-                    </div>
-                    <p className="max-w-md text-xs text-muted-foreground">
-                      This is a research tool built on a regulatory knowledge graph. It does not provide legal, tax, or financial advice. Always verify with qualified professionals.
+                  <div className="mx-auto max-w-md space-y-4 py-8 text-center">
+                    <h2 className="text-lg font-semibold">Ask about tax, welfare, or pensions</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Get answers grounded in a regulatory knowledge graph covering Irish tax, PRSI, benefits, and EU cross-border rules.
                     </p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {quickPrompts.map(({ label, prompt, scenarioHint: promptScenarioHint }) => (
+                        <Button
+                          key={promptScenarioHint}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => {
+                            setInput(prompt)
+                            setScenarioHint(promptScenarioHint)
+                          }}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
                 </ChatWelcome>
               ) : (
@@ -1175,89 +1126,76 @@ export default function Home() {
               <div ref={messagesEndRef} />
             </ChatContainer>
 
-            <div className="border-t bg-muted/30 px-6 py-4">
-              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {editingMessageId
-                    ? 'Editing your last message. Submit to replace it, or cancel to keep the original.'
-                    : isAuthenticated
-                      ? 'Send a new prompt or edit your last message to update the thread.'
-                      : 'Sign in to start chatting with the copilot.'}
-                </span>
-                <div className="flex items-center gap-2">
-                  {editingMessageId && (
-                    <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
-                      Cancel edit
-                    </Button>
-                  )}
-                  {versionedMessages.length > 0 && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={startEditingLastMessage}
-                      disabled={isLoading || !isAuthenticated}
-                    >
-                      Edit last message
-                    </Button>
-                  )}
-                </div>
+            <div className="border-t bg-muted/30 px-6 py-3">
+              <div className="mb-2 flex items-center justify-end gap-2">
+                {editingMessageId && (
+                  <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
+                    Cancel
+                  </Button>
+                )}
+                {versionedMessages.length > 0 && !editingMessageId && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={startEditingLastMessage}
+                    disabled={isLoading || !isAuthenticated}
+                  >
+                    <PencilLine className="mr-1 h-3 w-3" />
+                    Edit last
+                  </Button>
+                )}
               </div>
               <PromptInput
                 value={input}
                 onChange={setInput}
                 onSubmit={handleSubmit}
-                placeholder="Ask about tax, welfare, pensions, or cross-border rules. The copilot will query the regulatory graph and timeline engine for you."
+                placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
                 disabled={isLoading || !isAuthenticated || Boolean(editingMessageId)}
                 isLoading={isLoading}
               />
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Research assistance only · Not legal, tax, or welfare advice · All LLM calls pass through an egress guard with PII redaction.
+              <p className="mt-2 text-center text-[10px] text-muted-foreground">
+                Research only · Not legal/tax advice
               </p>
             </div>
           </section>
 
           <aside className="space-y-4">
             <Card className="border bg-card/90 shadow-lg backdrop-blur">
-              <CardHeader>
-                <CardTitle className="text-base">Saved conversations</CardTitle>
-                <CardDescription className="text-sm">Resume recent threads and share SSE output in-session.</CardDescription>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Conversations</CardTitle>
+                  <Button
+                    size="sm"
+                    onClick={startNewConversation}
+                    disabled={!isAuthenticated}
+                  >
+                    <Plus className="mr-1 h-4 w-4" />
+                    New
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {conversationId && (
-                  <div className="space-y-2 rounded-lg border px-3 py-2 text-xs">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1 text-left">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Sharing</p>
-                        <p className="font-medium text-foreground">
-                          {describeShareState(shareAudience, tenantAccess)}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {describeShareHint(selectValueFromShareState(shareAudience, tenantAccess))}
-                        </p>
-                      </div>
-                      <Select
-                        value={selectValueFromShareState(shareAudience, tenantAccess)}
-                        onValueChange={value => updateShareSettings(value as ShareOptionValue)}
-                        disabled={!isAuthenticated}
-                      >
-                        <SelectTrigger className="w-[220px] text-left">
-                          <SelectValue placeholder="Select sharing" />
-                        </SelectTrigger>
-                        <SelectContent align="end">
-                          <SelectItem value="private">Private (only you)</SelectItem>
-                          <SelectItem value="tenant-view">Tenant: view</SelectItem>
-                          <SelectItem value="tenant-edit">Tenant: view &amp; edit</SelectItem>
-                          <SelectItem value="public">Public: view</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
+              <CardContent className="space-y-3">
+                <div className="flex gap-1 rounded-lg border bg-muted/30 p-1">
+                  <Button
+                    variant={conversationListTab === 'active' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setConversationListTab('active')}
+                  >
+                    Active
+                  </Button>
+                  <Button
+                    variant={conversationListTab === 'archived' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setConversationListTab('archived')}
+                  >
+                    Archived
+                  </Button>
+                </div>
+
                 {conversationId && (
                   <div className="space-y-2 rounded-lg border px-3 py-2">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                      Conversation title
-                    </label>
                     <div className="flex gap-2">
                       <Input
                         value={conversationTitle}
@@ -1267,7 +1205,8 @@ export default function Home() {
                         }}
                         onFocus={() => setIsEditingTitle(true)}
                         onBlur={() => setIsEditingTitle(false)}
-                        placeholder="Add a title for this thread"
+                        placeholder="Add title..."
+                        className="h-8 text-sm"
                       />
                       {(isEditingTitle || isTitleDirty) && (
                         <Button size="sm" onClick={saveConversationTitle} disabled={isLoading || !isAuthenticated}>
@@ -1275,149 +1214,71 @@ export default function Home() {
                         </Button>
                       )}
                     </div>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={selectValueFromShareState(shareAudience, tenantAccess)}
+                        onValueChange={value => updateShareSettings(value as ShareOptionValue)}
+                        disabled={!isAuthenticated}
+                      >
+                        <SelectTrigger className="h-8 flex-1 text-xs">
+                          <SelectValue placeholder="Sharing" />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="private">Private</SelectItem>
+                          <SelectItem value="tenant-view">Tenant: view</SelectItem>
+                          <SelectItem value="tenant-edit">Tenant: edit</SelectItem>
+                          <SelectItem value="public">Public</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
+
                 {conversations.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No saved conversations yet. Ask your first question to start one.</p>
+                  <p className="py-4 text-center text-sm text-muted-foreground">
+                    {conversationListTab === 'active'
+                      ? 'No conversations yet'
+                      : 'No archived conversations'}
+                  </p>
                 )}
-                <div className="space-y-2">
+                <div className="max-h-[300px] space-y-1 overflow-y-auto">
                   {conversations.map((conv) => (
-                    <Button
+                    <div
                       key={conv.id}
-                      variant={conv.id === conversationId ? 'default' : 'outline'}
-                      size="sm"
-                      className="w-full justify-start"
-                      onClick={() => loadConversation(conv.id)}
+                      className={`group flex items-center gap-1 rounded-md border p-1 ${
+                        conv.id === conversationId ? 'border-primary bg-primary/10' : 'hover:bg-muted/50'
+                      }`}
                     >
-                      <span className="flex w-full items-center justify-between gap-2">
-                        <span className="truncate text-left">{conv.title || 'Untitled conversation'}</span>
-                        {conv.shareAudience !== 'private' && (
-                          <Badge variant="secondary">
-                            {describeShareState(conv.shareAudience, conv.tenantAccess)}
-                          </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-auto flex-1 justify-start px-2 py-1.5 text-left"
+                        onClick={() => loadConversation(conv.id)}
+                      >
+                        <span className="truncate text-sm">{conv.title || 'Untitled'}</span>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleArchiveConversation(conv.id, Boolean(conv.archivedAt))
+                        }}
+                        title={conv.archivedAt ? 'Restore' : 'Archive'}
+                      >
+                        {conv.archivedAt ? (
+                          <ArchiveRestore className="h-4 w-4" />
+                        ) : (
+                          <Archive className="h-4 w-4" />
                         )}
-                      </span>
-                    </Button>
+                      </Button>
+                    </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border bg-card/90 shadow-lg backdrop-blur">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <BookOpenCheck className="h-4 w-4 text-primary" /> Session context
-                </CardTitle>
-                <CardDescription>Profile and graph context for this conversation.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
-                  <span className="text-muted-foreground">Persona</span>
-                  <Badge variant="secondary" className="rounded-full">{profile.personaType}</Badge>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
-                  <span className="text-muted-foreground">Jurisdictions</span>
-                  <Badge variant="outline" className="rounded-full">
-                    {profile.jurisdictions.length > 0 ? profile.jurisdictions.join(', ') : 'None selected'}
-                  </Badge>
-                </div>
-                <div className="rounded-xl border bg-muted/30 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Active graph nodes</span>
-                    <Badge variant="secondary" className="rounded-full">
-                      {chatMetadata?.referencedNodes?.length
-                        ? `${chatMetadata.referencedNodes.length} linked`
-                        : 'Pending'}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 space-y-1">
-                    {isLoadingNodeSummaries && (
-                      <div className="text-xs text-muted-foreground">Looking up node names…</div>
-                    )}
-                    {!isLoadingNodeSummaries && referencedNodeSummaries.length === 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        {chatMetadata?.referencedNodes?.length
-                          ? 'No labels found for the latest references.'
-                          : 'Ask a question to populate graph context.'}
-                      </div>
-                    )}
-                    {referencedNodeSummaries.map(node => (
-                      <div key={node.id} className="flex items-center justify-between gap-2 text-xs">
-                        <div className="truncate" title={node.label}>
-                          <span className="font-medium text-foreground">{node.label}</span>
-                          {node.type && <span className="text-muted-foreground"> · {node.type}</span>}
-                        </div>
-                        <a
-                          className="shrink-0 text-primary hover:underline"
-                          href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
-                        >
-                          View
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-3 py-2">
-                  <span className="text-muted-foreground">Timeline focus</span>
-                  <Badge
-                    variant="outline"
-                    className="max-w-[240px] justify-center whitespace-normal rounded-full text-center"
-                  >
-                    {timelineSummary}
-                  </Badge>
-                </div>
-                <div className="rounded-xl border bg-primary/5 px-3 py-2 text-xs text-primary">
-                  These settings feed into the prompt builder, graph queries, and conversation context store. Changes take effect from the next question.
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border bg-card/90 shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between gap-2">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <CircleHelp className="h-4 w-4 text-primary" /> Help & guardrails
-                  </CardTitle>
-                  <CardDescription>Key details without crowding the main view.</CardDescription>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => setShowHelp((prev) => !prev)}>
-                  {showHelp ? 'Hide' : 'Show'}
-                </Button>
-              </CardHeader>
-              {showHelp && (
-                <CardContent className="space-y-3 text-sm">
-                  <div className="rounded-xl border bg-muted/30 px-3 py-2">
-                    Persona and jurisdictions feed the prompt builder, graph filters, and scenario engine. Update them before your next question for tailored answers.
-                  </div>
-                  <div className="rounded-xl border bg-muted/30 px-3 py-2">
-                    Scenario quick prompts are pre-modelled starting points; edit the text after selecting one to refine the query.
-                  </div>
-                  <div className="space-y-2 rounded-xl border bg-muted/40 px-3 py-2">
-                    <div className="font-semibold">Architecture highlights</div>
-                    <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
-                      <li>Graph-backed answers grounded in Memgraph.</li>
-                      <li>Timeline engine tracks when rules start, end, or overlap.</li>
-                      <li>Scenario-aware agents based on persona and jurisdiction.</li>
-                      <li>Egress guard screens outbound LLM calls.</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-2 rounded-xl border bg-muted/30 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold">Graph view</span>
-                      <Button asChild size="sm" variant="outline">
-                        <a href={`/graph?conversationId=${conversationIdRef.current}`}>Open</a>
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Inspect the nodes and relationships referenced in this conversation without cluttering the chat panel.
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    Research assistance only. Verify outputs with qualified professionals; this UI is optimised for clarity over exhaustiveness.
-                  </div>
-                </CardContent>
-              )}
-            </Card>
           </aside>
         </div>
       </main>
