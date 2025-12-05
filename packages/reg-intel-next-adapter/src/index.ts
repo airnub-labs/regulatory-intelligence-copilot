@@ -330,12 +330,16 @@ function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencie
     return null;
   }
 
-  const uri = process.env.MEMGRAPH_URI ?? process.env.NEO4J_URI;
+  const uri =
+    process.env.MEMGRAPH_URI ??
+    process.env.MEMGRAPH_URL ??
+    process.env.NEO4J_URI ??
+    process.env.NEO4J_URL;
   if (!uri) {
     const hint =
       graphWriteMode === 'memgraph'
-        ? 'Graph write mode is set to memgraph but MEMGRAPH_URI is missing.'
-        : 'MEMGRAPH_URI is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.';
+        ? 'Graph write mode is set to memgraph but MEMGRAPH_URI/MEMGRAPH_URL is missing.'
+        : 'MEMGRAPH_URI (or MEMGRAPH_URL) is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.';
     console.warn(`Graph write path disabled: ${hint}`);
     return null;
   }
