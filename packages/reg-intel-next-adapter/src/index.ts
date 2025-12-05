@@ -200,6 +200,9 @@ type ConversationStoreResolution = Required<
 };
 
 function resolveSupabaseCredentials() {
+  // Service-role credentials must never be initialized in a browser bundle.
+  if (typeof window !== 'undefined') return null;
+
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
   if (!supabaseUrl || !supabaseKey) return null;
