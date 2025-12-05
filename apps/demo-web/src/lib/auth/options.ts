@@ -2,6 +2,31 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+// Define extended types for our auth callbacks
+interface ExtendedJWT {
+  sub?: string
+  email?: string | null
+  name?: string | null
+  tenantId?: string
+}
+
+interface ExtendedUser {
+  id: string
+  email?: string | null
+  name?: string | null
+  tenantId?: string
+}
+
+interface ExtendedSession {
+  user: {
+    id?: string
+    email?: string | null
+    name?: string | null
+    tenantId?: string
+  }
+  expires: string
+}
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const fallbackTenantId = process.env.SUPABASE_DEMO_TENANT_ID ?? 'default'
@@ -65,23 +90,27 @@ export const authOptions = {
     signIn: '/login',
   },
   callbacks: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async jwt({ token, user }: { token: any; user?: any }) {
-      if (user) {
-        token.sub = user.id
-        token.email = user.email
-        token.name = user.name
-        token.tenantId = (user as { tenantId?: string }).tenantId ?? fallbackTenantId
+    jwt({ token, user }: { token: unknown; user?: unknown }) {
+      const extendedToken = token as ExtendedJWT
+      const extendedUser = user as ExtendedUser | undefined
+
+      if (extendedUser) {
+        extendedToken.sub = extendedUser.id
+        extendedToken.email = extendedUser.email ?? undefined
+        extendedToken.name = extendedUser.name ?? undefined
+        extendedToken.tenantId = extendedUser.tenantId ?? fallbackTenantId
       }
       return token
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async session({ session, token }: { session: any; token: any }) {
-      if (session.user) {
-        session.user.id = typeof token.sub === 'string' ? token.sub : ''
-        session.user.email = typeof token.email === 'string' ? token.email : session.user.email
-        session.user.name = typeof token.name === 'string' ? token.name : session.user.name
-        session.user.tenantId = (token as { tenantId?: string }).tenantId ?? fallbackTenantId
+    session({ session, token }: { session: unknown; token: unknown }) {
+      const extendedSession = session as ExtendedSession
+      const extendedToken = token as ExtendedJWT
+
+      if (extendedSession.user) {
+        extendedSession.user.id = typeof extendedToken.sub === 'string' ? extendedToken.sub : ''
+        extendedSession.user.email = typeof extendedToken.email === 'string' ? extendedToken.email : extendedSession.user.email
+        extendedSession.user.name = typeof extendedToken.name === 'string' ? extendedToken.name : extendedSession.user.name
+        extendedSession.user.tenantId = extendedToken.tenantId ?? fallbackTenantId
       }
       return session
     },

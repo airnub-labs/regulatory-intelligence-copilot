@@ -536,12 +536,16 @@ export default function Home() {
               setWarnings(warningList)
               setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
               setMessages(prev =>
-                prev.map(message =>
-                  message.id === assistantMessageId
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    ? { ...message, metadata: { ...(message.metadata || {}), warnings: warningList } as any }
-                    : message
-                )
+                prev.map(message => {
+                  if (message.id === assistantMessageId) {
+                    const updatedMetadata: ChatMetadata & { deletedAt?: string; supersededBy?: string } = {
+                      ...message.metadata,
+                      warnings: warningList
+                    }
+                    return { ...message, metadata: updatedMetadata }
+                  }
+                  return message
+                })
               )
             }
             break

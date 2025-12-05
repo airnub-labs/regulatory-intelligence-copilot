@@ -65,16 +65,20 @@ interface GraphData {
   links: GraphEdge[]; // ForceGraph2D expects 'links' not 'edges'
 }
 
-// ForceGraph2D ref type - using any because the library doesn't export proper types
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ForceGraphRef = any;
+// ForceGraph2D ref type - library doesn't export proper types, so we define the methods we use
+interface ForceGraphMethods {
+  zoomToFit?: (duration?: number, padding?: number) => void;
+  centerAt?: (x: number, y: number, duration?: number) => void;
+  zoom?: (scale: number, duration?: number) => void;
+  d3Force?: (forceName: string, force?: unknown) => unknown;
+  // Add other methods as needed
+}
+type ForceGraphRef = ForceGraphMethods | null;
 
-// ForceGraph2D node/link types - using any for compatibility with library internals
-// The library adds x, y, vx, vy properties at runtime
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ForceGraphNode = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ForceGraphLink = any;
+// ForceGraph2D node/link callback types - the library uses duck typing and adds properties at runtime
+// We use intersection types to maintain our data while allowing library augmentation
+type ForceGraphNode = GraphNode & Record<string, unknown>;
+type ForceGraphLink = GraphEdge & Record<string, unknown>;
 
 interface GraphPatch {
   type: 'graph_patch';
@@ -361,15 +365,15 @@ export function GraphVisualization({
   // Memoized reset view callback
   const resetView = useCallback(() => {
     if (fgRef.current) {
-      fgRef.current.zoomToFit(400);
+      fgRef.current.zoomToFit?.(400);
     }
   }, []);
 
   // Memoized focus on node callback
   const focusOnNode = useCallback((node: GraphNode) => {
     if (fgRef.current && node.x !== undefined && node.y !== undefined) {
-      fgRef.current.centerAt(node.x, node.y, 1000);
-      fgRef.current.zoom(3, 1000);
+      fgRef.current.centerAt?.(node.x, node.y, 1000);
+      fgRef.current.zoom?.(3, 1000);
     }
   }, []);
 
@@ -590,21 +594,25 @@ export function GraphVisualization({
 
         {/* Graph */}
         <ForceGraph2D
-          ref={fgRef}
+          ref={fgRef as React.RefObject<never>}
           graphData={filteredData}
           width={dimensions.width}
           height={dimensions.height}
-          nodeLabel={(node: ForceGraphNode) => `${node.label || node.id}\n(${node.type})`}
-          nodeColor={(node: ForceGraphNode) => getNodeColor(node)}
+          nodeLabel={(node: unknown) => {
+            const n = node as ForceGraphNode
+            return `${n.label || n.id}\n(${n.type})`
+          }}
+          nodeColor={(node: unknown) => getNodeColor(node as ForceGraphNode)}
           nodeRelSize={6}
-          nodeCanvasObject={(node: ForceGraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
-            const label = node.label || node.id;
+          nodeCanvasObject={(node: unknown, ctx: CanvasRenderingContext2D, globalScale: number) => {
+            const n = node as ForceGraphNode
+            const label = n.label || n.id;
             const fontSize = 12 / globalScale;
-            const isSelected = selectedNode?.id === node.id;
+            const isSelected = selectedNode?.id === n.id;
 
             // Ensure x and y are defined (they should be by the time rendering happens)
-            const x = node.x ?? 0;
-            const y = node.y ?? 0;
+            const x = n.x ?? 0;
+            const y = n.y ?? 0;
 
             ctx.font = `${fontSize}px Sans-Serif`;
             ctx.textAlign = 'center';
@@ -620,7 +628,7 @@ export function GraphVisualization({
             }
 
             // Draw node circle
-            ctx.fillStyle = getNodeColor(node);
+            ctx.fillStyle = getNodeColor(n);
             ctx.beginPath();
             ctx.arc(x, y, 6, 0, 2 * Math.PI);
             ctx.fill();
@@ -630,7 +638,7 @@ export function GraphVisualization({
             ctx.font = isSelected ? `bold ${fontSize}px Sans-Serif` : `${fontSize}px Sans-Serif`;
             ctx.fillText(label, x, y + 12);
           }}
-          linkLabel={(link: ForceGraphLink) => link.type}
+          linkLabel={(link: unknown) => (link as ForceGraphLink).type}
           linkColor={() => '#94a3b8'}
           linkWidth={1.5}
           linkDirectionalArrowLength={4}
@@ -639,7 +647,7 @@ export function GraphVisualization({
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.3}
           cooldownTicks={100}
-          onNodeClick={(node: ForceGraphNode) => {
+          onNodeClick={(node: unknown) => {
             setSelectedNode(node as GraphNode);
           }}
           onBackgroundClick={() => setSelectedNode(null)}

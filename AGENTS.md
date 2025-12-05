@@ -34,7 +34,8 @@ v0.6 updates the v0.4 agent design by:
 **Repository rules:**
 
 - Fix TypeScript and lint errors instead of masking them with `typescript.ignoreBuildErrors` (or similar) in `next.config.js`.
-- When addressing TypeScript type errors, do not “fix” them by changing types to `any` unless a design decision explicitly requires `any`.
+- When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
+- Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
 
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
