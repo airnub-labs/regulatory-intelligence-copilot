@@ -9,6 +9,8 @@ import {
   ArrowLeft,
   ArrowRight,
   AlertTriangle,
+  ExternalLink,
+  Loader2,
   PencilLine,
   Plus,
   Wand2,
@@ -967,7 +969,7 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium text-muted-foreground">Jurisdictions</label>
                 <div className="flex gap-1">
-                  {['IE', 'UK', 'EU'].map((jur) => (
+                  {['IE', 'UK', 'EU', 'NI', 'IM'].map((jur) => (
                     <Badge
                       key={jur}
                       onClick={() => toggleJurisdiction(jur)}
@@ -1000,22 +1002,48 @@ export default function Home() {
               </div>
             </div>
 
-            {chatMetadata && (
+            {(chatMetadata || isLoading) && (
               <div className="flex items-center gap-3 border-b bg-muted/20 px-6 py-2 text-xs text-muted-foreground">
-                <span>Agent: <span className="text-foreground">{chatMetadata.agentId || 'default'}</span></span>
-                {chatMetadata.referencedNodes && chatMetadata.referencedNodes.length > 0 && (
-                  <span>{chatMetadata.referencedNodes.length} graph refs</span>
+                {isLoading && (
+                  <span className="flex items-center gap-1 text-primary">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Streaming
+                  </span>
                 )}
-                {chatMetadata.uncertaintyLevel === 'high' && (
-                  <Badge variant="destructive" className="text-[10px]">High uncertainty</Badge>
+                {chatMetadata?.agentId && (
+                  <span>Agent: <span className="text-foreground">{chatMetadata.agentId}</span></span>
+                )}
+                {chatMetadata?.jurisdictions && chatMetadata.jurisdictions.length > 0 && (
+                  <span>Scope: <span className="text-foreground">{chatMetadata.jurisdictions.join(', ')}</span></span>
+                )}
+                {chatMetadata?.referencedNodes && chatMetadata.referencedNodes.length > 0 && (
+                  <a
+                    href={`/graph?conversationId=${conversationIdRef.current}`}
+                    className="flex items-center gap-1 text-primary hover:underline"
+                  >
+                    {chatMetadata.referencedNodes.length} graph refs
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+                {chatMetadata?.uncertaintyLevel && (
+                  <Badge
+                    variant={chatMetadata.uncertaintyLevel === 'high' ? 'destructive' : chatMetadata.uncertaintyLevel === 'medium' ? 'secondary' : 'outline'}
+                    className="text-[10px]"
+                  >
+                    {chatMetadata.uncertaintyLevel} confidence
+                  </Badge>
                 )}
               </div>
             )}
 
             {warnings.length > 0 && (
-              <div className="mx-4 mt-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>{warnings[0]}</span>
+              <div className="mx-4 mt-2 space-y-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {warnings.map((warning, idx) => (
+                  <div key={idx} className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                    <span>{warning}</span>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -1279,6 +1307,53 @@ export default function Home() {
               </CardContent>
             </Card>
 
+            {(referencedNodeSummaries.length > 0 || isLoadingNodeSummaries) && (
+              <Card className="border bg-card/90 shadow-lg backdrop-blur">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-sm">
+                    <span>Graph Context</span>
+                    {conversationIdRef.current && (
+                      <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                        <a href={`/graph?conversationId=${conversationIdRef.current}`}>
+                          Open Graph
+                          <ExternalLink className="ml-1 h-3 w-3" />
+                        </a>
+                      </Button>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1">
+                  {isLoadingNodeSummaries && (
+                    <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Loading graph references...
+                    </div>
+                  )}
+                  {!isLoadingNodeSummaries && referencedNodeSummaries.length === 0 && chatMetadata?.referencedNodes?.length && (
+                    <p className="py-2 text-xs text-muted-foreground">
+                      {chatMetadata.referencedNodes.length} nodes referenced
+                    </p>
+                  )}
+                  <div className="max-h-[200px] space-y-1 overflow-y-auto">
+                    {referencedNodeSummaries.map(node => (
+                      <a
+                        key={node.id}
+                        href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
+                        className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50"
+                      >
+                        <div className="flex-1 truncate">
+                          <span className="font-medium">{node.label}</span>
+                          {node.type && (
+                            <span className="ml-1 text-muted-foreground">({node.type})</span>
+                          )}
+                        </div>
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      </a>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </aside>
         </div>
       </main>
