@@ -199,6 +199,51 @@ describe('ComplianceEngine streaming', () => {
     );
   });
 
+  it('processes concept payloads even when the tool name is missing', async () => {
+    const llmRouter = {
+      streamChat: vi.fn(async function* (_messages: ChatMessage[]): AsyncIterable<LlmStreamChunk> {
+        yield { type: 'tool', name: '0', argsJson: conceptPayload };
+        yield { type: 'text', delta: 'Response' };
+        yield { type: 'done' };
+      }),
+    } as unknown as LlmRouter;
+
+    const engine = new ComplianceEngine({
+      llmRouter,
+      graphWriteService,
+      canonicalConceptHandler,
+      conversationContextStore,
+      llmClient,
+      graphClient,
+      timelineEngine,
+      egressGuard,
+    });
+
+    const request: ComplianceRequest = {
+      messages: [{ role: 'user', content: 'Capture concepts' }],
+      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+      tenantId: 'tenant-missing-name',
+      conversationId: 'conversation-missing-name',
+    };
+
+    const chunks = [] as Array<{ type: string; metadata?: any }>;
+    for await (const chunk of engine.handleChatStream(request)) {
+      chunks.push(chunk);
+    }
+
+    const referencedIds = (chunks[0].metadata?.referencedNodes ?? []).map(
+      (node: { id: string }) => node.id
+    );
+
+    expect(referencedIds).toEqual(
+      expect.arrayContaining(['concept-node-1', 'concept-node-2'])
+    );
+    expect(canonicalConceptHandler.resolveAndUpsert).toHaveBeenCalledWith(
+      conceptPayload.concepts,
+      graphWriteService
+    );
+  });
+
   it('surfaces captured concept IDs in metadata when the agent has no referenced nodes', async () => {
     const llmRouter = createRouter();
 
