@@ -92,6 +92,9 @@ importers:
       force-graph:
         specifier: ^1.51.0
         version: 1.51.0
+      import-in-the-middle:
+        specifier: ^2.0.0
+        version: 2.0.0
       lucide-react:
         specifier: ^0.555.0
         version: 0.555.0(react@19.2.0)
@@ -113,6 +116,9 @@ importers:
       react-force-graph-2d:
         specifier: ^1.29.0
         version: 1.29.0(react@19.2.0)
+      require-in-the-middle:
+        specifier: ^8.0.1
+        version: 8.0.1
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
