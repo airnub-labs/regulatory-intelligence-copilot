@@ -610,17 +610,20 @@ export default function Home() {
                 if (prev.some(c => c.id === conv.id)) return prev
                 return [conv, ...prev]
               })
-            } else if (parsedEvent.type === 'updated' && typeof parsedData === 'object' && parsedData !== null) {
-              const conv = parsedData as ConversationSummary
-              setConversations(prev =>
-                prev.map(c => c.id === conv.id ? conv : c)
-              )
-              // Update current conversation metadata if it's the one being edited
-              if (conv.id === conversationId) {
-                setConversationTitle(conv.title ?? '')
-                setSavedConversationTitle(conv.title ?? '')
-                setShareAudience(conv.shareAudience)
-                setTenantAccess(conv.tenantAccess)
+            } else if (parsedEvent.type === 'upsert' && typeof parsedData === 'object' && parsedData !== null) {
+              const data = parsedData as { conversation?: ConversationSummary }
+              if (data.conversation) {
+                const conv = data.conversation
+                setConversations(prev =>
+                  prev.map(c => c.id === conv.id ? conv : c)
+                )
+                // Update current conversation metadata if it's the one being edited
+                if (conv.id === conversationId) {
+                  setConversationTitle(conv.title ?? '')
+                  setSavedConversationTitle(conv.title ?? '')
+                  setShareAudience(conv.shareAudience)
+                  setTenantAccess(conv.tenantAccess)
+                }
               }
             } else if (parsedEvent.type === 'deleted' && typeof parsedData === 'object' && parsedData !== null) {
               const { conversationId: deletedId } = parsedData as { conversationId: string }
