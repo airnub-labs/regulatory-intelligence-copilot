@@ -442,6 +442,69 @@ interface ConversationContextStore {
 
 ---
 
+### D-044 – Type-safe SSE event contracts for real-time streams
+
+**Context:**
+
+- The conversation list and individual conversation streams use Server-Sent Events (SSE) to push real-time updates to connected clients.
+- Previously, event type strings (e.g. `'updated'`, `'upsert'`) and payload structures were defined separately in server and client code.
+- This led to a production bug where the client listened for `'updated'` events while the server broadcast `'upsert'` events, causing UI updates to fail despite events being received.
+- The mismatch was only discoverable at runtime, not during type-checking or build.
+
+**Decision:**
+
+- **All SSE event types and their payload structures must be defined as shared TypeScript types** in the `@reg-copilot/reg-intel-conversations` package.
+- A central `ConversationListEventPayloadMap` type maps each event name to its exact payload structure.
+- Both server-side broadcasters and client-side listeners must reference these shared types when sending or receiving events.
+- Event payloads must be explicitly typed using the mapped type (e.g. `ConversationListEventPayloadMap['upsert']`) rather than inline object literals.
+
+**Implementation:**
+
+```typescript
+// Shared package: packages/reg-intel-conversations/src/sseTypes.ts
+export interface ConversationListUpsertPayload {
+  conversation: ClientConversation
+}
+
+export type ConversationListEventPayloadMap = {
+  snapshot: ConversationListSnapshotPayload
+  upsert: ConversationListUpsertPayload
+  deleted: ConversationListDeletedPayload
+  // ... other events
+}
+
+// Server: apps/demo-web/src/app/api/conversations/[id]/route.ts
+const payload: ConversationListEventPayloadMap['upsert'] = {
+  conversation: toClientConversation(updatedConversation),
+}
+conversationListEventHub.broadcast(tenantId, 'upsert', payload)
+
+// Client: apps/demo-web/src/app/page.tsx
+import type { ConversationListEventPayloadMap } from '@reg-copilot/reg-intel-conversations'
+
+const data = parsedData as unknown as ConversationListEventPayloadMap['upsert']
+if (data.conversation) {
+  // TypeScript knows the exact shape of data.conversation
+}
+```
+
+**Rationale:**
+
+- **Compile-time safety:** TypeScript catches event type and payload structure mismatches during build, not at runtime.
+- **Single source of truth:** Event contracts are defined once in a shared package, preventing drift between client and server.
+- **Self-documenting:** The type definitions serve as authoritative documentation for the SSE API.
+- **Prevents regressions:** Future changes to event structures require updating the shared types, which forces updates to both producers and consumers.
+- **Discoverable:** Developers can use IDE autocomplete to discover valid event types and their exact payload shapes.
+
+**Consequences:**
+
+- All new SSE streams must follow this pattern: define event types and payloads in a shared package before implementation.
+- Existing SSE streams should be migrated to use shared types to prevent similar issues.
+- The `eventHub.ts` event type unions (e.g. `ConversationListEventType`) remain as runtime enums, while `sseTypes.ts` provides compile-time payload contracts.
+- Coding agents and developers must import and use `ConversationListEventPayloadMap` (or equivalent for other streams) when working with SSE events.
+
+---
+
 ## 8. Summary of Changes in v0.6
 
 ### Added
@@ -457,6 +520,7 @@ interface ConversationContextStore {
 - ✅ **Clarified data separation**: Supabase (conversations, context) vs Memgraph (rules-only).
 - ✅ **Adopted graph change detection enhancements** (timestamps + batching) as defaults.
 - ✅ **Positioned Scenario Engine & expert collections** as optional but first-class extensions.
+- ✅ **Type-safe SSE event contracts** – shared TypeScript types for all real-time event streams to prevent client-server mismatches.
 
 ### Unchanged from v0.4 / v0.5 (still authoritative)
 
