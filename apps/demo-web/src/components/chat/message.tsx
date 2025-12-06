@@ -4,6 +4,7 @@ import { Bot, ShieldCheck, User } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { MessageVersionNav } from "./message-version-nav"
 
 type ListBuffer = {
   type: "ul" | "ol"
@@ -155,9 +156,30 @@ interface MessageProps {
   disclaimer?: string
   deletedAt?: string | null
   supersededBy?: string | null
+  // Version navigation props
+  showVersionNav?: boolean
+  currentVersionIndex?: number
+  totalVersions?: number
+  versionTimestamp?: Date
+  onPreviousVersion?: () => void
+  onNextVersion?: () => void
 }
 
-export function Message({ role, content, className, metadata, disclaimer, deletedAt, supersededBy }: MessageProps) {
+export function Message({
+  role,
+  content,
+  className,
+  metadata,
+  disclaimer,
+  deletedAt,
+  supersededBy,
+  showVersionNav = false,
+  currentVersionIndex,
+  totalVersions,
+  versionTimestamp,
+  onPreviousVersion,
+  onNextVersion,
+}: MessageProps) {
   const isUser = role === "user"
   const isDeleted = Boolean(deletedAt ?? metadata?.deletedAt)
 
@@ -243,6 +265,21 @@ export function Message({ role, content, className, metadata, disclaimer, delete
               <span className="rounded-full bg-background px-2 py-1 text-xs">Nodes: {nodesCount}</span>
             </div>
           )}
+          {showVersionNav &&
+            currentVersionIndex !== undefined &&
+            totalVersions !== undefined &&
+            versionTimestamp &&
+            onPreviousVersion &&
+            onNextVersion && (
+              <MessageVersionNav
+                currentIndex={currentVersionIndex}
+                totalVersions={totalVersions}
+                currentTimestamp={versionTimestamp}
+                onPrevious={onPreviousVersion}
+                onNext={onNextVersion}
+                isOriginal={currentVersionIndex === 0}
+              />
+            )}
         </div>
       </div>
       {isUser && (

@@ -30,6 +30,7 @@
     "ai": "^5.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "force-graph": "^1.51.0",
     "import-in-the-middle": "1.15.0",
     "lucide-react": "^0.555.0",
