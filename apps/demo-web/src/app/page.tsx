@@ -6,8 +6,6 @@ import { useRouter } from 'next/navigation'
 import {
   Archive,
   ArchiveRestore,
-  ArrowLeft,
-  ArrowRight,
   AlertTriangle,
   ExternalLink,
   Loader2,
@@ -23,6 +21,9 @@ import type {
 
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { Message, MessageLoading } from '@/components/chat/message'
+import { MetadataSkeleton } from '@/components/chat/metadata-skeleton'
+import { ProgressIndicator } from '@/components/chat/progress-indicator'
+import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput } from '@/components/chat/prompt-input'
 import { AppHeader } from '@/components/layout/app-header'
 import { Badge } from '@/components/ui/badge'
@@ -344,6 +345,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [streamingStage, setStreamingStage] = useState<StreamingStage>('analyzing')
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [referencedNodeSummaries, setReferencedNodeSummaries] = useState<ReferencedNodeSummary[]>([])
   const [isLoadingNodeSummaries, setIsLoadingNodeSummaries] = useState(false)
@@ -732,6 +734,9 @@ export default function Home() {
     const decoder = new TextDecoder()
     let buffer = ''
 
+    // Initialize streaming stage
+    setStreamingStage('querying')
+
     const appendAssistantText = (delta: string) => {
       setMessages(prev =>
         prev.map(message =>
@@ -762,6 +767,7 @@ export default function Home() {
             if (!isChatSseMetadata(parsedData)) break
             applyMetadata(parsedData)
             setChatMetadata(parsedData)
+            setStreamingStage('generating') // Metadata received, now generating response
             if (parsedData.warnings !== undefined) {
               setWarnings(parsedData.warnings)
             }
@@ -809,9 +815,11 @@ export default function Home() {
           case 'error': {
             const errorMessage = extractErrorMessage(parsedData)
             appendAssistantText(`Error: ${errorMessage}`)
+            setStreamingStage('complete')
             return
           }
           case 'done':
+            setStreamingStage('complete')
             return
           default:
             break
@@ -867,6 +875,7 @@ export default function Home() {
     }
     setEditingContent('')
     setIsLoading(true)
+    setStreamingStage('analyzing')
     setChatMetadata(null)
     setWarnings([])
 
@@ -1192,25 +1201,6 @@ export default function Home() {
 
                     return (
                       <div key={chain.latestId} className="relative">
-                        {hasHistory && (
-                          <div className="absolute -left-12 top-3 z-10 flex items-center gap-1 text-muted-foreground">
-                            <Button size="icon" variant="ghost" onClick={goPrevious} disabled={currentIndex === 0}>
-                              <ArrowLeft className="h-4 w-4" />
-                            </Button>
-                            <span className="text-xs font-medium">
-                              {currentIndex + 1} / {chain.versions.length}
-                            </span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={goNext}
-                              disabled={currentIndex === chain.versions.length - 1}
-                            >
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
-
                         {isEditingCurrent ? (
                           <div className="rounded-2xl border bg-muted/40 p-4 shadow-sm">
                             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
@@ -1244,12 +1234,23 @@ export default function Home() {
                             metadata={currentMessage.metadata}
                             deletedAt={currentMessage.deletedAt}
                             supersededBy={currentMessage.supersededBy}
+                            showVersionNav={hasHistory}
+                            currentVersionIndex={currentIndex}
+                            totalVersions={chain.versions.length}
+                            versionTimestamp={new Date()}
+                            onPreviousVersion={goPrevious}
+                            onNextVersion={goNext}
                           />
                         )}
                       </div>
                     )
                   })}
-                  {isLoading && <MessageLoading />}
+                  {isLoading && (
+                    <>
+                      <ProgressIndicator currentStage={streamingStage} />
+                      <MessageLoading />
+                    </>
+                  )}
                 </>
               )}
               <div ref={messagesEndRef} />
