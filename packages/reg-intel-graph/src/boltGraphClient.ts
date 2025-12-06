@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto';
 import neo4j, { Driver, Session } from 'neo4j-driver';
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_STATEMENT } from '@opentelemetry/semantic-conventions';
 import { withSpan } from '@reg-copilot/reg-intel-observability';
 import type {
   GraphClient,
@@ -60,10 +60,10 @@ export class BoltGraphClient implements GraphClient {
     return withSpan(
       'db.memgraph.query',
       {
-        [SemanticAttributes.DB_SYSTEM]: 'memgraph',
-        [SemanticAttributes.DB_NAME]: this.database,
-        [SemanticAttributes.DB_OPERATION]: 'query',
-        [SemanticAttributes.DB_STATEMENT]: `hash:sha256:${queryHash}`,
+        [SEMATTRS_DB_SYSTEM]: 'memgraph',
+        [SEMATTRS_DB_NAME]: this.database,
+        [SEMATTRS_DB_OPERATION]: 'query',
+        [SEMATTRS_DB_STATEMENT]: `hash:sha256:${queryHash}`,
       },
       async () => {
         const session = this.driver.session({ database: this.database });

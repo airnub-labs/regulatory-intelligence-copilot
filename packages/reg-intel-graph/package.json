@@ -21,6 +21,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
     "@reg-copilot/reg-intel-observability": "workspace:*",
     "neo4j-driver": "^5.15.0"
   },

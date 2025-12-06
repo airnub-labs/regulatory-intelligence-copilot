@@ -40,7 +40,7 @@ import {
   requestContext,
   withSpan,
 } from '@reg-copilot/reg-intel-observability';
-import { SpanStatusCode, trace } from '@opentelemetry/api';
+import { SpanStatusCode, trace, type Attributes } from '@opentelemetry/api';
 
 export type {
   GraphClient,
@@ -289,7 +289,7 @@ export class ComplianceEngine {
     return spanContext.traceId;
   }
 
-  private instrumentAsyncWithSpan<T extends Record<string, unknown>>(
+  private instrumentAsyncWithSpan<T extends object>(
     name: string,
     target: T
   ): T {
@@ -308,7 +308,7 @@ export class ComplianceEngine {
     });
   }
 
-  private instrumentSyncWithSpan<T extends Record<string, unknown>>(
+  private instrumentSyncWithSpan<T extends object>(
     name: string,
     target: T
   ): T {
@@ -867,14 +867,14 @@ export class ComplianceEngine {
         profile,
       };
 
-      if (!GlobalRegulatoryComplianceAgent.handleStream) {
+      const handleStream = GlobalRegulatoryComplianceAgent.handleStream;
+      if (!handleStream) {
         throw new ComplianceError('Agent does not support streaming');
       }
       const agentResult = await this.runWithTracing(
         'compliance.agent',
         { agent: 'GlobalRegulatoryComplianceAgent' },
-        async () =>
-          GlobalRegulatoryComplianceAgent.handleStream(agentInput, agentContext)
+        async () => handleStream(agentInput, agentContext)
       );
 
       const warnings = agentResult.warnings ?? [];
@@ -941,7 +941,7 @@ export class ComplianceEngine {
 
   private async runWithTracing<T>(
     name: string,
-    attributes: Record<string, unknown>,
+    attributes: Attributes,
     fn: () => Promise<T> | T
   ): Promise<T> {
     return withSpan(name, attributes, async () => {
@@ -960,7 +960,7 @@ export class ComplianceEngine {
 
   private runWithTracingSync<T>(
     name: string,
-    attributes: Record<string, unknown>,
+    attributes: Attributes,
     fn: () => T
   ): T {
     const tracer = trace.getTracer('reg-intel-observability');

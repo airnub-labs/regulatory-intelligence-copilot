@@ -6,7 +6,7 @@ import type {
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
 import { withSpan } from '@reg-copilot/reg-intel-observability';
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_SQL_TABLE } from '@opentelemetry/semantic-conventions';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
 export type TenantAccess = 'view' | 'edit';
@@ -534,10 +534,10 @@ export class SupabaseConversationStore implements ConversationStore {
     return withSpan(
       'db.supabase.mutation',
       {
-        [SemanticAttributes.DB_SYSTEM]: 'postgresql',
-        [SemanticAttributes.DB_NAME]: 'supabase',
-        [SemanticAttributes.DB_OPERATION]: input.operation,
-        [SemanticAttributes.DB_SQL_TABLE]: input.table,
+        [SEMATTRS_DB_SYSTEM]: 'postgresql',
+        [SEMATTRS_DB_NAME]: 'supabase',
+        [SEMATTRS_DB_OPERATION]: input.operation,
+        [SEMATTRS_DB_SQL_TABLE]: input.table,
         'app.tenant.id': input.tenantId,
         ...(input.conversationId ? { 'app.conversation.id': input.conversationId } : {}),
       },
@@ -576,6 +576,9 @@ export class SupabaseConversationStore implements ConversationStore {
     tenantAccess?: TenantAccess;
     authorizationModel?: AuthorizationModel;
     authorizationSpec?: AuthorizationSpec | null;
+    traceId?: string | null;
+    rootSpanName?: string | null;
+    rootSpanId?: string | null;
   }): Promise<{ conversationId: string }> {
     return this.wrapMutation(
       { operation: 'insert', table: 'conversations', tenantId: input.tenantId },
@@ -975,10 +978,10 @@ export class SupabaseConversationContextStore implements ConversationContextStor
     await withSpan(
       'db.supabase.mutation',
       {
-        [SemanticAttributes.DB_SYSTEM]: 'postgresql',
-        [SemanticAttributes.DB_NAME]: 'supabase',
-        [SemanticAttributes.DB_OPERATION]: 'upsert',
-        [SemanticAttributes.DB_SQL_TABLE]: 'conversation_contexts',
+        [SEMATTRS_DB_SYSTEM]: 'postgresql',
+        [SEMATTRS_DB_NAME]: 'supabase',
+        [SEMATTRS_DB_OPERATION]: 'upsert',
+        [SEMATTRS_DB_SQL_TABLE]: 'conversation_contexts',
         'app.tenant.id': identity.tenantId,
         'app.conversation.id': identity.conversationId,
       },

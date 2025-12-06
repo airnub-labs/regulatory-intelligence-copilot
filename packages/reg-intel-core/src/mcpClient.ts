@@ -7,7 +7,7 @@ import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
 import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
 import { injectTraceContextHeaders, withSpan } from '@reg-copilot/reg-intel-observability';
-import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
+import { SEMATTRS_HTTP_METHOD, SEMATTRS_HTTP_URL } from '@opentelemetry/semantic-conventions';
 
 // MCP Gateway configuration - set once from the active sandbox
 let mcpGatewayUrl = '';
@@ -62,8 +62,8 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
       'mcp.tool': params.toolName,
       'app.sandbox.id': sandboxId,
       'mcp.policy.sanitized': true,
-      [SemanticAttributes.HTTP_METHOD]: 'POST',
-      [SemanticAttributes.HTTP_URL]: mcpGatewayUrl,
+      [SEMATTRS_HTTP_METHOD]: 'POST',
+      [SEMATTRS_HTTP_URL]: mcpGatewayUrl,
     },
     async () => {
       const headers = new Headers({

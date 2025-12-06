@@ -1,10 +1,9 @@
-import { SpanStatusCode, trace } from '@opentelemetry/api';
+import { SpanStatusCode, trace, type Attributes } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { FsInstrumentation } from '@opentelemetry/instrumentation-fs';
-import { NextInstrumentation } from '@opentelemetry/instrumentation-next';
 import { Instrumentation } from '@opentelemetry/instrumentation';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
@@ -17,8 +16,12 @@ import {
   type Sampler,
 } from '@opentelemetry/sdk-trace-base';
 import { Resource } from '@opentelemetry/resources';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
+import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+
 import { requestContext } from './requestContext.js';
+
+// ATTR_DEPLOYMENT_ENVIRONMENT_NAME is not yet in semantic-conventions stable, use string literal
+const ATTR_DEPLOYMENT_ENVIRONMENT = 'deployment.environment.name';
 
 export interface TraceSamplingOptions {
   parentBasedRatio?: number;
@@ -45,7 +48,7 @@ const tracer = trace.getTracer('reg-intel-observability');
 let sdkInstance: NodeSDK | null = null;
 
 const clampRatio = (value: number) => Math.min(1, Math.max(0, value));
-const sanitizeRatio = (value?: number) => (Number.isFinite(value) ? value : 1);
+const sanitizeRatio = (value?: number): number => (Number.isFinite(value) ? value! : 1);
 
 const buildSampler = (options?: TraceSamplingOptions): Sampler => {
   const ratio = clampRatio(sanitizeRatio(options?.parentBasedRatio));
@@ -124,7 +127,6 @@ export const initObservability = async (options: ObservabilityOptions) => {
   const instrumentations: Instrumentation[] = [
     new HttpInstrumentation(),
     new UndiciInstrumentation(),
-    new NextInstrumentation(),
   ];
 
   if (options.enableFsInstrumentation) {
@@ -137,16 +139,16 @@ export const initObservability = async (options: ObservabilityOptions) => {
 
   sdkInstance = new NodeSDK({
     resource: new Resource({
-      [SemanticResourceAttributes.SERVICE_NAME]: options.serviceName,
-      [SemanticResourceAttributes.SERVICE_VERSION]:
+      [ATTR_SERVICE_NAME]: options.serviceName,
+      [ATTR_SERVICE_VERSION]:
         options.serviceVersion ?? process.env.npm_package_version ?? '0.0.0',
-      [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]:
+      [ATTR_DEPLOYMENT_ENVIRONMENT]:
         options.environment ?? process.env.NODE_ENV ?? 'development',
     }),
     traceExporter,
     metricReader,
     instrumentations,
-    traceSampler: buildSampler(options.traceSampling),
+    sampler: buildSampler(options.traceSampling),
     contextManager: new AsyncLocalStorageContextManager().enable(),
   });
 
@@ -185,11 +187,11 @@ export const getRuntimeObservabilityConfig = (): ObservabilityRuntimeConfig | nu
 
 export const withSpan = async <T>(
   name: string,
-  attributes: Record<string, unknown>,
+  attributes: Attributes,
   fn: () => Promise<T> | T
 ): Promise<T> => {
   const samplingOverride = runtimeConfig?.sampling.alwaysSampleErrors;
-  const spanAttributes =
+  const spanAttributes: Attributes =
     samplingOverride === undefined
       ? attributes
       : { ...attributes, 'regintel.trace.error_override': samplingOverride };
