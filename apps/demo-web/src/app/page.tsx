@@ -1050,10 +1050,10 @@ export default function Home() {
             <ChatContainer className="flex-1 bg-transparent px-4">
               {versionedMessages.length === 0 ? (
                 <ChatWelcome>
-                  <div className="mx-auto max-w-md space-y-4 py-8 text-center">
-                    <h2 className="text-lg font-semibold">Ask about tax, welfare, or pensions</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Get answers grounded in a regulatory knowledge graph covering Irish tax, PRSI, benefits, and EU cross-border rules.
+                  <div className="mx-auto max-w-lg space-y-4 py-8 text-center">
+                    <h2 className="text-xl font-semibold">Welcome to the Regulatory Intelligence Copilot</h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Grounded answers from a regulatory knowledge graph—not a generic chatbot. Coverage includes corporation tax, PAYE, CGT, R&amp;D credits, director obligations, PRSI, benefits, entitlements, contributions, state pension, occupational and personal schemes, funding rules, social security coordination, EU regulations, and cross-border tax &amp; welfare effects.
                     </p>
                     <div className="flex flex-wrap justify-center gap-2">
                       {quickPrompts.map(({ label, prompt, scenarioHint: promptScenarioHint }) => (
