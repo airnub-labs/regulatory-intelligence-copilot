@@ -16,6 +16,10 @@ import {
   Wand2,
   X,
 } from 'lucide-react'
+import type {
+  ConversationListEventPayloadMap,
+  ClientConversation,
+} from '@reg-copilot/reg-intel-conversations'
 
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { Message, MessageLoading } from '@/components/chat/message'
@@ -71,15 +75,8 @@ interface VersionedMessage {
 type ShareAudience = 'private' | 'tenant' | 'public'
 type TenantAccess = 'view' | 'edit'
 type ShareOptionValue = 'private' | 'tenant-view' | 'tenant-edit' | 'public'
-interface ConversationSummary {
-  id: string
-  title?: string | null
-  createdAt: string
-  lastMessageAt?: string | null
-  shareAudience: ShareAudience
-  tenantAccess: TenantAccess
-  archivedAt?: string | null
-}
+// Use shared ClientConversation type from the conversations package
+type ConversationSummary = ClientConversation
 
 function parseSseEvent(eventBlock: string): { type: string; data: string } | null {
   const lines = eventBlock.split('\n')
@@ -600,23 +597,22 @@ export default function Home() {
             const parsedData = parseJsonSafe(parsedEvent.data)
 
             if (parsedEvent.type === 'snapshot' && typeof parsedData === 'object' && parsedData !== null) {
-              const snapshot = parsedData as { conversations?: ConversationSummary[] }
+              // Type-safe cast using unknown intermediate step
+              const snapshot = parsedData as unknown as ConversationListEventPayloadMap['snapshot']
               if (snapshot.conversations) {
                 setConversations(snapshot.conversations)
               }
-            } else if (parsedEvent.type === 'created' && typeof parsedData === 'object' && parsedData !== null) {
-              const conv = parsedData as ConversationSummary
-              setConversations(prev => {
-                if (prev.some(c => c.id === conv.id)) return prev
-                return [conv, ...prev]
-              })
             } else if (parsedEvent.type === 'upsert' && typeof parsedData === 'object' && parsedData !== null) {
-              const data = parsedData as { conversation?: ConversationSummary }
+              // Type-safe cast using unknown intermediate step
+              const data = parsedData as unknown as ConversationListEventPayloadMap['upsert']
               if (data.conversation) {
                 const conv = data.conversation
-                setConversations(prev =>
-                  prev.map(c => c.id === conv.id ? conv : c)
-                )
+                setConversations(prev => {
+                  // Add if new, update if exists
+                  const exists = prev.some(c => c.id === conv.id)
+                  if (!exists) return [conv, ...prev]
+                  return prev.map(c => c.id === conv.id ? conv : c)
+                })
                 // Update current conversation metadata if it's the one being edited
                 if (conv.id === conversationId) {
                   setConversationTitle(conv.title ?? '')
@@ -626,9 +622,10 @@ export default function Home() {
                 }
               }
             } else if (parsedEvent.type === 'deleted' && typeof parsedData === 'object' && parsedData !== null) {
-              const { conversationId: deletedId } = parsedData as { conversationId: string }
-              setConversations(prev => prev.filter(c => c.id !== deletedId))
-              if (deletedId === conversationId) {
+              // Type-safe cast using unknown intermediate step
+              const data = parsedData as unknown as ConversationListEventPayloadMap['deleted']
+              setConversations(prev => prev.filter(c => c.id !== data.conversationId))
+              if (data.conversationId === conversationId) {
                 startNewConversation()
               }
             }

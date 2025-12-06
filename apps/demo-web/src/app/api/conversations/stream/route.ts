@@ -1,5 +1,9 @@
 import { NextRequest } from 'next/server'
-import type { ConversationListEventType, SseSubscriber } from '@reg-copilot/reg-intel-conversations'
+import type {
+  ConversationListEventType,
+  ConversationListEventPayloadMap,
+  SseSubscriber,
+} from '@reg-copilot/reg-intel-conversations'
 import { getServerSession } from 'next-auth/next'
 
 import { authOptions } from '@/lib/auth/options'
@@ -57,10 +61,12 @@ export async function GET(request: NextRequest) {
       }
 
       unsubscribe = conversationListEventHub.subscribe(tenantId, subscriber)
-      subscriber.send('snapshot', {
+      // Use type-safe payload from shared package
+      const snapshotPayload: ConversationListEventPayloadMap['snapshot'] = {
         status,
         conversations: initialConversations.map(toClientConversation),
-      })
+      }
+      subscriber.send('snapshot', snapshotPayload)
 
       request.signal.addEventListener('abort', abortHandler)
     },

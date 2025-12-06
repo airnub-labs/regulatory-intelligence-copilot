@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import type { ConversationListEventPayloadMap } from '@reg-copilot/reg-intel-conversations';
 
 import { authOptions } from '@/lib/auth/options';
 import {
@@ -85,9 +86,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
     const updatedConversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
     if (updatedConversation) {
-      conversationListEventHub.broadcast(tenantId, 'upsert', {
+      // Use type-safe payload from shared package
+      const payload: ConversationListEventPayloadMap['upsert'] = {
         conversation: toClientConversation(updatedConversation),
-      });
+      };
+      conversationListEventHub.broadcast(tenantId, 'upsert', payload);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
