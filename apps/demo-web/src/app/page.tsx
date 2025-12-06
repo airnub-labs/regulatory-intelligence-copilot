@@ -1018,7 +1018,7 @@ export default function Home() {
     <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
       <AppHeader
-        primaryAction={{ label: 'View Graph', href: `/graph?conversationId=${conversationIdRef.current}` }}
+        primaryAction={{ label: 'View Graph', href: conversationIdRef.current ? `/graph?conversationId=${conversationIdRef.current}` : '/graph' }}
         userEmail={session?.user?.email ?? (session?.user as { id?: string } | undefined)?.id ?? null}
         onSignOut={() => signOut({ callbackUrl: '/login' })}
       />
@@ -1119,7 +1119,7 @@ export default function Home() {
                 )}
                 {chatMetadata?.referencedNodes && chatMetadata.referencedNodes.length > 0 && (
                   <a
-                    href={`/graph?conversationId=${conversationIdRef.current}`}
+                    href={conversationIdRef.current ? `/graph?conversationId=${conversationIdRef.current}` : '/graph'}
                     className="flex items-center gap-1 text-primary hover:underline"
                   >
                     {chatMetadata.referencedNodes.length} graph refs
@@ -1413,14 +1413,12 @@ export default function Home() {
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center justify-between text-sm">
                     <span>Graph Context</span>
-                    {conversationIdRef.current && (
-                      <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                        <a href={`/graph?conversationId=${conversationIdRef.current}`}>
-                          Open Graph
-                          <ExternalLink className="ml-1 h-3 w-3" />
-                        </a>
-                      </Button>
-                    )}
+                    <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs">
+                      <a href={conversationIdRef.current ? `/graph?conversationId=${conversationIdRef.current}` : '/graph'}>
+                        Open Graph
+                        <ExternalLink className="ml-1 h-3 w-3" />
+                      </a>
+                    </Button>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1">
