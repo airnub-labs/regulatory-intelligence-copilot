@@ -32,6 +32,9 @@ export interface ConversationRecord {
   id: string;
   tenantId: string;
   userId?: string | null;
+  traceId?: string | null;
+  rootSpanName?: string | null;
+  rootSpanId?: string | null;
   shareAudience: ShareAudience;
   tenantAccess: TenantAccess;
   authorizationModel: AuthorizationModel;
@@ -49,6 +52,9 @@ export interface ConversationMessage extends ChatMessage {
   id: string;
   metadata?: Record<string, unknown>;
   userId?: string | null;
+  traceId?: string | null;
+  rootSpanName?: string | null;
+  rootSpanId?: string | null;
   createdAt: Date;
   deletedAt?: Date | null;
   supersededBy?: string | null;
@@ -58,6 +64,9 @@ export interface ConversationStore {
   createConversation(input: {
     tenantId: string;
     userId?: string | null;
+    traceId?: string | null;
+    rootSpanName?: string | null;
+    rootSpanId?: string | null;
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
@@ -71,6 +80,9 @@ export interface ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
+    traceId?: string | null;
+    rootSpanName?: string | null;
+    rootSpanId?: string | null;
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
@@ -161,6 +173,9 @@ export class InMemoryConversationStore implements ConversationStore {
   async createConversation(input: {
     tenantId: string;
     userId?: string | null;
+    traceId?: string | null;
+    rootSpanName?: string | null;
+    rootSpanId?: string | null;
     personaId?: string | null;
     jurisdictions?: string[];
     title?: string | null;
@@ -179,6 +194,9 @@ export class InMemoryConversationStore implements ConversationStore {
       id,
       tenantId: input.tenantId,
       userId: input.userId,
+      traceId: input.traceId ?? null,
+      rootSpanName: input.rootSpanName ?? null,
+      rootSpanId: input.rootSpanId ?? null,
       shareAudience,
       tenantAccess,
       authorizationModel,
@@ -199,6 +217,9 @@ export class InMemoryConversationStore implements ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
+    traceId?: string | null;
+    rootSpanName?: string | null;
+    rootSpanId?: string | null;
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
@@ -216,6 +237,9 @@ export class InMemoryConversationStore implements ConversationStore {
       content: input.content,
       metadata: input.metadata,
       userId: input.userId,
+      traceId: input.traceId ?? null,
+      rootSpanName: input.rootSpanName ?? null,
+      rootSpanId: input.rootSpanId ?? null,
       createdAt: new Date(),
     };
     const existing = this.messages.get(input.conversationId) ?? [];
@@ -223,6 +247,9 @@ export class InMemoryConversationStore implements ConversationStore {
     this.messages.set(input.conversationId, existing);
     record.lastMessageAt = message.createdAt;
     record.updatedAt = message.createdAt;
+    record.traceId = input.traceId ?? record.traceId ?? null;
+    record.rootSpanName = input.rootSpanName ?? record.rootSpanName ?? null;
+    record.rootSpanId = input.rootSpanId ?? record.rootSpanId ?? null;
     this.conversations.set(input.conversationId, record);
     return { messageId: message.id };
   }
@@ -390,13 +417,20 @@ export class InMemoryConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
-    this.contexts.set(this.key(identity), { activeNodeIds: ctx.activeNodeIds ?? [] });
+    this.contexts.set(this.key(identity), {
+      activeNodeIds: ctx.activeNodeIds ?? [],
+      traceId: ctx.traceId,
+    });
   }
 
-  async mergeActiveNodeIds(identity: ConversationIdentity, nodeIds: string[]): Promise<void> {
+  async mergeActiveNodeIds(
+    identity: ConversationIdentity,
+    nodeIds: string[],
+    options?: { traceId?: string | null }
+  ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
-    await this.save(identity, { activeNodeIds: merged });
+    await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
   }
 }
 
@@ -404,6 +438,9 @@ type SupabaseConversationRow = {
   id: string;
   tenant_id: string;
   user_id?: string | null;
+  trace_id?: string | null;
+  root_span_name?: string | null;
+  root_span_id?: string | null;
   share_audience: ShareAudience;
   tenant_access: TenantAccess;
   authorization_model: AuthorizationModel;
@@ -422,6 +459,9 @@ type SupabaseConversationMessageRow = {
   conversation_id: string;
   tenant_id: string;
   user_id?: string | null;
+  trace_id?: string | null;
+  root_span_name?: string | null;
+  root_span_id?: string | null;
   role: 'user' | 'assistant' | 'system';
   content: string;
   metadata?: Record<string, unknown> | null;
@@ -432,6 +472,7 @@ type SupabaseConversationContextRow = {
   conversation_id: string;
   tenant_id: string;
   active_node_ids: string[];
+  trace_id?: string | null;
   updated_at: string;
 };
 
@@ -440,6 +481,9 @@ function mapConversationRow(row: SupabaseConversationRow): ConversationRecord {
     id: row.id,
     tenantId: row.tenant_id,
     userId: row.user_id,
+    traceId: row.trace_id,
+    rootSpanName: row.root_span_name,
+    rootSpanId: row.root_span_id,
     shareAudience: row.share_audience,
     tenantAccess: row.tenant_access,
     authorizationModel: row.authorization_model,
@@ -467,6 +511,9 @@ function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage
     content: row.content,
     metadata,
     userId: row.user_id,
+    traceId: row.trace_id,
+    rootSpanName: row.root_span_name,
+    rootSpanId: row.root_span_id,
     createdAt: new Date(row.created_at),
     deletedAt: typeof deletedAtValue === 'string' ? new Date(deletedAtValue) : undefined,
     supersededBy: typeof supersededByValue === 'string' ? supersededByValue : undefined,
@@ -505,7 +552,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const { data, error } = await this.client
       .from('conversations_view')
       .select(
-        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
+        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
       )
       .eq('id', conversationId)
       .eq('tenant_id', tenantId)
@@ -544,6 +591,9 @@ export class SupabaseConversationStore implements ConversationStore {
           .insert({
             tenant_id: input.tenantId,
             user_id: input.userId ?? null,
+            trace_id: input.traceId ?? null,
+            root_span_name: input.rootSpanName ?? null,
+            root_span_id: input.rootSpanId ?? null,
             share_audience: shareAudience,
             tenant_access: tenantAccess,
             authorization_model: authorizationModel,
@@ -571,6 +621,9 @@ export class SupabaseConversationStore implements ConversationStore {
     tenantId: string;
     conversationId: string;
     userId?: string | null;
+    traceId?: string | null;
+    rootSpanName?: string | null;
+    rootSpanId?: string | null;
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
@@ -592,15 +645,21 @@ export class SupabaseConversationStore implements ConversationStore {
         }
 
         const messageTimestamp = new Date().toISOString();
+        const mergedMetadata = input.traceId
+          ? { ...(input.metadata ?? {}), traceId: input.traceId }
+          : input.metadata;
         const { data, error } = await this.internalClient
           .from('conversation_messages')
           .insert({
             conversation_id: input.conversationId,
             tenant_id: input.tenantId,
             user_id: input.userId ?? null,
+            trace_id: input.traceId ?? null,
+            root_span_name: input.rootSpanName ?? null,
+            root_span_id: input.rootSpanId ?? null,
             role: input.role,
             content: input.content,
-            metadata: input.metadata ?? null,
+            metadata: mergedMetadata ?? null,
             created_at: messageTimestamp,
           })
           .select('id, created_at, metadata')
@@ -612,9 +671,26 @@ export class SupabaseConversationStore implements ConversationStore {
 
         const createdAt = (data as SupabaseConversationMessageRow).created_at ?? messageTimestamp;
 
+        const conversationUpdate: Record<string, unknown> = {
+          last_message_at: createdAt,
+          updated_at: createdAt,
+        };
+
+        if (input.traceId !== undefined) {
+          conversationUpdate.trace_id = input.traceId;
+        }
+
+        if (input.rootSpanName !== undefined) {
+          conversationUpdate.root_span_name = input.rootSpanName;
+        }
+
+        if (input.rootSpanId !== undefined) {
+          conversationUpdate.root_span_id = input.rootSpanId;
+        }
+
         const { error: updateError } = await this.internalClient
           .from('conversations')
-          .update({ last_message_at: createdAt, updated_at: createdAt })
+          .update(conversationUpdate)
           .eq('id', input.conversationId)
           .eq('tenant_id', input.tenantId);
 
@@ -711,7 +787,9 @@ export class SupabaseConversationStore implements ConversationStore {
 
     const query = this.client
       .from('conversation_messages_view')
-      .select('id, conversation_id, tenant_id, user_id, role, content, metadata, created_at')
+      .select(
+        'id, conversation_id, tenant_id, user_id, trace_id, root_span_name, root_span_id, role, content, metadata, created_at'
+      )
       .eq('conversation_id', input.conversationId)
       .eq('tenant_id', input.tenantId)
       .order('created_at', { ascending: true });
@@ -739,7 +817,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const query = this.client
       .from('conversations_view')
       .select(
-        'id, tenant_id, user_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
+        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
       )
       .eq('tenant_id', input.tenantId)
 
@@ -876,7 +954,7 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   async load(identity: ConversationIdentity): Promise<ConversationContext | null> {
     const { data, error } = await this.client
       .from('conversation_contexts_view')
-      .select('conversation_id, tenant_id, active_node_ids, updated_at')
+      .select('conversation_id, tenant_id, active_node_ids, trace_id, updated_at')
       .eq('conversation_id', identity.conversationId)
       .eq('tenant_id', identity.tenantId)
       .maybeSingle();
@@ -887,7 +965,10 @@ export class SupabaseConversationContextStore implements ConversationContextStor
 
     if (!data) return null;
     const row = data as SupabaseConversationContextRow;
-    return { activeNodeIds: row.active_node_ids ?? [] } satisfies ConversationContext;
+    return {
+      activeNodeIds: row.active_node_ids ?? [],
+      traceId: row.trace_id,
+    } satisfies ConversationContext;
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
@@ -908,6 +989,7 @@ export class SupabaseConversationContextStore implements ConversationContextStor
             conversation_id: identity.conversationId,
             tenant_id: identity.tenantId,
             active_node_ids: ctx.activeNodeIds ?? [],
+            trace_id: ctx.traceId ?? null,
             updated_at: new Date().toISOString(),
           });
 
@@ -918,9 +1000,13 @@ export class SupabaseConversationContextStore implements ConversationContextStor
     );
   }
 
-  async mergeActiveNodeIds(identity: ConversationIdentity, nodeIds: string[]): Promise<void> {
+  async mergeActiveNodeIds(
+    identity: ConversationIdentity,
+    nodeIds: string[],
+    options?: { traceId?: string | null }
+  ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
-    await this.save(identity, { activeNodeIds: merged });
+    await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
   }
 }

@@ -167,6 +167,7 @@ export interface ConversationIdentity {
 
 export interface ConversationContext {
   activeNodeIds: string[];
+  traceId?: string | null;
 }
 
 export const EMPTY_CONVERSATION_CONTEXT: ConversationContext = { activeNodeIds: [] };
@@ -176,7 +177,8 @@ export interface ConversationContextStore {
   save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void>;
   mergeActiveNodeIds?(
     identity: ConversationIdentity,
-    nodeIds: string[]
+    nodeIds: string[],
+    options?: { traceId?: string | null }
   ): Promise<void>;
 }
 
@@ -275,6 +277,16 @@ export class ComplianceEngine {
       'compliance.egress.guard',
       deps.egressGuard
     );
+  }
+
+  private getActiveTraceId() {
+    const spanContext = trace.getActiveSpan()?.spanContext();
+
+    if (!spanContext || !trace.isSpanContextValid(spanContext)) {
+      return undefined;
+    }
+
+    return spanContext.traceId;
   }
 
   private instrumentAsyncWithSpan<T extends Record<string, unknown>>(
@@ -656,6 +668,8 @@ export class ComplianceEngine {
       return;
     }
 
+    const activeTraceId = this.getActiveTraceId();
+
     try {
       await this.runWithTracing(
         'compliance.conversation.save',
@@ -664,7 +678,8 @@ export class ComplianceEngine {
           if (this.deps.conversationContextStore!.mergeActiveNodeIds) {
             await this.deps.conversationContextStore!.mergeActiveNodeIds(
               identity,
-              nodeIds
+              nodeIds,
+              { traceId: activeTraceId }
             );
             return;
           }
@@ -678,6 +693,7 @@ export class ComplianceEngine {
 
           await this.deps.conversationContextStore!.save(identity, {
             activeNodeIds: mergedIds,
+            traceId: activeTraceId ?? existingContext.traceId,
           });
         }
       );

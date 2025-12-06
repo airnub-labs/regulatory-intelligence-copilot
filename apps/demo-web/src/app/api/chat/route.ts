@@ -7,7 +7,7 @@
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
 import { requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
-import { context, propagation } from '@opentelemetry/api';
+import { context, propagation, trace } from '@opentelemetry/api';
 import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
@@ -66,7 +66,20 @@ export async function POST(request: Request) {
     { tenantId, conversationId, userId: session.user.id },
     () =>
       withSpan('api.chat', spanAttributes, () => {
-        const serializedBody = JSON.stringify({ ...normalizedBody, tenantId });
+        const activeSpan = trace.getActiveSpan();
+        const activeSpanContext = activeSpan?.spanContext();
+        const traceContext =
+          activeSpanContext && trace.isSpanContextValid(activeSpanContext)
+            ? {
+                traceId: activeSpanContext.traceId,
+                rootSpanId: activeSpanContext.spanId,
+                rootSpanName: 'name' in (activeSpan ?? {})
+                  ? (activeSpan as { name?: string }).name
+                  : undefined,
+              }
+            : undefined;
+
+        const serializedBody = JSON.stringify({ ...normalizedBody, tenantId, traceContext });
         propagation.inject(context.active(), headers, headerSetter);
 
         return handler(
