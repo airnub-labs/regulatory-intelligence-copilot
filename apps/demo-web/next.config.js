@@ -12,9 +12,6 @@ const nextConfig = {
     'pino',
     'thread-stream',
     'pino-pretty',
-    '@opentelemetry/instrumentation',
-    'import-in-the-middle',
-    'require-in-the-middle',
   ],
   transpilePackages: [
     '@e2b-auditor/core',
