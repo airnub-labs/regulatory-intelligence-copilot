@@ -395,10 +395,6 @@ export class ComplianceEngine {
       'compliance.concepts.handle',
       { toolName },
       async () => {
-        if (toolName !== 'capture_concepts') {
-          return [];
-        }
-
         if (!this.conceptCaptureEnabled || !this.deps.canonicalConceptHandler || !this.deps.graphWriteService) {
           if (!this.conceptWarningLogged) {
             console.warn(
@@ -415,6 +411,10 @@ export class ComplianceEngine {
             ? chunk.argsJson
             : chunk.arguments ?? chunk.payload;
         const concepts = this.parseCapturedConcepts(payload);
+        const isConceptPayload = concepts.length > 0;
+        if (toolName !== 'capture_concepts' && !isConceptPayload) {
+          return [];
+        }
         if (!concepts.length) {
           return [];
         }
