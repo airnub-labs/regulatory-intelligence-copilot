@@ -194,7 +194,8 @@ describe('ComplianceEngine streaming', () => {
 
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-1', conversationId: 'conversation-1' },
-      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1']),
+      expect.objectContaining({ traceId: expect.any(String) })
     );
   });
 
@@ -244,7 +245,8 @@ describe('ComplianceEngine streaming', () => {
 
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-2', conversationId: 'conversation-2' },
-      expect.arrayContaining(['concept-node-1', 'concept-node-2'])
+      expect.arrayContaining(['concept-node-1', 'concept-node-2']),
+      expect.objectContaining({ traceId: expect.any(String) })
     );
   });
 
@@ -322,7 +324,8 @@ describe('ComplianceEngine streaming', () => {
 
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-1', conversationId: 'conversation-1' },
-      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1'])
+      expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1']),
+      expect.objectContaining({ traceId: expect.any(String) })
     );
   });
 

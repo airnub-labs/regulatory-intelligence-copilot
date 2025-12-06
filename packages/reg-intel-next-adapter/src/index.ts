@@ -47,6 +47,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import neo4j, { type Driver } from 'neo4j-driver';
 import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
+import { trace } from '@opentelemetry/api';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
 
@@ -163,6 +164,51 @@ function sanitizeMessages(messages: Array<{ role: string; content: string }>): C
       content: role === 'user' ? sanitizeTextForEgress(message.content) : message.content,
     } satisfies ChatMessage;
   });
+}
+
+type TraceContextPayload = {
+  traceId?: string | null;
+  rootSpanId?: string | null;
+  rootSpanName?: string | null;
+};
+
+function normalizeTraceContext(raw: unknown): TraceContextPayload {
+  if (!raw || typeof raw !== 'object') return {};
+  const candidate = raw as Record<string, unknown>;
+
+  return {
+    traceId: typeof candidate.traceId === 'string' ? candidate.traceId : undefined,
+    rootSpanId: typeof candidate.rootSpanId === 'string' ? candidate.rootSpanId : undefined,
+    rootSpanName: typeof candidate.rootSpanName === 'string' ? candidate.rootSpanName : undefined,
+  } satisfies TraceContextPayload;
+}
+
+function getActiveTraceContext(): TraceContextPayload {
+  const span = trace.getActiveSpan();
+  const spanContext = span?.spanContext();
+
+  if (!spanContext || !trace.isSpanContextValid(spanContext)) {
+    return {};
+  }
+
+  const spanName = 'name' in (span ?? {}) ? (span as { name?: string }).name : undefined;
+
+  return {
+    traceId: spanContext.traceId,
+    rootSpanId: spanContext.spanId,
+    rootSpanName: spanName,
+  } satisfies TraceContextPayload;
+}
+
+function resolveTraceContext(bodyValue: unknown): TraceContextPayload {
+  const provided = normalizeTraceContext(bodyValue);
+  const active = getActiveTraceContext();
+
+  return {
+    traceId: provided.traceId ?? active.traceId,
+    rootSpanId: provided.rootSpanId ?? active.rootSpanId,
+    rootSpanName: provided.rootSpanName ?? active.rootSpanName,
+  } satisfies TraceContextPayload;
 }
 
 /**
@@ -523,6 +569,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         profile,
         conversationId: requestConversationId,
         userId: bodyUserId,
+        traceContext: incomingTraceContext,
         shareAudience,
         tenantAccess,
         authorizationModel,
@@ -540,6 +587,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       const normalizedProfile = profile
         ? { ...profile, personaType: normalizeProfileType(profile.personaType) }
         : undefined;
+
+      const traceContext = resolveTraceContext(incomingTraceContext);
 
       // Validate profile if provided
       if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
@@ -564,6 +613,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         const created = await conversationStore.createConversation({
           tenantId,
           userId,
+          traceId: traceContext.traceId,
+          rootSpanId: traceContext.rootSpanId,
+          rootSpanName: traceContext.rootSpanName,
           personaId: normalizedProfile?.personaType,
           jurisdictions: normalizedProfile?.jurisdictions,
           title: typeof title === 'string' ? title : undefined,
@@ -618,6 +670,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         role: 'user',
         content: incomingMessageContent,
         userId,
+        traceId: traceContext.traceId,
+        rootSpanId: traceContext.rootSpanId,
+        rootSpanName: traceContext.rootSpanName,
         metadata: normalizedProfile ? { profile: normalizedProfile } : undefined,
       });
 
@@ -749,6 +804,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   tenantId,
                   conversationId,
                   userId: conversationRecord.userId ?? userId,
+                  traceId: traceContext.traceId,
+                  rootSpanId: traceContext.rootSpanId,
+                  rootSpanName: traceContext.rootSpanName,
                   role: 'assistant',
                   content: streamedTextBuffer,
                   metadata: lastMetadata
