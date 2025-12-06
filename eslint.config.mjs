@@ -37,25 +37,25 @@ export default tseslint.config(
           selector:
             "CallExpression[callee.property.name='run'] > MemberExpression[object.name='session']",
           message:
-            'Direct session.run() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/safety-guards/graph_ingress_guard_v_0_1.md',
+            'Direct session.run() calls are prohibited. Use GraphWriteService for all graph writes. See docs/architecture/guards/graph_ingress_v_0_1.md',
         },
         {
           selector: "CallExpression[callee.name='executeCypher']",
           message:
-            'Direct executeCypher() calls are prohibited. Use GraphWriteService for all graph writes. See docs/specs/safety-guards/graph_ingress_guard_v_0_1.md',
+            'Direct executeCypher() calls are prohibited. Use GraphWriteService for all graph writes. See docs/architecture/guards/graph_ingress_v_0_1.md',
         },
         // ComplianceEngine Bypass Prevention (Phase 3 Architecture)
         {
           selector:
             "CallExpression[callee.object.name='llmRouter'][callee.property.name='streamChat']",
           message:
-            'Direct llmRouter.streamChat() calls are prohibited in application code. Use ComplianceEngine.handleChatStream() to ensure proper agent routing and graph querying. See docs/architecture_v_0_4.md',
+            'Direct llmRouter.streamChat() calls are prohibited in application code. Use ComplianceEngine.handleChatStream() to ensure proper agent routing and graph querying. See docs/architecture/archive/architecture_v_0_4.md',
         },
         {
           selector:
             "CallExpression[callee.object.name='llmRouter'][callee.property.name='chat']",
           message:
-            'Direct llmRouter.chat() calls are prohibited in application code. Use ComplianceEngine.handleChat() to ensure proper agent routing and graph querying. See docs/architecture_v_0_4.md',
+            'Direct llmRouter.chat() calls are prohibited in application code. Use ComplianceEngine.handleChat() to ensure proper agent routing and graph querying. See docs/architecture/archive/architecture_v_0_4.md',
         },
       ],
     },
@@ -79,7 +79,7 @@ export default tseslint.config(
           name: '@reg-copilot/reg-intel-llm',
           importNames: ['LlmRouter', 'createLlmRouter', 'createDefaultLlmRouter'],
           message:
-            'Direct LlmRouter usage is prohibited in application code. Use ComplianceEngine.handleChat() or ComplianceEngine.handleChatStream() instead. See docs/architecture_v_0_4.md',
+            'Direct LlmRouter usage is prohibited in application code. Use ComplianceEngine.handleChat() or ComplianceEngine.handleChatStream() instead. See docs/architecture/archive/architecture_v_0_4.md',
         },
       ],
     },

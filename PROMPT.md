@@ -31,31 +31,31 @@ You must treat the project docs as **source of truth** and avoid inventing new a
 
 ## 2. Before you touch any code
 
-For any non‑trivial task, mentally load these files first (from `docs/` and `docs/specs/`):
+For any non‑trivial task, mentally load these files first (from `docs/`):
 
 1. **Core concept & architecture**
    - `docs/architecture/architecture_v_0_6.md`
-   - `docs/specs/concept/regulatory_graph_copilot_concept_v_0_6.md`
+   - `docs/architecture/copilot-concept/concept_v_0_6.md`
 
 2. **Graph schema & changelog**
-   - `docs/specs/graph-schema/graph_schema_v_0_6.md`
-   - `docs/specs/graph_schema_changelog_v_0_6.md`
+   - `docs/architecture/graph/schema_v_0_6.md`
+   - `docs/architecture/graph/schema_changelog_v_0_6.md`
 
 3. **Agents & prompts**
-   - `AGENTS_v_0_6.md`
-   - `PROMPT_v_0_6.md` (this file – keep yourself aligned)
+   - `AGENTS.md`
+   - `PROMPT.md` (this file – keep yourself aligned)
 
 4. **Key cross‑cutting specs**
-   - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
-   - `docs/specs/graph_algorithms_v_0_1.md`
-   - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
-   - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
-   - `docs/specs/safety-guards/egress_guard_v_0_2.md`
+   - `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
+   - `docs/architecture/graph/algorithms_v_0_1.md`
+   - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
+   - `docs/architecture/guards/graph_ingress_v_0_1.md`
+   - `docs/architecture/guards/egress_v_0_2.md`
 
 5. **New v0.6 features**
-   - `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`
-   - `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`
-   - `docs/specs/scenario_engine_v_0_1.md` (if scenario/what‑if related)
+   - `docs/architecture/conversation-context/concept_capture_v_0_1.md`
+   - `docs/architecture/conversation-context/spec_v_0_1.md`
+   - `docs/architecture/engines/scenario-engine/spec_v_0_1.md` (if scenario/what‑if related)
 
 6. **Roadmap & decisions**
    - `docs/governance/decisions/decisions_v_0_6.md`
@@ -101,7 +101,7 @@ When adding new code:
 
 - Memgraph may only contain:
   - Regulatory rules, concepts, timelines, guidance, cases, EU regs/directives, treaties, profile tags, algorithm metadata.  
-  - SKOS‑inspired concepts (`:Concept` + `:Label`) as per `graph_schema_v_0_6.md` and `concept_capture_from_main_chat_v_0_1.md`.
+  - SKOS‑inspired concepts (`:Concept` + `:Label`) as per `schema_v_0_6.md` and `concept_capture_v_0_1.md`.
 - Memgraph must **never** contain:
   - User names, emails, addresses, PPSNs, company IDs, bank details.  
   - Tenant IDs, conversation IDs, raw messages, or personal scenarios.
@@ -167,9 +167,9 @@ When you receive a task like “Implement X” or “Refactor Y”, follow this 
    - `reg-intel-prompts`: pure prompt composition; no network or graph calls.
 
 5. **Wire up concept capture & Conversation Context correctly** (when relevant)
-   - Use the structured stream chunk shape (`text` vs `tool` vs `error`) defined in `concept_capture_from_main_chat_v_0_1.md`.  
+   - Use the structured stream chunk shape (`text` vs `tool` vs `error`) defined in `concept_capture_v_0_1.md`.  
    - On `tool` chunks for `capture_concepts`, call the canonical concept resolver + `GraphWriteService`.  
-   - Update `referencedNodes` and `ConversationContext.activeNodeIds` according to `conversation_context_spec_v_0_1.md`.
+   - Update `referencedNodes` and `ConversationContext.activeNodeIds` according to `spec_v_0_1.md`.
 
 6. **Test & document**
    - Add/adjust unit and integration tests where appropriate.  
@@ -193,7 +193,7 @@ When working here, you should:
     - Stream answer tokens to the caller.  
     - Intercept tool output chunks and route them to a concept metadata handler.
   - Conversation Context loading/saving via a `ConversationContextStore` abstraction.
-  - Agent selection / delegation logic as defined in `AGENTS_v_0_6.md`.
+- Agent selection / delegation logic as defined in `AGENTS.md`.
 
 - Never:
   - Talk directly to Memgraph; use `reg-intel-graph` abstractions.  
@@ -240,7 +240,7 @@ When working here, you should:
     | { type: 'error'; error: Error };
   ```
 
-- Configure the `capture_concepts` tool schema for main chat as per `concept_capture_from_main_chat_v_0_1.md`.
+- Configure the `capture_concepts` tool schema for main chat as per `concept_capture_v_0_1.md`.
 
 - Respect egress guard rules:
   - All outbound provider calls go through the Egress Guard.  
@@ -346,5 +346,5 @@ If a feature request would push the system towards providing personalised, bindi
 
 ---
 
-**End of PROMPT_v_0_6.md**
+**End of PROMPT.md**
 

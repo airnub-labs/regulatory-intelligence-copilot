@@ -687,7 +687,7 @@ Any other relevant information
 ### Community Resources
 
 - **GitHub Issues:** https://github.com/your-repo/issues
-- **Documentation:** [Main docs](../change-detection/graph_change_detection_v_0_6.md)
+- **Documentation:** [Main docs](../architecture/graph/change_detection_v_0_6.md)
 - **API Reference:** [API docs](./graph_change_detector_api.md)
 - **Discord/Slack:** [Community link]
 
@@ -699,7 +699,7 @@ Any other relevant information
 - [Usage Guide](./graph_change_detector_usage.md)
 - [Testing Guide](./graph_change_detector_testing.md)
 - [Performance Guide](./graph_change_detector_performance.md)
-- [Architecture Overview](../change-detection/graph_change_detection_v_0_6.md)
+- [Architecture Overview](../architecture/graph/change_detection_v_0_6.md)
 
 ---
 

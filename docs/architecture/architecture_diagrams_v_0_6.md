@@ -5,7 +5,7 @@ This document contains detailed Mermaid diagrams showing the **v0.6 architecture
 - Clean layered UI architecture.
 - Complete `/api/chat` request flow via **ComplianceEngine** and agents.
 - **LLM provider integration** with OpenAI Responses API and multi-provider routing.
-- **Graph streaming & patch format** aligned with `graph_change_detection_v_0_6`.
+- **Graph streaming & patch format** aligned with `change_detection_v_0_6`.
 - v0.6 additions: **concept capture from main chat**, **conversation context**, and **Supabase-backed chat storage**.
 
 > v0.6 builds on the diagrams introduced in v0.5 and updates them to reflect:
@@ -728,7 +728,7 @@ graph TB
 
 ## Graph Streaming Architecture
 
-This diagram shows the real-time graph streaming infrastructure for pushing incremental updates to clients, aligned with `graph_change_detection_v_0_6` and the updated `GraphPatch` shape.
+This diagram shows the real-time graph streaming infrastructure for pushing incremental updates to clients, aligned with `change_detection_v_0_6` and the updated `GraphPatch` shape.
 
 ```mermaid
 graph TB
