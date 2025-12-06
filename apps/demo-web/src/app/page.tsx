@@ -607,9 +607,22 @@ export default function Home() {
               const data = parsedData as unknown as ConversationListEventPayloadMap['upsert']
               if (data.conversation) {
                 const conv = data.conversation
+                // Check if conversation's archived state matches current tab filter
+                const isArchived = conv.archivedAt !== null
+                const shouldBeInCurrentList =
+                  conversationListTab === 'active' ? !isArchived :
+                  conversationListTab === 'archived' ? isArchived :
+                  true // 'all' tab shows everything
+
                 setConversations(prev => {
-                  // Add if new, update if exists
                   const exists = prev.some(c => c.id === conv.id)
+
+                  // Remove from list if archived state doesn't match filter
+                  if (!shouldBeInCurrentList) {
+                    return prev.filter(c => c.id !== conv.id)
+                  }
+
+                  // Add if new, update if exists
                   if (!exists) return [conv, ...prev]
                   return prev.map(c => c.id === conv.id ? conv : c)
                 })
