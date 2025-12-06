@@ -1,7 +1,8 @@
-import { initObservability } from '@reg-copilot/reg-intel-observability';
-
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'edge') return;
+
+  // Use dynamic import to avoid bundling Node.js-only code for Edge Runtime
+  const { initObservability } = await import('@reg-copilot/reg-intel-observability');
 
   const envSamplingRatio = process.env.OTEL_TRACES_SAMPLING_RATIO
     ? Number(process.env.OTEL_TRACES_SAMPLING_RATIO)

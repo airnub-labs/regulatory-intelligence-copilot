@@ -566,51 +566,139 @@ export default function Home() {
     }
   }
 
+  // Subscribe to conversations list updates for real-time changes
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const controller = new AbortController()
+
+    const subscribe = async () => {
+      try {
+        const response = await fetch(`/api/conversations/stream?status=${conversationListTab}`, {
+          signal: controller.signal,
+          credentials: 'include',
+        })
+        if (!response.ok || !response.body) return
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+
+          let boundaryIndex
+          while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, boundaryIndex).trim()
+            buffer = buffer.slice(boundaryIndex + 2)
+
+            if (!rawEvent) continue
+            const parsedEvent = parseSseEvent(rawEvent)
+            if (!parsedEvent) continue
+            const parsedData = parseJsonSafe(parsedEvent.data)
+
+            if (parsedEvent.type === 'snapshot' && typeof parsedData === 'object' && parsedData !== null) {
+              const snapshot = parsedData as { conversations?: ConversationSummary[] }
+              if (snapshot.conversations) {
+                setConversations(snapshot.conversations)
+              }
+            } else if (parsedEvent.type === 'created' && typeof parsedData === 'object' && parsedData !== null) {
+              const conv = parsedData as ConversationSummary
+              setConversations(prev => {
+                if (prev.some(c => c.id === conv.id)) return prev
+                return [conv, ...prev]
+              })
+            } else if (parsedEvent.type === 'updated' && typeof parsedData === 'object' && parsedData !== null) {
+              const conv = parsedData as ConversationSummary
+              setConversations(prev =>
+                prev.map(c => c.id === conv.id ? conv : c)
+              )
+              // Update current conversation metadata if it's the one being edited
+              if (conv.id === conversationId) {
+                setConversationTitle(conv.title ?? '')
+                setSavedConversationTitle(conv.title ?? '')
+                setShareAudience(conv.shareAudience)
+                setTenantAccess(conv.tenantAccess)
+              }
+            } else if (parsedEvent.type === 'deleted' && typeof parsedData === 'object' && parsedData !== null) {
+              const { conversationId: deletedId } = parsedData as { conversationId: string }
+              setConversations(prev => prev.filter(c => c.id !== deletedId))
+              if (deletedId === conversationId) {
+                startNewConversation()
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Ignore abort errors - they're expected when cleaning up
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Conversations list stream error:', error)
+        }
+      }
+    }
+
+    subscribe()
+
+    return () => {
+      controller.abort()
+    }
+  }, [isAuthenticated, conversationListTab, conversationId])
+
+  // Subscribe to individual conversation updates for real-time changes
   useEffect(() => {
     if (!conversationId || !isAuthenticated) return
     const controller = new AbortController()
 
     const subscribe = async () => {
-      const response = await fetch(`/api/conversations/${conversationId}/stream`, {
-        signal: controller.signal,
-        credentials: 'include',
-      })
-      if (!response.ok || !response.body) return
+      try {
+        const response = await fetch(`/api/conversations/${conversationId}/stream`, {
+          signal: controller.signal,
+          credentials: 'include',
+        })
+        if (!response.ok || !response.body) return
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
 
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
+          buffer += decoder.decode(value, { stream: true })
 
-        let boundaryIndex
-        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-          const rawEvent = buffer.slice(0, boundaryIndex).trim()
-          buffer = buffer.slice(boundaryIndex + 2)
+          let boundaryIndex
+          while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+            const rawEvent = buffer.slice(0, boundaryIndex).trim()
+            buffer = buffer.slice(boundaryIndex + 2)
 
-          if (!rawEvent) continue
-          const parsedEvent = parseSseEvent(rawEvent)
-          if (!parsedEvent) continue
-          const parsedData = parseJsonSafe(parsedEvent.data)
+            if (!rawEvent) continue
+            const parsedEvent = parseSseEvent(rawEvent)
+            if (!parsedEvent) continue
+            const parsedData = parseJsonSafe(parsedEvent.data)
 
-          if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
-            applyMetadata(parsedData)
-            if (conversationIdRef.current) {
+            if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
+              applyMetadata(parsedData)
+              if (conversationIdRef.current) {
+                loadConversation(conversationIdRef.current)
+              }
+            } else if (parsedEvent.type === 'warning') {
+              const warningList = extractWarnings(parsedData)
+              if (warningList.length) {
+                setWarnings(warningList)
+                setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
+              }
+            } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
               loadConversation(conversationIdRef.current)
             }
-          } else if (parsedEvent.type === 'warning') {
-            const warningList = extractWarnings(parsedData)
-            if (warningList.length) {
-              setWarnings(warningList)
-              setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
-            }
-          } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
-            loadConversation(conversationIdRef.current)
           }
+        }
+      } catch (error) {
+        // Ignore abort errors - they're expected when cleaning up
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error('Conversation stream error:', error)
         }
       }
     }
