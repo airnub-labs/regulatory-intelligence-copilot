@@ -10,6 +10,9 @@
 > - Adding explicit support for **self‑populating graph concepts** from main chat (SKOS‑style concepts + tools).
 > - Introducing **conversation context** and **referenced node tracking** as first‑class architectural concerns.
 > - Recognising future **Scenario Engine** and **What‑If simulations** as supported extension points.
+> - **NEW:** Implementing **conversation path branching and merging** for advanced exploration workflows with path-aware navigation.
+> - **NEW:** Adding **AI-powered merge summarization** to consolidate branch findings back to the main conversation.
+> - **NEW:** Introducing a **reusable UI component library** (`@reg-copilot/reg-intel-ui`) for conversation path management.
 
 ---
 
@@ -31,12 +34,16 @@ This architecture sits on top of, and must remain consistent with, the following
 
 ### New / Refined Specs Introduced by v0.6
 
-- `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
+- `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`
   (SKOS‑inspired concept capture via LLM tools and self‑population of the rules graph.)
-- `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
+- `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`
   (Conversation‑level context, active graph node IDs, and how they are persisted and applied.)
-- `docs/specs/scenario_engine_v_0_1.md`  
+- `docs/specs/scenario_engine_v_0_1.md`
   (Initial design for a Scenario / What‑If Engine built on top of the rules graph + timeline.)
+- `docs/architecture/conversation-branching-and-merging.md`
+  (Conversation path branching, merging, and path-aware navigation architecture.)
+- `docs/architecture/IMPLEMENTATION-PLAN.md`
+  (Implementation tracking for conversation branching features.)
 
 ### Project‑Level Docs
 
@@ -168,6 +175,25 @@ The engine is implemented as a set of reusable packages:
 - `reg-intel-prompts`
   - Prompt aspect system (jurisdiction, agent, persona, disclaimers, additional context).
   - Standardised system prompts and guardrails.
+
+- `reg-intel-conversations`
+  - `ConversationStore` and `ConversationContextStore` abstractions.
+  - `ConversationPathStore` for path branching and merging.
+  - SSE event types and payload definitions.
+  - Share/authorisation envelope types.
+  - In-memory and Supabase implementations.
+
+- `reg-intel-ui`
+  - Reusable React components for conversation path management.
+  - `ConversationPathProvider` context and hooks.
+  - `PathSelector`, `BranchDialog`, `MergeDialog`, `VersionNavigator` components.
+  - Tailwind-compatible styling with CSS variables for theming.
+  - Designed for consumption by any Next.js host application.
+
+- `reg-intel-next-adapter`
+  - Thin Next.js adapter for wiring routes to engine.
+  - Path-aware chat handler integration.
+  - SSE endpoint helpers.
 
 The **demo web app** depends on these packages but does **not** contain core business logic. This makes it easy to embed the engine in other hosts (Next.js apps, CLI, future SaaS shells).
 
@@ -337,9 +363,255 @@ This design ensures:
 
 ---
 
-## 6. Graph Layer & Streaming
+## 6. Conversation Paths, Branching & Merging
 
-### 6.1 Graph Client & Writes
+v0.6 introduces a comprehensive **conversation path system** that enables users to branch conversations for exploratory research, navigate through conversation history with full path awareness, and merge findings back to the main conversation.
+
+### 6.1 Core Concepts
+
+**Conversation Paths** represent distinct exploration threads within a single conversation:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Main Path                                                       │
+│  ─────────●────●────●────●                                      │
+│                │    ╰─●──●──● (Edit creates implicit path)       │
+│                ╰─●──●  (Branch: "PRSI Analysis")                 │
+│                   ╰─●──●──● (Nested branch: "Cross-border")      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+- **Primary Path**: Every conversation has exactly one primary path (the "main" thread).
+- **Branch Paths**: Created from any message point for independent exploration.
+- **Path Hierarchy**: Branches can have sub-branches, forming a tree structure.
+- **Path Resolution**: Messages are resolved by walking the path chain from root to current path.
+
+### 6.2 Data Model
+
+The path system is implemented via a dedicated `conversation_paths` table and path-aware message columns:
+
+```sql
+-- Conversation paths table
+CREATE TABLE conversation_paths (
+    id uuid PRIMARY KEY,
+    conversation_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+
+    -- Lineage
+    parent_path_id uuid REFERENCES conversation_paths(id),
+    branch_point_message_id uuid REFERENCES conversation_messages(id),
+
+    -- Metadata
+    name text,                    -- Optional branch name
+    is_primary boolean NOT NULL,  -- Exactly one per conversation
+    is_active boolean NOT NULL,   -- Currently visible/active
+
+    -- Merge tracking
+    merged_to_path_id uuid,
+    merged_at timestamptz,
+    merge_summary_message_id uuid,
+
+    created_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL
+);
+
+-- Messages are path-aware
+ALTER TABLE conversation_messages ADD COLUMN
+    path_id uuid NOT NULL REFERENCES conversation_paths(id),
+    sequence_in_path integer NOT NULL,
+    is_branch_point boolean NOT NULL DEFAULT false,
+    branched_to_paths uuid[] DEFAULT '{}';
+```
+
+### 6.3 Path Resolution Algorithm
+
+When viewing messages for a path, the system resolves the complete message list by walking the path hierarchy:
+
+```typescript
+async function resolvePathMessages(pathId: string): Promise<Message[]> {
+  const path = await getPath(pathId);
+
+  if (!path.parentPathId) {
+    // Root path - return all messages for this path
+    return getMessagesForPath(pathId);
+  }
+
+  // Child path - compose from parent
+  const parentMessages = await resolvePathMessages(path.parentPathId);
+
+  // Find branch point in parent messages
+  const branchPointIndex = parentMessages.findIndex(
+    m => m.id === path.branchPointMessageId
+  );
+
+  // Take parent messages up to and including branch point
+  const inherited = parentMessages.slice(0, branchPointIndex + 1);
+
+  // Get this path's own messages
+  const own = await getMessagesForPath(pathId);
+
+  return [...inherited, ...own];
+}
+```
+
+This ensures:
+- Path-aware navigation shows the correct conversation history at any point.
+- Branches inherit context from their parent path.
+- Users see a coherent conversation regardless of which path they're viewing.
+
+### 6.4 Branching Operations
+
+Users can create branches from any message in a conversation:
+
+1. **Branch Creation**: Creates a new `conversation_path` record with:
+   - `parent_path_id` pointing to the source path.
+   - `branch_point_message_id` pointing to the branching message.
+   - Optional `name` for identification.
+
+2. **Branch Navigation**: Users can switch between paths via path selector UI.
+
+3. **Branch Lifecycle**: Paths can be:
+   - **Active**: Visible and available for new messages.
+   - **Archived**: Hidden but preserved (e.g., after merge).
+   - **Deleted**: Soft-deleted with cascade to messages.
+
+### 6.5 Merging Operations
+
+Branches can be merged back to their parent (or any ancestor) path:
+
+**Merge Modes**:
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Summary** | AI generates a concise summary of branch findings | Default for most merges |
+| **Full** | All branch messages appended to target | When full context needed |
+| **Selective** | User selects specific messages to include | Fine-grained control |
+
+**AI-Powered Merge Summarization**:
+
+The system uses LLM to generate merge summaries via the `generateMergeSummary()` function:
+
+```typescript
+interface GenerateMergeSummaryInput {
+  branchMessages: PathAwareMessage[];
+  sourcePath: ConversationPath;
+  targetPath: ConversationPath;
+  customPrompt?: string;      // User-provided summarization guidance
+  tenantId: string;
+}
+
+interface GenerateMergeSummaryResult {
+  summary: string;
+  aiGenerated: boolean;       // true if LLM was used
+  error?: string;             // Populated on failure
+}
+```
+
+The summarizer:
+- Uses a regulatory-focused system prompt for consistent summaries.
+- Captures key findings, regulatory references, and action items.
+- Falls back gracefully when LLM is unavailable.
+- Supports custom user prompts for guided summarization.
+
+**Merge Result**:
+
+After merge, a system message is created in the target path containing:
+- Summary of branch findings (AI-generated or user-provided).
+- Metadata tracking source path, message count, and merge timestamp.
+- Branch is optionally archived post-merge.
+
+### 6.6 API Endpoints
+
+Path management is exposed via REST endpoints:
+
+```
+# Path Management
+GET    /api/conversations/:id/paths                    # List all paths
+POST   /api/conversations/:id/paths                    # Create new path
+GET    /api/conversations/:id/paths/:pathId            # Get path details
+PATCH  /api/conversations/:id/paths/:pathId            # Update path
+DELETE /api/conversations/:id/paths/:pathId            # Delete/archive path
+
+# Path Messages
+GET    /api/conversations/:id/paths/:pathId/messages   # Get resolved messages
+
+# Branching
+POST   /api/conversations/:id/branch                   # Create branch
+       Body: { sourceMessageId, branchName? }
+
+# Merging
+POST   /api/conversations/:id/paths/:pathId/merge/preview  # Preview merge
+       Body: { targetPathId, mergeMode, summaryPrompt? }
+POST   /api/conversations/:id/paths/:pathId/merge          # Execute merge
+       Body: { targetPathId, mergeMode, summaryContent?, archiveSource? }
+
+# Active Path
+GET    /api/conversations/:id/active-path              # Get active path
+PUT    /api/conversations/:id/active-path              # Set active path
+```
+
+### 6.7 SSE Events
+
+Real-time path updates are delivered via SSE:
+
+```typescript
+type PathEventType =
+  | 'path:created'     // New branch created
+  | 'path:updated'     // Path metadata changed
+  | 'path:deleted'     // Path deleted/archived
+  | 'path:merged'      // Path merged to another
+  | 'path:active';     // Active path changed
+
+interface PathEventPayloadMap {
+  'path:created': { path: ConversationPath; branchPointMessage?: PathAwareMessage };
+  'path:updated': { pathId: string; conversationId: string; changes: Partial<ConversationPath> };
+  'path:deleted': { pathId: string; conversationId: string; reason: 'deleted' | 'archived' };
+  'path:merged': { sourcePathId: string; targetPathId: string; conversationId: string; summaryMessageId?: string; mergeMode: MergeMode };
+  'path:active': { pathId: string; conversationId: string; previousPathId?: string };
+}
+```
+
+### 6.8 Reusable UI Component Library
+
+The `@reg-copilot/reg-intel-ui` package provides reusable components for path management:
+
+**Components**:
+- `ConversationPathProvider`: React context for path state management.
+- `PathSelector`: Dropdown for switching between paths.
+- `BranchButton` / `BranchDialog`: UI for creating branches.
+- `MergeDialog` / `MergePreview`: UI for merge configuration and preview.
+- `VersionNavigator`: Navigation through message version history.
+
+**Hooks**:
+- `useConversationPaths()`: Main hook for path state and actions.
+- `usePathResolution()`: Resolve messages for a given path.
+- `useBranching()`: Branch creation logic.
+- `useMerging()`: Merge operations and preview.
+
+The library is designed to be consumed by any Next.js application via:
+```json
+{
+  "dependencies": {
+    "@reg-copilot/reg-intel-ui": "workspace:*"
+  }
+}
+```
+
+### 6.9 Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Path-based versioning over `supersededBy` | Explicit paths provide clearer navigation and merge semantics |
+| AI summarization as default merge mode | Prevents conversation bloat while preserving insights |
+| Graceful LLM fallback | Ensures merge works even without LLM availability |
+| Reusable UI package | Enables adoption by other host applications |
+| SSE for real-time updates | Consistent with existing conversation streaming |
+
+---
+
+## 7. Graph Layer & Streaming
+
+### 7.1 Graph Client & Writes
 
 - `GraphClient` encapsulates Memgraph connections and Cypher queries.
 - `GraphWriteService` is the **only** path for writes to Memgraph:
@@ -347,7 +619,7 @@ This design ensures:
   - Rejects any write that attempts to introduce PII or unapproved properties.
   - Provides higher‑level upsert operations (e.g. `upsertConcept`, `upsertRule`, `upsertTimelineConstraint`).
 
-### 6.2 GraphChangeDetector & Streaming
+### 7.2 GraphChangeDetector & Streaming
 
 - `GraphChangeDetector` monitors Memgraph for changes relevant to the current tenant’s view of the rules graph.
 - When changes occur (e.g. ingestion creates new nodes/edges):
@@ -357,9 +629,9 @@ This design ensures:
 
 ---
 
-## 7. Timeline Engine & Scenario Engine
+## 8. Timeline Engine & Scenario Engine
 
-### 7.1 Timeline Engine (Unchanged in Scope)
+### 8.1 Timeline Engine (Unchanged in Scope)
 
 - The **Timeline Engine** (`docs/specs/timeline-engine/timeline_engine_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
 - Given a scenario (sequence of events + dates), it can answer:
@@ -368,7 +640,7 @@ This design ensures:
   - How lookbacks affect eligibility.
 - `ComplianceEngine` integrates it for timing‑sensitive questions (CGT wash rules, PRSI contribution windows, etc.).
 
-### 7.2 Scenario Engine (Future but Supported)
+### 8.2 Scenario Engine (Future but Supported)
 
 v0.6 recognises a future **Scenario Engine** (`scenario_engine_v_0_1.md`) as a first‑class extension point:
 
@@ -385,16 +657,16 @@ No concrete implementation is mandated by v0.6, but the architecture is explicit
 
 ---
 
-## 8. Agents & Prompt Aspects
+## 9. Agents & Prompt Aspects
 
-### 8.1 Engine‑First Agent Design
+### 9.1 Engine‑First Agent Design
 
 - `ComplianceEngine` hosts a registry of **specialist agents** and a **Global Regulatory Agent**.
 - Agents are configured via:
   - Prompt aspects (jurisdiction, persona/profile, agent role, disclaimers, conversation context).
   - Tool selections (graph queries, timeline engine, concept capture, MCP fetchers).
 
-### 8.2 Prompt Aspect System
+### 9.2 Prompt Aspect System
 
 - Prompt aspects compose into a single system prompt for each LLM call.
 - Key aspects include:
@@ -409,11 +681,11 @@ This keeps prompts consistent, auditable, and easily extended.
 
 ---
 
-## 9. UI Architecture (Incorporating v0.5)
+## 10. UI Architecture (Incorporating v0.5)
 
 v0.6 fully incorporates the UI architecture additions from v0.5.
 
-### 9.1 Frontend Stack
+### 10.1 Frontend Stack
 
 - Next.js 16 (App Router, Turbopack).
 - React 19.
@@ -425,7 +697,7 @@ v0.6 fully incorporates the UI architecture additions from v0.5.
 - Vercel AI SDK v5 (`ai`, `@ai-sdk/react`) for streaming chat UX on the frontend.
 - class‑variance‑authority, `clsx`, and `tailwind-merge` for composable, type‑safe styling.
 
-### 9.2 Chat & Graph Views
+### 10.2 Chat & Graph Views
 
 - `apps/demo-web/src/app/page.tsx`
   - Main chat interface.
@@ -436,7 +708,7 @@ v0.6 fully incorporates the UI architecture additions from v0.5.
   - Graph visualisation view.
   - Renders nodes/edges using ForceGraph (or similar) based on graph patches.
 
-### 9.3 API Routes
+### 10.3 API Routes
 
 - `/api/chat`
   - Thin adapter onto `ComplianceEngine.handleChat`.
@@ -456,7 +728,7 @@ The UI is deliberately **thin and dumb**: it does not implement business logic, 
 
 ---
 
-## 10. Technology Stack Summary
+## 11. Technology Stack Summary
 
 - **Runtime:** Node.js 24 LTS.
 - **Frontend:** Next.js 16, React 19, Tailwind v4, shadcn/ui, Radix UI, Vercel AI SDK v5.
@@ -467,7 +739,7 @@ The UI is deliberately **thin and dumb**: it does not implement business logic, 
 
 ---
 
-## 11. Non‑Goals (v0.6)
+## 12. Non‑Goals (v0.6)
 
 To keep scope sane, v0.6 explicitly does **not** attempt to:
 
@@ -478,7 +750,7 @@ To keep scope sane, v0.6 explicitly does **not** attempt to:
 
 ---
 
-## 12. Summary of Changes in v0.6
+## 13. Summary of Changes in v0.6
 
 ### Added
 
@@ -488,6 +760,28 @@ To keep scope sane, v0.6 explicitly does **not** attempt to:
 - ✅ Backend‑owned **Conversation Context** and `referencedNodes` semantics.
 - ✅ Hooks for future **Scenario Engine** and What‑If scenarios.
 - ✅ Explicit alignment with `concept_capture_from_main_chat_v_0_1.md`, `conversation_context_spec_v_0_1.md`, and `scenario_engine_v_0_1.md`.
+- ✅ **Conversation path branching and merging** system with:
+  - `conversation_paths` database table and path-aware message columns.
+  - `ConversationPathStore` interface with branching/merging operations.
+  - Path resolution algorithm for composing messages from path hierarchy.
+  - REST API endpoints for path CRUD, branching, and merging.
+  - SSE events for real-time path updates (`path:created`, `path:updated`, `path:merged`, etc.).
+- ✅ **AI-powered merge summarization** via `generateMergeSummary()`:
+  - Regulatory-focused summarization prompts.
+  - Support for custom user-provided summarization guidance.
+  - Graceful fallback when LLM is unavailable.
+- ✅ **Reusable UI component library** (`@reg-copilot/reg-intel-ui`):
+  - `ConversationPathProvider` for path state management.
+  - `PathSelector`, `BranchDialog`, `MergeDialog` components.
+  - `useConversationPaths()` and related hooks.
+  - Tailwind-compatible styling with light/dark mode support.
+
+### Deprecated / Removed
+
+- ❌ `supersededBy` field for message versioning (replaced by path-based versioning).
+- ❌ `softDeleteMessage()` method (replaced by path versioning via new messages).
+- ❌ `PathEventPayloads` interface (replaced by `PathEventPayloadMap` in sseTypes.ts).
+- ❌ `AuditorError` and `isAuditorError` aliases (use `ComplianceError` and `isComplianceError`).
 
 ### Carried Forward (Unchanged in Spirit)
 
