@@ -3,4 +3,4 @@ export {
   useConversationPaths,
   useHasPathProvider,
   type ConversationPathProviderProps,
-} from './useConversationPaths';
+} from './useConversationPaths.js';

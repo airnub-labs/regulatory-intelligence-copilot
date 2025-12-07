@@ -12,9 +12,9 @@ import {
   GitMerge,
 } from 'lucide-react';
 
-import { useConversationPaths } from '../hooks/useConversationPaths';
-import { cn, formatRelativeDate, buildPathTree, flattenPathTree } from '../utils';
-import type { BaseComponentProps, ClientPath, PathSelectorVariant } from '../types';
+import { useConversationPaths } from '../hooks/useConversationPaths.js';
+import { cn, formatRelativeDate, buildPathTree, flattenPathTree } from '../utils.js';
+import type { BaseComponentProps, ClientPath, PathSelectorVariant } from '../types.js';
 
 export interface PathSelectorProps extends BaseComponentProps {
   /** Visual variant */

@@ -35,7 +35,7 @@ export {
   useConversationPaths,
   useHasPathProvider,
   type ConversationPathProviderProps,
-} from './hooks';
+} from './hooks/index.js';
 
 // Components
 export {
@@ -49,7 +49,7 @@ export {
   type BranchDialogProps,
   type MergeDialogProps,
   type VersionNavigatorProps,
-} from './components';
+} from './components/index.js';
 
 // Types
 export type {
@@ -72,7 +72,7 @@ export type {
   ButtonVariant,
   ButtonSize,
   BaseComponentProps,
-} from './types';
+} from './types.js';
 
 // Utilities
-export { cn, formatRelativeDate, truncate, stringToColor, buildPathTree, flattenPathTree } from './utils';
+export { cn, formatRelativeDate, truncate, stringToColor, buildPathTree, flattenPathTree } from './utils.js';

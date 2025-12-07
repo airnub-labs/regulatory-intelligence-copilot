@@ -3,8 +3,8 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
-import { cn, formatRelativeDate } from '../utils';
-import type { BaseComponentProps } from '../types';
+import { cn, formatRelativeDate } from '../utils.js';
+import type { BaseComponentProps } from '../types.js';
 
 export interface VersionNavigatorProps extends BaseComponentProps {
   /** Current version index (0-based) */

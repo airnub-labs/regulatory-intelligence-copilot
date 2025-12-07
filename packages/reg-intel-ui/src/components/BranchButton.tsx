@@ -3,8 +3,8 @@
 import { GitBranch } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 
-import { cn } from '../utils';
-import type { BaseComponentProps, ButtonVariant, ButtonSize } from '../types';
+import { cn } from '../utils.js';
+import type { BaseComponentProps, ButtonVariant, ButtonSize } from '../types.js';
 
 export interface BranchButtonProps extends BaseComponentProps {
   /** Button click handler */

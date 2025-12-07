@@ -4,9 +4,9 @@ import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, GitBranch, Loader2 } from 'lucide-react';
 
-import { useConversationPaths } from '../hooks/useConversationPaths';
-import { cn, truncate } from '../utils';
-import type { BaseComponentProps, ClientPath } from '../types';
+import { useConversationPaths } from '../hooks/useConversationPaths.js';
+import { cn, truncate } from '../utils.js';
+import type { BaseComponentProps, ClientPath } from '../types.js';
 
 export interface BranchDialogProps extends BaseComponentProps {
   /** Whether the dialog is open */

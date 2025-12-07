@@ -17,8 +17,8 @@
     "**/*.css"
   ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsc",
+    "dev": "tsc --watch",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -45,7 +45,6 @@
     "@types/react-dom": "^19.2.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tsup": "^8.5.0",
     "typescript": "^5.9.0",
     "vitest": "^1.0.0"
   },

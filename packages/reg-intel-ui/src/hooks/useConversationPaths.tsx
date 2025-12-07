@@ -21,7 +21,7 @@ import type {
   MergeResult,
   MergePreview,
   UpdatePathInput,
-} from '../types';
+} from '../types.js';
 
 /**
  * Context for path state

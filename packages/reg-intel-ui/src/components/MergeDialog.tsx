@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, GitMerge, Loader2, FileText, ListPlus, CheckSquare } from 'lucide-react';
 
-import { useConversationPaths } from '../hooks/useConversationPaths';
-import { cn } from '../utils';
-import type { BaseComponentProps, ClientPath, MergeMode, MergeResult, MergePreview } from '../types';
+import { useConversationPaths } from '../hooks/useConversationPaths.js';
+import { cn } from '../utils.js';
+import type { BaseComponentProps, ClientPath, MergeMode, MergeResult, MergePreview } from '../types.js';
 
 export interface MergeDialogProps extends BaseComponentProps {
   /** Whether the dialog is open */
