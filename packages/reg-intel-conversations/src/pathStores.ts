@@ -14,7 +14,7 @@ import {
   SEMATTRS_DB_SQL_TABLE,
 } from '@opentelemetry/semantic-conventions';
 
-import type { SupabaseLikeClient } from './conversationStores';
+import type { SupabaseLikeClient } from './conversationStores.js';
 import type {
   ConversationPath,
   PathAwareMessage,
@@ -34,7 +34,7 @@ import type {
   GetActivePathInput,
   DeletePathInput,
   MessageType,
-} from './types/paths';
+} from './types/paths.js';
 
 // =============================================================================
 // Store Interface
@@ -330,7 +330,7 @@ export class InMemoryConversationPathStore implements ConversationPathStore {
     for (const msg of messages) {
       // Get branches from this message
       const branchedPaths = await Promise.all(
-        (msg.branchedToPaths ?? []).map(pid =>
+        (msg.branchedToPaths ?? []).map((pid: string) =>
           this.getPath({ tenantId: input.tenantId, pathId: pid })
         )
       );
@@ -340,7 +340,7 @@ export class InMemoryConversationPathStore implements ConversationPathStore {
         messageContent: msg.content.slice(0, 200) + (msg.content.length > 200 ? '...' : ''),
         messageRole: msg.role,
         sequenceInPath: msg.effectiveSequence ?? msg.sequenceInPath,
-        branchedPaths: branchedPaths.filter((p): p is ConversationPath => p !== null),
+        branchedPaths: branchedPaths.filter((p: ConversationPath | null): p is ConversationPath => p !== null),
         canBranch: true,
       });
     }
@@ -899,9 +899,12 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
   }
 
   async resolvePathMessages(input: ResolvePathMessagesInput): Promise<PathAwareMessage[]> {
-    // Use the database function for efficient resolution
-    const { data, error } = await this.client
-      .rpc('resolve_path_messages', { p_path_id: input.pathId });
+    // Use the database function for efficient resolution if available
+    if (!this.client.rpc) {
+      return this.resolvePathMessagesManual(input);
+    }
+
+    const { data, error } = await this.client.rpc('resolve_path_messages', { p_path_id: input.pathId });
 
     if (error) {
       // Fallback to manual resolution if function doesn't exist
@@ -1329,11 +1332,8 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
   }
 
   private async getAncestorPaths(tenantId: string, pathId: string): Promise<ConversationPath[]> {
-    // Use recursive query
-    const { data, error } = await this.client.rpc('get_path_ancestors', { p_path_id: pathId });
-
-    if (error) {
-      // Fallback to manual traversal
+    // Fallback function for manual traversal
+    const manualTraversal = async (): Promise<ConversationPath[]> => {
       const ancestors: ConversationPath[] = [];
       let currentPath = await this.getPath({ tenantId, pathId });
 
@@ -1348,6 +1348,17 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
       }
 
       return ancestors;
+    };
+
+    // Use recursive query if available
+    if (!this.client.rpc) {
+      return manualTraversal();
+    }
+
+    const { data, error } = await this.client.rpc('get_path_ancestors', { p_path_id: pathId });
+
+    if (error) {
+      return manualTraversal();
     }
 
     const pathIds = (data as { path_id: string }[]).map(r => r.path_id);

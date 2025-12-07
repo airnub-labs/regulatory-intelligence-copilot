@@ -17,6 +17,7 @@ export type SupabaseError = { message: string };
 export type SupabaseLikeClient = {
   from(table: string): any;
   schema?(schema: string): SupabaseLikeClient;
+  rpc?(fn: string, params?: Record<string, unknown>): PromiseLike<{ data: any; error: any }>;
 };
 
 export interface AuthorizationSpec {

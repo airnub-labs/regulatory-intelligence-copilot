@@ -80,19 +80,28 @@ export function isChildPath(
 }
 
 /**
+ * Base path properties required for tree building
+ */
+export interface PathTreeBase {
+  id: string;
+  parentPathId: string | null;
+  name: string | null;
+}
+
+/**
  * Build a tree structure from flat paths
  */
-export interface PathTreeNode {
-  path: { id: string; parentPathId: string | null; name: string | null };
-  children: PathTreeNode[];
+export interface PathTreeNode<T extends PathTreeBase = PathTreeBase> {
+  path: T;
+  children: PathTreeNode<T>[];
   depth: number;
 }
 
-export function buildPathTree<T extends { id: string; parentPathId: string | null; name: string | null }>(
+export function buildPathTree<T extends PathTreeBase>(
   paths: T[]
-): PathTreeNode[] {
-  const nodeMap = new Map<string, PathTreeNode>();
-  const roots: PathTreeNode[] = [];
+): PathTreeNode<T>[] {
+  const nodeMap = new Map<string, PathTreeNode<T>>();
+  const roots: PathTreeNode<T>[] = [];
 
   // Create nodes
   for (const path of paths) {
@@ -112,7 +121,7 @@ export function buildPathTree<T extends { id: string; parentPathId: string | nul
   }
 
   // Sort children by name
-  const sortChildren = (nodes: PathTreeNode[]) => {
+  const sortChildren = (nodes: PathTreeNode<T>[]) => {
     nodes.sort((a, b) => {
       const aName = a.path.name ?? '';
       const bName = b.path.name ?? '';
@@ -128,10 +137,10 @@ export function buildPathTree<T extends { id: string; parentPathId: string | nul
 /**
  * Flatten a path tree for rendering
  */
-export function flattenPathTree(nodes: PathTreeNode[]): PathTreeNode[] {
-  const result: PathTreeNode[] = [];
+export function flattenPathTree<T extends PathTreeBase>(nodes: PathTreeNode<T>[]): PathTreeNode<T>[] {
+  const result: PathTreeNode<T>[] = [];
 
-  const traverse = (node: PathTreeNode) => {
+  const traverse = (node: PathTreeNode<T>) => {
     result.push(node);
     node.children.forEach(traverse);
   };

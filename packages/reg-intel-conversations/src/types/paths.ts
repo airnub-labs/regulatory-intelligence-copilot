@@ -8,7 +8,7 @@
  * - Merge results back to parent paths
  */
 
-import type { ShareAudience, TenantAccess } from '../conversationStores';
+import type { ShareAudience, TenantAccess } from '../conversationStores.js';
 
 // =============================================================================
 // Core Path Types
@@ -340,9 +340,10 @@ export type PathEventType =
   | 'path:active';
 
 /**
- * Payload for path SSE events
+ * Payload map for path SSE events
+ * @deprecated Use PathEventPayloadMap from sseTypes.ts instead
  */
-export interface PathEventPayload {
+export interface PathEventPayloads {
   'path:created': {
     path: ConversationPath;
     branchPointMessage?: PathAwareMessage;
