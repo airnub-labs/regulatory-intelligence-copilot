@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   AlertTriangle,
   ExternalLink,
+  GitBranch,
   Loader2,
   PencilLine,
   Plus,
@@ -18,9 +19,11 @@ import type {
   ConversationListEventPayloadMap,
   ClientConversation,
 } from '@reg-copilot/reg-intel-conversations'
-
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { Message, MessageLoading } from '@/components/chat/message'
+import { PathToolbar } from '@/components/chat/path-toolbar'
+import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
+import { getPathApiClient } from '@/lib/pathApiClient'
 import { MetadataSkeleton } from '@/components/chat/metadata-skeleton'
 import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
@@ -369,6 +372,7 @@ export default function Home() {
 
   const isAuthenticated = status === 'authenticated' && Boolean((session?.user as { id?: string } | undefined)?.id)
   const isTitleDirty = conversationTitle !== savedConversationTitle
+  const pathApiClient = useMemo(() => getPathApiClient(), [])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
@@ -1051,7 +1055,12 @@ export default function Home() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.8fr)]">
-          <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
+          <ConditionalPathProvider
+            conversationId={conversationId}
+            apiClient={pathApiClient}
+            onError={(err) => console.error('Path error:', err)}
+          >
+            <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
             <div className="flex items-center justify-between border-b bg-gradient-to-r from-muted/60 via-background to-muted/40 px-6 py-4">
               <h1 className="text-xl font-semibold tracking-tight">Regulatory Intelligence Copilot</h1>
               <Badge variant="outline" className="text-xs">Research only</Badge>
@@ -1092,7 +1101,10 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="ml-auto flex gap-1">
+              <div className="ml-auto flex items-center gap-2">
+                {conversationId && (
+                  <PathToolbar compact className="mr-2" />
+                )}
                 {quickPrompts.slice(0, 2).map(({ scenarioHint: promptScenarioHint, label }) => (
                   <Button
                     key={promptScenarioHint}
@@ -1288,6 +1300,7 @@ export default function Home() {
               </p>
             </div>
           </section>
+          </ConditionalPathProvider>
 
           <aside className="space-y-4">
             <Card className="border bg-card/90 shadow-lg backdrop-blur">

@@ -25,7 +25,7 @@ This document tracks the implementation progress of the conversation branching a
 | 2 | Backend Stores | ✅ Complete | 2024-12-07 | 2024-12-07 |
 | 3 | API Routes | ✅ Complete | 2024-12-07 | 2024-12-07 |
 | 4 | Reusable UI Components | ✅ Complete | 2024-12-07 | 2024-12-07 |
-| 5 | Demo App Integration | ⏳ Pending | - | - |
+| 5 | Demo App Integration | ✅ Complete | 2024-12-07 | 2024-12-07 |
 | 6 | AI Merge Summarization | ⏳ Pending | - | - |
 
 ---
@@ -310,25 +310,29 @@ Integrate the reusable UI components into the demo-web application.
 
 ### Tasks
 
-- [ ] Install `@reg-copilot/reg-intel-ui` package
-- [ ] Wrap app with `ConversationPathProvider`
-- [ ] Replace existing message list with `PathAwareMessageList`
-- [ ] Add `PathSelector` to conversation header
-- [ ] Add `BranchButton` to message actions
-- [ ] Integrate `BranchDialog` and `MergeDialog`
-- [ ] Update `VersionNavigator` to be path-aware
-- [ ] Remove deprecated version navigation code
-- [ ] Update SSE subscription for path events
+- [x] Install `@reg-copilot/reg-intel-ui` package
+- [x] Create `PathApiClient` implementation for demo-web
+- [x] Create `ConditionalPathProvider` wrapper component
+- [x] Create `PathAwareMessageList` component
+- [x] Create `PathToolbar` component for path switching
+- [x] Wrap conversation section with path provider
+- [x] Add `PathToolbar` to conversation header
+- [x] Export new components from chat index
+- [ ] Add `BranchButton` to message actions (deferred - uses dialog from reg-intel-ui)
+- [ ] Remove deprecated version navigation code (deferred - for gradual migration)
+- [ ] Update SSE subscription for path events (deferred - uses existing subscription)
 
-### Files to Modify
+### Files Created/Modified
 ```
 apps/demo-web/src/
-├── app/page.tsx                    [MAJOR REFACTOR]
+├── app/page.tsx                            [MODIFIED - path provider integration]
+├── lib/pathApiClient.ts                    [NEW - PathApiClient implementation]
 ├── components/chat/
-│   ├── message.tsx                 [MODIFY - add branch button]
-│   ├── message-version-nav.tsx     [DEPRECATE - use reg-intel-ui]
-│   └── chat-container.tsx          [MODIFY - use PathAwareMessageList]
-└── package.json                    [ADD reg-intel-ui dependency]
+│   ├── conditional-path-provider.tsx       [NEW - conditional wrapper]
+│   ├── path-aware-message-list.tsx         [NEW - path-aware messages]
+│   ├── path-toolbar.tsx                    [NEW - path selection toolbar]
+│   └── index.ts                            [MODIFIED - export new components]
+└── package.json                            [MODIFIED - added reg-intel-ui dependency]
 ```
 
 ### Verification

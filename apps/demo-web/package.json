@@ -22,6 +22,7 @@
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
     "@reg-copilot/reg-intel-conversations": "workspace:*",
+    "@reg-copilot/reg-intel-ui": "workspace:*",
     "@reg-copilot/reg-intel-core": "workspace:*",
     "@reg-copilot/reg-intel-next-adapter": "workspace:*",
     "@reg-copilot/reg-intel-observability": "workspace:*",
