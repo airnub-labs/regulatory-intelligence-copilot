@@ -1,4 +1,5 @@
 import type { ClientConversation } from './presenters.js'
+import type { ClientPath, MergeMode } from './types/paths.js'
 
 /**
  * Type-safe SSE event payload definitions for conversation list streams.
@@ -174,3 +175,85 @@ export type ConversationListEventPayloadMap = {
  */
 export type ConversationListEventPayload<T extends keyof ConversationListEventPayloadMap> =
   ConversationListEventPayloadMap[T]
+
+// =============================================================================
+// Path SSE Event Types
+// =============================================================================
+
+/**
+ * Path created event: A new branch was created in the conversation.
+ */
+export interface PathCreatedPayload {
+  /** The newly created path */
+  path: ClientPath
+  /** The message that was used as the branch point */
+  branchPointMessageId?: string
+}
+
+/**
+ * Path updated event: Path metadata was changed.
+ */
+export interface PathUpdatedPayload {
+  /** ID of the updated path */
+  pathId: string
+  /** Conversation this path belongs to */
+  conversationId: string
+  /** The changes that were made */
+  changes: Partial<ClientPath>
+}
+
+/**
+ * Path deleted event: A path was deleted or archived.
+ */
+export interface PathDeletedPayload {
+  /** ID of the deleted path */
+  pathId: string
+  /** Conversation this path belonged to */
+  conversationId: string
+  /** Why the path was removed */
+  reason: 'deleted' | 'archived'
+}
+
+/**
+ * Path merged event: A path was merged into another.
+ */
+export interface PathMergedPayload {
+  /** ID of the source path that was merged */
+  sourcePathId: string
+  /** ID of the target path that received the merge */
+  targetPathId: string
+  /** Conversation these paths belong to */
+  conversationId: string
+  /** ID of the summary message created (for summary mode) */
+  summaryMessageId?: string
+  /** How the merge was performed */
+  mergeMode: MergeMode
+}
+
+/**
+ * Path active event: The active path for a conversation changed.
+ */
+export interface PathActivePayload {
+  /** ID of the new active path */
+  pathId: string
+  /** Conversation this path belongs to */
+  conversationId: string
+  /** ID of the previously active path */
+  previousPathId?: string
+}
+
+/**
+ * Type-safe map of path event types to their payload structures.
+ */
+export type PathEventPayloadMap = {
+  'path:created': PathCreatedPayload
+  'path:updated': PathUpdatedPayload
+  'path:deleted': PathDeletedPayload
+  'path:merged': PathMergedPayload
+  'path:active': PathActivePayload
+}
+
+/**
+ * Type-safe helper to extract payload type for a path event.
+ */
+export type PathEventPayload<T extends keyof PathEventPayloadMap> = PathEventPayloadMap[T]

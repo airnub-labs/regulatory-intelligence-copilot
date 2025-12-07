@@ -22,9 +22,9 @@ This document tracks the implementation progress of the conversation branching a
 | Phase | Description | Status | Started | Completed |
 |-------|-------------|--------|---------|-----------|
 | 1 | Database Schema | ✅ Complete | 2024-12-07 | 2024-12-07 |
-| 2 | Backend Stores | 🔄 In Progress | 2024-12-07 | - |
-| 3 | API Routes | ⏳ Pending | - | - |
-| 4 | Reusable UI Components | ⏳ Pending | - | - |
+| 2 | Backend Stores | ✅ Complete | 2024-12-07 | 2024-12-07 |
+| 3 | API Routes | ✅ Complete | 2024-12-07 | 2024-12-07 |
+| 4 | Reusable UI Components | 🔄 In Progress | 2024-12-07 | - |
 | 5 | Demo App Integration | ⏳ Pending | - | - |
 | 6 | AI Merge Summarization | ⏳ Pending | - | - |
 
@@ -139,33 +139,33 @@ Create REST API endpoints and SSE events for path management.
 
 ### Tasks
 
-- [ ] Path Management Endpoints
-  - [ ] `GET /api/conversations/:id/paths` - List paths
-  - [ ] `POST /api/conversations/:id/paths` - Create path
-  - [ ] `GET /api/conversations/:id/paths/:pathId` - Get path
-  - [ ] `PATCH /api/conversations/:id/paths/:pathId` - Update path
-  - [ ] `DELETE /api/conversations/:id/paths/:pathId` - Delete path
+- [x] Path Management Endpoints
+  - [x] `GET /api/conversations/:id/paths` - List paths
+  - [x] `POST /api/conversations/:id/paths` - Create path
+  - [x] `GET /api/conversations/:id/paths/:pathId` - Get path
+  - [x] `PATCH /api/conversations/:id/paths/:pathId` - Update path
+  - [x] `DELETE /api/conversations/:id/paths/:pathId` - Delete path
 
-- [ ] Path Messages Endpoint
-  - [ ] `GET /api/conversations/:id/paths/:pathId/messages` - Get resolved messages
+- [x] Path Messages Endpoint
+  - [x] `GET /api/conversations/:id/paths/:pathId/messages` - Get resolved messages
 
-- [ ] Branching Endpoint
-  - [ ] `POST /api/conversations/:id/branch` - Create branch from message
+- [x] Branching Endpoint
+  - [x] `POST /api/conversations/:id/branch` - Create branch from message
 
-- [ ] Merging Endpoints
-  - [ ] `POST /api/conversations/:id/paths/:pathId/merge` - Merge to target
-  - [ ] `POST /api/conversations/:id/paths/:pathId/merge/preview` - Preview merge
+- [x] Merging Endpoints
+  - [x] `POST /api/conversations/:id/paths/:pathId/merge` - Merge to target
+  - [x] `POST /api/conversations/:id/paths/:pathId/merge/preview` - Preview merge
 
-- [ ] Active Path Endpoints
-  - [ ] `GET /api/conversations/:id/active-path` - Get active path
-  - [ ] `PUT /api/conversations/:id/active-path` - Set active path
+- [x] Active Path Endpoints
+  - [x] `GET /api/conversations/:id/active-path` - Get active path
+  - [x] `PUT /api/conversations/:id/active-path` - Set active path
 
-- [ ] SSE Event Types
-  - [ ] `path:created` - New branch created
-  - [ ] `path:updated` - Path metadata changed
-  - [ ] `path:deleted` - Path deleted/archived
-  - [ ] `path:merged` - Path merged to another
-  - [ ] `path:active` - Active path changed
+- [x] SSE Event Types
+  - [x] `path:created` - New branch created
+  - [x] `path:updated` - Path metadata changed
+  - [x] `path:deleted` - Path deleted/archived
+  - [x] `path:merged` - Path merged to another
+  - [x] `path:active` - Active path changed
 
 - [ ] Update existing chat endpoint
   - [ ] Accept `pathId` parameter

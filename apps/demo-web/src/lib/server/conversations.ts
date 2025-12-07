@@ -5,8 +5,10 @@ import {
   ConversationListEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
+  InMemoryConversationPathStore,
   SupabaseConversationContextStore,
   SupabaseConversationStore,
+  SupabaseConversationPathStore,
 } from '@reg-copilot/reg-intel-conversations';
 import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
@@ -101,6 +103,10 @@ export const conversationStore = supabaseClient
 export const conversationContextStore = supabaseClient
   ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationContextStore();
+
+export const conversationPathStore = supabaseClient
+  ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient ?? undefined)
+  : new InMemoryConversationPathStore();
 
 export const conversationEventHub = new ConversationEventHub();
 export const conversationListEventHub = new ConversationListEventHub();
