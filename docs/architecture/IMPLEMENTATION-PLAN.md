@@ -79,34 +79,34 @@ Implement `ConversationPathStore` interface and update existing stores to use pa
 
 ### Tasks
 
-- [ ] Define TypeScript interfaces in `packages/reg-intel-conversations/src/types/`
-  - [ ] `ConversationPath` interface
-  - [ ] `BranchPoint` interface
-  - [ ] `MergeRequest` / `MergeResult` interfaces
-  - [ ] `PathResolution` interface
+- [x] Define TypeScript interfaces in `packages/reg-intel-conversations/src/types/`
+  - [x] `ConversationPath` interface
+  - [x] `BranchPoint` interface
+  - [x] `MergeRequest` / `MergeResult` interfaces
+  - [x] `PathResolution` interface
 
-- [ ] Implement `ConversationPathStore` interface
-  - [ ] `createPath()` - Create new path (primary or branch)
-  - [ ] `getPath()` - Get single path
-  - [ ] `listPaths()` - List all paths for conversation
-  - [ ] `updatePath()` - Update path metadata
-  - [ ] `deletePath()` - Delete/archive path
-  - [ ] `resolvePathMessages()` - Get messages for path with inheritance
-  - [ ] `branchFromMessage()` - Create branch from message
-  - [ ] `mergePath()` - Merge path into another
-  - [ ] `getActivePath()` - Get currently active path
-  - [ ] `setActivePath()` - Set active path
-  - [ ] `getBranchPointsForPath()` - Get available branch points
+- [x] Implement `ConversationPathStore` interface
+  - [x] `createPath()` - Create new path (primary or branch)
+  - [x] `getPath()` - Get single path
+  - [x] `listPaths()` - List all paths for conversation
+  - [x] `updatePath()` - Update path metadata
+  - [x] `deletePath()` - Delete/archive path
+  - [x] `resolvePathMessages()` - Get messages for path with inheritance
+  - [x] `branchFromMessage()` - Create branch from message
+  - [x] `mergePath()` - Merge path into another
+  - [x] `getActivePath()` - Get currently active path
+  - [x] `setActivePath()` - Set active path
+  - [x] `getBranchPointsForPath()` - Get available branch points
 
-- [ ] Implement `InMemoryConversationPathStore`
-  - [ ] All interface methods
-  - [ ] Path resolution logic
-  - [ ] Branch/merge logic
+- [x] Implement `InMemoryConversationPathStore`
+  - [x] All interface methods
+  - [x] Path resolution logic
+  - [x] Branch/merge logic
 
-- [ ] Implement `SupabaseConversationPathStore`
-  - [ ] All interface methods
-  - [ ] Efficient SQL queries for path resolution
-  - [ ] Transaction support for branching/merging
+- [x] Implement `SupabaseConversationPathStore`
+  - [x] All interface methods
+  - [x] Efficient SQL queries for path resolution
+  - [x] Transaction support for branching/merging
 
 - [ ] Update `ConversationStore` interface
   - [ ] Deprecate `softDeleteMessage()` in favor of path-based versioning
