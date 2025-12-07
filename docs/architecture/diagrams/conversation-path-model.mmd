@@ -1,0 +1,75 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e3f2fd', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e8f5e9'}}}%%
+
+graph TB
+    subgraph Legend["Legend"]
+        direction LR
+        L1[Message]
+        L2[Edited Version]:::edited
+        L3[Branch Message]:::branch
+        L4[Merge Summary]:::merge
+    end
+
+    subgraph ConversationPaths["Conversation: Tax Obligations Analysis"]
+        subgraph MainPath["📍 Main Path (Primary)"]
+            direction TB
+            M1["👤 User: What are tax obligations<br/>for directors in Ireland?"]
+            M2["🤖 Assistant: Directors have several<br/>tax obligations including..."]
+            M3["👤 User: Tell me about PAYE"]
+            M4["🤖 Assistant: PAYE (Pay As You Earn)..."]
+            M5["📋 MERGE: PRSI Analysis Summary<br/>(5 messages summarized)"]:::merge
+            M6["👤 User: What about CGT?"]
+            M7["🤖 Assistant: Capital Gains Tax..."]
+        end
+
+        subgraph EditPath["✏️ Edit of M1"]
+            M1v2["👤 User: What are PENSION<br/>obligations for directors?"]:::edited
+            M2v2["🤖 Assistant: Pension obligations<br/>include auto-enrollment..."]:::edited
+        end
+
+        subgraph BranchPRSI["🌿 Branch: PRSI Deep Dive"]
+            B1["👤 User: Tell me more about<br/>PRSI specifically"]:::branch
+            B2["🤖 Assistant: PRSI (Pay Related<br/>Social Insurance)..."]:::branch
+            B3["👤 User: What class applies<br/>to directors?"]:::branch
+            B4["🤖 Assistant: Class S typically<br/>applies to..."]:::branch
+            B5["👤 User: And for employed<br/>directors?"]:::branch
+            B6["🤖 Assistant: Employed directors<br/>use Class A..."]:::branch
+        end
+
+        subgraph BranchCross["🌿 Branch: Cross-Border"]
+            C1["👤 User: What about working<br/>in multiple EU countries?"]:::branch
+            C2["🤖 Assistant: EU Regulation 883/2004<br/>coordinates..."]:::branch
+        end
+    end
+
+    %% Main path flow
+    M1 --> M2
+    M2 --> M3
+    M3 --> M4
+    M4 --> M5
+    M5 --> M6
+    M6 --> M7
+
+    %% Edit creates version
+    M1 -.->|"supersededBy"| M1v2
+    M1v2 --> M2v2
+
+    %% Branch from M2
+    M2 -.->|"branch"| B1
+    B1 --> B2
+    B2 --> B3
+    B3 --> B4
+    B4 --> B5
+    B5 --> B6
+
+    %% Branch from M4
+    M4 -.->|"branch"| C1
+    C1 --> C2
+
+    %% Merge PRSI back
+    B6 -.->|"merge summary"| M5
+
+    %% Styling
+    classDef default fill:#e3f2fd,stroke:#1976d2,stroke-width:1px,color:#0d47a1
+    classDef edited fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100
+    classDef branch fill:#fce4ec,stroke:#c2185b,stroke-width:1px,color:#880e4f
+    classDef merge fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20

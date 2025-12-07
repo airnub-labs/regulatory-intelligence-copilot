@@ -1,0 +1,50 @@
+erDiagram
+    CONVERSATIONS ||--o{ CONVERSATION_PATHS : "has paths"
+    CONVERSATIONS ||--o{ CONVERSATION_MESSAGES : "contains"
+    CONVERSATION_PATHS ||--o{ CONVERSATION_MESSAGES : "organizes"
+    CONVERSATION_PATHS ||--o| CONVERSATION_PATHS : "parent path"
+    CONVERSATION_PATHS ||--o| CONVERSATION_MESSAGES : "branch point"
+    CONVERSATION_PATHS ||--o| CONVERSATION_PATHS : "merged to"
+
+    CONVERSATIONS {
+        uuid id PK
+        uuid tenant_id
+        uuid user_id
+        text share_audience
+        text tenant_access
+        text title
+        timestamptz archived_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    CONVERSATION_PATHS {
+        uuid id PK
+        uuid conversation_id FK
+        uuid tenant_id
+        uuid parent_path_id FK "nullable - links to parent path"
+        uuid branch_point_message_id FK "nullable - message where branch started"
+        text name "optional branch name"
+        boolean is_primary "one primary per conversation"
+        boolean is_active "false if archived"
+        uuid merged_to_path_id FK "nullable - if merged"
+        timestamptz merged_at
+        uuid merge_summary_message_id FK "nullable - summary message"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    CONVERSATION_MESSAGES {
+        uuid id PK
+        uuid conversation_id FK
+        uuid path_id FK "which path this message belongs to"
+        uuid tenant_id
+        uuid user_id
+        text role "user|assistant|system"
+        text content
+        jsonb metadata "includes deletedAt, supersededBy"
+        integer sequence_in_path "ordering within path"
+        boolean is_branch_point "true if branched from"
+        uuid[] branched_to_paths "paths that branch here"
+        timestamptz created_at
+    }
