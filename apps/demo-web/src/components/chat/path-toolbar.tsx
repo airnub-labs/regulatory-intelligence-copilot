@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { GitBranch, GitMerge, ChevronDown } from 'lucide-react';
+import { GitBranch, GitMerge } from 'lucide-react';
 import {
   useConversationPaths,
   useHasPathProvider,
@@ -70,7 +69,10 @@ function PathToolbarContent({
     isMerging,
   } = useConversationPaths();
 
-  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  // TODO: Integrate MergeDialog from @reg-copilot/reg-intel-ui when Phase 6 is complete
+  const handleMergeClick = () => {
+    console.log('Merge dialog integration pending - Phase 6');
+  };
 
   const handlePathChange = async (pathId: string) => {
     await switchPath(pathId);
@@ -127,7 +129,7 @@ function PathToolbarContent({
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs"
-            onClick={() => setShowMergeDialog(true)}
+            onClick={handleMergeClick}
             disabled={isMerging}
           >
             <GitMerge className="mr-1 h-3 w-3" />
@@ -178,7 +180,7 @@ function PathToolbarContent({
               variant="outline"
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={() => setShowMergeDialog(true)}
+              onClick={handleMergeClick}
               disabled={isMerging}
             >
               <GitMerge className="mr-1 h-3 w-3" />

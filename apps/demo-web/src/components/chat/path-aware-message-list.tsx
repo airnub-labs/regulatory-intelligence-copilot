@@ -81,7 +81,7 @@ interface FallbackMessageListProps {
   editingMessageId?: string | null;
 }
 
-function FallbackMessageList({ messages, isLoading, editingMessageId }: FallbackMessageListProps) {
+function FallbackMessageList({ messages, isLoading }: FallbackMessageListProps) {
   return (
     <>
       {messages

@@ -8,7 +8,6 @@ import {
   ArchiveRestore,
   AlertTriangle,
   ExternalLink,
-  GitBranch,
   Loader2,
   PencilLine,
   Plus,
