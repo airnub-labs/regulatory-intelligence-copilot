@@ -85,7 +85,8 @@ class StackContextManager implements ContextManager {
     }
   }
 
-  bind<T>(target: T, _context?: Context): T {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  bind<T>(target: T, context?: Context): T {
     return target;
   }
 
@@ -102,7 +103,8 @@ class StackContextManager implements ContextManager {
 class TestTracerProvider implements TracerProvider {
   constructor(private readonly finishedSpans: TestSpan[]) {}
 
-  getTracer(_name: string, _version?: string, _options?: undefined): Tracer {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getTracer(name: string, version?: string, options?: undefined): Tracer {
     return new TestTracer(this.finishedSpans);
   }
 }
