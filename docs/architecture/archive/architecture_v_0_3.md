@@ -3,28 +3,28 @@
 > **Goal:** A chat‑driven, graph‑backed regulatory copilot that helps users and advisors explore how tax, social welfare, pensions, CGT and EU rules interact – without ever giving formal legal / tax advice or leaking sensitive data. The system is EU‑first, privacy‑conscious, and designed to be reused inside other Next.js/Supabase SaaS products.
 >
 > **This version (v0.3)** updates v0.2 to:
-> - Align with the **latest decisions** in `docs/governance/decisions/archive/decisions_v_0_3.md`.
-> - Set **Node.js 24 LTS** as the minimum runtime (see `node_24_lts_rationale_v_0_1.md`).
+> - Align with the **latest decisions** in `docs/governance/decisions/decisions_v_0_3.md`.
+> - Set **Node.js 24 LTS** as the minimum runtime (see `node_24_lts_rationale.md`).
 > - Standardise web apps on **Next.js 16**, **React 19**, **Tailwind CSS 4**, and **TypeScript 5.9+**.
 > - Clarify the role of **Vercel AI SDK v5** as an **edge‑only implementation detail** behind a provider‑agnostic `LlmRouter`.
 > - Reaffirm that **MCP / E2B / Memgraph** live **outside** the AI SDK tool layer.
 
 ## Normative References
 
-- `docs/architecture/graph/archive/schema_v_0_3.md`
-- `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
-- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
-- `docs/architecture/guards/graph_ingress_v_0_1.md`
+- `docs/specs/graph-schema/versions/docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md` – special cases (IE/UK/NI/IM/GI/AD/CTA)
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – data privacy & graph boundaries
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 
 For architectural intent and design trade‑offs, see also:
 
-- `docs/governance/decisions/archive/decisions_v_0_3.md`
-- `docs/architecture/graph/archive/schema_v_0_3.md`
-- `docs/architecture/graph/archive/schema_changelog_v_0_3.md`
-- `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
-- `docs/architecture/copilot-concept/archive/concept_v_0_3.md`
-- `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
+- `docs/governance/decisions/decisions_v_0_3.md`
+- `docs/specs/graph-schema/versions/docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+- `docs/specs/graph_schema_changelog_v_0_3.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_3.md`
+- `docs/node_24_lts_rationale.md`
 
 ---
 
@@ -64,7 +64,7 @@ At every layer, the architecture is designed to be:
 
 The high-level system architecture is constrained by the data privacy boundaries defined in:
 
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
 
 In particular, the global regulatory graph is **public and rule-only**: it may only store public regulatory data (jurisdictions, regions, agreements, regimes, rules, benefits, timelines) and document metadata, and must never store user or tenant-specific data, PII, or uploaded document contents. User profile and scenario data live outside the graph in per-tenant storage and in-memory session context.
 
@@ -83,12 +83,12 @@ All writes to the global Memgraph instance are routed through a
 `GraphWriteService` that applies an aspect‑based **Graph Ingress Guard** as
 specified in:
 
-- `docs/architecture/guards/graph_ingress_v_0_1.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 
 No other component is allowed to execute direct Cypher `CREATE`/`MERGE` writes
 against Memgraph. The ingress guard enforces that:
 
-- Only schema‑approved node and relationship types (see `docs/architecture/graph/archive/schema_v_0_3.md`)
+- Only schema‑approved node and relationship types (see `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`)
   are persisted.
 - Only whitelisted properties for those types are allowed.
 - No user/tenant data, PII, or scenario‑specific text is ever written to the
@@ -444,14 +444,14 @@ This client uses Memgraph’s Bolt/HTTP interface directly. Memgraph MCP may sti
 
 ### 8.2 Schema Overview (Summary)
 
-The graph schema (see `docs/architecture/graph/archive/schema_v_0_3.md`) includes:
+The graph schema (see `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`) includes:
 
 - Node labels like `:Statute`, `:Section`, `:Benefit`, `:Relief`, `:Condition`, `:Timeline`, `:Case`, `:Guidance`, `:EURegulation`, `:EUDirective`, `:ProfileTag`, `:Jurisdiction`, and nodes that model social welfare, pensions, CGT, and cross‑border coordination.
 - Edge types like `CITES`, `REFERENCES`, `REQUIRES`, `LIMITED_BY`, `EXCLUDES`, `MUTUALLY_EXCLUSIVE_WITH`, `LOOKBACK_WINDOW`, `LOCKS_IN_FOR_PERIOD`, `IMPLEMENTED_BY`, `INTERPRETS`, `APPLIES_TO`, and cross‑border relationships linking domestic and EU instruments.
 
 ### 8.3 Jurisdictions & Cross-Border Modelling
 
-Special cases (IE/UK/NI/IM/GI/AD and CTA/Windsor/NI Protocol) must follow `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`.
+Special cases (IE/UK/NI/IM/GI/AD and CTA/Windsor/NI Protocol) must follow `docs/specs/special_jurisdictions_modelling_v_0_1.md`.
 
 ### 8.4 GraphRAG Retrieval
 

@@ -19,34 +19,34 @@ This architecture sits on top of, and must remain consistent with, the following
 
 ### Core Graph & Engine Specs
 
-- `docs/architecture/graph/archive/schema_v_0_4.md`
-- `docs/architecture/graph/archive/schema_changelog_v_0_4.md`
-- `docs/architecture/graph/algorithms_v_0_1.md`
-- `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
-- `docs/architecture/copilot-concept/archive/concept_v_0_4.md`
-- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/guards/graph_ingress_v_0_1.md`
-- `docs/architecture/guards/egress_v_0_2.md`
+- `docs/specs/graph-schema/versions/graph_schema_v_0_4.md`
+- `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
+- `docs/specs/graph_algorithms_v_0_1.md`
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+- `docs/specs/concept/versions/regulatory_graph_copilot_concept_v_0_4.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/specs/safety-guards/egress_guard_v_0_3.md`
 
 ### New / Refined Specs Introduced by v0.6
 
-- `docs/architecture/conversation-context/concept_capture_v_0_1.md`  
+- `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
   (SKOS‑inspired concept capture via LLM tools and self‑population of the rules graph.)
-- `docs/architecture/conversation-context/spec_v_0_1.md`  
+- `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
   (Conversation‑level context, active graph node IDs, and how they are persisted and applied.)
-- `docs/architecture/engines/scenario-engine/spec_v_0_1.md`  
+- `docs/specs/scenario_engine_v_0_1.md`  
   (Initial design for a Scenario / What‑If Engine built on top of the rules graph + timeline.)
 
 ### Project‑Level Docs
 
-- `docs/architecture/archive/architecture_v_0_4.md` (historic, now superseded by this document as the canonical architecture summary)
-- `docs/architecture/archive/architecture_v_0_5.md` (UI‑focused extension, now folded into v0.6)
-- `docs/governance/decisions/archive/decisions_v_0_5.md`
-- `docs/governance/roadmap/archive/roadmap_v_0_4.md`
-- `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
+- `docs/architecture_v_0_4.md` (historic, now superseded by this document as the canonical architecture summary)
+- `docs/architecture/versions/architecture_v_0_5.md` (UI‑focused extension, now folded into v0.6)
+- `docs/governance/decisions/decisions_v_0_5.md`
+- `docs/governance/roadmap/roadmap_v_0_4.md`
+- `docs/node_24_lts_rationale.md`
 - `AGENTS.md` (agent landscape)
-- `PROMPT.md` (coding‑agent prompts and implementation guidance)
+- `PROMPTS.md` (coding‑agent prompts and implementation guidance)
 
 Where there is ambiguity, **specs and decision docs take precedence** over this document.
 
@@ -83,6 +83,7 @@ The system consists of:
    - `LlmRouter` with pluggable providers (OpenAI Responses, Groq, local/OSS models).
    - Uses OpenAI Responses API (incl. GPT‑OSS models) as a primary reference implementation.
    - All outbound calls (LLM, MCP, HTTP) go through `EgressClient` and the **Egress Guard**.
+   - Egress Guard supports `enforce` / `report-only` / `off` modes; production wiring uses **enforce** with optional report-only rollout in non-prod. Per-tenant/per-user preferences resolve to a requested and **effective** mode in `LlmRouter`, execution payloads remain sanitised in enforce/report-only, and provider allowlisting still runs in every mode (rejecting disallowed providers even when effective mode is `off`).
    - Main‑chat calls can emit **streamed text** for the UI and **structured tool output** for concept capture and other metadata.
 
 5. **Graph Ingress & Ingestion**
@@ -100,12 +101,19 @@ The system consists of:
      - External regulatory content (e.g. Revenue, TAC, EU regs) via HTTP.
    - All egress from sandboxes still flows through the **Egress Guard**.
 
-7. **Storage Layer (Host App)**
-   - Supabase (or similar Postgres) provides multi‑tenant application storage:
-     - Tenants, users, auth.
-     - Conversations and messages.
-     - Conversation‑level context (active node IDs, flags, scenario state).
-   - May store references to graph node IDs, but the graph never stores tenant/user identifiers.
+   7. **Storage Layer (Host App)**
+     - Supabase (or similar Postgres) provides multi‑tenant application storage:
+       - Tenants, users, auth.
+       - Conversations and messages.
+       - Conversation‑level context (active node IDs, flags, scenario state).
+       - Access envelopes for conversations that combine `share_audience` (private/tenant/public) and `tenant_access` (view/edit) with `authorization_model` + `authorization_spec` so Supabase RLS and external ReBAC engines (e.g., OpenFGA) can be swapped without reshaping the table later; when an external ReBAC engine is unavailable, the effective audience falls back to **private/owner-only**.
+       - Demo shell authentication uses **NextAuth credentials** backed by Supabase; the seed script (`supabase/seed/demo_seed.sql`) provisions a Supabase auth user with generated IDs and emits them for `.env.local` to avoid regressions back to hardcoded demo headers.
+     - May store references to graph node IDs, but the graph never stores tenant/user identifiers.
+     - A ConversationStore + ConversationContextStore abstraction sits between the web app and the Compliance Engine:
+       - Supabase/Postgres is the production target with read-only public views for safe exposure.
+      - An in-memory fallback keeps dev-mode working without external services.
+      - The shared package `@reg-copilot/reg-intel-conversations` owns the stores, share/authorisation envelope, and SSE event hub so other host shells (non-Next.js) can reuse the same logic without forking the adapter.
+    - SSE streams are keyed per `(tenantId, conversationId)` so multiple authorised viewers can consume the same live answer; the baseline implementation assumes a single instance, with Redis/pub-sub recommended for horizontal fan-out.
 
 ### 1.2 Privacy & Data Boundaries (Summary)
 
@@ -197,7 +205,7 @@ v0.6 makes **concept capture from main chat** a first‑class concern:
   - Answering the user’s question.
   - Emitting **SKOS‑inspired concept metadata** via a dedicated tool.
 
-- A canonical tool (defined in `concept_capture_v_0_1.md`) is
+- A canonical tool (defined in `concept_capture_from_main_chat_v_0_1.md`) is
   available to the main chat model, e.g. `capture_concepts`:
   - Captures **domain**, **kind**, **jurisdiction**, **prefLabel**, **altLabels**, **definition**, **sourceUrls**.
   - Follows a SKOS‑like structure (prefLabel, altLabels, definition).
@@ -219,11 +227,14 @@ The streaming model in v0.6 is:
   - Never forwarded to the UI.
   - Interpreted inside `ComplianceEngine`:
     - Tool `name` identifies `capture_concepts` or other tools.
-    - `argsJson` contains structured payload (e.g. SKOS concepts).
+    - `argsJson` contains structured payload (e.g. SKOS concepts) and is the primary source for parsing concept metadata.
   - Trigger self‑population, concept resolution, scenario updates, etc.
 
 - **Error chunks (`type: 'error'`)**
   - Abort the stream and emit a safe error message to the UI.
+
+- **Done chunks (`type: 'done'`)**
+  - Router end-of-stream marker; Compliance Engine uses this to emit its own final `done` chunk with merged referenced nodes, disclaimer, and follow-ups.
 
 This ensures:
 
@@ -288,10 +299,13 @@ interface ChatResponse {
 - `referencedNodes` is now explicitly populated via the concept pipeline and graph queries:
   - Includes IDs of rules/benefits/sections/concepts (e.g. `Rule:VAT_IE`, `Rule:VRT_IE`).
   - Intended for **UI evidence chips** and for syncing with the graph view.
+- When streamed over SSE, the non‑advice disclaimer is emitted as its own `disclaimer` event (in addition to `message`,
+  `metadata`, and `done`) so UIs can render it consistently without polluting the token stream; the underlying aspect still
+  guarantees its presence unless explicitly disabled.
 
 ### 5.2 Conversation Context (Backend‑Owned)
 
-v0.6 introduces a backend‑owned **Conversation Context**, defined in `spec_v_0_1.md`:
+v0.6 introduces a backend‑owned **Conversation Context**, defined in `conversation_context_spec_v_0_1.md`:
 
 ```ts
 interface ConversationContext {
@@ -347,7 +361,7 @@ This design ensures:
 
 ### 7.1 Timeline Engine (Unchanged in Scope)
 
-- The **Timeline Engine** (`docs/architecture/engines/timeline-engine/spec_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
+- The **Timeline Engine** (`docs/specs/timeline-engine/timeline_engine_v_0_2.md`) consumes time‑based graph edges such as `:LOOKBACK_WINDOW` and `:LOCKS_IN_FOR_PERIOD`.
 - Given a scenario (sequence of events + dates), it can answer:
   - Whether a rule applies at a given date.
   - When lock‑in periods expire.
@@ -356,7 +370,7 @@ This design ensures:
 
 ### 7.2 Scenario Engine (Future but Supported)
 
-v0.6 recognises a future **Scenario Engine** (`spec_v_0_1.md`) as a first‑class extension point:
+v0.6 recognises a future **Scenario Engine** (`scenario_engine_v_0_1.md`) as a first‑class extension point:
 
 - Models structured "what‑if" scenarios (e.g. importing a car from Japan, changing residency, altering income).
 - Uses:
@@ -427,7 +441,13 @@ v0.6 fully incorporates the UI architecture additions from v0.5.
 - `/api/chat`
   - Thin adapter onto `ComplianceEngine.handleChat`.
   - Streams `text` chunks as SSE events.
+  - Emits `disclaimer` SSE events for safety messaging so downstream clients can render them separately from streamed text.
   - Emits a final metadata event with `referencedNodes`, `jurisdictions`, `uncertaintyLevel`, `disclaimerKey`.
+
+- `/api/conversations/stream` (tenant-scoped SSE feed)
+  - Streams conversation list changes (create/share/rename/archive) so the UI stays in sync across tabs/devices without manual refreshes.
+  - Each event carries identifiers, titles, and the share/authorisation envelope so clients can merge updates into cached lists without re-fetching full histories.
+  - Built on the same conversation event hub used for per-conversation SSE streams; production instances should fan out via Redis/pub-sub when horizontally scaled.
 
 - `/api/graph/*`
   - Read‑only routes for fetching initial graph snapshots and streaming patches.
@@ -467,7 +487,7 @@ To keep scope sane, v0.6 explicitly does **not** attempt to:
 - ✅ Main‑chat **SKOS‑style concept capture** tool and self‑populating graph pipeline.
 - ✅ Backend‑owned **Conversation Context** and `referencedNodes` semantics.
 - ✅ Hooks for future **Scenario Engine** and What‑If scenarios.
-- ✅ Explicit alignment with `concept_capture_v_0_1.md`, `spec_v_0_1.md`, and `spec_v_0_1.md`.
+- ✅ Explicit alignment with `concept_capture_from_main_chat_v_0_1.md`, `conversation_context_spec_v_0_1.md`, and `scenario_engine_v_0_1.md`.
 
 ### Carried Forward (Unchanged in Spirit)
 

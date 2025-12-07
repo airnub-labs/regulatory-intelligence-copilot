@@ -13,7 +13,19 @@
     "outDir": "dist",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@reg-copilot/reg-intel-core": ["packages/reg-intel-core/dist/index.d.ts"],
+      "@reg-copilot/reg-intel-graph": ["packages/reg-intel-graph/dist/index.d.ts"],
+      "@reg-copilot/reg-intel-llm": ["packages/reg-intel-llm/dist/index.d.ts"],
+      "@reg-copilot/reg-intel-prompts": ["packages/reg-intel-prompts/dist/index.d.ts"],
+      "@reg-copilot/reg-intel-next-adapter": ["packages/reg-intel-next-adapter/dist/index.d.ts"],
+      "@reg-copilot/reg-intel-conversations": ["packages/reg-intel-conversations/dist/index.d.ts"],
+      "@reg-copilot/reg-intel-observability": [
+        "packages/reg-intel-observability/dist/index.d.ts"
+      ]
+    }
   },
   "exclude": ["node_modules", "dist"]
 }

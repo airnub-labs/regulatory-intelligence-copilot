@@ -1,53 +1,253 @@
 import * as React from "react"
+import { Bot, ShieldCheck, User } from "lucide-react"
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+
+type ListBuffer = {
+  type: "ul" | "ol"
+  items: React.ReactNode[]
+}
+
+function renderInlineMarkdown(text: string, keyPrefix: string) {
+  const elements: React.ReactNode[] = []
+  const regex = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(text.slice(lastIndex, match.index))
+    }
+
+    if (match[1] && match[2]) {
+      elements.push(
+        <a key={`${keyPrefix}-link-${elements.length}`} href={match[2]} target="_blank" rel="noreferrer">
+          {match[1]}
+        </a>
+      )
+    } else if (match[3]) {
+      elements.push(<strong key={`${keyPrefix}-strong-${elements.length}`}>{match[3]}</strong>)
+    } else if (match[4]) {
+      elements.push(<em key={`${keyPrefix}-em-${elements.length}`}>{match[4]}</em>)
+    } else if (match[5]) {
+      elements.push(<code key={`${keyPrefix}-code-${elements.length}`}>{match[5]}</code>)
+    }
+
+    lastIndex = regex.lastIndex
+  }
+
+  if (lastIndex < text.length) {
+    elements.push(text.slice(lastIndex))
+  }
+
+  return elements
+}
+
+function renderMarkdown(content: string) {
+  const elements: React.ReactNode[] = []
+  let paragraphBuffer: string[] = []
+  let listBuffer: ListBuffer | null = null
+
+    const flushParagraph = () => {
+      if (paragraphBuffer.length === 0) return
+      elements.push(
+        <p key={`paragraph-${elements.length}`}>
+          {renderInlineMarkdown(paragraphBuffer.join(" "), `paragraph-${elements.length}`)}
+      </p>
+    )
+    paragraphBuffer = []
+  }
+
+  const flushList = () => {
+    if (!listBuffer) return
+    const ListTag = listBuffer.type === "ul" ? "ul" : "ol"
+    elements.push(
+      <ListTag key={`list-${elements.length}`}>
+        {listBuffer.items.map((item, index) => (
+          <li key={`list-item-${elements.length}-${index}`}>{item}</li>
+        ))}
+      </ListTag>
+    )
+    listBuffer = null
+  }
+
+  content.split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim()
+    const bulletMatch = trimmed.match(/^[-*+]\s+(.*)$/)
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.*)$/)
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.*)$/)
+
+      if (headingMatch) {
+        flushParagraph()
+        flushList()
+        const level = headingMatch[1].length
+        const Tag = (level === 1 ? "h1" : level === 2 ? "h2" : "h3") as keyof React.JSX.IntrinsicElements
+        elements.push(
+          <Tag key={`heading-${elements.length}`}>
+            {renderInlineMarkdown(headingMatch[2], `heading-${elements.length}`)}
+        </Tag>
+      )
+      return
+    }
+
+    if (bulletMatch) {
+      flushParagraph()
+      const item = bulletMatch[1]
+      if (!listBuffer || listBuffer.type !== "ul") {
+        flushList()
+        listBuffer = { type: "ul", items: [] }
+      }
+      listBuffer.items.push(
+        <span key={`list-item-content-${listBuffer.items.length}`}>
+          {renderInlineMarkdown(item, `list-${elements.length}-${listBuffer?.items.length ?? 0}`)}
+        </span>
+      )
+      return
+    }
+
+    if (orderedMatch) {
+      flushParagraph()
+      const item = orderedMatch[1]
+      if (!listBuffer || listBuffer.type !== "ol") {
+        flushList()
+        listBuffer = { type: "ol", items: [] }
+      }
+      listBuffer.items.push(
+        <span key={`ordered-item-content-${listBuffer.items.length}`}>
+          {renderInlineMarkdown(item, `list-${elements.length}-${listBuffer?.items.length ?? 0}`)}
+        </span>
+      )
+      return
+    }
+
+    if (trimmed === "") {
+      flushParagraph()
+      flushList()
+      return
+    }
+
+    flushList()
+    paragraphBuffer.push(trimmed)
+  })
+
+  flushParagraph()
+  flushList()
+
+  return elements
+}
+
+interface MessageMetadata {
+  agentId?: string
+  jurisdictions?: string[]
+  uncertaintyLevel?: "low" | "medium" | "high"
+  referencedNodes?: string[]
+  deletedAt?: string
+  supersededBy?: string
+}
 
 interface MessageProps {
   role: "user" | "assistant"
-  content: React.ReactNode
+  content: string
   className?: string
+  metadata?: MessageMetadata
+  disclaimer?: string
+  deletedAt?: string | null
+  supersededBy?: string | null
 }
 
-export function Message({ role, content, className }: MessageProps) {
+export function Message({ role, content, className, metadata, disclaimer, deletedAt, supersededBy }: MessageProps) {
   const isUser = role === "user"
+  const isDeleted = Boolean(deletedAt ?? metadata?.deletedAt)
+
+  const nodesCount = metadata?.referencedNodes?.length ?? 0
 
   return (
     <div
       className={cn(
-        "flex gap-3 w-full",
+        "group flex w-full gap-3",
         isUser ? "justify-end" : "justify-start",
+        isDeleted && "opacity-75",
         className
       )}
     >
       {!isUser && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            AI
-          </AvatarFallback>
+        <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+          <AvatarFallback className="bg-primary text-primary-foreground text-xs">AI</AvatarFallback>
         </Avatar>
       )}
-      <div
-        className={cn(
-          "flex flex-col gap-1 max-w-[85%]",
-          isUser && "items-end"
-        )}
-      >
-        <div
-          className={cn(
-            "rounded-lg px-4 py-3",
-            isUser
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-foreground border border-border"
+      <div className={cn("flex max-w-[88%] flex-col gap-2", isUser && "items-end")}> 
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {isUser ? (
+            <>
+              <User className="h-3.5 w-3.5" />
+              You
+              <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+              Trusted input
+            </>
+          ) : (
+            <>
+              <Bot className="h-3.5 w-3.5" />
+              Copilot
+              <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+              Graph grounded
+            </>
           )}
-        >
-          <MessageContent>{content}</MessageContent>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div
+            className={cn(
+              "relative overflow-hidden rounded-2xl border px-4 py-3 shadow-sm transition",
+              isUser
+                ? "bg-gradient-to-br from-primary to-primary/85 text-primary-foreground"
+                : "bg-card/90 text-foreground",
+              !isUser && "backdrop-blur supports-[backdrop-filter]:border-border/80"
+            )}
+          >
+            {!isUser && (
+              <Badge className="absolute right-3 top-3 flex items-center gap-1" variant="secondary">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                AI Elements
+              </Badge>
+            )}
+            <div className="space-y-2">
+              <MessageContent
+                content={content}
+                tone={isUser ? "user" : "assistant"}
+                className={cn(isDeleted && "line-through opacity-70")}
+              />
+              {isDeleted && (
+                <div className="text-[11px] font-medium text-muted-foreground">
+                  Superseded {supersededBy ? `by message ${supersededBy.slice(0, 8)}…` : ''}
+                </div>
+              )}
+              {!isUser && disclaimer && (
+                <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
+                  {disclaimer}
+                </div>
+              )}
+            </div>
+          </div>
+          {!isUser && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium text-muted-foreground">
+              <span className="rounded-full bg-background px-2 py-1 text-xs font-semibold text-foreground">
+                Agent: {metadata?.agentId ?? "pending"}
+              </span>
+              <span className="rounded-full bg-background px-2 py-1 text-xs">
+                Jurisdictions: {metadata?.jurisdictions?.join(", ") ?? "pending"}
+              </span>
+              <span className="rounded-full bg-background px-2 py-1 text-xs">
+                Uncertainty: {metadata?.uncertaintyLevel ?? "unknown"}
+              </span>
+              <span className="rounded-full bg-background px-2 py-1 text-xs">Nodes: {nodesCount}</span>
+            </div>
+          )}
         </div>
       </div>
       {isUser && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">
-            U
-          </AvatarFallback>
+        <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+          <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">U</AvatarFallback>
         </Avatar>
       )}
     </div>
@@ -55,33 +255,40 @@ export function Message({ role, content, className }: MessageProps) {
 }
 
 interface MessageContentProps {
-  children: React.ReactNode
+  content: string
+  tone: "user" | "assistant"
+  className?: string
 }
 
-export function MessageContent({ children }: MessageContentProps) {
+export function MessageContent({ content, tone, className }: MessageContentProps) {
   return (
-    <div className="prose prose-sm dark:prose-invert max-w-none">
-      <div className="whitespace-pre-wrap text-sm leading-relaxed">
-        {children}
-      </div>
+    <div
+      className={cn(
+        "prose prose-sm max-w-none dark:prose-invert",
+        tone === "assistant" ? "text-foreground" : "text-primary-foreground",
+        className
+      )}
+    >
+      <div className="text-sm leading-relaxed">{renderMarkdown(content)}</div>
     </div>
   )
 }
 
 export function MessageLoading() {
   return (
-    <div className="flex gap-3 w-full justify-start">
-      <Avatar className="h-8 w-8 shrink-0">
-        <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-          AI
-        </AvatarFallback>
+    <div className="flex w-full justify-start gap-3">
+      <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+        <AvatarFallback className="bg-primary text-primary-foreground text-xs">AI</AvatarFallback>
       </Avatar>
-      <div className="flex flex-col gap-1 max-w-[85%]">
-        <div className="rounded-lg px-4 py-3 bg-muted border border-border">
-          <div className="flex gap-1">
-            <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce" />
-            <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce [animation-delay:0.1s]" />
-            <div className="h-2 w-2 rounded-full bg-muted-foreground animate-bounce [animation-delay:0.2s]" />
+      <div className="flex max-w-[88%] flex-col gap-2">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Bot className="h-3.5 w-3.5" /> Copilot <span className="h-1 w-1 rounded-full bg-muted-foreground" /> Streaming
+        </div>
+        <div className="relative overflow-hidden rounded-2xl border bg-card/90 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:border-border/80">
+          <div className="flex gap-2">
+            <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground" />
+            <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:120ms]" />
+            <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:240ms]" />
           </div>
         </div>
       </div>

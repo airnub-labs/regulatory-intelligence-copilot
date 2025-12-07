@@ -18,8 +18,13 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@reg-copilot/reg-intel-conversations": "workspace:*",
     "@reg-copilot/reg-intel-core": "workspace:*",
-    "@reg-copilot/reg-intel-llm": "workspace:*"
+    "@reg-copilot/reg-intel-llm": "workspace:*",
+    "@reg-copilot/reg-intel-observability": "workspace:*",
+    "@supabase/supabase-js": "^2.49.0",
+    "neo4j-driver": "^5.15.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

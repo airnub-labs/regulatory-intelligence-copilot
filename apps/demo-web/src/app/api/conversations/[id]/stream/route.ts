@@ -1,0 +1,84 @@
+import { NextRequest } from 'next/server';
+import type { ConversationEventType, SseSubscriber } from '@reg-copilot/reg-intel-conversations';
+import { getServerSession } from 'next-auth/next';
+
+import { authOptions } from '@/lib/auth/options';
+import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
+import { toClientConversation } from '@/lib/server/conversationPresenter';
+
+export const dynamic = 'force-dynamic';
+
+const encoder = new TextEncoder();
+
+function sseChunk(event: ConversationEventType, data: unknown) {
+  const payload = typeof data === 'string' ? data : JSON.stringify(data);
+  return encoder.encode(`event: ${event}\n` + `data: ${payload}\n\n`);
+}
+
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id: conversationId } = await context.params;
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const tenantId = session.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+
+  const conversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
+  if (!conversation) {
+    return new Response('Conversation not found or access denied', { status: 404 });
+  }
+
+  const safeConversation = toClientConversation(conversation);
+
+  const stream = new ReadableStream({
+    start(controller) {
+      let closed = false;
+      let unsubscribe: () => void = () => {};
+
+      const cleanup = () => {
+        if (closed) return;
+        closed = true;
+        unsubscribe();
+        request.signal.removeEventListener('abort', abortHandler);
+        controller.close();
+      };
+
+      const abortHandler = () => {
+        cleanup();
+      };
+
+      const subscriber: SseSubscriber<ConversationEventType> = {
+        send(event: ConversationEventType, data: unknown) {
+          controller.enqueue(sseChunk(event, data));
+        },
+        onClose() {
+          cleanup();
+        },
+      };
+
+      unsubscribe = conversationEventHub.subscribe(tenantId, conversationId, subscriber);
+      // provide immediate metadata payload with conversation id and sharing state
+      subscriber.send('metadata', {
+        conversationId,
+        shareAudience: safeConversation.shareAudience,
+        tenantAccess: safeConversation.tenantAccess,
+        title: safeConversation.title,
+        jurisdictions: safeConversation.jurisdictions,
+        archivedAt: safeConversation.archivedAt,
+      });
+
+      request.signal.addEventListener('abort', abortHandler);
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      Connection: 'keep-alive',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  });
+}

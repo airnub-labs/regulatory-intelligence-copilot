@@ -54,7 +54,7 @@ Under the hood, it reuses and extends the architecture from `rfc-refactor`:
 
 For the full product concept, see:
 
-- 📄 `docs/architecture/copilot-concept/concept_v_0_6.md`
+- 📄 `docs/specs/regulatory_graph_copilot_concept_v_0_6.md`
 
 ---
 
@@ -95,8 +95,8 @@ If you’re new to the repo, start here:
 - 🏛 **Architecture**  
   - `docs/architecture/README.md` – high‑level architecture overview for v0.6, with links to `architecture_v_0_6.md`, diagrams, graph schema, change detection, engines, and integration guides.
 
-- 🗺 **Roadmap & decisions**
-  - `docs/governance/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).
+- 🗺 **Roadmap & decisions**  
+  - `docs/governance/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).  
   - `docs/governance/decisions/decisions_v_0_6.md` – architectural decision records (ADRs) and design rationale.
 
 - 🤖 **Agents & prompts**  
@@ -112,7 +112,7 @@ Specs and decisions in `docs/` are the **source of truth**. If anything in this 
 
 ## Current Status
 
-- **Architecture:** v0.6, based on `docs/architecture/architecture_v_0_6.md`.
+- **Architecture:** v0.6, based on `docs/architecture/versions/architecture_v_0_6.md`.
 - **Backend engine:** Implemented as reusable TypeScript packages (`reg-intel-core`, `reg-intel-graph`, `reg-intel-llm`, `reg-intel-prompts`).
 - **Frontend:** Next.js 16, React 19, Tailwind v4, shadcn/ui, Radix UI, Vercel AI SDK v5.
 - **Graph:** Memgraph Community + MAGE as a single shared rules graph.
@@ -129,7 +129,7 @@ This repo is **not** a finished product. It is a living reference implementation
 
 ### 1. Prerequisites
 
-- **Node.js** 24+ (LTS) – see `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` for why.
+- **Node.js** 24+ (LTS) – see `docs/node_24_lts_rationale.md` for why.  
 - **pnpm** (or your preferred package manager).  
 - **Docker** (for Memgraph + MCP gateway + any sandbox sidecars).  
 - Accounts / API keys for:
@@ -160,7 +160,7 @@ E2B_API_KEY=...
 OPENAI_API_KEY=...
 GROQ_API_KEY=...
 MEMGRAPH_URI=bolt://localhost:7687
-MEMGRAPH_USER=...
+MEMGRAPH_USERNAME=...
 MEMGRAPH_PASSWORD=...
 MCP_GATEWAY_URL=http://localhost:4000
 
@@ -168,9 +168,28 @@ MCP_GATEWAY_URL=http://localhost:4000
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 DATABASE_URL=...
+
+# Conversation + graph write modes
+# COPILOT_CONVERSATIONS_MODE=auto
+# COPILOT_GRAPH_WRITE_MODE=auto
 ```
 
+For non‑development deployments, always provide `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` so the platform can use the
+Supabase/Postgres conversation store. Avoid forcing `COPILOT_CONVERSATIONS_MODE` to `memory` outside dev/test; leave it unset (or
+`auto`) so the Supabase store is selected when credentials are present.
+
 Keep all secrets **out of source control**.
+
+#### Conversation & graph write modes
+
+- `COPILOT_CONVERSATIONS_MODE` mirrors the conversation store defaults:
+  - `auto` (default) – use Supabase/Postgres when credentials are present; fall back to in‑memory stores otherwise.
+  - `supabase` – force the Supabase/Postgres store (fails fast if credentials are missing).
+  - `memory` – force the in‑memory store (intended for local tests; **not** for production).
+- `COPILOT_GRAPH_WRITE_MODE` controls concept capture writes:
+  - `auto` (default) – use Memgraph writes when `MEMGRAPH_URI` (+ credentials) are configured; disable writes and emit warnings otherwise.
+  - `memgraph` – require Memgraph write connectivity; concept capture is blocked with a warning if unavailable.
+  - `memory` – never attempt graph writes; concept capture remains in memory only (useful for tests without Memgraph).
 
 ### 4. Start Infra (Memgraph + MCP Gateway)
 
@@ -196,15 +215,16 @@ For local development you can either:
 - Use the **Supabase CLI / docker stack** for a full local Supabase instance, or  
 - Point `DATABASE_URL` at a local Postgres instance.
 
-The recommended path is described in **`docs/development/local/LOCAL_DEVELOPMENT.md`**, which covers:
+The recommended path is described in **`docs/local_development.md`**, which covers:
 
-- Starting Supabase locally.  
-- Running database migrations.  
+- Starting Supabase locally.
+- Running database migrations.
 - Applying seed data for demo conversations and tenants.
+- Reading the first‑run Supabase notice that prints the **seeded demo user ID and tenant ID**; copy those values into the **repo root** `.env.local` (used by the demo web app) so the UI can authenticate as the seeded demo user.
 
 ### 6. Seed Memgraph with demo data
 
-Seed scripts and example Cypher files live under `scripts/` and `docs/architecture/graph/` (see `docs/architecture/README.md` for pointers).
+Seed scripts and example Cypher files live under `scripts/` and `docs/specs/graph-seed/` (see `docs/architecture/README.md` for pointers).
 
 A typical flow looks like:
 
@@ -270,69 +290,41 @@ packages/
 
 docs/
   README.md                    # Docs index (start here)
-  api/
-    graph_change_detector_api.md
-    graph_change_detector_performance.md
-    graph_change_detector_testing.md
-    graph_change_detector_troubleshooting.md
-    graph_change_detector_usage.md
   architecture/
     README.md                  # Architecture index / map
-    architecture_v_0_6.md
-    architecture_diagrams_v_0_6.md
-    archive/
-      architecture_v_0_1.md
-      architecture_v_0_2.md
-      architecture_v_0_3.md
-      architecture_v_0_4.md
-      architecture_v_0_5.md
-      architecture_diagrams_v_0_5.md
-    copilot-concept/
-      concept_v_0_6.md
-      archive/ (v0.1–v0.4)
-    conversation-context/
-      concept_capture_v_0_1.md
-      spec_v_0_1.md
-    graph/
-      schema_v_0_6.md
-      schema_changelog_v_0_6.md
-      algorithms_v_0_1.md
-      seed_ni_uk_ie_eu.txt
-      special_jurisdictions_modelling_v_0_1.md
-      change_detection_v_0_6.md
-      archive/ (schema history, change detection v0.3, cross-jurisdiction design)
-    engines/
-      timeline-engine/
-        spec_v_0_2.md
-        integration_v_0_3.md
-        archive/ (v0.1 timeline docs)
-      scenario-engine/
-        spec_v_0_1.md
-        archive/ (scenario integration v0.1)
-    guards/
-      graph_ingress_v_0_1.md
-      egress_v_0_2.md
-    runtime/
-      node_24_lts_rationale_v_0_1.md
-      node_24_lts_integration_checklist_v_0_1.md
-    data_privacy_and_architecture_boundaries_v_0_1.md
+    versions/
+      architecture_v_0_6.md
+      # older versions archived here
+    diagrams/
+      architecture_diagrams_v_0_6.md
   governance/
-    decisions/ (v0.6 + archive)
-    roadmap/ (v0.6 + archive)
-    migrations/
-      migration_plan_v_0_1.md
-      migration_plan_v_0_2.md
+    decisions/
+      decisions_v_0_6.md
+      versions/...
     product/
-      eligibility-explorer/
-        spec_v_0_1.md
-  development/
-    local/
-      LOCAL_DEVELOPMENT.md
-      eslint_rules.md
-    implementation-plans/
-      PHASE_* docs and implementation summaries
+      scenario-engine/
+        scenario_engine_v_0_1.md
+  roadmap/
+    roadmap_v_0_6.md
+    versions/...
+  change-detection/
+    graph_change_detection_v_0_6.md
+    archive/...
+  specs/
+    regulatory_graph_copilot_concept_v_0_6.md
+    graph_schema_v_0_6.md
+    graph_schema_changelog_v_0_6.md
+    graph_algorithms_v_0_1.md
+    timeline_engine_v_0_2.md
+    special_jurisdictions_modelling_v_0_1.md
+    data_privacy_and_architecture_boundaries_v_0_1.md
+    graph_ingress_guard_v_0_1.md
+    egress_guard_v_0_2.md
+    conversation-context/
+      conversation_context_spec_v_0_1.md
+      concept_capture_from_main_chat_v_0_1.md
 
-  # plus historical v0.1/v0.2/v0.3/v0.4/v0.5 docs preserved in archives
+  # plus historical v0.1/v0.2/v0.3/v0.4 docs
 
 AGENTS.md                      # v0.6 agent spec
 PROMPT.md                      # v0.6 coding agent prompt

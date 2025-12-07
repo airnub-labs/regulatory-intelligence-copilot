@@ -313,6 +313,9 @@ sequenceDiagram
     API-->>Page: SSE: event: metadata<br/>data: {agent, jurisdictions,<br/>uncertainty, referencedNodes}
     Note over Page: setChatMetadata({<br/>  agent, jurisdictions,<br/>  uncertainty, referencedNodes<br/>})
 
+    API-->>Page: SSE: event: disclaimer<br/>data: {text: 'Research tool, not advice'}
+    Note over Page: Store disclaimer separately<br/>and render below the assistant reply
+
     API-->>Page: SSE: event: message<br/>data: {text: 'Based'}
     Note over Page: Update assistant message:<br/>content += 'Based'
     Page->>Message: Re-render assistant message

@@ -23,7 +23,7 @@ Before starting, ensure you have the following installed:
 
 ### Required
 
-- **Node.js 24+ LTS** – Required for all packages. See `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md` for details.
+- **Node.js 24+ LTS** – Required for all packages. See `docs/node_24_lts_rationale.md` for details.
   ```bash
   node --version  # Should be >= 24.0.0
   ```
@@ -115,6 +115,20 @@ Using the provided Docker Compose configuration:
 docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
 ```
 
+### Seed the graph for local testing
+
+The repository ships with a guard-railed seeding script that uses `GraphWriteService` (and therefore the Graph Ingress Guard)
+to load a minimal Ireland/EU test dataset. This is safe for local use and keeps Memgraph PII-free.
+
+```bash
+# Requires Memgraph to be running locally
+# Uses MEMGRAPH_URI / MEMGRAPH_USERNAME / MEMGRAPH_PASSWORD if set
+pnpm dlx tsx scripts/seed-graph.ts
+```
+
+The script clears existing data in the target Memgraph instance before inserting the sample dataset. Comment out the `clear`
+step inside `scripts/seed-graph.ts` if you want to preserve existing local data between runs.
+
 ### Verify Memgraph is Running
 
 ```bash
@@ -145,12 +159,8 @@ Memgraph Lab provides:
 
 ### Initial Graph Schema Setup
 
-Load the initial schema and sample data:
-
-```bash
-# TODO: Add schema loading script when available
-# For now, you can run Cypher queries manually in Memgraph Lab
-```
+The `scripts/seed-graph.ts` script (see above) is the recommended way to stand up a fresh local dataset with the correct guard
+rails. If you want to inspect or extend the schema manually, you can run Cypher in Memgraph Lab.
 
 Example schema setup queries:
 
@@ -232,6 +242,14 @@ This starts all Supabase services:
 
 **First run takes 5-10 minutes** to download Docker images.
 
+On the very first start you will also see a **notice** similar to:
+
+```
+NOTICE: Seeded demo user with id <user-id> and tenant id <tenant-id>
+```
+
+Copy these IDs into the **repository root** `.env.local` (the demo web app reads from the root env file; you do *not* need a separate `apps/demo-web/.env.local`).
+
 ### Access Supabase Studio
 
 Open your browser to:
@@ -261,6 +279,34 @@ service_role key: <key>
 ```
 
 Save these for your `.env` file.
+
+### Seed demo data and configure the app
+
+1. **Reset and seed** the local database so the demo tenant, user, personas, and quick prompts exist:
+
+   ```bash
+   supabase db reset --use-mig --seed supabase/seed/demo_seed.sql
+   ```
+
+   The seed will **generate IDs** for the demo tenant/user (so database sequences remain untouched). Capture them with:
+
+   ```bash
+   # Uses the default local Supabase Postgres port and password
+   PGPASSWORD=postgres psql "postgresql://postgres@localhost:54322/postgres" \
+     -c "select id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id from auth.users where email='demo.user@example.com';"
+   ```
+
+2. **Expose Supabase to the platform** by adding these values to `.env.local` (use the URLs/keys printed by `supabase start`):
+
+   ```bash
+   NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
+   SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
+   SUPABASE_DEMO_TENANT_ID=<demo_tenant_id-from-query-above>
+   NEXT_PUBLIC_SUPABASE_DEMO_USER_ID=<demo_user_id-from-query-above>
+   ```
+
+   The demo web app reads these values to call the API with the seeded Supabase user instead of the previous hardcoded demo header.
 
 ### Stop Supabase
 
@@ -314,7 +360,7 @@ LOCAL_LLM_API_KEY=dummy  # Some local servers require any value
 # -----------------------------------------------------------------------------
 
 MEMGRAPH_URI=bolt://localhost:7687
-MEMGRAPH_USER=
+MEMGRAPH_USERNAME=
 MEMGRAPH_PASSWORD=
 
 # Memgraph MCP Server
@@ -328,6 +374,13 @@ MCP_GATEWAY_URL=http://localhost:8001
 NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
+
+# Authentication (NextAuth + Supabase demo user)
+NEXTAUTH_SECRET=<generate-with-`openssl rand -hex 32`>
+NEXTAUTH_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_DEMO_EMAIL=demo.user@example.com
+# The demo seed sets password to Password123! for the seeded user in supabase/seed/demo_seed.sql
+# The tenant and user IDs are generated at seed time; pull them with the psql command above.
 
 # -----------------------------------------------------------------------------
 # E2B Configuration (optional)
@@ -347,6 +400,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 
 # Logging
 LOG_LEVEL=debug
+
+# Conversation + graph write modes (override defaults when needed)
+# COPILOT_CONVERSATIONS_MODE=auto
+# COPILOT_GRAPH_WRITE_MODE=auto
 ```
 
 ### Environment Variable Reference
@@ -357,15 +414,24 @@ LOG_LEVEL=debug
 | `GROQ_API_KEY` | Yes* | Groq API key for Llama/Mixtral |
 | `LOCAL_LLM_BASE_URL` | Yes* | Local model endpoint (vLLM, Ollama) |
 | `MEMGRAPH_URI` | Yes | Memgraph Bolt connection URI |
-| `MEMGRAPH_USER` | No | Memgraph username (empty for local) |
+| `MEMGRAPH_USERNAME` | No | Memgraph username (empty for local) |
 | `MEMGRAPH_PASSWORD` | No | Memgraph password (empty for local) |
 | `MCP_GATEWAY_URL` | Yes | Memgraph MCP server URL |
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase API URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (server-side only) |
+| `SUPABASE_DEMO_TENANT_ID` | Yes (demo) | Tenant ID returned by the seed query for the demo user |
+| `NEXT_PUBLIC_SUPABASE_DEMO_USER_ID` | Yes (demo) | User ID returned by the seed query for the demo user |
+| `COPILOT_CONVERSATIONS_MODE` | No | Conversation store mode: `auto` (default) uses Supabase when credentials are set, otherwise memory; `supabase` forces Supabase; `memory` forces in-memory (testing only) |
+| `COPILOT_GRAPH_WRITE_MODE` | No | Concept capture write mode: `auto` (default) uses Memgraph when `MEMGRAPH_URI` is present, otherwise disables writes; `memgraph` requires Memgraph connectivity; `memory` forces in-memory no-op writes |
 | `E2B_API_KEY` | No | E2B sandbox API key |
 
 \* At least one LLM provider required
+
+#### Conversation & graph write modes
+
+- **Conversations**: By default (`COPILOT_CONVERSATIONS_MODE=auto`), the Next adapter uses Supabase/Postgres when `SUPABASE_*` credentials are present and falls back to an in-memory store when they are not. Set `supabase` to fail fast if credentials are missing, or `memory` to intentionally use the in-memory store for local tests and demos.
+- **Graph writes / concept capture**: `COPILOT_GRAPH_WRITE_MODE=auto` attempts to write captured concepts to Memgraph when `MEMGRAPH_URI` (and optional credentials) are configured. If Memgraph is not configured, concept capture downgrades to an in-memory no-op with a warning. Use `memgraph` to require connectivity, or `memory` to block writes for tests without Memgraph.
 
 ### Verify Configuration
 
@@ -686,6 +752,20 @@ pnpm dev
 - Check for typos in variable names
 - For `NEXT_PUBLIC_*` vars, rebuild if changed
 
+**Problem**: `COPILOT_CONVERSATIONS_MODE=memory` throws an error
+
+```
+Error: COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments
+```
+
+**Solution**:
+- Memory mode is intentionally blocked in production builds. For local demos or tests, set a development-like environment:
+  - In `.env.local`, ensure `NODE_ENV=development` (or `NODE_ENV=test`).
+  - Restart the dev server after changing the value so the Next.js runtime picks it up.
+- If you are running a production build locally and do not want to change `NODE_ENV`, switch back to the default `auto` mode by
+  removing `COPILOT_CONVERSATIONS_MODE` (or setting it to `auto`) so the Supabase conversation store is used when credentials
+  are present.
+
 ### LLM Provider Issues
 
 **Problem**: OpenAI API errors
@@ -831,11 +911,12 @@ ANALYZE=true pnpm build
 
 ## Additional Resources
 
-- **Architecture Documentation**: `docs/architecture/archive/architecture_v_0_5.md`
-- **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
-- **Architecture Decisions**: `docs/governance/decisions/archive/decisions_v_0_5.md`
-- **Graph Schema**: `docs/architecture/graph/archive/schema_v_0_4.md`
+- **Architecture Documentation**: `docs/architecture/architecture_v_0_6.md`
 - **Agent Design**: `AGENTS.md`
+- **Graph Schema**: `docs/specs/graph-schema/graph_schema_v_0_6.md`
+- **Concept Capture & Conversation Context**: `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md` and `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`
+- **Roadmap & Decisions**: `docs/roadmap/roadmap_v_0_6.md` and `docs/decisions/decisions_v_0_6.md`
+- **UI Implementation**: `apps/demo-web/UI_IMPLEMENTATION.md`
 
 ---
 
@@ -861,6 +942,6 @@ Once your local environment is running:
 2. **Inspect the graph** – Use Memgraph Lab to explore the knowledge graph
 3. **Read the architecture docs** – Understand the system design
 4. **Add sample data** – Create test scenarios in the graph
-5. **Implement features** – Follow the roadmap in `docs/governance/roadmap/archive/roadmap_v_0_4.md`
+5. **Implement features** – Follow the roadmap in `docs/roadmap/roadmap_v_0_6.md`
 
 Happy developing! 🚀

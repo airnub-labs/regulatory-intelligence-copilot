@@ -4,26 +4,19 @@
 > **Supersedes:** `AGENTS.md` (v0.4)  
 > **Aligned with:**  
 > - `docs/architecture/architecture_v_0_6.md`
-> - `docs/architecture/copilot-concept/concept_v_0_6.md`
-> - `docs/architecture/graph/schema_v_0_6.md`
-> - `docs/architecture/graph/schema_changelog_v_0_6.md`
-> - `docs/architecture/graph/algorithms_v_0_1.md`
-> - `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
-> - `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-> - `docs/architecture/guards/graph_ingress_v_0_1.md`
-> - `docs/architecture/guards/egress_v_0_2.md`
-> - `docs/architecture/conversation-context/concept_capture_v_0_1.md`
-> - `docs/architecture/conversation-context/spec_v_0_1.md`
-> - `docs/architecture/engines/scenario-engine/spec_v_0_1.md`
-> - `docs/docs_maintenance_v_0_1.md`
+> - `docs/specs/concept/regulatory_graph_copilot_concept_v_0_6.md`  
+> - `docs/specs/graph-schema/graph_schema_v_0_6.md`  
+> - `docs/specs/graph-schema/graph_schema_changelog_v_0_6.md`  
+> - `docs/specs/graph_algorithms_v_0_1.md`  
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`  
+> - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`  
+> - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`  
+> - `docs/specs/safety-guards/egress_guard_v_0_3.md`
+> - `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`  
+> - `docs/specs/conversation-context/conversation_context_spec_v_0_1.md`  
+> - `docs/specs/scenario_engine_v_0_1.md`  
 > - `docs/governance/decisions/decisions_v_0_6.md`
 > - `docs/governance/roadmap/roadmap_v_0_6.md`
-
-**Documentation expectations:**
-
-- Follow the domain layout and naming conventions in `docs/docs_maintenance_v_0_1.md`.
-- Default to **archiving** superseded docs into the appropriate `archive/` directory rather than deleting them unless explicitly told otherwise.
-- Keep `README.md`, `docs/README.md`, `PROMPT.md`, and this file aligned with any doc naming or structural changes.
 
 > **Purpose:** Define the *logical agents* in the Regulatory Intelligence Copilot and how they should behave under the v0.6 architecture. Implementation details (files, classes, wiring) must follow this specification.
 
@@ -38,13 +31,19 @@ v0.6 updates the v0.4 agent design by:
 
 ## 1. Agent Architecture Overview
 
+**Repository rules:**
+
+- Fix TypeScript and lint errors instead of masking them with `typescript.ignoreBuildErrors` (or similar) in `next.config.js`.
+- When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
+- Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
+
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.
 - It delegates to **domain/jurisdiction expert agents** and, where relevant, **scenario/what‑if agents**, then reconciles their results.
 - Agents are:
   - **Jurisdiction‑aware but jurisdiction‑neutral** by default (they accept one or more jurisdictions as context; code is not hard‑wired to Ireland only except where explicitly intended for a specialist lens).
-  - Consumers of the **Memgraph Regulatory Rules Graph** (no writes) using `GraphClient` with `schema_v_0_6.md`.
+  - Consumers of the **Memgraph Regulatory Rules Graph** (no writes) using `GraphClient` with `graph_schema_v_0_6.md`.
   - Users of the **Timeline Engine v0.2** for any time‑based logic.
   - Callers of LLMs through a **provider‑agnostic LLM router** (no direct calls to OpenAI/Groq/etc.).
   - Subject to **egress guard aspects** before anything leaves the platform.
@@ -106,10 +105,10 @@ All agents **MUST**:
 - Respect **ingress/egress guardrails** and never introduce user PII into Memgraph or external calls.
 - Populate `referencedNodes` with the Memgraph IDs of rules/benefits/sections/timelines actually used, so that:
   - `ChatResponse.referencedNodes` can be set accurately.
-  - `ConversationContext.activeNodeIds` can be updated (see `spec_v_0_1.md`).
+  - `ConversationContext.activeNodeIds` can be updated (see `conversation_context_spec_v_0_1.md`).
 - Treat **concept capture** as an engine capability:
   - Agents do *not* call a separate entity‑extraction task.
-  - The Compliance Engine attaches a `capture_concepts` tool (see `concept_capture_v_0_1.md`) to main‑chat LLM calls and processes its output behind the scenes.
+  - The Compliance Engine attaches a `capture_concepts` tool (see `concept_capture_from_main_chat_v_0_1.md`) to main‑chat LLM calls and processes its output behind the scenes.
 
 ### 1.2 Non‑Chat / Utility Agents
 
@@ -117,7 +116,7 @@ Some agents are not directly exposed to the user but are part of the agent layer
 
 - **Graph ingestion agents** – orchestrate MCP calls + LLM extraction to turn source documents into graph upserts (always via `GraphWriteService` + Graph Ingress Guard).
 - **Change detection / impact analysis agents** – reason over `:Update`/`:ChangeEvent` nodes and affected rules to summarise impacts.
-- **Scenario/what‑if agents** – built on `spec_v_0_1.md`, they evaluate alternative paths and explain trade‑offs.
+- **Scenario/what‑if agents** – built on `scenario_engine_v_0_1.md`, they evaluate alternative paths and explain trade‑offs.
 - **Egress guard helper agents** – small LLM/deterministic helpers that inspect outbound payloads (to LLMs/MCPs) for PII / risky content.
 
 These follow the same safety and graph‑access rules but may have narrower interfaces (batch jobs, ingestion pipelines, etc.).
@@ -139,7 +138,7 @@ These follow the same safety and graph‑access rules but may have narrower inte
   - Company/director obligations.  
   - EU‑level rules affecting any of the above.  
   - Cross‑border interactions (e.g. IE–UK–NI–IM–MT–EU).
-- Coordinates with **scenario/what‑if agents** for explicit “what if I do X vs Y?” questions (see `spec_v_0_1.md`).
+- Coordinates with **scenario/what‑if agents** for explicit “what if I do X vs Y?” questions (see `scenario_engine_v_0_1.md`).
 
 ### 2.2 Responsibilities
 
@@ -156,7 +155,7 @@ These follow the same safety and graph‑access rules but may have narrower inte
      - Relevant statutes/sections, benefits, reliefs, guidance, case law, EU instruments, treaties, special regimes.
      - Conditions, timelines, mutual exclusions, cross‑jurisdiction links.
    - Pull a **local neighbourhood subgraph** relevant to the query based on persona and jurisdictions.
-   - Optionally use graph algorithms (as per `algorithms_v_0_1.md`) to:
+   - Optionally use graph algorithms (as per `graph_algorithms_v_0_1.md`) to:
      - Identify important nodes/communities in that neighbourhood.
      - Provide better retrieval and explanation hints to the LLM.
    - Ensure all nodes actually used in reasoning are included in `referencedNodes`.
@@ -210,7 +209,7 @@ All expert agents:
   - Make their scope explicit in prompts, logs, and documentation.
 
 - **Graph usage:**
-  - Query Memgraph via `GraphClient` using the schema in `schema_v_0_6.md`.
+  - Query Memgraph via `GraphClient` using the schema in `graph_schema_v_0_6.md`.
   - Prefer fetching a small, relevant subgraph plus timeline info rather than raw documents.
   - Populate `referencedNodes` with the IDs of rules/benefits/sections/timelines actually used.
 
@@ -243,7 +242,7 @@ Expert agents return an `AgentChatResponse` which the global agent then merges i
 
 ## 4. Scenario & What‑If Agents (v0.6)
 
-Scenario/what‑if agents sit on top of the **Scenario Engine** (`spec_v_0_1.md`) and help users explore alternative paths (e.g. “import car now vs next year”, “claim benefit A vs benefit B”).
+Scenario/what‑if agents sit on top of the **Scenario Engine** (`scenario_engine_v_0_1.md`) and help users explore alternative paths (e.g. “import car now vs next year”, “claim benefit A vs benefit B”).
 
 ### 4.1 Roles
 
@@ -265,7 +264,7 @@ Scenario/what‑if agents sit on top of the **Scenario Engine** (`spec_v_0_1.md`
   - Continue to populate `referencedNodes` with the rules used in scenario evaluation.
   - Benefit from concept capture but do not manage it directly.
 
-Scenario agents **do not** store scenario data in Memgraph. Scenario definitions and user‑specific inputs live in Supabase/Postgres as per `spec_v_0_1.md` and scenario engine docs.
+Scenario agents **do not** store scenario data in Memgraph. Scenario definitions and user‑specific inputs live in Supabase/Postgres as per `conversation_context_spec_v_0_1.md` and scenario engine docs.
 
 ---
 
@@ -287,6 +286,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - Agents never call providers directly; they always go through the **LLM router**.
 - Tenant and task policies determine which models/providers are used and whether remote egress is allowed.
 - AI SDK v5, Responses API, and other provider specifics are implementation details behind the `LlmProvider` abstraction.
+- The router resolves requested vs effective egress modes **in strict order**: global defaults → tenant policy → optional per-user policy → per-call override. Each scope runs its own `allowOff` check; if a scope disallows `off`, later candidates cannot resurrect it. `requestedMode` and `effectiveMode` must both be set on the context with the base default as the fallback, and provider allowlisting is always enforced (even when sanitisation mode is `off`).
 
 ### 5.4 Egress Guard
 
@@ -295,6 +295,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
   - Static/deterministic checks (PII patterns, domain allowlists, etc.).
   - Optional LLM‑powered inspectors (egress guard helper agents).
 - Agents must be written assuming that egress may be **blocked, redacted, or downgraded** depending on tenant policy.
+- `LlmRouter` resolves requested + effective mode per call (global defaults → tenant policy → optional per-user policy → per-call override). `enforce` executes the sanitised payload, `report-only` logs redactions but executes the original request, and provider allowlisting runs in every mode (rejecting disallowed providers even when effective mode is `off`). `off` is a deliberate, test-only wiring. `EgressGuardContext` carries tenant/user IDs, the requested `mode`, and the resolved `effectiveMode` for observability. **Do not regress the ordering or `allowOff` scoping**; user-level `off` must only be honoured when explicitly allowed even if the tenant forbids it.
 
 ### 5.5 Concept Capture & Self‑Populating Graph
 
@@ -302,10 +303,12 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - Tool output is parsed into SKOS‑like concept objects and processed by:
   - A **canonical concept resolver** (graph‑only in v0.1), and
   - **GraphWriteService** for new or incomplete concepts.
+- Tool chunks arrive as `type: 'tool'` with `name: 'capture_concepts'` and structured args in `argsJson`; other tool names are ignored for concept capture.
 - Agents:
   - Must not implement their own concept extraction pipelines.
   - Should use clear terminology and cite jurisdictions to help concept capture.
   - Rely on updated graph content and Conversation Context in subsequent turns.
+- Canonicalised concept node IDs are merged into `referencedNodes` and persisted to the Conversation Context so subsequent turns inherit captured concepts automatically.
 
 ### 5.6 Conversation Context
 
@@ -313,7 +316,7 @@ Scenario agents **do not** store scenario data in Memgraph. Scenario definitions
 - It typically includes:
   - `activeNodeIds` (graph nodes recently referenced in answers).
   - Scenario/what‑if metadata (where relevant).
-- Agents do not read or write Conversation Context directly; they benefit from it via prompt aspects that summarise the active concepts and nodes.
+- Agents do not read or write Conversation Context directly; they benefit from it via prompt aspects that summarise the active concepts and nodes. The Compliance Engine merges agent `referencedNodes` with captured concept node IDs before persisting `activeNodeIds`.
 
 ### 5.7 Privacy, Redaction, and Non‑Advice Line
 
@@ -353,3 +356,9 @@ When adding or modifying an agent, ensure:
 
 Following this spec keeps the agent layer consistent with the v0.6 architecture and allows the entire system to be reused in other host apps (e.g. separate Next.js/Supabase SaaS products) without rewriting core logic.
 
+
+### 5.8 Web app / shell responsibilities
+
+- The chat surface must call `/api/chat` with a `conversationId` once the first SSE metadata payload provides one, ensuring the backend `ConversationStore`/`ConversationContextStore` maintains continuity.
+- Conversation SSE streams are keyed per `(tenantId, conversationId)`; authorised users on the same tenant may subscribe concurrently to the same stream in single-instance deployments.
+- Dev mode may rely on in-memory stores; production shells should wire Supabase/Postgres-backed stores with RLS.

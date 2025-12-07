@@ -3,21 +3,21 @@
 > Tracks changes to the Memgraph schema for architecture alignment.
 >
 > **Status:** Current  
-> **Supersedes:** `docs/architecture/graph/archive/schema_changelog_v_0_4.md`
+> **Supersedes:** `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
 
 ---
 
 ## v0.6 – Concept Layer & Self‑Populating Graph
 
 **Status:** Current  
-**Aligned with:** `architecture_v_0_6.md`, `decisions_v_0_6.md`  
-**Primary schema:** `schema_v_0_6.md`  
+**Aligned with:** `docs/architecture/architecture_v_0_6.md`, `docs/governance/decisions/decisions_v_0_6.md`
+**Primary schema:** `graph_schema_v_0_6.md`  
 **Companion specs:**
 
-- `concept_capture_v_0_1.md`
-- `spec_v_0_1.md`
-- `graph_ingress_v_0_1.md`
-- `algorithms_v_0_1.md`
+- `concept_capture_from_main_chat_v_0_1.md`
+- `conversation_context_spec_v_0_1.md`
+- `graph_ingress_guard_v_0_1.md`
+- `graph_algorithms_v_0_1.md`
 - `data_privacy_and_architecture_boundaries_v_0_1.md`
 
 ### 1. Summary
@@ -214,7 +214,7 @@ For an existing v0.4 deployment:
    - Extend schema/whitelists to cover `:Concept`, `:Label`, and new relationships.
 
 4. **Enable concept capture:**
-   - Implement `capture_concepts` tool in the LLM layer as per `concept_capture_v_0_1.md`.
+   - Implement `capture_concepts` tool in the LLM layer as per `concept_capture_from_main_chat_v_0_1.md`.
    - Wire `canonicalConceptResolver` + `GraphWriteService` for SKOS payloads.
 
 5. **Optional: Backfill key concepts:**
@@ -224,7 +224,7 @@ For an existing v0.4 deployment:
    - This backfill is optional but recommended for better early behaviour.
 
 6. **Update documentation & queries:**
-   - Document usage of `:Concept` and `:Label` in `schema_v_0_6.md`.
+   - Document usage of `:Concept` and `:Label` in `graph_schema_v_0_6.md`.
    - Add example queries for:
      - “Find all rules aligned with VAT in IE”,
      - “Find concepts aligned with this section”,
@@ -235,7 +235,7 @@ For an existing v0.4 deployment:
 ## v0.5 – No Graph Schema Changes (UI‑Only Release)
 
 **Status:** Historical, fully compatible  
-**Aligned with:** `docs/architecture/archive/architecture_v_0_5.md`, `docs/governance/decisions/archive/decisions_v_0_5.md`
+**Aligned with:** `docs/architecture/versions/architecture_v_0_5.md`, `docs/governance/decisions/versions/decisions_v_0_5.md`
 
 v0.5 focused on the **UI layer**:
 
@@ -253,7 +253,7 @@ Implementation note:
 ## v0.4 – Architecture Alignment & Ingress Guard Integration (Unchanged)
 
 **Status:** Historical, still compatible  
-**Aligned with:** `architecture_v_0_4.md`, `decisions_v_0_4.md`
+**Aligned with:** `docs/architecture/versions/architecture_v_0_4.md`, `docs/governance/decisions/decisions_v_0_4.md`
 
 v0.4 was an alignment release that:
 
@@ -263,18 +263,18 @@ v0.4 was an alignment release that:
 - Clarified “rules‑only, no PII” for the shared rules graph,  
 - Documented special jurisdiction modelling (IE/UK/NI/IM/MT/GI/AD/CTA).
 
-For full details, see `docs/architecture/graph/archive/schema_changelog_v_0_4.md`.
+For full details, see `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`.
 
 ---
 
 ## v0.3 – Cross‑Jurisdiction + Timeline Alignment
 
 **Status:** Historical, still compatible  
-**Detailed changelog:** `schema_changelog_v_0_3.md`
+**Detailed changelog:** `graph_schema_changelog_v_0_3.md`
 
 Highlights:
 
-- Tight alignment with `docs/architecture/engines/timeline-engine/spec_v_0_2.md`.
+- Tight alignment with `docs/specs/timeline-engine/timeline_engine_v_0_2.md`.
 - Richer timeline modelling:
   - `LOOKBACK_WINDOW`
   - `LOCKS_IN_FOR_PERIOD`
@@ -295,7 +295,7 @@ Pivot from HTTP/RFC/OWASP graph to the current regulatory focus:
 - Introduced jurisdiction‑aware modelling (IE, EU, IM, MT, UK, etc.).
 - Added EU instruments (`:EURegulation`, `:EUDirective`), profile tags, mutual exclusions, and initial change tracking.
 
-See `schema_changelog_v_0_3.md` for legacy details.
+See `graph_schema_changelog_v_0_3.md` for legacy details.
 
 ---
 

@@ -5,7 +5,7 @@
 > **Branch:** `claude/phase-3-implementation-01SkpBxYZmSPvq2wGC99kqP5`
 > **Status:** Ready to implement
 
-This phase implements the Web App Integration & Streaming milestone from `roadmap_v_0_4.md` Phase 3.
+This phase implements the Web App Integration & Streaming milestone from `docs/governance/roadmap/roadmap_v_0_4.md` Phase 3.
 
 ---
 
@@ -424,7 +424,7 @@ describe('SSE Chat Streaming', () => {
 ## Documentation Updates
 
 **Files to Update:**
-- [ ] `docs/IMPLEMENTATION_STATUS_v_0_4.md` - Mark Phase 3 tasks complete
+- [ ] `docs/V0_4_IMPLEMENTATION_STATUS.md` - Mark Phase 3 tasks complete
 - [ ] `README.md` - Update API documentation
 - [ ] `apps/demo-web/README.md` - Document new endpoints
 - [ ] Create `docs/API.md` - Comprehensive API reference
@@ -482,9 +482,9 @@ After Phase 3 is complete, the recommended path is:
 
 ## References
 
-- `docs/governance/roadmap/archive/roadmap_v_0_4.md` - Phase 3 definition
-- `docs/architecture/archive/architecture_v_0_4.md` - Architecture overview
-- `docs/governance/decisions/archive/decisions_v_0_4.md` - ADRs
+- `docs/governance/roadmap/roadmap_v_0_4.md` - Phase 3 definition
+- `docs/architecture_v_0_4.md` - Architecture overview
+- `docs/governance/decisions/decisions_v_0_4.md` - ADRs
 - `packages/reg-intel-core/src/orchestrator/complianceEngine.ts` - Engine interface
 - `apps/demo-web/src/app/api/` - Current API implementation
 

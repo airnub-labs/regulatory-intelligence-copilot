@@ -6,7 +6,7 @@ This document describes the ESLint rules configured to enforce v0.4 architecture
 
 ## Graph Write Discipline
 
-Per `docs/governance/decisions/archive/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go through `GraphWriteService`.
+Per `docs/governance/decisions/decisions_v_0_4.md` (D-026, D-028), all writes to Memgraph must go through `GraphWriteService`.
 
 ### Rules
 
@@ -14,7 +14,7 @@ Per `docs/governance/decisions/archive/decisions_v_0_4.md` (D-026, D-028), all w
 - **Error:** Direct `session.run()` calls are prohibited
 - **Why:** Bypasses Graph Ingress Guard aspects (PII blocking, schema validation, property whitelisting)
 - **Fix:** Use `GraphWriteService` methods instead
-- **See:** `docs/architecture/guards/graph_ingress_v_0_1.md`
+- **See:** `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
 
 **Rule:** `no-restricted-syntax` (executeCypher)
 - **Error:** Direct `executeCypher()` calls are prohibited
@@ -83,6 +83,6 @@ Planned rules:
 ---
 
 **See Also:**
-- `docs/architecture/guards/graph_ingress_v_0_1.md`
-- `docs/governance/decisions/archive/decisions_v_0_4.md` (D-026, D-028)
-- `docs/development/implementation-plans/PHASE_1_FIXES.md`
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+- `docs/governance/decisions/decisions_v_0_4.md` (D-026, D-028)
+- `docs/PHASE_1_FIXES.md`

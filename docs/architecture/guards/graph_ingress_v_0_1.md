@@ -15,9 +15,9 @@
 
 Referenced specs:
 
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/graph/archive/schema_v_0_3.md`
-- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
 
 ---
 
@@ -150,7 +150,7 @@ Baseline aspects:
 
 1. **SchemaValidationAspect**
    - Validates `nodeLabel` and `relType` against
-     `docs/architecture/graph/archive/schema_v_0_3.md`.
+     `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`.
    - Rejects writes with unknown labels/types.
 
 2. **PropertyWhitelistAspect**
@@ -297,7 +297,7 @@ chosen local model / agent framework.
 ### 6.1 Allowed Node & Edge Types
 
 Allowed node labels and relationship types are defined in
-`docs/architecture/graph/archive/schema_v_0_3.md` (e.g. `Jurisdiction`, `Region`, `Agreement`, `Regime`,
+`docs/specs/graph-schema/versions/graph_schema_v_0_3.md` (e.g. `Jurisdiction`, `Region`, `Agreement`, `Regime`,
 `Rule`, `Benefit`, `Timeline`, `Document`, `DocumentSection`, and relationships
 like `PART_OF`, `PARTY_TO`, `SUBJECT_TO_REGIME`, `DERIVED_FROM`, etc.).
 
@@ -439,11 +439,11 @@ Its sole responsibility:
 
 Implementers of the GraphWriteService and ingress aspects must consult:
 
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/graph/archive/schema_v_0_3.md`
-- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
-- `docs/architecture/archive/architecture_v_0_3.md`
-- `docs/governance/decisions/archive/decisions_v_0_3.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+- `docs/architecture_v_0_3.md`
+- `docs/governance/decisions/decisions_v_0_3.md`
 
 before making changes that affect Memgraph writes or the ingress aspect chain.
 

@@ -15,6 +15,27 @@ import {
   createBaselineAspects,
 } from './graphIngressGuard.js';
 
+export interface UpsertConceptDto {
+  id: string;
+  pref_label: string;
+  domain?: string;
+  kind?: string;
+  jurisdiction?: string;
+  definition?: string;
+  alt_labels?: string[];
+  source_urls?: string[];
+  ingestion_status?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_verified_at?: string;
+}
+
+export interface UpsertLabelDto {
+  id: string;
+  value: string;
+  kind?: string;
+}
+
 /**
  * DTO for upserting a jurisdiction
  */
@@ -169,6 +190,12 @@ export class GraphWriteService {
     this.defaultSource = config.defaultSource || 'script';
   }
 
+  private sanitizeProperties(properties: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.entries(properties).filter(([, value]) => value !== undefined),
+    );
+  }
+
   /**
    * Execute a write operation through the ingress guard pipeline
    */
@@ -211,11 +238,12 @@ export class GraphWriteService {
    */
   private async executeCypherNode(session: Session, ctx: GraphWriteContext): Promise<void> {
     const { nodeLabel, properties, operation } = ctx;
+    const sanitizedProperties = this.sanitizeProperties(properties);
 
     if (operation === 'merge' || operation === 'create') {
       // Build property string for Cypher
-      const propEntries = Object.entries(properties).filter(
-        ([_, value]) => value !== undefined && value !== null,
+      const propEntries = Object.entries(sanitizedProperties).filter(
+        ([_, value]) => value !== null,
       );
       const propString = propEntries.map(([key]) => `${key}: $${key}`).join(', ');
 
@@ -224,18 +252,18 @@ export class GraphWriteService {
           ? `MERGE (n:${nodeLabel} {id: $id}) SET n += {${propString}}`
           : `CREATE (n:${nodeLabel} {${propString}})`;
 
-      await session.run(cypher, properties);
+      await session.run(cypher, sanitizedProperties);
     } else if (operation === 'update') {
-      const propString = Object.entries(properties)
+      const propString = Object.entries(sanitizedProperties)
         .filter(([key]) => key !== 'id')
         .map(([key]) => `n.${key} = $${key}`)
         .join(', ');
 
       const cypher = `MATCH (n:${nodeLabel} {id: $id}) SET ${propString}`;
-      await session.run(cypher, properties);
+      await session.run(cypher, sanitizedProperties);
     } else if (operation === 'delete') {
       const cypher = `MATCH (n:${nodeLabel} {id: $id}) DETACH DELETE n`;
-      await session.run(cypher, properties);
+      await session.run(cypher, sanitizedProperties);
     }
   }
 
@@ -247,6 +275,7 @@ export class GraphWriteService {
     ctx: GraphWriteContext,
   ): Promise<void> {
     const { relType, properties, operation, metadata } = ctx;
+    const sanitizedProperties = this.sanitizeProperties(properties);
 
     if (operation === 'merge' || operation === 'create') {
       const fromLabel = metadata?.fromLabel as string;
@@ -260,8 +289,8 @@ export class GraphWriteService {
         );
       }
 
-      const propEntries = Object.entries(properties).filter(
-        ([_, value]) => value !== undefined && value !== null,
+      const propEntries = Object.entries(sanitizedProperties).filter(
+        ([_, value]) => value !== null,
       );
       const propString =
         propEntries.length > 0
@@ -276,8 +305,32 @@ export class GraphWriteService {
           : `MATCH (a:${fromLabel} {id: $fromId}), (b:${toLabel} {id: $toId}) ` +
             `CREATE (a)-[r:${relType} ${propString}]->(b)`;
 
-      await session.run(cypher, { ...properties, fromId, toId });
+      await session.run(cypher, { ...sanitizedProperties, fromId, toId });
     }
+  }
+
+  async upsertConcept(dto: UpsertConceptDto): Promise<void> {
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Concept',
+      properties: { ...dto },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+
+    await this.executeWrite(ctx);
+  }
+
+  async upsertLabel(dto: UpsertLabelDto): Promise<void> {
+    const ctx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'Label',
+      properties: { ...dto },
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+
+    await this.executeWrite(ctx);
   }
 
   /**

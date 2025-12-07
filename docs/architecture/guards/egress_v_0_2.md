@@ -21,7 +21,7 @@ The platform already:
 - Applies some form of **egress guard** to scrub PII and sensitive context before it leaves the system.
 
 This spec brings that into the same formal, composable pattern as the
-`graph_ingress_v_0_1.md` spec, so that:
+`graph_ingress_guard_v_0_1.md` spec, so that:
 
 - Ingress and egress guards look and feel the same to engineers.
 - Both can be extended with **AI policy agents** via aspects, without
@@ -289,9 +289,9 @@ about both boundaries in the same way.
 
 This spec should be referenced from:
 
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md`
-- `docs/architecture/archive/architecture_v_0_3.md`
-- `docs/governance/decisions/archive/decisions_v_0_3.md`
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+- `docs/architecture_v_0_3.md`
+- `docs/governance/decisions/decisions_v_0_3.md`
 
 with a short note that:
 

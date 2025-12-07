@@ -4,7 +4,7 @@
 
 This document specifies how the **main chat task** in the Regulatory Intelligence Copilot captures regulatory concepts (VAT, VRT, benefits, rules, etc.) as **SKOS‑style metadata** and uses them to **self‑populate the shared rules graph** and **inform conversation context**, without breaking streaming UX.
 
-It assumes the architecture in `architecture_v_0_6.md` and the decisions in `decisions_v_0_6.md`.
+It assumes the architecture in `architecture_v_0_6.md` and the decisions in `docs/governance/decisions/decisions_v_0_6.md`.
 
 ---
 
@@ -46,7 +46,13 @@ For each user message, the Compliance Engine:
 The model:
 
 - Streams answer text in chunks (`type: 'text'`).
-- Calls `capture_concepts` once, returning a **SKOS‑inspired concept array** as a `type: 'tool'` chunk.
+- Calls `capture_concepts` once, returning a **SKOS‑inspired concept array** as a `type: 'tool'` chunk carried in `argsJson`.
+
+The AI SDK router surfaces tool results as:
+
+```ts
+{ type: 'tool', name: 'capture_concepts', argsJson: { concepts: [...] } }
+```
 
 The UI sees only streamed text + a final meta event. Tool output is consumed by the engine only.
 
@@ -71,7 +77,8 @@ All LLM providers used by the engine must implement a **tagged union** stream ty
 export type LlmStreamChunk =
   | { type: 'text'; delta: string }
   | { type: 'tool'; name: string; argsJson: unknown }
-  | { type: 'error'; error: Error };
+  | { type: 'error'; error: Error }
+  | { type: 'done' };
 ```
 
 Semantics:
@@ -79,11 +86,14 @@ Semantics:
 - `type: 'text'`  
   Append `delta` to the current answer string; forward directly to the UI SSE stream.
 
-- `type: 'tool'`  
+- `type: 'tool'`
   A tool result (e.g. `capture_concepts`). **Never** forwarded to the UI. Parsed and dispatched inside the Compliance Engine.
 
-- `type: 'error'`  
+- `type: 'error'`
   Provider‑level failure. The engine must stop streaming and surface a safe error to the user.
+
+- `type: 'done'`
+  Router end-of-stream marker. The Compliance Engine uses this to flush any pending metadata and emit its own final `done` chunk.
 
 ### 3.2 Provider responsibilities
 

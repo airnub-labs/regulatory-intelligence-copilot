@@ -54,6 +54,8 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
   const allowedNodeLabels = [
     'Jurisdiction',
     'Region',
+    'Concept',
+    'Label',
     'Agreement',
     'Treaty',
     'Regime',
@@ -109,6 +111,10 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'IMPLEMENTED_VIA',
     'SUBJECT_TO_REGIME',
     'AVAILABLE_VIA_REGIME',
+    'HAS_ALT_LABEL',
+    'ALIGNS_WITH',
+    'DERIVED_FROM',
+    'HAS_SOURCE',
   ];
 
   if (ctx.nodeLabel && !allowedNodeLabels.includes(ctx.nodeLabel)) {
@@ -221,6 +227,21 @@ export const propertyWhitelistAspect: GraphIngressAspect = async (ctx, next) => 
   // Define allowed properties for each node label
   // This is a simplified version - expand as needed per schema_v_0_4.md
   const nodePropertyWhitelist: Record<string, string[]> = {
+    Concept: [
+      'id',
+      'pref_label',
+      'domain',
+      'kind',
+      'jurisdiction',
+      'definition',
+      'alt_labels',
+      'source_urls',
+      'ingestion_status',
+      'created_at',
+      'updated_at',
+      'last_verified_at',
+    ],
+    Label: ['id', 'value', 'kind'],
     Jurisdiction: ['id', 'name', 'type', 'notes', 'code'],
     Region: ['id', 'name', 'type', 'notes'],
     Agreement: ['id', 'name', 'type', 'description', 'effective_from', 'effective_to'],

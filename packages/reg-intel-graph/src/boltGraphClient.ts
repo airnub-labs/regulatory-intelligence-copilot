@@ -5,7 +5,10 @@
  * This bypasses MCP for core graph operations, improving performance and reliability.
  */
 
+import { createHash } from 'node:crypto';
 import neo4j, { Driver, Session } from 'neo4j-driver';
+import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_STATEMENT } from '@opentelemetry/semantic-conventions';
+import { withSpan } from '@reg-copilot/reg-intel-observability';
 import type {
   GraphClient,
   GraphContext,
@@ -52,19 +55,32 @@ export class BoltGraphClient implements GraphClient {
    * Execute a Cypher query and return raw results
    */
   async executeCypher(query: string, params?: Record<string, unknown>): Promise<unknown> {
-    const session = this.driver.session({ database: this.database });
+    const queryHash = createHash('sha256').update(query).digest('hex');
 
-    try {
-      const result = await session.run(query, params || {});
-      return result.records.map(record => record.toObject());
-    } catch (error) {
-      console.error(`${LOG_PREFIX.graph} Cypher execution error:`, error);
-      throw new GraphError(
-        `Failed to execute Cypher query: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
-    } finally {
-      await session.close();
-    }
+    return withSpan(
+      'db.memgraph.query',
+      {
+        [SEMATTRS_DB_SYSTEM]: 'memgraph',
+        [SEMATTRS_DB_NAME]: this.database,
+        [SEMATTRS_DB_OPERATION]: 'query',
+        [SEMATTRS_DB_STATEMENT]: `hash:sha256:${queryHash}`,
+      },
+      async () => {
+        const session = this.driver.session({ database: this.database });
+
+        try {
+          const result = await session.run(query, params || {});
+          return result.records.map(record => record.toObject());
+        } catch (error) {
+          console.error(`${LOG_PREFIX.graph} Cypher execution error:`, error);
+          throw new GraphError(
+            `Failed to execute Cypher query: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
+        } finally {
+          await session.close();
+        }
+      }
+    );
   }
 
   /**

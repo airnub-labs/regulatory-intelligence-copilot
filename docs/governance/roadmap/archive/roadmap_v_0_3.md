@@ -6,11 +6,19 @@
 > This roadmap reflects the **v0.3 architecture and decisions**: Node 24 LTS baseline, jurisdiction‑neutral prompts, prompt aspects, provider‑agnostic LLM routing (including OpenAI Responses + GPT‑OSS + Groq + local/OSS models), direct Memgraph GraphClient, WebSocket graph streaming, and a reusable engine + demo app split with Vercel AI SDK v5 used only as an **edge implementation detail**.
 >
 > See also:
+<<<<<<<< HEAD:docs/governance/roadmap/versions/roadmap_v_0_3.md
+> - `docs/architecture/versions/architecture_v_0_3.md`
+> - `docs/governance/decisions/decisions_v_0_3.md`
+> - `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+> - `docs/node_24_lts_rationale.md`
+========
 > - `docs/architecture/archive/architecture_v_0_3.md`
 > - `docs/governance/decisions/archive/decisions_v_0_3.md`
 > - `docs/architecture/graph/archive/schema_v_0_3.md`
 > - `docs/architecture/engines/timeline-engine/spec_v_0_2.md`
 > - `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
+>>>>>>>> origin/main:docs/governance/roadmap/archive/roadmap_v_0_3.md
 
 The goal is to reach a **credible, useful v1** focused on Ireland/EU first, while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for multi‑jurisdiction expansion and optional Microsoft GraphRAG integration.
 
@@ -24,8 +32,8 @@ The goal is to reach a **credible, useful v1** focused on Ireland/EU first, whil
 - [ ] Confirm fork: `rfc-refactor` → `regulatory-intelligence-copilot`.
 - [ ] Replace legacy docs with new ones:
   - [ ] `README.md` → regulatory copilot positioning (v0.3 docs referenced).
-  - [ ] `architecture_v_0_3.md`.
-  - [ ] `decisions_v_0_3.md`.
+  - [ ] `architecture/versions/architecture_v_0_3.md`.
+  - [ ] `governance/decisions/decisions_v_0_3.md`.
   - [ ] `AGENTS.md` (current agents + orchestrator).
   - [ ] `roadmap_v_0_3.md` (this document).
 - [ ] Remove or archive (e.g. `legacy/`):

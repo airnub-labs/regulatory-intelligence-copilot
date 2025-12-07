@@ -5,9 +5,9 @@
 > **Status:** Phase 1 & Phase 2 Complete ✅
 
 This document tracks the implementation of the v0.4 architecture as defined in:
-- `docs/architecture/archive/architecture_v_0_4.md`
-- `docs/governance/decisions/archive/decisions_v_0_4.md`
-- `docs/governance/roadmap/archive/roadmap_v_0_4.md`
+- `docs/architecture_v_0_4.md`
+- `docs/governance/decisions/decisions_v_0_4.md`
+- `docs/governance/roadmap/roadmap_v_0_4.md`
 
 ---
 
@@ -16,7 +16,7 @@ This document tracks the implementation of the v0.4 architecture as defined in:
 ### Core Infrastructure
 
 #### 1. Documentation & Specs
-- [x] Created `docs/architecture/graph/archive/schema_changelog_v_0_4.md`
+- [x] Created `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md`
   - Documents schema evolution from v0.3 to v0.4
   - Clarifies that v0.4 uses v0.3 schema with enhanced enforcement
   - Documents Graph Ingress Guard integration
@@ -160,7 +160,7 @@ Per `architecture_v_0_4.md` and D-020, the monorepo has been reorganized with cl
 **Current Blocker:** None - demo-web works fine with direct reg-intel-core imports
 
 ### Phase 3: Graph Algorithm Integration (Optional)
-Per `algorithms_v_0_1.md` and D-030:
+Per `graph_algorithms_v_0_1.md` and D-030:
 - [ ] Implement optional Leiden community detection
 - [ ] Implement optional centrality metrics (PageRank, betweenness)
 - [ ] Add configuration flags to enable/disable algorithms
@@ -187,7 +187,7 @@ Per `algorithms_v_0_1.md` and D-030:
 **Current Blocker:** None - can be done alongside Phase 2.
 
 ### Phase 5: Content & Seeding
-Per `roadmap_v_0_4.md` Phase 4:
+Per `docs/governance/roadmap/roadmap_v_0_4.md` Phase 4:
 - [ ] Seed IE/UK/NI/IM/EU/CTA graph using GraphWriteService
 - [ ] Implement special jurisdiction models (NI as Region under UK, etc.)
 - [ ] Add domain-specific agents (CGT, R&D, EU coordination)
@@ -201,7 +201,7 @@ Per `roadmap_v_0_4.md` Phase 4:
 **Current Blocker:** Requires Phase 2 (package split) for cleaner separation of ingestion logic.
 
 ### Phase 6: Web App Integration
-Per `roadmap_v_0_4.md` Phase 3:
+Per `docs/governance/roadmap/roadmap_v_0_4.md` Phase 3:
 - [ ] Wire `/api/chat` to ComplianceEngine.handleChat via reg-intel-next-adapter
 - [ ] Implement SSE streaming for chat responses
 - [ ] Implement WebSocket patch-based graph updates

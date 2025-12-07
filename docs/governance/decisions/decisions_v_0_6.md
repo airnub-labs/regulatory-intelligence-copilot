@@ -198,6 +198,24 @@ interface ConversationContextStore {
   - Populate `referencedNodes` using the canonical node IDs resolved from concept capture and graph queries.
   - Include both pre-existing nodes (e.g. `Rule:VAT_IE`, `Rule:VRT_IE`) and newly created concept nodes when available.
 
+### D-037 – Router-centric egress guard + `capture_concepts` wiring
+
+**Decision:**
+
+- All outbound LLM calls run through **LlmRouter → EgressClient** as the single choke point. Agents never talk to providers directly.
+- `LlmRouter` resolves a requested vs **effective egress mode** (global defaults → tenant → optional user → per-call override) and always enforces provider allowlisting, even when `effectiveMode === 'off'`.
+- **Mode semantics:**
+  - `enforce` executes the **sanitised** payload.
+  - `report-only` executes the **original** payload but records sanitisation deltas in `metadata` for audit/telemetry.
+  - `off` skips sanitisation but still rejects disallowed providers (test-only wiring).
+- Main-chat calls attach a `capture_concepts` tool; the Compliance Engine ingests `type: 'tool'` chunks (`name: 'capture_concepts'`, `argsJson`) off-stream, resolves/upsserts canonical concepts, and merges returned node IDs into `referencedNodes` + **Conversation Context** before returning results.
+
+**Trade-offs / rationale:**
+
+- Centralising egress guarantees consistent sanitisation + allowlisting across providers and future MCP/http targets while keeping per-tenant policy resolution visible via `EgressGuardContext` (tenant/user/mode metadata).
+- Executing originals in `report-only` keeps behaviour faithful to caller intent while still surfacing redaction signals for gradual rollouts.
+- Streaming concept capture via `capture_concepts` keeps the UI text-only while letting the engine self-populate graph context for subsequent turns.
+
 **UI responsibilities:**
 
 - The UI **may**:
@@ -208,8 +226,69 @@ interface ConversationContextStore {
 **Rationale:**
 
 - Makes answers **grounded and inspectable** without exposing internal SKOS JSON.
+
+### D-037 – Conversation persistence and SSE fan-out
+
+**Decision:**
+
+- Conversations/messages are persisted in Supabase/Postgres via a `ConversationStore`, with a dev-mode in-memory fallback to keep local demos running without external services.
+- Conversation context remains on the backend through `ConversationContextStore`; the Compliance Engine always reads/writes it, keeping the UI stateless.
+- SSE transport is **per conversation**: a hub broadcasts each streamed chunk to all subscribers for the same `(tenantId, conversationId)`.
+
+**Status:**
+
+- Schema and seed data added; production Supabase wiring and RLS are pending.
+- Event hub implemented as an in-process map suitable for single-instance dev. Production fan-out will require Redis/pub-sub or a managed equivalent.
 - Provides the basis for a "show your workings" experience in the graph view.
-- Reuses an existing field that was previously unpopulated, rather than inventing a new one.
+- Sharing is modelled via `share_audience` (private/tenant/public) and `tenant_access` (view/edit); `isShared` is derived in application code instead of being stored or exposed as a column to avoid redundant state.
+  - An `authorization_model` + `authorization_spec` envelope sits beside these columns so we can plug in OpenFGA (or similar Zanzibar-style ReBAC) later while keeping Supabase as the system of record and the UI/API contracts stable. When `authorization_model = 'openfga'` but the external service is unavailable, the effective audience **falls back to private/owner-only** until ReBAC checks succeed again.
+
+### D-040 – ReBAC trajectory (OpenFGA-ready)
+
+**Decision (future-facing):**
+
+- Use `authorization_model = 'openfga'` plus `authorization_spec` to carry principal/resource tuples so we can mirror conversation sharing into OpenFGA without rewriting persistence.
+- Keep Supabase/RLS as the enforcement source of truth; OpenFGA provides discovery (`ListObjects`, `ListUsers`) and caching for server-side filtering.
+
+**Status:**
+
+- Planning. Schema and API surfaces already include `authorization_model`/`authorization_spec` to avoid future breaking changes.
+
+**Next steps (tracked on the roadmap):**
+
+- Define the OpenFGA model (users, conversations, tenant membership, roles, public-read delegation).
+- Synchronise tuple writes alongside Supabase updates when `authorization_model = 'openfga'` is enabled for a tenant.
+- Gate authz in the chat/conversation APIs via OpenFGA checks before RLS queries.
+
+### D-041 – Shared conversation/authorisation package
+
+**Decision:**
+
+- Extract the conversation store/context interfaces, sharing/authorisation envelope, and per-conversation SSE event hub into a reusable package `@reg-copilot/reg-intel-conversations` so host shells beyond Next.js can consume the same logic without divergence.
+- Keep `@reg-copilot/reg-intel-next-adapter` thin: it re-exports these primitives but no longer owns their implementations.
+
+**Status:**
+
+- Implemented in v0.6; Next.js wiring now depends on the shared package while remaining API-compatible for callers.
+
+**Rationale:**
+
+- Avoids duplicated sharing/auth logic as ReBAC (OpenFGA) lands.
+- Simplifies adoption in other runtimes (CLI, different web shells) while keeping a single derivation for `share_audience` + `tenant_access` resolution and SSE fan-out semantics.
+
+### D-042 – Tenant-scoped SSE stream for conversation lists
+
+**Decision:**
+
+- Add a **tenant-scoped SSE endpoint** (tentatively `/api/conversations/stream`) that emits conversation list changes so UIs stay in sync across tabs/devices without manual refreshes.
+- Events cover creation, rename, archive/restore, and sharing/authorisation changes and include enough metadata (IDs, titles, share envelope) for clients to merge updates into cached lists without re-fetching entire histories.
+- The stream reuses the conversation event hub that already powers per-conversation chat SSE; production deployments should fan out via Redis/pub-sub when horizontally scaled.
+
+**Rationale:**
+
+- Keeps conversation pickers and sidebars **live** when users collaborate or switch devices.
+- Avoids **polling loops** and reduces Supabase query load for simple list updates.
+- Aligns web and non-Next.js shells on a single streaming contract for conversation discovery.
 
 ---
 
@@ -301,6 +380,129 @@ interface ConversationContextStore {
 - Allows advanced features like what-if comparisons and curated expert profiles to be built without changing the core engine/graph contracts.
 - Ensures the architecture remains **extensible** while preserving the invariants defined in v0.4–v0.6.
 
+### D-041 – Egress guard modes and safe sanitisation
+
+**Context:**
+
+- Egress policy enforcement and PII redaction need staged rollout controls without allowing accidental bypass of the sanitiser.
+
+**Decision:**
+
+- `EgressClient` exposes three modes: `enforce`, `report-only`, and `off`.
+- In `enforce`, the execution payload is the sanitised request. In `report-only`, sanitisation still runs and is recorded in metadata, but the original payload executes for observability and parity with caller intent.
+- `originalRequest` can be preserved explicitly for debugging/telemetry in non-production wiring when needed.
+- `off` disables sanitisation but still runs provider allowlisting (and will throw on disallowed providers); it is reserved for explicit test/benchmark clients.
+- Sanitisation runs before other aspects; provider allowlisting is **always enforced**.
+
+**Consequences:**
+
+- Production wiring uses `mode: 'enforce'` by default; staged environments may temporarily use `report-only` while still running with sanitised execution payloads.
+- `mode: 'off'` must be treated as a deliberate, non-default testing override and avoided in normal app wiring.
+
+---
+
+### D-042 – Per-tenant/per-user egress mode resolution (safe by default)
+
+**Context:**
+
+- Tenants may need to stage egress policy changes or enable report-only telemetry without weakening protections for others.
+- Per-user experimentation must not bypass sanitisation for unrelated tenants.
+
+**Decision:**
+
+- `LlmRouter` resolves an `effectiveMode` per call using global defaults, tenant policy (`egressMode`, `allowOffMode`), optional per-user policies, and optional per-call overrides (e.g. `egressModeOverride`).
+- Optional per-user policies (when present on a tenant policy) can narrow the mode further but cannot escalate beyond tenant-level `allowOffMode`; per-call overrides follow the same constraint and will not downgrade below tenant defaults.
+- `EgressGuardContext` carries the requested mode and the resolved `effectiveMode` along with tenant/user IDs; `EgressClient` falls back to its configured default when it is absent.
+- In `enforce`, execution uses the sanitised payload. In `report-only`, execution uses the original payload while surfacing sanitisation deltas in metadata. `off` disables sanitisation but still enforces provider allowlisting and is only for explicitly configured test/benchmark wiring.
+
+**Consequences:**
+
+- Production wiring and default SaaS tenants continue to run in `enforce`; opt-in `report-only` or `off` require explicit tenant policy.
+- Coding agents must assume all outbound provider calls flow through `LlmRouter` + `EgressClient`, with per-call effective mode resolution rather than ad-hoc bypasses.
+
+---
+
+### D-043 – Supabase-backed authentication with seeded demo credentials
+
+**Context:**
+
+- The demo Next.js shell now relies on **NextAuth credentials** wired to Supabase.
+- Previous hardcoded demo headers risked regression when authentication was not configured or when database ID sequences advanced.
+
+**Decision:**
+
+- Keep the demo login flow anchored to Supabase via NextAuth using a seeded email/password account.
+- The seed script must generate IDs for the demo tenant/user/identity (respecting UUID defaults) and emit them so `.env.local` can be populated without overriding database sequences.
+- Documentation and environment examples should instruct developers to read the seeded IDs from Supabase after `supabase db reset` rather than relying on fixed constants.
+
+**Consequences:**
+
+- Local authentication remains reproducible without polluting UUID/sequence generators.
+- Future changes to the demo shell or seed data must preserve the NextAuth + Supabase contract and keep documentation updated to prevent regression to unauthenticated or hardcoded flows.
+
+---
+
+### D-044 – Type-safe SSE event contracts for real-time streams
+
+**Context:**
+
+- The conversation list and individual conversation streams use Server-Sent Events (SSE) to push real-time updates to connected clients.
+- Previously, event type strings (e.g. `'updated'`, `'upsert'`) and payload structures were defined separately in server and client code.
+- This led to a production bug where the client listened for `'updated'` events while the server broadcast `'upsert'` events, causing UI updates to fail despite events being received.
+- The mismatch was only discoverable at runtime, not during type-checking or build.
+
+**Decision:**
+
+- **All SSE event types and their payload structures must be defined as shared TypeScript types** in the `@reg-copilot/reg-intel-conversations` package.
+- A central `ConversationListEventPayloadMap` type maps each event name to its exact payload structure.
+- Both server-side broadcasters and client-side listeners must reference these shared types when sending or receiving events.
+- Event payloads must be explicitly typed using the mapped type (e.g. `ConversationListEventPayloadMap['upsert']`) rather than inline object literals.
+
+**Implementation:**
+
+```typescript
+// Shared package: packages/reg-intel-conversations/src/sseTypes.ts
+export interface ConversationListUpsertPayload {
+  conversation: ClientConversation
+}
+
+export type ConversationListEventPayloadMap = {
+  snapshot: ConversationListSnapshotPayload
+  upsert: ConversationListUpsertPayload
+  deleted: ConversationListDeletedPayload
+  // ... other events
+}
+
+// Server: apps/demo-web/src/app/api/conversations/[id]/route.ts
+const payload: ConversationListEventPayloadMap['upsert'] = {
+  conversation: toClientConversation(updatedConversation),
+}
+conversationListEventHub.broadcast(tenantId, 'upsert', payload)
+
+// Client: apps/demo-web/src/app/page.tsx
+import type { ConversationListEventPayloadMap } from '@reg-copilot/reg-intel-conversations'
+
+const data = parsedData as unknown as ConversationListEventPayloadMap['upsert']
+if (data.conversation) {
+  // TypeScript knows the exact shape of data.conversation
+}
+```
+
+**Rationale:**
+
+- **Compile-time safety:** TypeScript catches event type and payload structure mismatches during build, not at runtime.
+- **Single source of truth:** Event contracts are defined once in a shared package, preventing drift between client and server.
+- **Self-documenting:** The type definitions serve as authoritative documentation for the SSE API.
+- **Prevents regressions:** Future changes to event structures require updating the shared types, which forces updates to both producers and consumers.
+- **Discoverable:** Developers can use IDE autocomplete to discover valid event types and their exact payload shapes.
+
+**Consequences:**
+
+- All new SSE streams must follow this pattern: define event types and payloads in a shared package before implementation.
+- Existing SSE streams should be migrated to use shared types to prevent similar issues.
+- The `eventHub.ts` event type unions (e.g. `ConversationListEventType`) remain as runtime enums, while `sseTypes.ts` provides compile-time payload contracts.
+- Coding agents and developers must import and use `ConversationListEventPayloadMap` (or equivalent for other streams) when working with SSE events.
+
 ---
 
 ## 8. Summary of Changes in v0.6
@@ -308,6 +510,7 @@ interface ConversationContextStore {
 ### Added
 
 - ✅ **Single main-chat task with SKOS-style concept capture** (`capture_concepts` tool).
+- ✅ **Router-centric LLM egress** – all providers flow through `LlmRouter` + `EgressClient` with requested/effective mode and tenant/user IDs recorded per call.
 - ✅ **Extended streaming contract** for `LlmProvider` (`text` + `tool` chunks).
 - ✅ **Self-population pipeline** from concept metadata → Memgraph via `GraphWriteService`.
 - ✅ **Auto-ingestion gating** to avoid graph bloat; ingestion only when concepts are missing or sparse.
@@ -317,6 +520,7 @@ interface ConversationContextStore {
 - ✅ **Clarified data separation**: Supabase (conversations, context) vs Memgraph (rules-only).
 - ✅ **Adopted graph change detection enhancements** (timestamps + batching) as defaults.
 - ✅ **Positioned Scenario Engine & expert collections** as optional but first-class extensions.
+- ✅ **Type-safe SSE event contracts** – shared TypeScript types for all real-time event streams to prevent client-server mismatches.
 
 ### Unchanged from v0.4 / v0.5 (still authoritative)
 

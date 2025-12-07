@@ -101,6 +101,7 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
     let graphContext: GraphContext = { nodes: [], edges: [] };
+    const warnings: string[] = [];
 
     try {
       if (jurisdictions.length > 1) {
@@ -115,6 +116,9 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
       }
     } catch (error) {
       console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      warnings.push(
+        'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
+      );
     }
 
     // Format context
@@ -152,6 +156,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
     return {
       answer: response.content,
       referencedNodes,
+      warnings: warnings.length ? warnings : undefined,
       uncertaintyLevel: graphContext.nodes.length > 0 ? 'medium' : 'high',
       agentId: AGENT_ID,
       notes: graphContext.nodes.length === 0
@@ -168,13 +173,41 @@ Please provide a comprehensive response considering all relevant regulatory doma
   async handleStream(input: AgentInput, ctx: AgentContext): Promise<AgentStreamResult> {
     console.log(`${LOG_PREFIX.agent} ${AGENT_ID} processing streaming request`);
 
+    const wrapAsStream = (result: AgentResult): AgentStreamResult => {
+      async function* stream(): AsyncGenerator<LlmStreamChunk> {
+        if (result.answer) {
+          yield { type: 'text', delta: result.answer };
+        }
+        yield { type: 'done' };
+      }
+
+      return {
+        agentId: result.agentId,
+        referencedNodes: result.referencedNodes,
+        warnings: result.warnings,
+        uncertaintyLevel: result.uncertaintyLevel,
+        followUps: result.followUps,
+        stream: stream(),
+      } satisfies AgentStreamResult;
+    };
+
+    const isAsyncIterable = (value: unknown): value is AsyncIterable<LlmStreamChunk> =>
+      !!value && typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
+
     // Try to find a specialized domain agent with streaming support
     for (const agent of DOMAIN_AGENTS) {
       try {
         const canHandle = await agent.canHandle(input);
         if (canHandle && agent.handleStream) {
           console.log(`${LOG_PREFIX.agent} Delegating to ${agent.id} (streaming)`);
-          return agent.handleStream(input, ctx);
+          const streamed = await agent.handleStream(input, ctx);
+          if (isAsyncIterable(streamed.stream)) {
+            return streamed;
+          }
+        }
+        if (canHandle) {
+          const fallbackResult = await agent.handle(input, ctx);
+          return wrapAsStream(fallbackResult);
         }
       } catch (error) {
         console.log(`${LOG_PREFIX.agent} Error checking ${agent.id}:`, error);
@@ -187,6 +220,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
     let graphContext: GraphContext = { nodes: [], edges: [] };
+    const warnings: string[] = [];
 
     try {
       if (jurisdictions.length > 1) {
@@ -201,6 +235,9 @@ Please provide a comprehensive response considering all relevant regulatory doma
       }
     } catch (error) {
       console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      warnings.push(
+        'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
+      );
     }
 
     // Format context
@@ -226,31 +263,34 @@ Please provide a comprehensive response considering all relevant regulatory doma
       type: n.type,
     }));
 
-    // Check if LLM client supports streaming
-    if (!ctx.llmClient.streamChat) {
-      throw new Error('LLM client does not support streaming');
+    if (ctx.llmClient.streamChat) {
+      const stream = ctx.llmClient.streamChat({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...(input.conversationHistory || []),
+          { role: 'user', content: prompt },
+        ],
+      });
+
+      if (isAsyncIterable(stream)) {
+        return {
+          agentId: AGENT_ID,
+          referencedNodes,
+          warnings: warnings.length ? warnings : undefined,
+          uncertaintyLevel: graphContext.nodes.length > 0 ? 'medium' : 'high',
+          followUps: [
+            'Would you like me to focus on a specific area (tax, welfare, pensions)?',
+            'Are there specific benefits or reliefs you want to explore?',
+            'Do you need information about time constraints or deadlines?',
+          ],
+          stream,
+        };
+      }
     }
 
-    // Stream LLM response with jurisdiction-aware prompt
-    const stream = ctx.llmClient.streamChat({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...(input.conversationHistory || []),
-        { role: 'user', content: prompt },
-      ],
-    });
-
-    return {
-      agentId: AGENT_ID,
-      referencedNodes,
-      uncertaintyLevel: graphContext.nodes.length > 0 ? 'medium' : 'high',
-      followUps: [
-        'Would you like me to focus on a specific area (tax, welfare, pensions)?',
-        'Are there specific benefits or reliefs you want to explore?',
-        'Do you need information about time constraints or deadlines?',
-      ],
-      stream,
-    };
+    // Fallback to non-streaming path and wrap result
+    const nonStreamingResult = await this.handle(input, ctx);
+    return wrapAsStream(nonStreamingResult);
   },
 };
 

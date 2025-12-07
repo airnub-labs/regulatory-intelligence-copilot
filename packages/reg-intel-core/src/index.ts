@@ -140,7 +140,16 @@ export {
   type UpsertTimelineDto,
   type UpsertAgreementDto,
   type UpsertRegimeDto,
+  type UpsertConceptDto,
+  type UpsertLabelDto,
   type CreateRelationshipDto,
+} from '@reg-copilot/reg-intel-graph';
+
+export {
+  CanonicalConceptHandler,
+  createCanonicalConceptHandler,
+  type CapturedConceptPayload,
+  type CanonicalConceptHandlerConfig,
 } from '@reg-copilot/reg-intel-graph';
 
 // LLM Client (legacy MCP-based)
@@ -175,6 +184,10 @@ export {
   type ComplianceResponse,
   type ComplianceStreamChunk,
   type ComplianceEngineDeps,
+  type ConversationContext,
+  type ConversationContextStore,
+  type ConversationIdentity,
+  EMPTY_CONVERSATION_CONTEXT,
 } from './orchestrator/complianceEngine.js';
 
 // Agents

@@ -6,6 +6,20 @@
 > This roadmap reflects the **v0.4 architecture and decisions**: Node 24 LTS baseline, jurisdiction‑neutral prompts + prompt aspects, provider‑agnostic LLM routing (OpenAI Responses + GPT‑OSS + Groq + local/OSS models), direct Memgraph `GraphClient`, read‑only Memgraph MCP, `GraphWriteService` + Graph Ingress Guard, `EgressClient` + AI SDK v5 as an **edge implementation detail**, patch‑based graph streaming, and a reusable engine + demo app split.
 >
 > Normative references:
+<<<<<<<< HEAD:docs/governance/roadmap/versions/roadmap_v_0_5.md
+> - `docs/architecture/versions/architecture_v_0_4.md`
+> - `docs/governance/decisions/decisions_v_0_4.md`
+> - `docs/specs/graph-schema/versions/graph_schema_v_0_3.md`
+> - `docs/specs/graph_schema_changelog_v_0_3.md`
+> - `docs/specs/timeline-engine/timeline_engine_v_0_2.md`
+> - `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md`
+> - `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md`
+> - `docs/specs/safety-guards/egress_guard_v_0_2.md`
+> - `docs/specs/graph_algorithms_v_0_1.md`
+> - `docs/specs/special_jurisdictions_modelling_v_0_1.md`
+> - `docs/specs/special_jurisdictions_graph_seed_ni_uk_ie_eu.cypher` (example seed)
+> - `docs/node_24_lts_rationale.md`
+========
 > - `docs/architecture/archive/architecture_v_0_4.md`
 > - `docs/governance/decisions/archive/decisions_v_0_4.md`
 > - `docs/architecture/graph/archive/schema_v_0_3.md`
@@ -18,6 +32,7 @@
 > - `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md`
 - `docs/architecture/graph/seed_ni_uk_ie_eu.txt` (example seed)
 > - `docs/architecture/runtime/node_24_lts_rationale_v_0_1.md`
+>>>>>>>> origin/main:docs/governance/roadmap/archive/roadmap_v_0_5.md
 
 The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/CTA‑aware) while keeping the codebase reusable inside other Next.js/Supabase SaaS products and leaving clear paths for:
 
@@ -29,7 +44,11 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
 
 ## Phase 0 – Fork, Clean-Up & Baseline (v0.3 → v0.4)
 
+<<<<<<<< HEAD:docs/governance/roadmap/versions/roadmap_v_0_5.md
+**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all docs/governance/decisions/architecture are aligned.
+========
 **Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all architecture and governance/decisions docs are aligned.
+>>>>>>>> origin/main:docs/governance/roadmap/archive/roadmap_v_0_5.md
 
 **Status:** Mostly done; this phase should be closed soon.
 
@@ -37,7 +56,7 @@ The goal is to reach a **credible, useful v1** (Ireland/EU‑first, IE/UK/NI/IM/
 - [ ] Confirm fork and rename:
   - [ ] `rfc-refactor` → `regulatory-intelligence-copilot` (done at repo level, verify everywhere in docs).
 - [ ] Documentation alignment:
-  - [ ] Update `README.md` to reference `architecture_v_0_4.md`, `decisions_v_0_4.md`, `roadmap_v_0_4.md`.
+  - [ ] Update `README.md` to reference `architecture/versions/architecture_v_0_4.md`, `governance/decisions/decisions_v_0_4.md`, `governance/roadmap/roadmap_v_0_4.md`.
   - [ ] Ensure old v0.1/v0.2/v0.3 docs are clearly marked as archived or superseded.
 - [ ] Legacy HTTP/RFC auditor cleanup:
   - [ ] Confirm HTTP probe runners & sample REST API are archived under `legacy/` or removed.

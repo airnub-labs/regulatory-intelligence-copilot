@@ -11,20 +11,20 @@ This roadmap is intentionally **implementation‑oriented**. It is structured as
 The roadmap must stay aligned with the following documents:
 
 - `docs/architecture/architecture_v_0_6.md` – **current canonical architecture** (backend + UI + v0.6 concept capture & conversation context).
-- `docs/architecture/archive/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
-- `docs/architecture/archive/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
+- `docs/architecture/versions/architecture_v_0_5.md` – UI‑layer details (chat UI, Tailwind v4, shadcn/ui, AI SDK integration).
+- `docs/architecture/versions/architecture_v_0_4.md` – backend stack, Memgraph graph layer, API and engine interfaces.
 - `docs/governance/decisions/decisions_v_0_6.md` – latest decisions/ADRs (Node 24, Memgraph boundaries, MCP usage, concept capture, conversation context).
-- `docs/architecture/graph/archive/schema_v_0_4.md` + `docs/architecture/graph/archive/schema_changelog_v_0_4.md` – rules graph schema.
-- `docs/architecture/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
-- `docs/architecture/guards/graph_ingress_v_0_1.md` – write‑path guarantees into Memgraph.
-- `docs/architecture/guards/egress_v_0_2.md` – outbound HTTP/LLM/MCP guardrails.
-- `docs/architecture/engines/timeline-engine/spec_v_0_2.md` – time‑based reasoning.
-- `docs/architecture/graph/algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
-- `docs/architecture/graph/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.
-- `docs/architecture/conversation-context/spec_v_0_1.md` (once added) – conversation context store & aspects.
-- `docs/architecture/conversation-context/concept_capture_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
-- `docs/governance/product/eligibility-explorer/spec_v_0_1.md` (once added) – deterministic eligibility evaluation (Use Case 1).
-- `docs/architecture/engines/scenario-engine/spec_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
+- `docs/specs/graph-schema/versions/graph_schema_v_0_4.md` + `docs/specs/graph-schema/versions/graph_schema_changelog_v_0_4.md` – rules graph schema.
+- `docs/specs/data_privacy_and_architecture_boundaries_v_0_1.md` – hard privacy boundaries between Memgraph and Supabase/app data.
+- `docs/specs/safety-guards/graph_ingress_guard_v_0_1.md` – write‑path guarantees into Memgraph.
+- `docs/specs/safety-guards/egress_guard_v_0_3.md` – outbound HTTP/LLM/MCP guardrails.
+- `docs/specs/timeline-engine/timeline_engine_v_0_2.md` – time‑based reasoning.
+- `docs/specs/graph_algorithms_v_0_1.md` – optional graph algorithms & GraphRAG behaviour.
+- `docs/specs/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/EU/IM cross‑border design.
+- `docs/specs/conversation-context/conversation_context_spec_v_0_1.md` (once added) – conversation context store & aspects.
+- `docs/specs/conversation-context/concept_capture_from_main_chat_v_0_1.md` (once added) – SKOS‑style concept capture via tools.
+- `docs/specs/eligibility_explorer_spec_v_0_1.md` (once added) – deterministic eligibility evaluation (Use Case 1).
+- `docs/specs/scenario_engine_v_0_1.md` (once added) – Scenario Engine for what‑if simulations (Use Case 2).
 
 Where there is ambiguity, **architecture + spec docs take precedence** over the roadmap.
 
@@ -32,7 +32,7 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 
 ## Phase 0 – Fork, Clean‑Up & Baseline (v0.3 → v0.4)
 
-**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all architecture and governance/decisions docs are aligned.
+**Goal:** Finalise the pivot from `rfc-refactor` to `regulatory-intelligence-copilot`, standardise on the v0.4 stack, and ensure all docs/governance/decisions/architecture are aligned.
 
 **Status:** Mostly done; this phase should be closed soon.
 
@@ -40,7 +40,7 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 - [ ] Confirm fork and rename:
   - [ ] `rfc-refactor` → `regulatory-intelligence-copilot` (done at repo level, verify everywhere in docs).
 - [ ] Documentation alignment:
-  - [ ] Update `README.md` to reference `architecture_v_0_6.md`, `decisions_v_0_6.md`, `roadmap_v_0_6.md`.
+  - [ ] Update `README.md` to reference `architecture/architecture_v_0_6.md`, `governance/decisions/decisions_v_0_6.md`, `governance/roadmap/roadmap_v_0_6.md`.
   - [ ] Ensure old v0.1/v0.2/v0.3 docs are clearly marked as archived or superseded.
 - [ ] Legacy HTTP/RFC auditor cleanup:
   - [ ] Confirm HTTP probe runners & sample REST API are archived under `legacy/` or removed.
@@ -151,7 +151,7 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 - [ ] LLM streaming chunk shape:
   - [ ] Extend `LlmProvider` streaming type to support `type: 'text' | 'tool' | 'error'` chunks.
   - [ ] Ensure OpenAI Responses + AI SDK v5 emit `tool` chunks for structured outputs.
-- [ ] `capture_concepts` tool (see `concept_capture_v_0_1.md`):
+- [ ] `capture_concepts` tool (see `concept_capture_from_main_chat_v_0_1.md`):
   - [ ] Define a SKOS‑inspired JSON schema (domain, kind, jurisdiction, `prefLabel`, `altLabels[]`, `definition`, `sourceUrls[]`).
   - [ ] Register `capture_concepts` as a tool on the main chat task.
   - [ ] Update system prompts so main chat **always** calls `capture_concepts` once per turn with detected regulatory concepts.
@@ -168,7 +168,7 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 
 ### 3.4 Conversation context (v0.6)
 
-- [ ] Conversation context store (see `spec_v_0_1.md`):
+- [ ] Conversation context store (see `conversation_context_spec_v_0_1.md`):
   - [ ] Introduce `ConversationContext` (e.g. `activeNodeIds: string[]`, later `activeScenarios`, flags).
   - [ ] Implement `ConversationContextStore` interface with a Supabase/Postgres‑backed implementation keyed by `(tenantId, conversationId)`.
 - [ ] Compliance Engine integration:
@@ -184,6 +184,14 @@ Where there is ambiguity, **architecture + spec docs take precedence** over the 
 - [ ] UI behaviour:
   - [ ] Keep the UI **stateless** w.r.t. conversation context; it only sends messages and renders streamed text/meta.
   - [ ] Optionally show `referencedNodes` and resolved concept labels as chips or side‑panel entries.
+
+### 3.5 ReBAC-ready sharing (OpenFGA path)
+
+- [ ] Finalise the `share_audience` + `tenant_access` plus `authorization_model`/`authorization_spec` envelope for conversations/messages so Supabase remains the source of truth while enabling external ReBAC engines and falling back to private/owner-only when OpenFGA (or similar) is unavailable.
+- [ ] Add an OpenFGA namespace modelling tenants, users, conversations, and public-read delegation; check in docker-compose for local OpenFGA.
+- [ ] Synchronise tuple writes from Supabase mutations when `authorization_model = 'openfga'` is enabled; keep RLS enforcement intact.
+- [ ] Gate conversation list/detail/chat APIs with OpenFGA `ListObjects`/`Check` before Supabase queries to align server-side filtering.
+- [ ] Update the chat SSE hub to carry access metadata so multi-device subscribers stay authorised during fan-out.
 
 **Exit criteria**
 - `/api/chat` uses SSE streaming with meta events (jurisdictions, uncertainty, referencedNodes).
@@ -281,7 +289,7 @@ These are high‑leverage enhancements that are **not required** for v1 but may 
 
 ### 7.1 Graph Algorithms & GraphRAG Enhancements
 
-- [ ] Implement optional Leiden community detection + centrality metrics on static snapshots, per `algorithms_v_0_1.md`.
+- [ ] Implement optional Leiden community detection + centrality metrics on static snapshots, per `graph_algorithms_v_0_1.md`.
 - [ ] Integrate community info into GraphRAG retrieval (e.g. sample representative nodes from communities for explanation).
 - [ ] Add configuration flags to enable/disable algorithms with minimal impact on core flows.
 
@@ -303,7 +311,7 @@ These are high‑leverage enhancements that are **not required** for v1 but may 
 
 ### 7.5 Eligibility Explorer (Use Case 1)
 
-- [ ] Formalise the **Eligibility Explorer** core service (see `docs/governance/product/eligibility-explorer/spec_v_0_1.md` once added):
+- [ ] Formalise the **Eligibility Explorer** core service (see `docs/specs/eligibility_explorer_spec_v_0_1.md` once added):
   - Deterministic, boolean eligibility for benefits/reliefs across one or more domains (e.g. SOCIAL_WELFARE, TAX, PENSIONS).
   - Public TS API surface in `reg-intel-core` (e.g. `EligibilityExplorer.evaluateEligibility(...)`).
 - [ ] Wire Eligibility Explorer into IE/UK vertical slices:
@@ -316,7 +324,7 @@ These are high‑leverage enhancements that are **not required** for v1 but may 
 
 ### 7.6 Scenario Engine & What‑If Scenario Comparison (Use Case 2)
 
-- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/architecture/engines/scenario-engine/spec_v_0_1.md` once added):
+- [ ] Implement the **Scenario Engine** in `reg-intel-core` (see `docs/specs/scenario_engine_v_0_1.md` once added):
   - Accept one or more `Scenario` objects (with multiple `ScenarioSnapshot`s).
   - Use the shared rules graph + Timeline Engine to produce `ScenarioEvaluationResult[]` (applicable rules, eligible/locked‑out benefits per snapshot).
 - [ ] Add a new Compliance Engine task type, e.g. `TaskType.WHAT_IF_SCENARIO_EVALUATION`, and a specialised `IE_WhatIfScenario_Agent` that:

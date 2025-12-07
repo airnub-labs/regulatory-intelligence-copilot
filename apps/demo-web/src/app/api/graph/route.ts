@@ -15,11 +15,50 @@ import {
   getMcpGatewayUrl,
   normalizeProfileType,
   type GraphContext,
+  type GraphNode,
   type ProfileId,
 } from '@reg-copilot/reg-intel-core';
 
 const MAX_INITIAL_NODES = 250;
 const MAX_INITIAL_EDGES = 500;
+const MAX_LOOKUP_IDS = 25;
+
+function escapeCypherValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function parseNodes(result: unknown): GraphNode[] {
+  const nodes: GraphNode[] = [];
+  const seenNodes = new Set<string>();
+
+  if (!result || !Array.isArray(result)) {
+    return nodes;
+  }
+
+  for (const row of result) {
+    if (!row || typeof row !== 'object') continue;
+
+    for (const [, value] of Object.entries(row as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') continue;
+      const v = value as Record<string, unknown>;
+
+      if (v.id && v.labels && Array.isArray(v.labels)) {
+        const props = (v.properties || {}) as Record<string, unknown>;
+        const nodeId = (props.id as string) || String(v.id);
+        if (seenNodes.has(nodeId)) continue;
+        seenNodes.add(nodeId);
+        nodes.push({
+          id: nodeId,
+          label: (props.label as string) || (props.name as string) || String(v.labels[0]),
+          type: v.labels[0] as GraphNode['type'],
+          properties: props,
+        });
+      }
+    }
+  }
+
+  return nodes;
+}
 
 function boundGraphContext(graphContext: GraphContext) {
   const boundedNodes = graphContext.nodes.slice(0, MAX_INITIAL_NODES);
@@ -39,6 +78,52 @@ function boundGraphContext(graphContext: GraphContext) {
 
 export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const idsParam = searchParams.get('ids');
+
+    if (idsParam) {
+      if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
+        return Response.json({
+          type: 'node_lookup',
+          nodes: [],
+          metadata: {
+            message: 'Graph is empty. Interact with the chat to populate the knowledge graph.',
+          },
+        });
+      }
+
+      const ids = Array.from(
+        new Set(
+          idsParam
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean)
+        )
+      ).slice(0, MAX_LOOKUP_IDS);
+
+      if (ids.length === 0) {
+        return Response.json({ type: 'node_lookup', nodes: [] });
+      }
+
+      const graphClient = createGraphClient();
+      const query = `
+        MATCH (n)
+        WHERE n.id IN [${ids.map((id) => `'${escapeCypherValue(id)}'`).join(', ')}]
+        RETURN n
+      `;
+
+      const result = await graphClient.executeCypher(query);
+      const nodes = parseNodes(result);
+
+      return Response.json({
+        type: 'node_lookup',
+        nodes,
+        metadata: {
+          requested: ids.length,
+        },
+      });
+    }
+
     // Check if MCP gateway is configured (only available after sandbox is active)
     if (!hasActiveSandbox() || !getMcpGatewayUrl()) {
       // Return empty graph - this is normal before first interaction
@@ -54,8 +139,6 @@ export async function GET(request: Request) {
         },
       });
     }
-
-    const { searchParams } = new URL(request.url);
 
     // Get query parameters
     const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];

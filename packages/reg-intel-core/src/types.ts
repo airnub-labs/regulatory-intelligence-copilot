@@ -142,6 +142,7 @@ export interface AgentResult {
     type: string;
   }>;
   notes?: string[];
+  warnings?: string[];
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   followUps?: string[];
   agentId: string;
@@ -150,11 +151,23 @@ export interface AgentResult {
 /**
  * Streaming chunk from LLM
  */
-export interface LlmStreamChunk {
-  type: 'text' | 'error' | 'done';
-  delta?: string;
-  error?: Error;
-}
+export type LlmStreamChunk =
+  | { type: 'text'; delta: string }
+  | {
+    type: 'tool';
+    name: string;
+    argsJson: unknown;
+    toolName?: string;
+    arguments?: unknown;
+    payload?: unknown;
+  }
+  | { type: 'error'; error: Error }
+  | {
+    type: 'done';
+    followUps?: string[];
+    referencedNodes?: string[];
+    disclaimer?: string;
+  };
 
 /**
  * Streaming result from an agent
@@ -167,6 +180,7 @@ export interface AgentStreamResult {
     label: string;
     type: string;
   }>;
+  warnings?: string[];
   uncertaintyLevel?: 'low' | 'medium' | 'high';
   followUps?: string[];
   stream: AsyncIterable<LlmStreamChunk>;
@@ -324,6 +338,8 @@ export interface LlmChatRequest {
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  tools?: Array<Record<string, unknown>>;
+  toolChoice?: 'auto' | 'required' | { type: string; function: { name: string } };
 }
 
 /**
