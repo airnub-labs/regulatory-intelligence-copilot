@@ -18,11 +18,6 @@ export class ComplianceError extends Error {
 }
 
 /**
- * @deprecated Use ComplianceError instead
- */
-export const AuditorError = ComplianceError;
-
-/**
  * Error thrown when E2B sandbox operations fail
  */
 export class SandboxError extends ComplianceError {
@@ -87,11 +82,6 @@ export class AgentError extends ComplianceError {
 export function isComplianceError(error: unknown): error is ComplianceError {
   return error instanceof ComplianceError;
 }
-
-/**
- * @deprecated Use isComplianceError instead
- */
-export const isAuditorError = isComplianceError;
 
 /**
  * Extract a user-friendly error message from any error

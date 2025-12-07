@@ -339,39 +339,6 @@ export type PathEventType =
   | 'path:merged'
   | 'path:active';
 
-/**
- * Payload map for path SSE events
- * @deprecated Use PathEventPayloadMap from sseTypes.ts instead
- */
-export interface PathEventPayloads {
-  'path:created': {
-    path: ConversationPath;
-    branchPointMessage?: PathAwareMessage;
-  };
-  'path:updated': {
-    pathId: string;
-    conversationId: string;
-    changes: Partial<ConversationPath>;
-  };
-  'path:deleted': {
-    pathId: string;
-    conversationId: string;
-    reason: 'deleted' | 'archived';
-  };
-  'path:merged': {
-    sourcePathId: string;
-    targetPathId: string;
-    conversationId: string;
-    summaryMessageId?: string;
-    mergeMode: MergeMode;
-  };
-  'path:active': {
-    pathId: string;
-    conversationId: string;
-    previousPathId?: string;
-  };
-}
-
 // =============================================================================
 // Client Types (for API responses)
 // =============================================================================
