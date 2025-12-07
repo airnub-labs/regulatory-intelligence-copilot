@@ -5,6 +5,7 @@ import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
+import { generateMergeSummary } from '@/lib/server/mergeSummarizer';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,9 @@ const VALID_MERGE_MODES: MergeMode[] = ['summary', 'full', 'selective'];
 /**
  * POST /api/conversations/[id]/paths/[pathId]/merge
  * Merge this path into another path
+ *
+ * For 'summary' mode, if summaryContent is not provided,
+ * generates an AI-powered summary automatically.
  */
 export async function POST(
   request: NextRequest,
@@ -97,6 +101,42 @@ export async function POST(
   }
 
   try {
+    // For summary mode, generate AI summary if not provided
+    let finalSummaryContent = summaryContent;
+
+    if (mergeMode === 'summary' && !finalSummaryContent) {
+      // Get messages from source path to generate summary
+      const preview = await conversationPathStore.previewMerge({
+        tenantId,
+        sourcePathId,
+        targetPathId,
+        mergeMode,
+        selectedMessageIds,
+        summaryPrompt,
+      });
+
+      if (preview.messagesToMerge.length > 0) {
+        try {
+          const summaryResult = await generateMergeSummary({
+            branchMessages: preview.messagesToMerge,
+            sourcePath: preview.sourcePath,
+            targetPath: preview.targetPath,
+            customPrompt: summaryPrompt,
+            tenantId,
+          });
+
+          finalSummaryContent = summaryResult.summary;
+
+          if (summaryResult.error) {
+            console.warn('[merge] Summary generation warning:', summaryResult.error);
+          }
+        } catch (summaryError) {
+          console.error('[merge] Failed to generate AI summary:', summaryError);
+          // Continue with basic summary from store
+        }
+      }
+    }
+
     const result = await conversationPathStore.mergePath({
       tenantId,
       sourcePathId,
@@ -104,7 +144,7 @@ export async function POST(
       mergeMode,
       selectedMessageIds,
       summaryPrompt,
-      summaryContent,
+      summaryContent: finalSummaryContent,
       userId,
       archiveSource: archiveSource !== false, // Default to archiving
     });
