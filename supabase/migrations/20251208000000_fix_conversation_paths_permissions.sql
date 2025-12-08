@@ -1,3 +1,12 @@
+-- =============================================================================
+-- DEPRECATED: This migration has been superseded by the consolidated migration
+-- Use: 20241207000000_conversation_paths_consolidated.sql instead
+-- =============================================================================
+-- This file is kept for historical reference only. The consolidated migration
+-- combines this with migrations 20241207000001, 20241207000002, and
+-- 20241207000003 into a single file.
+-- =============================================================================
+--
 -- Migration: Fix conversation_paths table permissions
 -- This migration adds explicit GRANT permissions for service_role and authenticated
 -- to perform operations on the conversation_paths table in the copilot_internal schema.

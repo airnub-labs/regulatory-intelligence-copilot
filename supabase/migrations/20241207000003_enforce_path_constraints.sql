@@ -1,3 +1,12 @@
+-- =============================================================================
+-- DEPRECATED: This migration has been superseded by the consolidated migration
+-- Use: 20241207000000_conversation_paths_consolidated.sql instead
+-- =============================================================================
+-- This file is kept for historical reference only. The consolidated migration
+-- combines this with migrations 20241207000001, 20241207000002, and
+-- 20251208000000 into a single file.
+-- =============================================================================
+--
 -- Migration: Enforce path constraints and add foreign keys
 -- This migration makes path_id NOT NULL and adds all foreign key constraints.
 -- Run this AFTER the data migration is complete.

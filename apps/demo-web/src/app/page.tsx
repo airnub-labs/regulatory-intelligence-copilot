@@ -23,6 +23,7 @@ import { Message, MessageLoading } from '@/components/chat/message'
 import { PathToolbar } from '@/components/chat/path-toolbar'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
+import { BranchDialog } from '@reg-copilot/reg-intel-ui'
 import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput } from '@/components/chat/prompt-input'
@@ -318,6 +319,8 @@ export default function Home() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
   const [activeVersionIndex, setActiveVersionIndex] = useState<Record<string, number>>({})
+  const [branchDialogOpen, setBranchDialogOpen] = useState(false)
+  const [branchFromMessageId, setBranchFromMessageId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
   const [conversationTitle, setConversationTitle] = useState<string>('')
   const [savedConversationTitle, setSavedConversationTitle] = useState<string>('')
@@ -888,6 +891,54 @@ export default function Home() {
     setInput('')
   }
 
+  const handleEdit = (messageId: string) => {
+    const message = messages.find(msg => msg.id === messageId)
+    if (!message || message.role !== 'user') return
+    setEditingMessageId(messageId)
+    setEditingContent(message.content)
+    setInput('')
+  }
+
+  const handleBranch = (messageId: string) => {
+    setBranchFromMessageId(messageId)
+    setBranchDialogOpen(true)
+  }
+
+  const handleBranchCreate = async (name?: string) => {
+    if (!branchFromMessageId || !conversationId) {
+      setBranchDialogOpen(false)
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/branch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          sourceMessageId: branchFromMessageId,
+          name,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Branch creation failed with status ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log('Branch created:', result)
+
+      // Optionally switch to the new path or reload conversation
+      // For now, just close the dialog
+      setBranchDialogOpen(false)
+      setBranchFromMessageId(null)
+    } catch (error) {
+      console.error('Failed to create branch:', error)
+      setBranchDialogOpen(false)
+      setBranchFromMessageId(null)
+    }
+  }
+
   const updateShareSettings = async (value: ShareOptionValue) => {
     if (!conversationIdRef.current) return
     if (!isAuthenticated) return
@@ -1178,6 +1229,10 @@ export default function Home() {
                             versionTimestamp={new Date()}
                             onPreviousVersion={goPrevious}
                             onNextVersion={goNext}
+                            messageId={currentMessage.id}
+                            onEdit={handleEdit}
+                            onBranch={handleBranch}
+                            showActions={true}
                           />
                         )}
                       </div>
@@ -1396,6 +1451,13 @@ export default function Home() {
           </aside>
         </div>
       </main>
+
+      <BranchDialog
+        open={branchDialogOpen}
+        onOpenChange={setBranchDialogOpen}
+        messageId={branchFromMessageId}
+        onBranch={handleBranchCreate}
+      />
     </div>
   )
 }

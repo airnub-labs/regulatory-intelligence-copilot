@@ -1,3 +1,12 @@
+-- =============================================================================
+-- DEPRECATED: This migration has been superseded by the consolidated migration
+-- Use: 20241207000000_conversation_paths_consolidated.sql instead
+-- =============================================================================
+-- This file is kept for historical reference only. The consolidated migration
+-- combines this with migrations 20241207000001, 20241207000003, and
+-- 20251208000000 into a single file.
+-- =============================================================================
+--
 -- Migration: Migrate existing conversations to path-based model
 -- This migration creates primary paths for all existing conversations
 -- and assigns all existing messages to their conversation's primary path.
