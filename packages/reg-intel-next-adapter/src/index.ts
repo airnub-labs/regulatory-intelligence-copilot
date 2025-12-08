@@ -649,19 +649,35 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return !msg.deletedAt && !metadataDeleted;
       });
 
+      // Validate replaceMessageId exists and is a user message
       if (replaceMessageId) {
-        const lastUserMessage = [...activeMessages]
-          .reverse()
-          .find(msg => msg.role === 'user');
-        if (!lastUserMessage || lastUserMessage.id !== replaceMessageId) {
-          return new Response('Only the last user message can be replaced', { status: 400 });
+        const messageToReplace = activeMessages.find(msg => msg.id === replaceMessageId);
+        if (!messageToReplace) {
+          return new Response('Message to replace not found', { status: 404 });
+        }
+        if (messageToReplace.role !== 'user') {
+          return new Response('Only user messages can be replaced', { status: 400 });
+        }
+        // TODO: Implement proper conversation branching when editing non-terminal messages
+        // For now, we soft-delete the old message and add the new one in-place
+        // Future enhancement: Use ConversationPathStore.branchFromMessage() to create
+        // a new path branching from the message being edited
+      }
+
+      // Build the message history for the LLM
+      // If editing a message, only include messages up to (but not including) the edited message
+      // This creates an effective branch from that point in the conversation
+      let messagesToInclude = activeMessages;
+      if (replaceMessageId) {
+        const editIndex = activeMessages.findIndex(msg => msg.id === replaceMessageId);
+        if (editIndex >= 0) {
+          // Include all messages before the one being edited
+          messagesToInclude = activeMessages.slice(0, editIndex);
         }
       }
 
       const sanitizedMessages = [
-        ...activeMessages
-          .filter(msg => msg.id !== replaceMessageId)
-          .map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
+        ...messagesToInclude.map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
         { role: 'user', content: incomingMessageContent } as ChatMessage,
       ];
       const { messageId: appendedMessageId } = await conversationStore.appendMessage({
@@ -702,14 +718,32 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         notifyListSubscribers(tenantId, 'upsert', refreshedConversation);
       }
 
+      // When editing a message, soft-delete the edited message and all subsequent messages
+      // This creates a branch effect where the conversation history diverges from the edit point
       if (replaceMessageId) {
-        await conversationStore.softDeleteMessage({
-          tenantId,
-          conversationId,
-          messageId: replaceMessageId,
-          userId,
-          supersededBy: appendedMessageId,
-        });
+        const editIndex = activeMessages.findIndex(msg => msg.id === replaceMessageId);
+        if (editIndex >= 0) {
+          // Soft-delete the edited message
+          await conversationStore.softDeleteMessage({
+            tenantId,
+            conversationId,
+            messageId: replaceMessageId,
+            userId,
+            supersededBy: appendedMessageId,
+          });
+
+          // Soft-delete all messages after the edited one
+          const messagesToDelete = activeMessages.slice(editIndex + 1);
+          for (const msg of messagesToDelete) {
+            await conversationStore.softDeleteMessage({
+              tenantId,
+              conversationId,
+              messageId: msg.id,
+              userId,
+              supersededBy: appendedMessageId,
+            });
+          }
+        }
       }
       const shouldIncludeDisclaimer = options?.includeDisclaimer ?? true;
       const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
