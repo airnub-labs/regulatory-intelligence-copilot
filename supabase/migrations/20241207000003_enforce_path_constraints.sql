@@ -266,14 +266,10 @@ CREATE OR REPLACE VIEW public.conversations_view AS
         c.title,
         c.persona_id,
         c.jurisdictions,
-        c.archived_at,
         c.created_at,
         c.updated_at,
         c.last_message_at,
-        c.active_path_id,
-        c.trace_id,
-        c.root_span_name,
-        c.root_span_id
+        c.active_path_id
     FROM copilot_internal.conversations c
     CROSS JOIN request_context ctx
     WHERE ctx.requester_role = 'service_role'

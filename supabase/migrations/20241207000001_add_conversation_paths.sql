@@ -8,12 +8,16 @@
 
 CREATE TABLE IF NOT EXISTS copilot_internal.conversation_paths (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    conversation_id uuid NOT NULL REFERENCES copilot_internal.conversations(id) ON DELETE CASCADE,
+    conversation_id uuid NOT NULL
+        REFERENCES copilot_internal.conversations(id)
+        ON DELETE CASCADE,
     tenant_id uuid NOT NULL,
 
     -- Path lineage: parent path and the message where this branch started
-    parent_path_id uuid REFERENCES copilot_internal.conversation_paths(id) ON DELETE SET NULL,
-    branch_point_message_id uuid,  -- FK added after message columns updated
+    parent_path_id uuid
+        REFERENCES copilot_internal.conversation_paths(id)
+        ON DELETE SET NULL,
+    branch_point_message_id uuid,  -- FK can be added later once message columns are updated
 
     -- Path metadata
     name text,                     -- Optional name for the branch (e.g., "PRSI Deep Dive")
@@ -22,25 +26,24 @@ CREATE TABLE IF NOT EXISTS copilot_internal.conversation_paths (
     is_active boolean NOT NULL DEFAULT true,
 
     -- Merge tracking
-    merged_to_path_id uuid REFERENCES copilot_internal.conversation_paths(id) ON DELETE SET NULL,
+    merged_to_path_id uuid
+        REFERENCES copilot_internal.conversation_paths(id)
+        ON DELETE SET NULL,
     merged_at timestamptz,
-    merge_summary_message_id uuid, -- FK added after message columns updated
+    merge_summary_message_id uuid, -- FK can be added later once message columns are updated
     merge_mode text CHECK (merge_mode IS NULL OR merge_mode IN ('summary', 'full', 'selective')),
 
     -- Timestamps
     created_at timestamptz NOT NULL DEFAULT now(),
-    updated_at timestamptz NOT NULL DEFAULT now(),
-
-    -- Constraints
-    CONSTRAINT conversation_paths_tenant_fk
-        FOREIGN KEY (tenant_id)
-        REFERENCES copilot_internal.conversations(tenant_id)
-        ON DELETE CASCADE
-        DEFERRABLE INITIALLY DEFERRED
+    updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Optional: index to help RLS / tenant-scoped queries
+CREATE INDEX IF NOT EXISTS idx_conversation_paths_tenant
+    ON copilot_internal.conversation_paths(tenant_id);
+
 -- Partial unique index: only one primary path per conversation
-CREATE UNIQUE INDEX idx_conversation_paths_primary
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_paths_primary
     ON copilot_internal.conversation_paths(conversation_id)
     WHERE is_primary = true;
 
@@ -200,11 +203,7 @@ CREATE OR REPLACE VIEW public.conversation_messages_view AS
         m.sequence_in_path,
         m.is_branch_point,
         m.branched_to_paths,
-        m.message_type,
-        -- Add trace columns if they exist
-        m.trace_id,
-        m.root_span_name,
-        m.root_span_id
+        m.message_type
     FROM copilot_internal.conversation_messages m
     CROSS JOIN request_context ctx
     WHERE ctx.requester_role = 'service_role'
@@ -289,7 +288,9 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_set_message_sequence ON copilot_internal.conversation_messages;
+DROP TRIGGER IF EXISTS trg_set_message_sequence
+    ON copilot_internal.conversation_messages;
+
 CREATE TRIGGER trg_set_message_sequence
     BEFORE INSERT ON copilot_internal.conversation_messages
     FOR EACH ROW

@@ -26,7 +26,8 @@ create or replace view public.conversations_view as
          c.archived_at,
          c.created_at,
          c.updated_at,
-         c.last_message_at
+         c.last_message_at,
+         c.active_path_id
   from copilot_internal.conversations c
   cross join request_context ctx
   where ctx.requester_role = 'service_role'

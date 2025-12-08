@@ -8,8 +8,15 @@ declare
   demo_conv_id uuid;
   demo_conversation_title text := 'Demo conversation';
   demo_user_id uuid;
-  demo_tenant_id uuid := coalesce(nullif(current_setting('app.demo_tenant_id', true), '')::uuid, gen_random_uuid());
+  demo_tenant_id uuid := coalesce(
+    nullif(current_setting('app.demo_tenant_id', true), '')::uuid,
+    gen_random_uuid()
+  );
+  demo_path_id uuid;
 begin
+  ---------------------------------------------------------------------------
+  -- 1. Ensure demo auth user exists (idempotent)
+  ---------------------------------------------------------------------------
   select id, raw_user_meta_data, created_at
     into seeded_user
     from auth.users
@@ -17,6 +24,7 @@ begin
    limit 1;
 
   if not found then
+    -- Create demo auth user
     demo_user_id := gen_random_uuid();
 
     insert into auth.users (
@@ -44,17 +52,17 @@ begin
       demo_now,
       demo_now,
       demo_now,
-      jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
+      jsonb_build_object('provider', 'email', 'providers', array['email'])
+        || jsonb_build_object('tenant_id', demo_tenant_id),
       jsonb_build_object(
         'tenant_id', demo_tenant_id,
         'full_name', demo_full_name,
         'email_verified', true,
         'phone_verified', false
       )
-    )
-    returning id, raw_user_meta_data
-    into seeded_user;
+    );
   else
+    -- Reuse and refresh existing demo user
     demo_user_id := seeded_user.id;
 
     update auth.users
@@ -66,104 +74,207 @@ begin
            created_at = coalesce(seeded_user.created_at, demo_now),
            updated_at = demo_now,
            last_sign_in_at = demo_now,
-           raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email']) || jsonb_build_object('tenant_id', demo_tenant_id),
+           raw_app_meta_data = jsonb_build_object('provider', 'email', 'providers', array['email'])
+             || jsonb_build_object('tenant_id', demo_tenant_id),
            raw_user_meta_data = jsonb_build_object(
              'tenant_id', demo_tenant_id,
              'full_name', demo_full_name,
              'email_verified', true,
              'phone_verified', false
            )
-     where id = seeded_user.id
-    returning id, raw_user_meta_data
-      into seeded_user;
+     where id = demo_user_id;
   end if;
 
-  demo_user_id := coalesce(demo_user_id, seeded_user.id);
+  ---------------------------------------------------------------------------
+  -- 2. Ensure an email identity exists (with provider_id)
+  ---------------------------------------------------------------------------
+  perform 1
+    from auth.identities
+   where user_id = demo_user_id
+     and provider = 'email';
 
-  -- Keep the tenant ID in sync even if the user already existed
-  demo_tenant_id := coalesce((seeded_user.raw_user_meta_data ->> 'tenant_id')::uuid, demo_tenant_id);
+  if not found then
+    insert into auth.identities (
+      id,
+      user_id,
+      provider,
+      provider_id,
+      identity_data
+    )
+    values (
+      gen_random_uuid(),
+      demo_user_id,
+      'email',
+      demo_email,
+      jsonb_build_object(
+        'sub', demo_email,
+        'email', demo_email
+      )
+    );
+  end if;
 
-  -- Supabase manages indexes on auth.identities. To avoid privilege errors
-  -- from creating a unique index ourselves, perform an explicit delete/insert
-  -- so the seed is idempotent without relying on ON CONFLICT.
-  delete from auth.identities
-   where provider = 'email'
-     and (provider_id = demo_email or provider_id = demo_user_id::text or user_id = demo_user_id);
-
-  insert into auth.identities (user_id, identity_data, provider, provider_id, created_at, updated_at, last_sign_in_at)
+  ---------------------------------------------------------------------------
+  -- 3. Seed personas (idempotent)
+  ---------------------------------------------------------------------------
+  insert into copilot_internal.personas (id, label, description, jurisdictions)
   values (
-    demo_user_id,
-    jsonb_build_object('sub', demo_user_id, 'email', demo_email, 'email_verified', true, 'phone_verified', false),
-    'email',
-    demo_user_id::text,
-    demo_now,
-    demo_now,
-    demo_now
-  );
+      'single-director-ie',
+      'Single-director Irish company',
+      'Owner-director of a single-director Irish limited company – PAYE, PRSI, CT, pensions and CGT interactions.',
+      array['IE']
+    )
+  on conflict (id) do update
+    set label = excluded.label,
+        description = excluded.description,
+        jurisdictions = excluded.jurisdictions;
 
-  -- Demo conversation tied to the seeded user
+  ---------------------------------------------------------------------------
+  -- 4. Seed quick prompts (idempotent)
+  ---------------------------------------------------------------------------
+  insert into copilot_internal.quick_prompts (
+    id,
+    label,
+    prompt,
+    scenario_hint,
+    persona_filter,
+    jurisdictions
+  )
+  values (
+      'paye_prsi_single_director',
+      'PAYE vs PRSI for single-director',
+      'Explain how PAYE and PRSI interact for a single-director Irish company with salary + dividends.',
+      'paye_prsi_single_director',
+      array['single-director-ie'],
+      array['IE']
+    )
+  on conflict (id) do update
+    set label = excluded.label,
+        prompt = excluded.prompt,
+        scenario_hint = excluded.scenario_hint,
+        persona_filter = excluded.persona_filter,
+        jurisdictions = excluded.jurisdictions;
+
+  ---------------------------------------------------------------------------
+  -- 5. Ensure demo conversation exists
+  ---------------------------------------------------------------------------
   select id
     into demo_conv_id
-    from copilot_internal.conversations
-   where tenant_id = demo_tenant_id
-     and user_id = demo_user_id
-     and title = demo_conversation_title
-   order by created_at asc
+    from copilot_internal.conversations c
+   where c.tenant_id = demo_tenant_id
+     and c.user_id = demo_user_id
+     and c.title = demo_conversation_title
+   order by c.created_at asc
    limit 1;
 
   if not found then
-    insert into copilot_internal.conversations (tenant_id, user_id, share_audience, tenant_access, title, persona_id, jurisdictions)
-    values (demo_tenant_id, demo_user_id, 'tenant', 'edit', demo_conversation_title, 'single-director-ie', array['IE'])
+    insert into copilot_internal.conversations (
+      tenant_id,
+      user_id,
+      share_audience,
+      tenant_access,
+      title,
+      persona_id,
+      jurisdictions
+    )
+    values (
+      demo_tenant_id,
+      demo_user_id,
+      'tenant',
+      'edit',
+      demo_conversation_title,
+      'single-director-ie',
+      array['IE']
+    )
     returning id into demo_conv_id;
   end if;
 
+  ---------------------------------------------------------------------------
+  -- 6. Ensure a primary path exists for the demo conversation
+  ---------------------------------------------------------------------------
+  select id
+    into demo_path_id
+    from copilot_internal.conversation_paths p
+   where p.conversation_id = demo_conv_id
+     and p.is_primary = true
+   order by p.created_at asc
+   limit 1;
+
+  if not found then
+    insert into copilot_internal.conversation_paths (
+      conversation_id,
+      tenant_id,
+      name,
+      description,
+      is_primary,
+      is_active
+    )
+    values (
+      demo_conv_id,
+      demo_tenant_id,
+      'Main path',
+      'Primary path for seeded demo conversation',
+      true,
+      true
+    )
+    returning id into demo_path_id;
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 7. Seed demo messages with valid path_id
+  ---------------------------------------------------------------------------
   delete from copilot_internal.conversation_messages
    where conversation_id = demo_conv_id;
 
-  insert into copilot_internal.conversation_messages (conversation_id, tenant_id, user_id, role, content, metadata)
+  insert into copilot_internal.conversation_messages (
+    conversation_id,
+    tenant_id,
+    user_id,
+    role,
+    content,
+    metadata,
+    path_id
+  )
   values
-    (demo_conv_id, demo_tenant_id, demo_user_id, 'user', 'How do PAYE and PRSI interact for a single-director company?', null),
-    (demo_conv_id, demo_tenant_id, null, 'assistant', 'Here is how PAYE and PRSI interact...', jsonb_build_object('jurisdictions', array['IE']));
+    (
+      demo_conv_id,
+      demo_tenant_id,
+      demo_user_id,
+      'user',
+      'How do PAYE and PRSI interact for a single-director company?',
+      null,
+      demo_path_id
+    ),
+    (
+      demo_conv_id,
+      demo_tenant_id,
+      null,
+      'assistant',
+      'Here is how PAYE and PRSI interact between salary, PRSI classes, and corporation tax for a single-director company.',
+      jsonb_build_object('jurisdictions', array['IE']),
+      demo_path_id
+    );
 
-  raise notice 'Seeded demo user with id % and tenant id %', demo_user_id, demo_tenant_id;
+  ---------------------------------------------------------------------------
+  -- 8. Seed / refresh conversation context
+  ---------------------------------------------------------------------------
+  insert into copilot_internal.conversation_contexts (
+    conversation_id,
+    tenant_id,
+    active_node_ids,
+    summary,
+    updated_at
+  )
+  values (
+    demo_conv_id,
+    demo_tenant_id,
+    array[]::text[],
+    'Seeded demo conversation for PAYE/PRSI interactions.',
+    demo_now
+  )
+  on conflict (conversation_id) do update
+    set tenant_id = excluded.tenant_id,
+        active_node_ids = excluded.active_node_ids,
+        summary = excluded.summary,
+        updated_at = excluded.updated_at;
+
 end $$;
-
-insert into copilot_internal.personas (id, label, description, jurisdictions)
-values
-  ('single-director-ie', 'Single director company (IE)', 'Owner/director of an Irish limited company', array['IE'])
-  on conflict (id) do update set label = excluded.label, description = excluded.description, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.personas (id, label, description, jurisdictions)
-values
-  ('self-employed-contractor-ie', 'Self-employed contractor (IE)', 'Independent contractor in Ireland', array['IE'])
-  on conflict (id) do update set label = excluded.label, description = excluded.description, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.personas (id, label, description, jurisdictions)
-values
-  ('paye-eu-ties', 'PAYE employee with EU ties', 'Employee working in IE with EU tax/social security touchpoints', array['IE','EU'])
-  on conflict (id) do update set label = excluded.label, description = excluded.description, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.personas (id, label, description, jurisdictions)
-values
-  ('cross-border-ie-eu', 'Cross-border IE–EU worker', 'Works between Ireland and another EU country', array['IE','EU'])
-  on conflict (id) do update set label = excluded.label, description = excluded.description, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.quick_prompts (id, label, prompt, scenario_hint, persona_filter, jurisdictions)
-values
-  ('graph_welfare_prsi_jobseekers_benefit', 'Graph + welfare', 'Show me how PRSI contributions and jobseeker’s benefit interact for this persona.', 'graph_welfare_prsi_jobseekers_benefit', array['single-director-ie','self-employed-contractor-ie'], array['IE'])
-  on conflict (id) do update set label = excluded.label, prompt = excluded.prompt, scenario_hint = excluded.scenario_hint, persona_filter = excluded.persona_filter, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.quick_prompts (id, label, prompt, scenario_hint, persona_filter, jurisdictions)
-values
-  ('graph_tax_cgt_recent_changes', 'Graph + tax + CGT', 'Summarise PAYE, USC, and PRSI obligations for this persona and highlight any graph nodes with recent changes.', 'graph_tax_cgt_recent_changes', null, array['IE'])
-  on conflict (id) do update set label = excluded.label, prompt = excluded.prompt, scenario_hint = excluded.scenario_hint, persona_filter = excluded.persona_filter, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.quick_prompts (id, label, prompt, scenario_hint, persona_filter, jurisdictions)
-values
-  ('timeline_pension_contribution_limits', 'Timeline engine', 'Explain how pension contribution limits for this persona change over the next 5 years, based on the regulatory timeline.', 'timeline_pension_contribution_limits', null, array['IE'])
-  on conflict (id) do update set label = excluded.label, prompt = excluded.prompt, scenario_hint = excluded.scenario_hint, persona_filter = excluded.persona_filter, jurisdictions = excluded.jurisdictions;
-
-insert into copilot_internal.quick_prompts (id, label, prompt, scenario_hint, persona_filter, jurisdictions)
-values
-  ('cross_border_social_security_coordination', 'Cross-border / scenario engine', 'Outline social security coordination rules if this persona starts working remotely from another EU country.', 'cross_border_social_security_coordination', null, array['IE','EU'])
-  on conflict (id) do update set label = excluded.label, prompt = excluded.prompt, scenario_hint = excluded.scenario_hint, persona_filter = excluded.persona_filter, jurisdictions = excluded.jurisdictions;

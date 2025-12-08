@@ -37,7 +37,8 @@ create or replace view public.conversations_view as
          c.root_span_id,
          c.created_at,
          c.updated_at,
-         c.last_message_at
+         c.last_message_at,
+         c.active_path_id
   from copilot_internal.conversations c
   cross join request_context ctx
   where ctx.requester_role = 'service_role'
@@ -59,7 +60,12 @@ create or replace view public.conversation_messages_view as
          m.trace_id,
          m.root_span_name,
          m.root_span_id,
-         m.created_at
+         m.created_at,
+         m.path_id,
+         m.sequence_in_path,
+         m.is_branch_point,
+         m.branched_to_paths,
+         m.message_type
   from copilot_internal.conversation_messages m
   cross join request_context ctx
   where ctx.requester_role = 'service_role'
@@ -82,3 +88,8 @@ create or replace view public.conversation_contexts_view as
   cross join request_context ctx
   where ctx.requester_role = 'service_role'
      or (ctx.tenant_id is not null and cc.tenant_id = ctx.tenant_id);
+
+-- Restore view permissions after dropping/recreating them
+grant select on public.conversations_view to authenticated, service_role;
+grant select on public.conversation_messages_view to authenticated, service_role;
+grant select on public.conversation_contexts_view to authenticated, service_role;
