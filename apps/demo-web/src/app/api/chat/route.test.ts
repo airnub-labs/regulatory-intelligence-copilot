@@ -1,6 +1,7 @@
 import {
   Context,
   ContextManager,
+  Link,
   ROOT_CONTEXT,
   Span,
   SpanAttributes,
@@ -76,7 +77,12 @@ class StackContextManager implements ContextManager {
     return this.stack[this.stack.length - 1];
   }
 
-  with<T extends (...args: unknown[]) => ReturnType<T>>(contextValue: Context, fn: T, thisArg?: ThisParameterType<T>, ...args: Parameters<T>): ReturnType<T> {
+  with<A extends unknown[], F extends (...args: A) => ReturnType<F>>(
+    contextValue: Context,
+    fn: F,
+    thisArg?: ThisParameterType<F>,
+    ...args: A
+  ): ReturnType<F> {
     this.stack.push(contextValue);
     try {
       return fn.apply(thisArg, args);
@@ -85,7 +91,8 @@ class StackContextManager implements ContextManager {
     }
   }
 
-  bind<T>(target: T, _context?: Context): T {
+  bind<T>(contextValue: Context, target: T): T {
+    void contextValue; // Acknowledge unused parameter
     return target;
   }
 
@@ -102,7 +109,7 @@ class StackContextManager implements ContextManager {
 class TestTracerProvider implements TracerProvider {
   constructor(private readonly finishedSpans: TestSpan[]) {}
 
-  getTracer(_name: string, _version?: string, _options?: undefined): Tracer {
+  getTracer(): Tracer {
     return new TestTracer(this.finishedSpans);
   }
 }
@@ -110,7 +117,26 @@ class TestTracerProvider implements TracerProvider {
 class TestTracer implements Tracer {
   constructor(private readonly finishedSpans: TestSpan[]) {}
 
-  startActiveSpan<F extends (span: Span) => unknown>(name: string, options: SpanOptions = {}, fn: F): ReturnType<F> {
+  startActiveSpan<F extends (span: Span) => unknown>(
+    name: string,
+    arg2?: SpanOptions | F,
+    arg3?: Context | F,
+    arg4?: F
+  ): ReturnType<F> {
+    // Handle the various overload signatures
+    let options: SpanOptions = {};
+    let fn: F;
+
+    if (typeof arg2 === 'function') {
+      fn = arg2 as F;
+    } else if (typeof arg3 === 'function') {
+      options = arg2 as SpanOptions;
+      fn = arg3 as F;
+    } else {
+      options = arg2 as SpanOptions;
+      fn = arg4 as F;
+    }
+
     const span = new TestSpan(name, this.finishedSpans, options.attributes);
     const spanContext = trace.setSpan(context.active(), span);
     return context.with(spanContext, () => fn(span)) as ReturnType<F>;
@@ -182,6 +208,16 @@ class TestSpan implements Span {
 
   recordException(): this {
     this.setStatus({ code: SpanStatusCode.ERROR });
+    return this;
+  }
+
+  addLink(link: Link): this {
+    void link;
+    return this;
+  }
+
+  addLinks(links: Link[]): this {
+    void links;
     return this;
   }
 }

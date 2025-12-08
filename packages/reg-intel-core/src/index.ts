@@ -26,14 +26,12 @@ export { PROFILE_IDS, type ProfileId } from './types.js';
 // Errors
 export {
   ComplianceError,
-  AuditorError, // deprecated alias
   SandboxError,
   McpError,
   LlmError,
   GraphError,
   AgentError,
   isComplianceError,
-  isAuditorError, // deprecated alias
   getErrorMessage,
 } from './errors.js';
 

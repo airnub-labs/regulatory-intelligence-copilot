@@ -17,6 +17,7 @@ export type SupabaseError = { message: string };
 export type SupabaseLikeClient = {
   from(table: string): any;
   schema?(schema: string): SupabaseLikeClient;
+  rpc?(fn: string, params?: Record<string, unknown>): PromiseLike<{ data: any; error: any }>;
 };
 
 export interface AuthorizationSpec {
@@ -42,6 +43,7 @@ export interface ConversationRecord {
   personaId?: string | null;
   jurisdictions: string[];
   title?: string | null;
+  activePathId?: string | null;
   archivedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -448,6 +450,7 @@ type SupabaseConversationRow = {
   persona_id?: string | null;
   jurisdictions: string[];
   title?: string | null;
+  active_path_id?: string | null;
   archived_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -491,6 +494,7 @@ function mapConversationRow(row: SupabaseConversationRow): ConversationRecord {
     personaId: row.persona_id,
     jurisdictions: row.jurisdictions ?? [],
     title: row.title,
+    activePathId: row.active_path_id,
     archivedAt: row.archived_at ? new Date(row.archived_at) : null,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
@@ -552,7 +556,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const { data, error } = await this.client
       .from('conversations_view')
       .select(
-        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
+        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, active_path_id, archived_at, created_at, updated_at, last_message_at'
       )
       .eq('id', conversationId)
       .eq('tenant_id', tenantId)
@@ -615,7 +619,41 @@ export class SupabaseConversationStore implements ConversationStore {
           throw new Error(`Failed to create conversation: ${error.message}`);
         }
 
-        return { conversationId: (data as { id: string }).id };
+        const conversationId = (data as { id: string }).id;
+
+        // Create primary path for the conversation
+        const { data: pathData, error: pathError } = await this.internalClient
+          .from('conversation_paths')
+          .insert({
+            conversation_id: conversationId,
+            tenant_id: input.tenantId,
+            name: 'Main',
+            is_primary: true,
+            is_active: true,
+            created_at: now,
+            updated_at: now,
+          })
+          .select('id')
+          .single();
+
+        if (pathError) {
+          throw new Error(`Failed to create primary path: ${pathError.message}`);
+        }
+
+        const pathId = (pathData as { id: string }).id;
+
+        // Update conversation with active_path_id
+        const { error: updateError } = await this.internalClient
+          .from('conversations')
+          .update({ active_path_id: pathId })
+          .eq('id', conversationId)
+          .eq('tenant_id', input.tenantId);
+
+        if (updateError) {
+          throw new Error(`Failed to set active path: ${updateError.message}`);
+        }
+
+        return { conversationId };
       }
     );
   }
@@ -647,6 +685,42 @@ export class SupabaseConversationStore implements ConversationStore {
           throw new Error('User not authorised for conversation');
         }
 
+        // Ensure the conversation has an active path
+        let pathId = conversation.activePathId;
+        if (!pathId) {
+          // Create a primary path for the conversation
+          const { data: pathData, error: pathError } = await this.internalClient
+            .from('conversation_paths')
+            .insert({
+              conversation_id: input.conversationId,
+              tenant_id: input.tenantId,
+              name: 'Main',
+              is_primary: true,
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single();
+
+          if (pathError) {
+            throw new Error(`Failed to create primary path: ${pathError.message}`);
+          }
+
+          pathId = (pathData as { id: string }).id;
+
+          // Update conversation's active_path_id
+          const { error: updateError } = await this.internalClient
+            .from('conversations')
+            .update({ active_path_id: pathId })
+            .eq('id', input.conversationId)
+            .eq('tenant_id', input.tenantId);
+
+          if (updateError) {
+            throw new Error(`Failed to update conversation active path: ${updateError.message}`);
+          }
+        }
+
         const messageTimestamp = new Date().toISOString();
         const mergedMetadata = input.traceId
           ? { ...(input.metadata ?? {}), traceId: input.traceId }
@@ -655,6 +729,7 @@ export class SupabaseConversationStore implements ConversationStore {
           .from('conversation_messages')
           .insert({
             conversation_id: input.conversationId,
+            path_id: pathId,
             tenant_id: input.tenantId,
             user_id: input.userId ?? null,
             trace_id: input.traceId ?? null,
@@ -820,7 +895,7 @@ export class SupabaseConversationStore implements ConversationStore {
     const query = this.client
       .from('conversations_view')
       .select(
-        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, archived_at, created_at, updated_at, last_message_at'
+        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, active_path_id, archived_at, created_at, updated_at, last_message_at'
       )
       .eq('tenant_id', input.tenantId)
 

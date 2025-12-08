@@ -18,10 +18,11 @@ import type {
   ConversationListEventPayloadMap,
   ClientConversation,
 } from '@reg-copilot/reg-intel-conversations'
-
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { Message, MessageLoading } from '@/components/chat/message'
-import { MetadataSkeleton } from '@/components/chat/metadata-skeleton'
+import { PathToolbar } from '@/components/chat/path-toolbar'
+import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
+import { getPathApiClient } from '@/lib/pathApiClient'
 import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput } from '@/components/chat/prompt-input'
@@ -217,43 +218,6 @@ const extractWarnings = (parsedData: ParsedSseData): string[] => {
   return []
 }
 
-const extractYearsFromText = (text: string): string[] => {
-  const matches = text.match(/\b(20\d{2})\b/g)
-  if (!matches) return []
-  return Array.from(new Set(matches)).slice(-3)
-}
-
-const extractQuarterFromText = (text: string): string | undefined => {
-  const match = text.match(/\b(q[1-4])\s*(20\d{2})/i)
-  if (!match) return undefined
-  return `${match[1].toUpperCase()} ${match[2]}`
-}
-
-const summarizeTimelineSignal = (metadata: ChatMetadata | null, latestAnswer?: string): string => {
-  if (metadata?.timelineSummary) return metadata.timelineSummary
-  if (metadata?.timelineFocus) return metadata.timelineFocus
-
-  if (!latestAnswer) {
-    return 'Timeline signals will appear after your next answer.'
-  }
-
-  const quarter = extractQuarterFromText(latestAnswer)
-  if (quarter) {
-    return `Focuses on ${quarter}`
-  }
-
-  const years = extractYearsFromText(latestAnswer)
-  if (years.length) {
-    return `Mentions ${years.join(', ')} timelines`
-  }
-
-  if (/upcoming|effective|commences|commencing|starts|next year|next month/i.test(latestAnswer)) {
-    return 'Highlights upcoming rule changes'
-  }
-
-  return 'Timeline signals will appear after your next answer.'
-}
-
 const quickPrompts = [
   {
     label: 'Graph + welfare',
@@ -369,27 +333,13 @@ export default function Home() {
 
   const isAuthenticated = status === 'authenticated' && Boolean((session?.user as { id?: string } | undefined)?.id)
   const isTitleDirty = conversationTitle !== savedConversationTitle
+  const pathApiClient = useMemo(() => getPathApiClient(), [])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
   const versionedMessages = useMemo(() => buildVersionedMessages(messages), [messages])
-  const latestAssistantMessage = useMemo(() => {
-    for (let i = versionedMessages.length - 1; i >= 0; i -= 1) {
-      const chain = versionedMessages[i]
-      const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
-      const candidate = chain.versions[currentIndex]
-      if (candidate.role === 'assistant' && !candidate.deletedAt && !candidate.metadata?.deletedAt) {
-        return candidate
-      }
-    }
-    return null
-  }, [activeVersionIndex, versionedMessages])
-  const timelineSummary = useMemo(
-    () => summarizeTimelineSignal(chatMetadata, latestAssistantMessage?.content),
-    [chatMetadata, latestAssistantMessage?.content]
-  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -522,26 +472,6 @@ export default function Home() {
     }
     if (metadata.warnings !== undefined) {
       setWarnings(metadata.warnings)
-    }
-  }
-
-  const describeShareState = (audience: ShareAudience, access: TenantAccess) => {
-    if (audience === 'public') return 'Public (view only)'
-    if (audience === 'tenant' && access === 'view') return 'Tenant shared (view only)'
-    if (audience === 'tenant') return 'Tenant shared (edit)'
-    return 'Private to you'
-  }
-
-  const describeShareHint = (value: ShareOptionValue) => {
-    switch (value) {
-      case 'tenant-view':
-        return 'Tenant members can view this thread and watch SSE output live, but only you can edit.'
-      case 'tenant-edit':
-        return 'Tenant members can view and edit this thread in real time.'
-      case 'public':
-        return 'Anyone with the link can view this conversation and its SSE stream; edits remain tenant-only.'
-      default:
-        return 'Only you can view this conversation and its SSE stream.'
     }
   }
 
@@ -1051,7 +981,12 @@ export default function Home() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.8fr)]">
-          <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
+          <ConditionalPathProvider
+            conversationId={conversationId}
+            apiClient={pathApiClient}
+            onError={(err) => console.error('Path error:', err)}
+          >
+            <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
             <div className="flex items-center justify-between border-b bg-gradient-to-r from-muted/60 via-background to-muted/40 px-6 py-4">
               <h1 className="text-xl font-semibold tracking-tight">Regulatory Intelligence Copilot</h1>
               <Badge variant="outline" className="text-xs">Research only</Badge>
@@ -1092,7 +1027,10 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="ml-auto flex gap-1">
+              <div className="ml-auto flex items-center gap-2">
+                {conversationId && (
+                  <PathToolbar compact className="mr-2" />
+                )}
                 {quickPrompts.slice(0, 2).map(({ scenarioHint: promptScenarioHint, label }) => (
                   <Button
                     key={promptScenarioHint}
@@ -1288,6 +1226,7 @@ export default function Home() {
               </p>
             </div>
           </section>
+          </ConditionalPathProvider>
 
           <aside className="space-y-4">
             <Card className="border bg-card/90 shadow-lg backdrop-blur">
