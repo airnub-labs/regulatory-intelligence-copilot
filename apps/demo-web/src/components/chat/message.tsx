@@ -1,8 +1,9 @@
 import * as React from "react"
-import { Bot, ShieldCheck, User } from "lucide-react"
+import { Bot, GitBranch, Pencil, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { MessageVersionNav } from "./message-version-nav"
 
@@ -163,6 +164,11 @@ interface MessageProps {
   versionTimestamp?: Date
   onPreviousVersion?: () => void
   onNextVersion?: () => void
+  // Action props
+  messageId?: string
+  onEdit?: (messageId: string) => void
+  onBranch?: (messageId: string) => void
+  showActions?: boolean
 }
 
 export function Message({
@@ -179,9 +185,14 @@ export function Message({
   versionTimestamp,
   onPreviousVersion,
   onNextVersion,
+  messageId,
+  onEdit,
+  onBranch,
+  showActions = true,
 }: MessageProps) {
   const isUser = role === "user"
   const isDeleted = Boolean(deletedAt ?? metadata?.deletedAt)
+  const canShowActions = showActions && isUser && !isDeleted && messageId
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
 
@@ -239,6 +250,34 @@ export function Message({
                 tone={isUser ? "user" : "assistant"}
                 className={cn(isDeleted && "line-through opacity-70")}
               />
+              {canShowActions && (
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  {onEdit && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => onEdit(messageId!)}
+                      title="Edit message"
+                    >
+                      <Pencil className="mr-1 h-3 w-3" />
+                      Edit
+                    </Button>
+                  )}
+                  {onBranch && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => onBranch(messageId!)}
+                      title="Branch from here"
+                    >
+                      <GitBranch className="mr-1 h-3 w-3" />
+                      Branch
+                    </Button>
+                  )}
+                </div>
+              )}
               {isDeleted && (
                 <div className="text-[11px] font-medium text-muted-foreground">
                   Superseded {supersededBy ? `by message ${supersededBy.slice(0, 8)}…` : ''}

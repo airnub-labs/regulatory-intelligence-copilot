@@ -225,6 +225,7 @@ export class InMemoryConversationStore implements ConversationStore {
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
+    pathId?: string | null;
   }): Promise<{ messageId: string }> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
@@ -668,6 +669,7 @@ export class SupabaseConversationStore implements ConversationStore {
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
+    pathId?: string | null;
   }): Promise<{ messageId: string }> {
     return this.wrapMutation(
       {
@@ -685,8 +687,8 @@ export class SupabaseConversationStore implements ConversationStore {
           throw new Error('User not authorised for conversation');
         }
 
-        // Ensure the conversation has an active path
-        let pathId = conversation.activePathId;
+        // Use explicit pathId if provided, otherwise ensure conversation has an active path
+        let pathId = input.pathId ?? conversation.activePathId;
         if (!pathId) {
           // Create a primary path for the conversation
           const { data: pathData, error: pathError } = await this.internalClient
