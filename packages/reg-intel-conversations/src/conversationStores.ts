@@ -619,7 +619,41 @@ export class SupabaseConversationStore implements ConversationStore {
           throw new Error(`Failed to create conversation: ${error.message}`);
         }
 
-        return { conversationId: (data as { id: string }).id };
+        const conversationId = (data as { id: string }).id;
+
+        // Create primary path for the conversation
+        const { data: pathData, error: pathError } = await this.internalClient
+          .from('conversation_paths')
+          .insert({
+            conversation_id: conversationId,
+            tenant_id: input.tenantId,
+            name: 'Main',
+            is_primary: true,
+            is_active: true,
+            created_at: now,
+            updated_at: now,
+          })
+          .select('id')
+          .single();
+
+        if (pathError) {
+          throw new Error(`Failed to create primary path: ${pathError.message}`);
+        }
+
+        const pathId = (pathData as { id: string }).id;
+
+        // Update conversation with active_path_id
+        const { error: updateError } = await this.internalClient
+          .from('conversations')
+          .update({ active_path_id: pathId })
+          .eq('id', conversationId)
+          .eq('tenant_id', input.tenantId);
+
+        if (updateError) {
+          throw new Error(`Failed to set active path: ${updateError.message}`);
+        }
+
+        return { conversationId };
       }
     );
   }
