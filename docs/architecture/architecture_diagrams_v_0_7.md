@@ -297,6 +297,18 @@ sequenceDiagram
 
 ## Path Branching and Execution Contexts
 
+### What Gets Inherited on Branch
+
+When a user branches a conversation, it's important to understand what IS and IS NOT inherited:
+
+| Context Type | Inherited? | Details |
+|--------------|------------|---------|
+| **Message History** (up to branch point) | ✅ YES | Branch sees M1, M2, M3 |
+| **ConversationContext** (`activeNodeIds`) | ✅ YES | Copied at branch point |
+| **ExecutionContext** (E2B sandbox) | ❌ NO | Branch gets fresh sandbox on first `run_code` |
+
+**The branch continues the conversation as if it never branched** — same concepts, same history. Only the sandbox runtime state is isolated.
+
 ### Branch Creation Flow
 
 ```mermaid
@@ -305,7 +317,7 @@ sequenceDiagram
     participant UI as Chat UI
     participant API as /api/conversations/{id}/paths
     participant PathStore as ConversationPathStore
-    participant ExecStore as ExecutionContextStore
+    participant CtxStore as ConversationContextStore
 
     User->>UI: Click "Branch from here"<br/>on message M3
 
@@ -317,17 +329,19 @@ sequenceDiagram
 
     PathStore-->>API: {pathId: 'branch_001'}
 
-    Note over API: No ExecutionContext created yet<br/>(lazy creation on first tool call)
+    Note over API: ✅ Messages M1,M2,M3 inherited via path resolution<br/>✅ ConversationContext copied at branch point<br/>❌ No ExecutionContext (lazy on first run_code)
+
+    API->>CtxStore: Copy activeNodeIds to branch path
 
     API-->>UI: {path: {...}, branchPointMessage: {...}}
 
-    UI-->>User: Switch to new branch view
+    UI-->>User: Switch to new branch view<br/>(sees same concepts, same history)
 
     Note over User: User asks question in branch
 
     User->>UI: "What if I incorporate?"
 
-    Note over UI: Chat continues in branch_001<br/>On run_code call, new sandbox created
+    Note over UI: Chat continues in branch_001<br/>with inherited context<br/>New sandbox created only on run_code
 ```
 
 ### Message Edit Flow

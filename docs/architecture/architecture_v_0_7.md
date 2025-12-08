@@ -539,12 +539,47 @@ The chat flow in v0.7 must account for the active path:
 
 ### 5.2 Branching Behavior
 
-When a user branches from a message:
+When a user branches from a message, **conversation state is inherited but sandbox state is not**:
 
-1. **New path created** via `ConversationPathStore.branchFromMessage()`.
-2. **No execution context inherited** — the branch starts with no sandbox.
-3. **On first `run_code` call** in the branch, a new sandbox is created for that path.
-4. **Branch maintains isolation** — changes in branch sandbox don't affect parent path.
+#### What IS Inherited (Conversation Continuity)
+
+1. **Message history** up to the branch point — the branch sees messages M1, M2, M3.
+2. **ConversationContext** (`activeNodeIds`) — copied/snapshotted at branch point so the branch knows what concepts are in play.
+3. The branch **continues the conversation as if it never branched** from a knowledge perspective.
+
+#### What is NOT Inherited (Sandbox Isolation)
+
+1. **ExecutionContext** (E2B sandbox) — the branch starts with **no sandbox**.
+2. **On first `run_code` call** in the branch, a **new sandbox is lazily created** for that path.
+3. **Runtime state isolation** — variables, files, and state from parent's sandbox don't carry over.
+
+#### Rationale
+
+The distinction exists because:
+
+- **Conversation context** represents "what regulatory concepts are we discussing" — this should carry over so the branch can continue intelligently.
+- **Execution context** represents "what code has been run and what state exists" — this should NOT carry over because:
+  - The branch may want to explore different calculation paths.
+  - The parent's `total = 42000` shouldn't constrain the branch's exploration.
+  - Sandbox state can be large (loaded data, files) and expensive to clone.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Parent Path (Main)                                             │
+│  Messages: [M1, M2, M3, M4, M5]                                 │
+│  ConversationContext: {activeNodeIds: ["VAT", "CGT"]}           │
+│  ExecutionContext: {sandbox: sbx_001, state: {total: 42000}}    │
+└─────────────────────────────────────────────────────────────────┘
+                     │
+                     │ Branch at M3
+                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Branch Path                                                    │
+│  Messages: [M1, M2, M3] ← INHERITED                             │
+│  ConversationContext: {activeNodeIds: ["VAT", "CGT"]} ← COPIED  │
+│  ExecutionContext: null ← NOT INHERITED (lazy creation)        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ### 5.3 Message Editing Behavior
 
@@ -752,6 +787,18 @@ To keep scope sane, v0.7 explicitly does **not** attempt to:
 - ✅ **Per-path sandbox reuse** with TTL and resource limits.
 - ✅ **Egress Guard integration** for all sandbox egress.
 - ✅ **Prompt aspect** for code execution awareness.
+
+### Key Branching Behavior (Clarification)
+
+When a conversation branches:
+
+| What | Inherited? | Notes |
+|------|------------|-------|
+| **Message history** (up to branch point) | ✅ YES | Branch sees all prior messages |
+| **ConversationContext** (`activeNodeIds`) | ✅ YES | Copied at branch point |
+| **ExecutionContext** (E2B sandbox) | ❌ NO | Branch gets fresh sandbox when needed |
+
+**The branch continues the conversation as if it never branched** — only the sandbox runtime state is isolated so branches can explore different calculation paths independently.
 
 ### Carried Forward (Unchanged in Spirit)
 

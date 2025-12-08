@@ -32,7 +32,7 @@ To support LLM-driven code execution and analysis:
 2. **Lazy Creation**: Sandboxes should only be created when actually needed (first tool call).
 3. **Sandbox Reuse**: Subsequent tool calls on the same path should reuse the existing sandbox for continuity.
 4. **TTL-Based Lifecycle**: Sandboxes should expire after a period of inactivity to manage resources.
-5. **Branch Isolation**: When a user branches, the new path gets its own execution context (not inherited).
+5. **Branch Sandbox Isolation**: When a user branches, the new path gets its own execution context (sandbox NOT inherited, but ConversationContext IS inherited — see §6.2).
 6. **Edit Continuity**: When a user edits a message, the same path's execution context continues.
 7. **Egress Guard Integration**: All sandbox egress must flow through EgressGuard.
 
@@ -688,18 +688,40 @@ The execution context must respond to path lifecycle events:
 | **Path deleted** | Terminate context |
 | **Path archived** | Terminate context |
 
-### 6.2 Branch Isolation
+### 6.2 Branch Isolation (Sandbox Only)
 
-When a user branches from a message:
+**IMPORTANT**: When a user branches from a message, two different contexts behave differently:
+
+| Context Type | Inherited on Branch? | Reason |
+|--------------|---------------------|--------|
+| **ConversationContext** (`activeNodeIds`) | ✅ **YES** — copied at branch point | Branch needs to know what concepts were discussed |
+| **Message History** (up to branch point) | ✅ **YES** — inherited | Branch continues from that point |
+| **ExecutionContext** (E2B sandbox) | ❌ **NO** — not inherited | Sandbox runtime state should be isolated |
+
+The branch **continues the conversation as if it never branched** (same context, same history), but gets a **fresh sandbox** when it needs to run code.
+
+#### Rationale for Sandbox Isolation
+
+- The parent path may have run `let total = 42000;` in its sandbox.
+- The branch should be free to explore `let total = 35000;` without conflict.
+- Sandbox state (variables, loaded files, memory) can be large and expensive to clone.
+- Each branch represents a "what-if" exploration that may go in a completely different direction.
 
 ```ts
 // In ConversationPathStore.branchFromMessage()
 async branchFromMessage(input: BranchInput): Promise<BranchResult> {
-  // ... create new path ...
+  // 1. Create new path with parent reference
+  const newPath = await this.createPath({
+    parentPathId: sourceMessage.pathId,
+    branchPointMessageId: input.sourceMessageId,
+    // ...
+  });
 
-  // NOTE: No execution context is created here.
-  // The branch will get its own context lazily on first run_code call.
-  // This ensures branches are isolated from parent path's sandbox state.
+  // 2. ConversationContext is inherited via path resolution
+  //    (branch inherits activeNodeIds from parent at branch point)
+
+  // 3. ExecutionContext is NOT created or copied here
+  //    The branch will get its own sandbox lazily on first run_code call
 
   return result;
 }
