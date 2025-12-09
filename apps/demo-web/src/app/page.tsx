@@ -256,53 +256,15 @@ const normalizePersonaType = (value?: string | null): UserProfile['personaType']
   return DEFAULT_PERSONA
 }
 
+// Simplified message building - path system handles branching
+// Each path shows its own linear sequence of messages
 const buildVersionedMessages = (messages: ChatMessage[]): VersionedMessage[] => {
-  const messageMap = new Map(messages.map(message => [message.id, message]))
-  const predecessor = new Map<string, string>()
-
-  messages.forEach(message => {
-    const successorId = message.supersededBy ?? message.metadata?.supersededBy
-    if (successorId) {
-      predecessor.set(successorId, message.id)
-    }
-  })
-
-  const findLatest = (messageId: string): string => {
-    let current = messageId
-    let next = messageMap.get(current)?.supersededBy ?? messageMap.get(current)?.metadata?.supersededBy
-    while (next && messageMap.has(next)) {
-      current = next
-      next = messageMap.get(current)?.supersededBy ?? messageMap.get(current)?.metadata?.supersededBy
-    }
-    return current
-  }
-
-  const orderedLatestIds: string[] = []
-  const seenLatest = new Set<string>()
-  messages.forEach(message => {
-    const latestId = findLatest(message.id)
-    if (!seenLatest.has(latestId)) {
-      orderedLatestIds.push(latestId)
-      seenLatest.add(latestId)
-    }
-  })
-
-  const chains: VersionedMessage[] = orderedLatestIds.map(latestId => {
-    const versions: ChatMessage[] = []
-    let cursor: string | undefined = latestId
-
-    while (cursor) {
-      const current = messageMap.get(cursor)
-      if (current) {
-        versions.unshift(current)
-      }
-      cursor = predecessor.get(cursor)
-    }
-
-    return { latestId, versions }
-  })
-
-  return chains
+  // In path system, messages are already filtered by active path
+  // No need for supersededBy chains - just show messages as-is
+  return messages.map(message => ({
+    latestId: message.id,
+    versions: [message], // Single version - paths handle branching
+  }))
 }
 
 export default function Home() {
@@ -772,43 +734,21 @@ export default function Home() {
       return
     }
 
-    const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' }
-    const nowIso = new Date().toISOString()
-    const newUserMessageId = editingMessageId ? crypto.randomUUID() : undefined
-
-    setMessages(prev => {
-      if (!editingMessageId) {
-        return [
-          ...prev,
-          { id: crypto.randomUUID(), role: 'user', content: messageText },
-          assistantMessage,
-        ]
-      }
-
-      return [
-        ...prev.map(message =>
-          message.id === editingMessageId
-            ? {
-                ...message,
-                deletedAt: message.deletedAt ?? nowIso,
-                supersededBy: newUserMessageId,
-                metadata: {
-                  ...message.metadata,
-                  deletedAt: message.metadata?.deletedAt ?? nowIso,
-                  supersededBy: newUserMessageId,
-                },
-              }
-            : message
-        ),
-        { id: newUserMessageId ?? crypto.randomUUID(), role: 'user', content: messageText },
-        assistantMessage,
-      ]
-    })
-
-    if (!editingMessageId) {
-      setInput('')
+    // If editing a message, create a branch instead of using supersededBy
+    if (editingMessageId) {
+      await handleEditAsBranch(editingMessageId, messageText)
+      return
     }
-    setEditingContent('')
+
+    const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' }
+
+    setMessages(prev => [
+      ...prev,
+      { id: crypto.randomUUID(), role: 'user', content: messageText },
+      assistantMessage,
+    ])
+
+    setInput('')
     setIsLoading(true)
     setStreamingStage('analyzing')
     setChatMetadata(null)
@@ -831,7 +771,6 @@ export default function Home() {
           shareAudience,
           tenantAccess,
           title: conversationTitle,
-          replaceMessageId: editingMessageId,
           userId: (session?.user as { id?: string } | undefined)?.id,
         }),
         signal: controller.signal,
@@ -852,9 +791,103 @@ export default function Home() {
     } finally {
       setIsLoading(false)
       setScenarioHint(null)
+      loadConversations()
+    }
+  }
+
+  const handleEditAsBranch = async (messageId: string, newContent: string) => {
+    if (!conversationId) {
+      console.error('Cannot edit message: no conversation ID')
+      return
+    }
+
+    try {
+      setIsLoading(true)
       setEditingMessageId(null)
       setEditingContent('')
-      loadConversations()
+
+      // Find the message before the one being edited (branch point)
+      const editingIndex = messages.findIndex(m => m.id === messageId)
+      let branchPointMessageId = messageId
+
+      // If there's a previous message, branch from that instead
+      if (editingIndex > 0) {
+        branchPointMessageId = messages[editingIndex - 1].id
+      }
+
+      // Create branch from the previous message
+      const branchResponse = await fetch(`/api/conversations/${conversationId}/branch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          sourceMessageId: branchPointMessageId,
+          name: `Edit: ${newContent.slice(0, 30)}...`,
+          description: `Edited version of message`,
+        }),
+      })
+
+      if (!branchResponse.ok) {
+        throw new Error('Failed to create branch')
+      }
+
+      const { path: newPath } = await branchResponse.json()
+
+      // Now post the edited message to the new path
+      const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' }
+
+      // Optimistically add messages to UI
+      setMessages(prev => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'user', content: newContent },
+        assistantMessage,
+      ])
+
+      setStreamingStage('analyzing')
+      setChatMetadata(null)
+      setWarnings([])
+
+      abortControllerRef.current?.abort()
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+
+      // Post message to the new branch
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          conversationId: conversationId,
+          message: newContent,
+          profile,
+          scenarioHint,
+          shareAudience,
+          tenantAccess,
+          title: conversationTitle,
+          userId: (session?.user as { id?: string } | undefined)?.id,
+          pathId: newPath.id, // Post to the new branch
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`)
+      }
+
+      await streamChatResponse(response, assistantMessage.id)
+
+      // Reload conversation to switch to new path
+      setTimeout(() => {
+        loadConversation(conversationId)
+      }, 500)
+    } catch (error) {
+      console.error('Error creating branch for edit:', error)
+      alert('Failed to edit message: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+      setScenarioHint(null)
+      setEditingMessageId(null)
+      setEditingContent('')
     }
   }
 
@@ -1162,18 +1195,8 @@ export default function Home() {
               ) : (
                 <>
                   {versionedMessages.map(chain => {
-                    const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
-                    const currentMessage = chain.versions[currentIndex]
-                    const hasHistory = chain.versions.length > 1
-                    const goPrevious = () =>
-                      setActiveVersionIndex(prev => ({ ...prev, [chain.latestId]: Math.max(0, currentIndex - 1) }))
-                    const goNext = () =>
-                      setActiveVersionIndex(prev => ({
-                        ...prev,
-                        [chain.latestId]: Math.min(chain.versions.length - 1, currentIndex + 1),
-                      }))
-                    const isEditingChain = editingMessageId ? chain.versions.some(msg => msg.id === editingMessageId) : false
-                    const isEditingCurrent = isEditingChain && currentMessage.role === 'user'
+                    const currentMessage = chain.versions[0] // Path system - single version per message
+                    const isEditingCurrent = editingMessageId === currentMessage.id && currentMessage.role === 'user'
 
                     return (
                       <div key={chain.latestId} className="relative">
@@ -1209,14 +1232,6 @@ export default function Home() {
                             content={currentMessage.content}
                             disclaimer={currentMessage.disclaimer}
                             metadata={currentMessage.metadata}
-                            deletedAt={currentMessage.deletedAt}
-                            supersededBy={currentMessage.supersededBy}
-                            showVersionNav={hasHistory}
-                            currentVersionIndex={currentIndex}
-                            totalVersions={chain.versions.length}
-                            versionTimestamp={new Date()}
-                            onPreviousVersion={goPrevious}
-                            onNextVersion={goNext}
                             messageId={currentMessage.id}
                             onEdit={handleEdit}
                             onBranch={handleBranch}
