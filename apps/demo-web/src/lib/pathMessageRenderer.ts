@@ -1,14 +1,13 @@
 /**
  * Path-Based Message Rendering Utilities
  *
- * Replaces the legacy supersededBy pattern with proper path-based message resolution.
- * This enables showing complete conversation history for each path version.
+ * Utilities for working with path-aware messages in the conversation branching system.
  */
 
 import type { PathAwareMessage } from '@reg-copilot/reg-intel-conversations';
 
 /**
- * Chat message type (legacy format used by UI)
+ * Chat message type used by UI
  */
 export interface ChatMessage {
   id: string;
@@ -24,11 +23,7 @@ export interface ChatMessage {
     warnings?: string[];
     timelineSummary?: string;
     timelineFocus?: string;
-    deletedAt?: string;
-    supersededBy?: string;
   };
-  deletedAt?: string | null;
-  supersededBy?: string | null;
   // Path-aware fields
   pathId?: string;
   sequenceInPath?: number;
@@ -53,8 +48,6 @@ export function pathMessageToChatMessage(msg: PathAwareMessage): ChatMessage {
     role: msg.role as 'user' | 'assistant',
     content: msg.content,
     metadata: msg.metadata as ChatMessage['metadata'],
-    deletedAt: null, // Path system doesn't use soft deletes - messages are part of path history
-    supersededBy: null, // Not used in path system
     pathId: msg.pathId,
     sequenceInPath: msg.sequenceInPath,
     isBranchPoint: msg.isBranchPoint,
@@ -65,9 +58,9 @@ export function pathMessageToChatMessage(msg: PathAwareMessage): ChatMessage {
 /**
  * Build versioned messages from path-aware messages
  *
- * Unlike the legacy buildVersionedMessages which used supersededBy chains,
- * this groups messages by their position in the conversation flow, respecting
- * the path sequence order.
+ * Groups messages by their position in the conversation flow, respecting
+ * the path sequence order. In the path system, each message is its own version -
+ * branching is handled via separate paths, not message chains.
  *
  * @param messages - Array of PathAwareMessage from path store
  * @returns Array of VersionedMessage for UI rendering
@@ -79,65 +72,11 @@ export function buildPathVersionedMessages(messages: PathAwareMessage[]): Versio
   // Convert to chat message format
   const chatMessages = sortedMessages.map(pathMessageToChatMessage);
 
-  // Group into versioned chains - in path system, each message is its own "latest"
-  // since we don't use supersededBy pattern anymore
+  // Each message is its own version in the path system
   return chatMessages.map(msg => ({
     latestId: msg.id,
-    versions: [msg], // Single version per message in path system
+    versions: [msg],
   }));
-}
-
-/**
- * Legacy buildVersionedMessages for backwards compatibility
- * This is used when path data is not available
- */
-export function buildVersionedMessages(messages: ChatMessage[]): VersionedMessage[] {
-  const messageMap = new Map(messages.map(message => [message.id, message]));
-  const predecessor = new Map<string, string>();
-
-  messages.forEach(message => {
-    const successorId = message.supersededBy ?? message.metadata?.supersededBy;
-    if (successorId) {
-      predecessor.set(successorId, message.id);
-    }
-  });
-
-  const findLatest = (messageId: string): string => {
-    let current = messageId;
-    let next = messageMap.get(current)?.supersededBy ?? messageMap.get(current)?.metadata?.supersededBy;
-    while (next && messageMap.has(next)) {
-      current = next;
-      next = messageMap.get(current)?.supersededBy ?? messageMap.get(current)?.metadata?.supersededBy;
-    }
-    return current;
-  };
-
-  const orderedLatestIds: string[] = [];
-  const seenLatest = new Set<string>();
-  messages.forEach(message => {
-    const latestId = findLatest(message.id);
-    if (!seenLatest.has(latestId)) {
-      orderedLatestIds.push(latestId);
-      seenLatest.add(latestId);
-    }
-  });
-
-  const chains: VersionedMessage[] = orderedLatestIds.map(latestId => {
-    const versions: ChatMessage[] = [];
-    let cursor: string | undefined = latestId;
-
-    while (cursor) {
-      const current = messageMap.get(cursor);
-      if (current) {
-        versions.unshift(current);
-      }
-      cursor = predecessor.get(cursor);
-    }
-
-    return { latestId, versions };
-  });
-
-  return chains;
 }
 
 /**

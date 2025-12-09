@@ -66,9 +66,7 @@ interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   disclaimer?: string
-  metadata?: ChatMetadata & { deletedAt?: string; supersededBy?: string }
-  deletedAt?: string | null
-  supersededBy?: string | null
+  metadata?: ChatMetadata
   // Path-aware fields
   pathId?: string
   sequenceInPath?: number
@@ -123,9 +121,12 @@ interface ApiMessage {
   id?: string
   role: ChatMessage['role']
   content: string
-  metadata?: ChatMetadata & { deletedAt?: string; supersededBy?: string }
-  deletedAt?: string | null
-  supersededBy?: string | null
+  metadata?: ChatMetadata
+  // Path-aware fields
+  pathId?: string
+  sequenceInPath?: number
+  isBranchPoint?: boolean
+  branchedToPaths?: string[]
 }
 
 interface ConversationPayload {
@@ -378,9 +379,7 @@ export default function Home() {
         role: msg.role,
         content: msg.content,
         metadata: msg.metadata,
-        deletedAt: msg.deletedAt ?? msg.metadata?.deletedAt ?? null,
-        supersededBy: msg.supersededBy ?? msg.metadata?.supersededBy ?? null,
-        // Preserve path-aware fields if present
+        // Path-aware fields
         pathId: (msg as { pathId?: string }).pathId,
         sequenceInPath: (msg as { sequenceInPath?: number }).sequenceInPath,
         isBranchPoint: (msg as { isBranchPoint?: boolean }).isBranchPoint,
@@ -693,7 +692,7 @@ export default function Home() {
               setMessages(prev =>
                 prev.map(message => {
                   if (message.id === assistantMessageId) {
-                    const updatedMetadata: ChatMetadata & { deletedAt?: string; supersededBy?: string } = {
+                    const updatedMetadata: ChatMetadata = {
                       ...message.metadata,
                       warnings: warningList
                     }
@@ -923,7 +922,7 @@ export default function Home() {
       const chain = versionedMessages[i]
       const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
       const candidate = chain.versions[currentIndex]
-      if (candidate.role === 'user' && !candidate.deletedAt && !candidate.metadata?.deletedAt) {
+      if (candidate.role === 'user') {
         return candidate
       }
     }

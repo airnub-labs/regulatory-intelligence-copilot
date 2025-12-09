@@ -15,8 +15,6 @@ interface PathAwareMessageListProps {
     role: 'user' | 'assistant';
     content: string;
     metadata?: Record<string, unknown>;
-    deletedAt?: string | null;
-    supersededBy?: string | null;
     disclaimer?: string;
   }>;
   /** Whether messages are currently loading */
@@ -73,8 +71,6 @@ interface FallbackMessageListProps {
     role: 'user' | 'assistant';
     content: string;
     metadata?: Record<string, unknown>;
-    deletedAt?: string | null;
-    supersededBy?: string | null;
     disclaimer?: string;
   }>;
   isLoading: boolean;
@@ -84,19 +80,15 @@ interface FallbackMessageListProps {
 function FallbackMessageList({ messages, isLoading }: FallbackMessageListProps) {
   return (
     <>
-      {messages
-        .filter(msg => !msg.deletedAt)
-        .map(msg => (
-          <Message
-            key={msg.id}
-            role={msg.role}
-            content={msg.content}
-            disclaimer={msg.disclaimer}
-            metadata={msg.metadata as Parameters<typeof Message>[0]['metadata']}
-            deletedAt={msg.deletedAt}
-            supersededBy={msg.supersededBy}
-          />
-        ))}
+      {messages.map(msg => (
+        <Message
+          key={msg.id}
+          role={msg.role}
+          content={msg.content}
+          disclaimer={msg.disclaimer}
+          metadata={msg.metadata as Parameters<typeof Message>[0]['metadata']}
+        />
+      ))}
       {isLoading && <MessageLoading />}
     </>
   );

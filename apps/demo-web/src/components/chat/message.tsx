@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
-import { MessageVersionNav } from "./message-version-nav"
 
 type ListBuffer = {
   type: "ul" | "ol"
@@ -145,8 +144,6 @@ interface MessageMetadata {
   jurisdictions?: string[]
   uncertaintyLevel?: "low" | "medium" | "high"
   referencedNodes?: string[]
-  deletedAt?: string
-  supersededBy?: string
 }
 
 interface MessageProps {
@@ -155,15 +152,6 @@ interface MessageProps {
   className?: string
   metadata?: MessageMetadata
   disclaimer?: string
-  deletedAt?: string | null
-  supersededBy?: string | null
-  // Version navigation props
-  showVersionNav?: boolean
-  currentVersionIndex?: number
-  totalVersions?: number
-  versionTimestamp?: Date
-  onPreviousVersion?: () => void
-  onNextVersion?: () => void
   // Action props
   messageId?: string
   onEdit?: (messageId: string) => void
@@ -181,14 +169,6 @@ export function Message({
   className,
   metadata,
   disclaimer,
-  deletedAt,
-  supersededBy,
-  showVersionNav = false,
-  currentVersionIndex,
-  totalVersions,
-  versionTimestamp,
-  onPreviousVersion,
-  onNextVersion,
   messageId,
   onEdit,
   onBranch,
@@ -198,8 +178,7 @@ export function Message({
   onViewBranch,
 }: MessageProps) {
   const isUser = role === "user"
-  const isDeleted = Boolean(deletedAt ?? metadata?.deletedAt)
-  const canShowActions = showActions && isUser && !isDeleted && messageId
+  const canShowActions = showActions && isUser && messageId
   const hasBranches = isBranchPoint && branchedPaths.length > 0
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
@@ -209,7 +188,6 @@ export function Message({
       className={cn(
         "group flex w-full gap-3",
         isUser ? "justify-end" : "justify-start",
-        isDeleted && "opacity-75",
         className
       )}
     >
@@ -256,7 +234,6 @@ export function Message({
               <MessageContent
                 content={content}
                 tone={isUser ? "user" : "assistant"}
-                className={cn(isDeleted && "line-through opacity-70")}
               />
               {canShowActions && (
                 <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
@@ -306,11 +283,6 @@ export function Message({
                   </Button>
                 </div>
               )}
-              {isDeleted && (
-                <div className="text-[11px] font-medium text-muted-foreground">
-                  Superseded {supersededBy ? `by message ${supersededBy.slice(0, 8)}…` : ''}
-                </div>
-              )}
               {!isUser && disclaimer && (
                 <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
                   {disclaimer}
@@ -332,21 +304,6 @@ export function Message({
               <span className="rounded-full bg-background px-2 py-1 text-xs">Nodes: {nodesCount}</span>
             </div>
           )}
-          {showVersionNav &&
-            currentVersionIndex !== undefined &&
-            totalVersions !== undefined &&
-            versionTimestamp &&
-            onPreviousVersion &&
-            onNextVersion && (
-              <MessageVersionNav
-                currentIndex={currentVersionIndex}
-                totalVersions={totalVersions}
-                currentTimestamp={versionTimestamp}
-                onPrevious={onPreviousVersion}
-                onNext={onNextVersion}
-                isOriginal={currentVersionIndex === 0}
-              />
-            )}
         </div>
       </div>
       {isUser && (

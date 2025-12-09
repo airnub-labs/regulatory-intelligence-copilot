@@ -28,18 +28,25 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Get messages for the active path (or fall back to legacy messages)
-  let messages;
-  if (conversation.activePathId) {
-    // Use path-aware messages which include branch metadata
-    messages = await conversationPathStore.resolvePathMessages({
+  // Ensure conversation has a primary path
+  if (!conversation.activePathId) {
+    await conversationPathStore.ensurePrimaryPath({
       tenantId,
-      pathId: conversation.activePathId,
+      conversationId,
     });
-  } else {
-    // Fallback to legacy message fetching for conversations without paths
-    messages = await conversationStore.getMessages({ tenantId, conversationId, userId, limit: 100 });
+    // Reload conversation to get the activePathId
+    const refreshedConversation = await conversationStore.getConversation({ tenantId, conversationId, userId });
+    if (!refreshedConversation?.activePathId) {
+      return NextResponse.json({ error: 'Failed to initialize conversation path' }, { status: 500 });
+    }
+    conversation.activePathId = refreshedConversation.activePathId;
   }
+
+  // Get path-aware messages which include branch metadata
+  const messages = await conversationPathStore.resolvePathMessages({
+    tenantId,
+    pathId: conversation.activePathId,
+  });
 
   const contextState = await conversationContextStore.load({ tenantId, conversationId });
 
