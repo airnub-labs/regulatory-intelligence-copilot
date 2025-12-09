@@ -84,8 +84,8 @@ CREATE POLICY conversation_configs_select
     TO authenticated
     USING (
         config_level = 'global'
-        OR tenant_id = auth.jwt() ->> 'tenant_id'
-        OR (config_level = 'user' AND user_id::text = auth.uid()::text)
+        OR tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+        OR (config_level = 'user' AND user_id = auth.uid())
     );
 
 -- Policy: Authenticated users can update their own user-level configs
@@ -95,13 +95,13 @@ CREATE POLICY conversation_configs_update_user
     TO authenticated
     USING (
         config_level = 'user'
-        AND tenant_id::text = auth.jwt() ->> 'tenant_id'
-        AND user_id::text = auth.uid()::text
+        AND tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+        AND user_id = auth.uid()
     )
     WITH CHECK (
         config_level = 'user'
-        AND tenant_id::text = auth.jwt() ->> 'tenant_id'
-        AND user_id::text = auth.uid()::text
+        AND tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+        AND user_id = auth.uid()
     );
 
 -- Policy: Authenticated users can insert their own user-level configs
@@ -111,8 +111,8 @@ CREATE POLICY conversation_configs_insert_user
     TO authenticated
     WITH CHECK (
         config_level = 'user'
-        AND tenant_id::text = auth.jwt() ->> 'tenant_id'
-        AND user_id::text = auth.uid()::text
+        AND tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+        AND user_id = auth.uid()
     );
 
 -- Policy: Authenticated users can delete their own user-level configs
@@ -122,8 +122,8 @@ CREATE POLICY conversation_configs_delete_user
     TO authenticated
     USING (
         config_level = 'user'
-        AND tenant_id::text = auth.jwt() ->> 'tenant_id'
-        AND user_id::text = auth.uid()::text
+        AND tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+        AND user_id = auth.uid()
     );
 
 -- ========================================
