@@ -1,0 +1,421 @@
+/**
+ * Code Execution Tools for E2B Sandbox Integration
+ *
+ * Provides tools for executing code and running analyses in isolated E2B sandboxes.
+ * These tools are integrated with the execution context manager to ensure
+ * per-path sandbox isolation.
+ */
+
+import { z } from 'zod';
+
+// =============================================================================
+// E2B Sandbox Interface (Duck-typed to avoid hard dependency)
+// =============================================================================
+
+/**
+ * Minimal E2B Sandbox interface for code execution
+ * This allows us to work with E2B without a hard dependency on @e2b/code-interpreter
+ */
+export interface E2BSandbox {
+  sandboxId: string;
+  runCode(code: string, options?: { language?: string }): Promise<E2BExecutionResult>;
+  kill(): Promise<void>;
+}
+
+export interface E2BExecutionResult {
+  logs: {
+    stdout: string[];
+    stderr: string[];
+  };
+  results: unknown[];
+  exitCode?: number;
+  error?: unknown;
+}
+
+// =============================================================================
+// Tool Schemas
+// =============================================================================
+
+/**
+ * Schema for run_code tool
+ * Executes arbitrary code in the sandboxed environment
+ */
+export const runCodeToolSchema = z.object({
+  language: z
+    .enum(['python', 'javascript', 'typescript', 'bash', 'sh'])
+    .describe('Programming language for code execution'),
+  code: z
+    .string()
+    .min(1)
+    .describe('Code to execute in the sandbox'),
+  description: z
+    .string()
+    .optional()
+    .describe('Optional description of what this code does (for logging)'),
+  timeout: z
+    .number()
+    .min(1000)
+    .max(600000)
+    .optional()
+    .describe('Execution timeout in milliseconds (default: 60000, max: 600000)'),
+});
+
+export type RunCodeInput = z.infer<typeof runCodeToolSchema>;
+
+/**
+ * Schema for run_analysis tool
+ * Executes predefined or custom analysis code
+ */
+export const runAnalysisToolSchema = z.object({
+  analysisType: z
+    .enum(['tax_calculation', 'compliance_check', 'data_analysis', 'custom'])
+    .describe('Type of analysis to run'),
+  parameters: z
+    .record(z.unknown())
+    .describe('Analysis parameters (passed to analysis code as JSON)'),
+  code: z
+    .string()
+    .optional()
+    .describe('Optional custom code to run (required if analysisType is "custom")'),
+  outputFormat: z
+    .enum(['json', 'text', 'csv'])
+    .optional()
+    .describe('Expected output format (defaults to "json")'),
+});
+
+export type RunAnalysisInput = z.infer<typeof runAnalysisToolSchema>;
+
+// =============================================================================
+// Tool Result Types
+// =============================================================================
+
+export interface CodeExecutionResult {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  error?: string;
+  executionTimeMs?: number;
+  sandboxId?: string;
+}
+
+export interface AnalysisExecutionResult extends CodeExecutionResult {
+  result?: unknown;
+  parsedOutput?: unknown;
+}
+
+// =============================================================================
+// Tool Implementations
+// =============================================================================
+
+/**
+ * Execute code in E2B sandbox
+ */
+export async function executeCode(
+  input: RunCodeInput,
+  sandbox: E2BSandbox,
+  logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void }
+): Promise<CodeExecutionResult> {
+  const startTime = Date.now();
+
+  try {
+    logger?.info?.('[executeCode] Starting code execution', {
+      language: input.language,
+      sandboxId: sandbox.sandboxId,
+      description: input.description,
+    });
+
+    const result = await sandbox.runCode(input.code, {
+      language: input.language,
+    });
+
+    const executionTimeMs = Date.now() - startTime;
+    const stdout = result.logs.stdout.join('\n');
+    const stderr = result.logs.stderr.join('\n');
+    const exitCode = result.exitCode ?? 0;
+    const success = exitCode === 0 && !result.error;
+
+    logger?.info?.('[executeCode] Code execution completed', {
+      sandboxId: sandbox.sandboxId,
+      exitCode,
+      success,
+      executionTimeMs,
+      stdoutLength: stdout.length,
+      stderrLength: stderr.length,
+    });
+
+    return {
+      success,
+      stdout,
+      stderr,
+      exitCode,
+      error: result.error ? String(result.error) : undefined,
+      executionTimeMs,
+      sandboxId: sandbox.sandboxId,
+    };
+  } catch (error) {
+    const executionTimeMs = Date.now() - startTime;
+
+    logger?.error?.('[executeCode] Code execution failed', {
+      sandboxId: sandbox.sandboxId,
+      error: error instanceof Error ? error.message : String(error),
+      executionTimeMs,
+    });
+
+    return {
+      success: false,
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+      error: error instanceof Error ? error.message : String(error),
+      executionTimeMs,
+      sandboxId: sandbox.sandboxId,
+    };
+  }
+}
+
+/**
+ * Execute analysis in E2B sandbox
+ */
+export async function executeAnalysis(
+  input: RunAnalysisInput,
+  sandbox: E2BSandbox,
+  logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void }
+): Promise<AnalysisExecutionResult> {
+  const startTime = Date.now();
+  const outputFormat = input.outputFormat ?? 'json'; // Default to JSON
+
+  try {
+    logger?.info?.('[executeAnalysis] Starting analysis execution', {
+      analysisType: input.analysisType,
+      sandboxId: sandbox.sandboxId,
+      hasCustomCode: !!input.code,
+    });
+
+    // Generate or use provided code
+    const code = input.code ?? generateAnalysisCode(input.analysisType, input.parameters, outputFormat);
+
+    if (!code) {
+      throw new Error(`No code provided and no template available for analysis type: ${input.analysisType}`);
+    }
+
+    // Execute with Python (default for analyses)
+    const result = await sandbox.runCode(code, { language: 'python' });
+
+    const executionTimeMs = Date.now() - startTime;
+    const stdout = result.logs.stdout.join('\n');
+    const stderr = result.logs.stderr.join('\n');
+    const exitCode = result.exitCode ?? 0;
+    const success = exitCode === 0 && !result.error;
+
+    // Parse output if JSON format expected
+    let parsedOutput: unknown;
+    if (outputFormat === 'json' && stdout) {
+      try {
+        parsedOutput = JSON.parse(stdout);
+      } catch (parseError) {
+        logger?.error?.('[executeAnalysis] Failed to parse JSON output', {
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        });
+      }
+    }
+
+    logger?.info?.('[executeAnalysis] Analysis execution completed', {
+      sandboxId: sandbox.sandboxId,
+      exitCode,
+      success,
+      executionTimeMs,
+      hasResults: !!result.results?.length,
+      hasParsedOutput: !!parsedOutput,
+    });
+
+    return {
+      success,
+      stdout,
+      stderr,
+      exitCode,
+      error: result.error ? String(result.error) : undefined,
+      executionTimeMs,
+      sandboxId: sandbox.sandboxId,
+      result: result.results,
+      parsedOutput,
+    };
+  } catch (error) {
+    const executionTimeMs = Date.now() - startTime;
+
+    logger?.error?.('[executeAnalysis] Analysis execution failed', {
+      sandboxId: sandbox.sandboxId,
+      analysisType: input.analysisType,
+      error: error instanceof Error ? error.message : String(error),
+      executionTimeMs,
+    });
+
+    return {
+      success: false,
+      stdout: '',
+      stderr: '',
+      exitCode: 1,
+      error: error instanceof Error ? error.message : String(error),
+      executionTimeMs,
+      sandboxId: sandbox.sandboxId,
+    };
+  }
+}
+
+/**
+ * Generate analysis code based on type
+ * This provides templates for common analysis patterns
+ */
+function generateAnalysisCode(
+  type: string,
+  params: Record<string, unknown>,
+  outputFormat: 'json' | 'text' | 'csv'
+): string | null {
+  const paramsJson = JSON.stringify(params, null, 2);
+
+  switch (type) {
+    case 'tax_calculation':
+      return `
+import json
+import sys
+
+params = ${paramsJson}
+
+def calculate_tax(parameters):
+    """
+    Calculate tax based on provided parameters.
+    Expected parameters:
+      - income: Total income amount
+      - jurisdiction: Tax jurisdiction code
+      - deductions: List of deduction amounts
+    """
+    income = parameters.get('income', 0)
+    jurisdiction = parameters.get('jurisdiction', 'US')
+    deductions = parameters.get('deductions', [])
+
+    # Simple progressive tax calculation (example)
+    total_deductions = sum(deductions)
+    taxable_income = max(0, income - total_deductions)
+
+    # Progressive brackets (simplified example)
+    if taxable_income <= 10000:
+        tax = taxable_income * 0.10
+    elif taxable_income <= 50000:
+        tax = 1000 + (taxable_income - 10000) * 0.15
+    else:
+        tax = 7000 + (taxable_income - 50000) * 0.25
+
+    return {
+        'jurisdiction': jurisdiction,
+        'income': income,
+        'total_deductions': total_deductions,
+        'taxable_income': taxable_income,
+        'tax_owed': tax,
+        'effective_rate': (tax / income * 100) if income > 0 else 0
+    }
+
+try:
+    result = calculate_tax(params)
+    ${outputFormat === 'json' ? "print(json.dumps(result, indent=2))" : "print(result)"}
+except Exception as e:
+    print(f"Error: {str(e)}", file=sys.stderr)
+    sys.exit(1)
+`;
+
+    case 'compliance_check':
+      return `
+import json
+import sys
+
+params = ${paramsJson}
+
+def check_compliance(parameters):
+    """
+    Perform compliance check based on parameters.
+    Expected parameters:
+      - jurisdiction: Regulatory jurisdiction
+      - entity_type: Type of entity (corporation, llc, etc)
+      - requirements: List of requirement IDs to check
+    """
+    jurisdiction = parameters.get('jurisdiction', 'US')
+    entity_type = parameters.get('entity_type', 'corporation')
+    requirements = parameters.get('requirements', [])
+
+    # Mock compliance check (replace with actual logic)
+    results = []
+    for req_id in requirements:
+        results.append({
+            'requirement_id': req_id,
+            'status': 'compliant',  # or 'non_compliant', 'pending'
+            'notes': f'Check passed for {req_id}'
+        })
+
+    return {
+        'jurisdiction': jurisdiction,
+        'entity_type': entity_type,
+        'total_requirements': len(requirements),
+        'compliant_count': len([r for r in results if r['status'] == 'compliant']),
+        'results': results
+    }
+
+try:
+    result = check_compliance(params)
+    ${outputFormat === 'json' ? "print(json.dumps(result, indent=2))" : "print(result)"}
+except Exception as e:
+    print(f"Error: {str(e)}", file=sys.stderr)
+    sys.exit(1)
+`;
+
+    case 'data_analysis':
+      return `
+import json
+import sys
+
+params = ${paramsJson}
+
+def analyze_data(parameters):
+    """
+    Perform data analysis based on parameters.
+    Expected parameters:
+      - dataset: Data to analyze (array of objects)
+      - analysis_type: Type of analysis (summary, statistics, etc)
+    """
+    dataset = parameters.get('dataset', [])
+    analysis_type = parameters.get('analysis_type', 'summary')
+
+    if not dataset:
+        return {'error': 'No dataset provided'}
+
+    # Basic statistical analysis
+    if isinstance(dataset[0], (int, float)):
+        values = dataset
+    elif isinstance(dataset[0], dict) and 'value' in dataset[0]:
+        values = [item['value'] for item in dataset if 'value' in item]
+    else:
+        return {'error': 'Unsupported dataset format'}
+
+    return {
+        'analysis_type': analysis_type,
+        'count': len(values),
+        'min': min(values) if values else None,
+        'max': max(values) if values else None,
+        'mean': sum(values) / len(values) if values else None,
+        'sum': sum(values) if values else None,
+    }
+
+try:
+    result = analyze_data(params)
+    ${outputFormat === 'json' ? "print(json.dumps(result, indent=2))" : "print(result)"}
+except Exception as e:
+    print(f"Error: {str(e)}", file=sys.stderr)
+    sys.exit(1)
+`;
+
+    case 'custom':
+      // Custom analysis requires code to be provided
+      return null;
+
+    default:
+      return null;
+  }
+}

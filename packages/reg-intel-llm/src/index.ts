@@ -81,3 +81,25 @@ export type {
   LlmError,
   ComplianceError,
 } from './errors.js';
+
+// Code Execution Tools
+export {
+  executeCode,
+  executeAnalysis,
+  runCodeToolSchema,
+  runAnalysisToolSchema,
+  type E2BSandbox,
+  type E2BExecutionResult,
+  type RunCodeInput,
+  type RunAnalysisInput,
+  type CodeExecutionResult,
+  type AnalysisExecutionResult,
+} from './tools/codeExecutionTools.js';
+
+// Tool Registry
+export {
+  ToolRegistry,
+  createToolRegistry,
+  type ToolRegistryConfig,
+  type RegisteredTool,
+} from './tools/toolRegistry.js';
