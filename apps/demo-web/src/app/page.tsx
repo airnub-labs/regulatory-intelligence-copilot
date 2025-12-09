@@ -23,6 +23,7 @@ import { Message, MessageLoading } from '@/components/chat/message'
 import { PathToolbar } from '@/components/chat/path-toolbar'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
+import { getBranchMetadata } from '@/lib/pathMessageRenderer'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
 import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
@@ -917,6 +918,14 @@ export default function Home() {
     setBranchFromMessageId(null)
   }
 
+  const handleViewBranch = (pathId: string) => {
+    // Open the branch in a new window/tab with the pathId parameter
+    if (conversationId) {
+      const url = `/?conversationId=${conversationId}&pathId=${pathId}`
+      window.open(url, '_blank')
+    }
+  }
+
   const updateShareSettings = async (value: ShareOptionValue) => {
     if (!conversationIdRef.current) return
     if (!isAuthenticated) return
@@ -1212,6 +1221,9 @@ export default function Home() {
                             onEdit={handleEdit}
                             onBranch={handleBranch}
                             showActions={true}
+                            isBranchPoint={getBranchMetadata(currentMessage).isBranchPoint}
+                            branchedPaths={getBranchMetadata(currentMessage).branchIds}
+                            onViewBranch={handleViewBranch}
                           />
                         )}
                       </div>
