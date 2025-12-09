@@ -339,6 +339,7 @@ export default function Home() {
   const pathApiClient = useMemo(() => getPathApiClient(), [])
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null)
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
@@ -883,6 +884,12 @@ export default function Home() {
     setEditingMessageId(lastMessage.id)
     setEditingContent(lastMessage.content)
     setInput('')
+
+    // Auto-scroll to editing textarea and focus it
+    setTimeout(() => {
+      editTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      editTextareaRef.current?.focus()
+    }, 100)
   }
 
   const cancelEditing = () => {
@@ -1170,6 +1177,7 @@ export default function Home() {
                               Edit message
                             </Label>
                             <textarea
+                              ref={editTextareaRef}
                               id={`edit-${chain.latestId}`}
                               value={editingContent}
                               onChange={event => setEditingContent(event.target.value)}
@@ -1252,6 +1260,16 @@ export default function Home() {
               </p>
             </div>
           </section>
+
+          {/* Branch Dialog - must be inside provider to use useConversationPaths */}
+          {branchFromMessageId && (
+            <BranchDialog
+              open={branchDialogOpen}
+              onOpenChange={setBranchDialogOpen}
+              messageId={branchFromMessageId}
+              onBranchCreated={handleBranchCreated}
+            />
+          )}
           </ConditionalPathProvider>
 
           <aside className="space-y-4">
@@ -1422,15 +1440,6 @@ export default function Home() {
           </aside>
         </div>
       </main>
-
-      {branchFromMessageId && (
-        <BranchDialog
-          open={branchDialogOpen}
-          onOpenChange={setBranchDialogOpen}
-          messageId={branchFromMessageId}
-          onBranchCreated={handleBranchCreated}
-        />
-      )}
     </div>
   )
 }
