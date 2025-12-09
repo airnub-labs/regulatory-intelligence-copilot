@@ -785,50 +785,21 @@ export default function Home() {
         ]
       }
 
-      // Find the index of the message being edited
-      const editingIndex = prev.findIndex(m => m.id === editingMessageId)
-
-      // Find the next assistant message after the edited user message (if any)
-      let nextAssistantIndex = -1
-      if (editingIndex >= 0) {
-        for (let i = editingIndex + 1; i < prev.length; i++) {
-          if (prev[i].role === 'assistant') {
-            nextAssistantIndex = i
-            break
-          }
-        }
-      }
-
       return [
-        ...prev.map((message, idx) => {
-          // Mark the edited user message as superseded
-          if (message.id === editingMessageId) {
-            return {
-              ...message,
-              deletedAt: message.deletedAt ?? nowIso,
-              supersededBy: newUserMessageId,
-              metadata: {
-                ...message.metadata,
-                deletedAt: message.metadata?.deletedAt ?? nowIso,
+        ...prev.map(message =>
+          message.id === editingMessageId
+            ? {
+                ...message,
+                deletedAt: message.deletedAt ?? nowIso,
                 supersededBy: newUserMessageId,
-              },
-            }
-          }
-          // Also mark the next assistant message as superseded (it will be replaced)
-          if (idx === nextAssistantIndex) {
-            return {
-              ...message,
-              deletedAt: message.deletedAt ?? nowIso,
-              supersededBy: assistantMessage.id, // Link to new assistant message
-              metadata: {
-                ...message.metadata,
-                deletedAt: message.metadata?.deletedAt ?? nowIso,
-                supersededBy: assistantMessage.id,
-              },
-            }
-          }
-          return message
-        }),
+                metadata: {
+                  ...message.metadata,
+                  deletedAt: message.metadata?.deletedAt ?? nowIso,
+                  supersededBy: newUserMessageId,
+                },
+              }
+            : message
+        ),
         { id: newUserMessageId ?? crypto.randomUUID(), role: 'user', content: messageText },
         assistantMessage,
       ]
