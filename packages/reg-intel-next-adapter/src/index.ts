@@ -24,6 +24,10 @@ import type {
   LlmRouter,
   LlmCompletionOptions,
 } from '@reg-copilot/reg-intel-llm';
+import {
+  ToolRegistry,
+  type E2BSandbox,
+} from '@reg-copilot/reg-intel-llm';
 import type { ConversationContextStore } from '@reg-copilot/reg-intel-core';
 import {
   ConversationEventHub,
@@ -43,6 +47,11 @@ import {
   type ConversationStore,
   type ShareAudience,
   type TenantAccess,
+  ExecutionContextManager,
+  InMemoryExecutionContextStore,
+  SupabaseExecutionContextStore,
+  type ExecutionContextStore,
+  type E2BClient,
 } from '@reg-copilot/reg-intel-conversations';
 import { createClient } from '@supabase/supabase-js';
 import neo4j, { type Driver } from 'neo4j-driver';
@@ -58,6 +67,7 @@ export interface ChatRouteHandlerOptions {
   conversationContextStore?: ConversationContextStore;
   eventHub?: ConversationEventHub;
   conversationListEventHub?: ConversationListEventHub;
+  executionContextManager?: ExecutionContextManager;
 }
 
 /**
@@ -637,6 +647,41 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return new Response('Conversation not found or access denied', { status: 404 });
       }
 
+      // Get or create execution context for this path (if ExecutionContextManager configured)
+      let toolRegistry: ToolRegistry | undefined;
+
+      if (options?.executionContextManager && conversationRecord.activePathId) {
+        try {
+          const contextResult = await options.executionContextManager.getOrCreateContext({
+            tenantId,
+            conversationId,
+            pathId: conversationRecord.activePathId,
+          });
+
+          // Cast sandbox to llm package's E2BSandbox type for compatibility
+          const sandbox = contextResult.sandbox as unknown as E2BSandbox;
+
+          // Create tool registry with the sandbox
+          toolRegistry = new ToolRegistry({
+            sandbox,
+            logger: {
+              info: (msg: string, meta?: unknown) => console.info(`[ToolRegistry] ${msg}`, meta),
+              error: (msg: string, meta?: unknown) => console.error(`[ToolRegistry] ${msg}`, meta),
+            },
+          });
+
+          console.info('[ChatHandler] Execution context ready', {
+            pathId: conversationRecord.activePathId,
+            sandboxId: sandbox.sandboxId,
+            wasCreated: contextResult.wasCreated,
+            toolsRegistered: toolRegistry.getToolNames(),
+          });
+        } catch (error) {
+          console.error('[ChatHandler] Failed to setup execution context', error);
+          // Continue without code execution tools if setup fails
+        }
+      }
+
       const existingMessages = await conversationStore.getMessages({
         tenantId,
         conversationId,
@@ -913,3 +958,15 @@ export {
   type AuthorizationModel,
   type AuthorizationSpec,
 };
+
+// Execution Context Helpers
+export {
+  createExecutionContextManager,
+  initializeExecutionContextManager,
+  getExecutionContextManager,
+  getExecutionContextManagerSafe,
+  isExecutionContextManagerInitialized,
+  shutdownExecutionContextManager,
+  E2BSandboxClient,
+  type ExecutionContextConfig,
+} from './executionContext.js';
