@@ -7,6 +7,7 @@ import {
   conversationContextStore,
   conversationStore,
   conversationListEventHub,
+  conversationPathStore,
 } from '@/lib/server/conversations';
 import { toClientConversation } from '@/lib/server/conversationPresenter';
 
@@ -27,7 +28,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const messages = await conversationStore.getMessages({ tenantId, conversationId, userId, limit: 100 });
+  // Get messages for the active path (or fall back to legacy messages)
+  let messages;
+  if (conversation.activePathId) {
+    // Use path-aware messages which include branch metadata
+    messages = await conversationPathStore.resolvePathMessages({
+      tenantId,
+      pathId: conversation.activePathId,
+    });
+  } else {
+    // Fallback to legacy message fetching for conversations without paths
+    messages = await conversationStore.getMessages({ tenantId, conversationId, userId, limit: 100 });
+  }
+
   const contextState = await conversationContextStore.load({ tenantId, conversationId });
 
   return NextResponse.json({

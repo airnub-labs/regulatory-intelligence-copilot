@@ -16,6 +16,7 @@ import {
   conversationEventHub,
   conversationListEventHub,
   conversationStore,
+  executionContextManager,
 } from '@/lib/server/conversations';
 
 // Force dynamic rendering to avoid build-time initialization
@@ -26,6 +27,7 @@ const handler = createChatRouteHandler({
   conversationContextStore,
   eventHub: conversationEventHub,
   conversationListEventHub,
+  executionContextManager,
 });
 
 const headerSetter = {

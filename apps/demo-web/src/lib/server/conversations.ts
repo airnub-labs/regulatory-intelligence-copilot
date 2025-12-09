@@ -13,6 +13,7 @@ import {
 import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
+import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
 const normalizeConversationStoreMode = (
   process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
@@ -110,3 +111,23 @@ export const conversationPathStore = supabaseClient
 
 export const conversationEventHub = new ConversationEventHub();
 export const conversationListEventHub = new ConversationListEventHub();
+
+// Create ExecutionContextManager if E2B is configured
+// This enables code execution tools in the chat
+const e2bApiKey = process.env.E2B_API_KEY;
+export const executionContextManager = e2bApiKey
+  ? createExecutionContextManager({
+      mode: normalizeConversationStoreMode === 'memory' ? 'memory' : 'supabase',
+      supabaseClient: supabaseClient ?? undefined,
+      e2bApiKey,
+      defaultTtlMinutes: 30,
+      sandboxTimeoutMs: 600000, // 10 minutes
+      enableLogging: true,
+    })
+  : undefined;
+
+if (executionContextManager) {
+  console.info('[execution-context] ExecutionContextManager initialized with E2B integration');
+} else {
+  console.info('[execution-context] E2B_API_KEY not configured; code execution tools disabled');
+}

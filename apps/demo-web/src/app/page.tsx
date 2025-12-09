@@ -69,6 +69,11 @@ interface ChatMessage {
   metadata?: ChatMetadata & { deletedAt?: string; supersededBy?: string }
   deletedAt?: string | null
   supersededBy?: string | null
+  // Path-aware fields
+  pathId?: string
+  sequenceInPath?: number
+  isBranchPoint?: boolean
+  branchedToPaths?: string[]
 }
 
 interface VersionedMessage {
@@ -375,6 +380,11 @@ export default function Home() {
         metadata: msg.metadata,
         deletedAt: msg.deletedAt ?? msg.metadata?.deletedAt ?? null,
         supersededBy: msg.supersededBy ?? msg.metadata?.supersededBy ?? null,
+        // Preserve path-aware fields if present
+        pathId: (msg as { pathId?: string }).pathId,
+        sequenceInPath: (msg as { sequenceInPath?: number }).sequenceInPath,
+        isBranchPoint: (msg as { isBranchPoint?: boolean }).isBranchPoint,
+        branchedToPaths: (msg as { branchedToPaths?: string[] }).branchedToPaths,
       }))
       setMessages(loadedMessages)
       setConversationId(id)
@@ -876,7 +886,15 @@ export default function Home() {
 
       await streamChatResponse(response, assistantMessage.id)
 
-      // Reload conversation to switch to new path
+      // Set the new branch as the active path
+      await fetch(`/api/conversations/${conversationId}/active-path`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pathId: newPath.id }),
+      })
+
+      // Reload conversation to show new path's messages
       setTimeout(() => {
         loadConversation(conversationId)
       }, 500)
