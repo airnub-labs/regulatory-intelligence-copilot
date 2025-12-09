@@ -169,6 +169,10 @@ interface MessageProps {
   onEdit?: (messageId: string) => void
   onBranch?: (messageId: string) => void
   showActions?: boolean
+  // Branch indicator props
+  isBranchPoint?: boolean
+  branchedPaths?: string[]
+  onViewBranch?: (pathId: string) => void
 }
 
 export function Message({
@@ -189,10 +193,14 @@ export function Message({
   onEdit,
   onBranch,
   showActions = true,
+  isBranchPoint = false,
+  branchedPaths = [],
+  onViewBranch,
 }: MessageProps) {
   const isUser = role === "user"
   const isDeleted = Boolean(deletedAt ?? metadata?.deletedAt)
   const canShowActions = showActions && isUser && !isDeleted && messageId
+  const hasBranches = isBranchPoint && branchedPaths.length > 0
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
 
@@ -276,6 +284,26 @@ export function Message({
                       Branch
                     </Button>
                   )}
+                </div>
+              )}
+              {hasBranches && onViewBranch && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  <GitBranch className="h-3 w-3" />
+                  <span>This message has {branchedPaths.length} branch{branchedPaths.length > 1 ? 'es' : ''}</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => onViewBranch(branchedPaths[0])}
+                    title="View branch"
+                  >
+                    View
+                    {branchedPaths.length > 1 && (
+                      <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                        +{branchedPaths.length - 1}
+                      </Badge>
+                    )}
+                  </Button>
                 </div>
               )}
               {isDeleted && (

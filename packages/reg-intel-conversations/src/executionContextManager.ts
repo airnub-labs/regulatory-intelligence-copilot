@@ -16,6 +16,7 @@
  * - docs/architecture/execution-context/spec_v_0_1.md
  */
 
+import { withSpan } from '@reg-copilot/reg-intel-observability';
 import type {
   ExecutionContextStore,
   ExecutionContext,
@@ -141,14 +142,22 @@ export class ExecutionContextManager {
    * - Always extends TTL on access
    */
   async getOrCreateContext(input: GetOrCreateContextInput): Promise<GetOrCreateContextResult> {
-    this.config.logger?.info('[ExecutionContextManager] Getting or creating context', {
-      tenantId: input.tenantId,
-      conversationId: input.conversationId,
-      pathId: input.pathId,
-    });
+    return withSpan(
+      'execution_context.get_or_create',
+      {
+        'execution_context.tenant_id': input.tenantId,
+        'execution_context.conversation_id': input.conversationId,
+        'execution_context.path_id': input.pathId,
+      },
+      async () => {
+        this.config.logger?.info('[ExecutionContextManager] Getting or creating context', {
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          pathId: input.pathId,
+        });
 
-    // Try to get existing context
-    let context = await this.config.store.getContextByPath(input);
+        // Try to get existing context
+        let context = await this.config.store.getContextByPath(input);
 
     // If context was terminated, treat as non-existent
     if (context && context.terminatedAt) {
@@ -233,18 +242,20 @@ export class ExecutionContextManager {
     // Cache sandbox
     this.activeSandboxes.set(newContext.id, sandbox);
 
-    this.config.logger?.info('[ExecutionContextManager] Created new context', {
-      contextId: newContext.id,
-      pathId: input.pathId,
-      sandboxId: sandbox.sandboxId,
-      ttlMinutes: this.defaultTtl,
-    });
+        this.config.logger?.info('[ExecutionContextManager] Created new context', {
+          contextId: newContext.id,
+          pathId: input.pathId,
+          sandboxId: sandbox.sandboxId,
+          ttlMinutes: this.defaultTtl,
+        });
 
-    return {
-      context: newContext,
-      sandbox,
-      wasCreated: true,
-    };
+        return {
+          context: newContext,
+          sandbox,
+          wasCreated: true,
+        };
+      }
+    );
   }
 
   /**
