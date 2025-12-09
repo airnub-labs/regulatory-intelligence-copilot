@@ -904,39 +904,10 @@ export default function Home() {
     setBranchDialogOpen(true)
   }
 
-  const handleBranchCreate = async (name?: string) => {
-    if (!branchFromMessageId || !conversationId) {
-      setBranchDialogOpen(false)
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/conversations/${conversationId}/branch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          sourceMessageId: branchFromMessageId,
-          name,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Branch creation failed with status ${response.status}`)
-      }
-
-      const result = await response.json()
-      console.log('Branch created:', result)
-
-      // Optionally switch to the new path or reload conversation
-      // For now, just close the dialog
-      setBranchDialogOpen(false)
-      setBranchFromMessageId(null)
-    } catch (error) {
-      console.error('Failed to create branch:', error)
-      setBranchDialogOpen(false)
-      setBranchFromMessageId(null)
-    }
+  const handleBranchCreated = () => {
+    // Close the dialog and reset state after successful branch creation
+    setBranchDialogOpen(false)
+    setBranchFromMessageId(null)
   }
 
   const updateShareSettings = async (value: ShareOptionValue) => {
@@ -1452,12 +1423,14 @@ export default function Home() {
         </div>
       </main>
 
-      <BranchDialog
-        open={branchDialogOpen}
-        onOpenChange={setBranchDialogOpen}
-        messageId={branchFromMessageId}
-        onBranch={handleBranchCreate}
-      />
+      {branchFromMessageId && (
+        <BranchDialog
+          open={branchDialogOpen}
+          onOpenChange={setBranchDialogOpen}
+          messageId={branchFromMessageId}
+          onBranchCreated={handleBranchCreated}
+        />
+      )}
     </div>
   )
 }
