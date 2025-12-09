@@ -842,16 +842,15 @@ export default function Home() {
 
       const { path: newPath } = await branchResponse.json()
 
-      // Now post the edited message to the new path
-      const assistantMessage: ChatMessage = { id: crypto.randomUUID(), role: 'assistant', content: '' }
+      // Set the new branch as the active path immediately
+      await fetch(`/api/conversations/${conversationId}/active-path`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ pathId: newPath.id }),
+      })
 
-      // Optimistically add messages to UI
-      setMessages(prev => [
-        ...prev,
-        { id: crypto.randomUUID(), role: 'user', content: newContent },
-        assistantMessage,
-      ])
-
+      // Set loading state for editing
       setStreamingStage('analyzing')
       setChatMetadata(null)
       setWarnings([])
@@ -860,7 +859,20 @@ export default function Home() {
       const controller = new AbortController()
       abortControllerRef.current = controller
 
-      // Post message to the new branch
+      // Create assistant message placeholder for streaming
+      const assistantMessageId = crypto.randomUUID()
+
+      // Reload conversation to get messages from new path, then add placeholders for streaming
+      await loadConversation(conversationId)
+
+      // Now add user message and assistant placeholder at the end
+      setMessages(prev => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'user', content: newContent },
+        { id: assistantMessageId, role: 'assistant', content: '' },
+      ])
+
+      // Post edited message to the new branch
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -883,20 +895,13 @@ export default function Home() {
         throw new Error(`Request failed with status ${response.status}`)
       }
 
-      await streamChatResponse(response, assistantMessage.id)
+      // Stream the response into the placeholder message
+      await streamChatResponse(response, assistantMessageId)
 
-      // Set the new branch as the active path
-      await fetch(`/api/conversations/${conversationId}/active-path`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ pathId: newPath.id }),
-      })
-
-      // Reload conversation to show new path's messages
+      // Final reload to get the actual messages from the server
       setTimeout(() => {
         loadConversation(conversationId)
-      }, 500)
+      }, 100)
     } catch (error) {
       console.error('Error creating branch for edit:', error)
       alert('Failed to edit message: ' + (error instanceof Error ? error.message : 'Unknown error'))
@@ -1117,7 +1122,16 @@ export default function Home() {
 
               <div className="ml-auto flex items-center gap-2">
                 {conversationId && (
-                  <PathToolbar compact className="mr-2" />
+                  <PathToolbar
+                    compact
+                    className="mr-2"
+                    onPathSwitch={() => {
+                      // Reload conversation when path is switched
+                      if (conversationId) {
+                        loadConversation(conversationId)
+                      }
+                    }}
+                  />
                 )}
                 {quickPrompts.slice(0, 2).map(({ scenarioHint: promptScenarioHint, label }) => (
                   <Button
