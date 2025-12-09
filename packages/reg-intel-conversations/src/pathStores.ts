@@ -33,6 +33,9 @@ import type {
   SetActivePathInput,
   GetActivePathInput,
   DeletePathInput,
+  PinMessageInput,
+  UnpinMessageInput,
+  GetPinnedMessagesInput,
   MessageType,
 } from './types/paths.js';
 
@@ -66,6 +69,12 @@ export interface ConversationPathStore {
   // Merging
   mergePath(input: MergeInput): Promise<MergeResult>;
   previewMerge(input: Omit<MergeInput, 'userId' | 'archiveSource'>): Promise<MergePreview>;
+
+  // Message Pinning
+  pinMessage(input: PinMessageInput): Promise<void>;
+  unpinMessage(input: UnpinMessageInput): Promise<void>;
+  getPinnedMessages(input: GetPinnedMessagesInput): Promise<PathAwareMessage[]>;
+  getPinnedMessageCount(input: GetPinnedMessagesInput): Promise<number>;
 
   // Utilities
   getPrimaryPath(input: { tenantId: string; conversationId: string }): Promise<ConversationPath | null>;
@@ -619,6 +628,9 @@ export class InMemoryConversationPathStore implements ConversationPathStore {
       isBranchPoint: false,
       branchedToPaths: [],
       messageType: input.messageType,
+      isPinned: false,
+      pinnedAt: null,
+      pinnedBy: null,
       createdAt: new Date(),
     };
 
@@ -626,6 +638,64 @@ export class InMemoryConversationPathStore implements ConversationPathStore {
     this.messages.set(input.pathId, messages);
 
     return msg.id;
+  }
+
+  // Message Pinning
+  async pinMessage(input: PinMessageInput): Promise<void> {
+    for (const [pathId, messages] of this.messages.entries()) {
+      const idx = messages.findIndex(m => m.id === input.messageId);
+      if (idx !== -1) {
+        const updated = {
+          ...messages[idx],
+          isPinned: true,
+          pinnedAt: new Date(),
+          pinnedBy: input.userId,
+        };
+        messages[idx] = updated;
+        this.messages.set(pathId, messages);
+        return;
+      }
+    }
+    throw new Error('Message not found');
+  }
+
+  async unpinMessage(input: UnpinMessageInput): Promise<void> {
+    for (const [pathId, messages] of this.messages.entries()) {
+      const idx = messages.findIndex(m => m.id === input.messageId);
+      if (idx !== -1) {
+        const updated = {
+          ...messages[idx],
+          isPinned: false,
+          pinnedAt: null,
+          pinnedBy: null,
+        };
+        messages[idx] = updated;
+        this.messages.set(pathId, messages);
+        return;
+      }
+    }
+    throw new Error('Message not found');
+  }
+
+  async getPinnedMessages(input: GetPinnedMessagesInput): Promise<PathAwareMessage[]> {
+    const results: PathAwareMessage[] = [];
+
+    for (const [pathId, messages] of this.messages.entries()) {
+      const pathMessages = messages.filter(m => {
+        if (!m.isPinned) return false;
+        if (m.conversationId !== input.conversationId) return false;
+        if (input.pathId && m.pathId !== input.pathId) return false;
+        return true;
+      });
+      results.push(...pathMessages);
+    }
+
+    return results.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  async getPinnedMessageCount(input: GetPinnedMessagesInput): Promise<number> {
+    const messages = await this.getPinnedMessages(input);
+    return messages.length;
   }
 
   // For testing: add a message directly
@@ -679,6 +749,9 @@ type SupabaseMessageRow = {
   is_branch_point: boolean;
   branched_to_paths: string[];
   message_type: string;
+  is_pinned: boolean;
+  pinned_at: string | null;
+  pinned_by: string | null;
   created_at: string;
   effective_sequence?: number;
 };
@@ -719,6 +792,9 @@ function mapMessageRow(row: SupabaseMessageRow): PathAwareMessage {
     isBranchPoint: row.is_branch_point,
     branchedToPaths: row.branched_to_paths ?? [],
     messageType: row.message_type as MessageType,
+    isPinned: row.is_pinned,
+    pinnedAt: row.pinned_at ? new Date(row.pinned_at) : null,
+    pinnedBy: row.pinned_by,
     createdAt: new Date(row.created_at),
     effectiveSequence: row.effective_sequence,
   };
@@ -1386,5 +1462,92 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
       !p.mergedToPathId &&
       !p.isPrimary
     );
+  }
+
+  // Message Pinning
+  async pinMessage(input: PinMessageInput): Promise<void> {
+    if (!this.client.rpc) {
+      throw new Error('Supabase client does not support RPC operations');
+    }
+
+    const { error } = await this.client.rpc('pin_message', {
+      p_tenant_id: input.tenantId,
+      p_conversation_id: input.conversationId,
+      p_message_id: input.messageId,
+      p_user_id: input.userId,
+    });
+
+    if (error) {
+      throw new Error(`Failed to pin message: ${error.message}`);
+    }
+  }
+
+  async unpinMessage(input: UnpinMessageInput): Promise<void> {
+    if (!this.client.rpc) {
+      throw new Error('Supabase client does not support RPC operations');
+    }
+
+    const { error } = await this.client.rpc('unpin_message', {
+      p_tenant_id: input.tenantId,
+      p_conversation_id: input.conversationId,
+      p_message_id: input.messageId,
+    });
+
+    if (error) {
+      throw new Error(`Failed to unpin message: ${error.message}`);
+    }
+  }
+
+  async getPinnedMessages(input: GetPinnedMessagesInput): Promise<PathAwareMessage[]> {
+    if (!this.client.rpc) {
+      throw new Error('Supabase client does not support RPC operations');
+    }
+
+    const { data, error } = await this.client.rpc('get_pinned_messages', {
+      p_tenant_id: input.tenantId,
+      p_conversation_id: input.conversationId,
+      p_path_id: input.pathId ?? null,
+    });
+
+    if (error) {
+      throw new Error(`Failed to get pinned messages: ${error.message}`);
+    }
+
+    // Map the returned data to PathAwareMessage format
+    return (data ?? []).map((row: any) => ({
+      id: row.message_id,
+      conversationId: input.conversationId,
+      pathId: input.pathId ?? '',
+      tenantId: input.tenantId,
+      userId: row.pinned_by,
+      role: row.role,
+      content: row.content,
+      sequenceInPath: 0,
+      isBranchPoint: false,
+      branchedToPaths: [],
+      messageType: 'standard',
+      isPinned: true,
+      pinnedAt: new Date(row.pinned_at),
+      pinnedBy: row.pinned_by,
+      createdAt: new Date(row.created_at),
+    }));
+  }
+
+  async getPinnedMessageCount(input: GetPinnedMessagesInput): Promise<number> {
+    if (!this.client.rpc) {
+      throw new Error('Supabase client does not support RPC operations');
+    }
+
+    const { data, error } = await this.client.rpc('get_pinned_message_count', {
+      p_tenant_id: input.tenantId,
+      p_conversation_id: input.conversationId,
+      p_path_id: input.pathId ?? null,
+    });
+
+    if (error) {
+      throw new Error(`Failed to get pinned message count: ${error.message}`);
+    }
+
+    return data ?? 0;
   }
 }

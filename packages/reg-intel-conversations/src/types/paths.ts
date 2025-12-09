@@ -89,6 +89,14 @@ export interface PathAwareMessage {
   // Message classification
   messageType: MessageType;
 
+  // Pinning (for compaction control)
+  /** Whether this message is pinned to prevent compaction */
+  isPinned: boolean;
+  /** When the message was pinned */
+  pinnedAt: Date | null;
+  /** User who pinned the message */
+  pinnedBy: string | null;
+
   // Timestamps
   createdAt: Date;
 
@@ -325,6 +333,34 @@ export interface DeletePathInput {
   hardDelete?: boolean;
 }
 
+/**
+ * Input for pinning a message
+ */
+export interface PinMessageInput {
+  tenantId: string;
+  conversationId: string;
+  messageId: string;
+  userId: string;
+}
+
+/**
+ * Input for unpinning a message
+ */
+export interface UnpinMessageInput {
+  tenantId: string;
+  conversationId: string;
+  messageId: string;
+}
+
+/**
+ * Input for getting pinned messages
+ */
+export interface GetPinnedMessagesInput {
+  tenantId: string;
+  conversationId: string;
+  pathId?: string;
+}
+
 // =============================================================================
 // SSE Event Types
 // =============================================================================
@@ -337,7 +373,9 @@ export type PathEventType =
   | 'path:updated'
   | 'path:deleted'
   | 'path:merged'
-  | 'path:active';
+  | 'path:active'
+  | 'message:pinned'
+  | 'message:unpinned';
 
 // =============================================================================
 // Client Types (for API responses)
