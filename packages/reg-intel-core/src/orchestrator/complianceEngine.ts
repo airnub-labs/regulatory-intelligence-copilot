@@ -995,7 +995,7 @@ export class ComplianceEngine {
   private async *handleChatStreamInternal(
     request: ComplianceRequest
   ): AsyncGenerator<ComplianceStreamChunk> {
-    const { messages, profile, tenantId, conversationId, executionTools } = request;
+    const { messages, profile, tenantId, conversationId, executionTools, forceTool } = request;
 
     if (!messages || messages.length === 0) {
       yield { type: 'error', error: 'No messages provided' };
@@ -1006,6 +1006,65 @@ export class ComplianceEngine {
     if (!lastMessage) {
       yield { type: 'error', error: 'No user message found' };
       return;
+    }
+
+    // Handle forced tool execution (from UI buttons)
+    if (forceTool && executionTools?.length) {
+      const tool = executionTools.find(t => t.name === forceTool.name);
+      if (tool) {
+        yield {
+          type: 'metadata',
+          metadata: {
+            agentUsed: 'direct-tool-execution',
+            jurisdictions: profile?.jurisdictions ?? [],
+            uncertaintyLevel: 'low',
+            referencedNodes: [],
+          },
+        };
+
+        yield {
+          type: 'tool_call',
+          toolCall: {
+            name: forceTool.name,
+            arguments: forceTool.args,
+          },
+        };
+
+        try {
+          const result = await this.runWithTracing(
+            `compliance.tool.${forceTool.name}`,
+            { toolName: forceTool.name, forced: true },
+            async () => tool.execute(forceTool.args)
+          );
+
+          yield {
+            type: 'tool_result',
+            toolResult: result,
+          };
+
+          // Format result as text for display
+          const resultText = this.formatToolResult(forceTool.name, result);
+          yield { type: 'text', delta: resultText };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          yield {
+            type: 'error',
+            error: `Tool execution failed: ${errorMessage}`,
+          };
+        }
+
+        yield {
+          type: 'done',
+          disclaimer: NON_ADVICE_DISCLAIMER,
+        };
+        return;
+      } else {
+        yield {
+          type: 'error',
+          error: `Tool '${forceTool.name}' not found. Available tools: ${executionTools.map(t => t.name).join(', ')}`,
+        };
+        return;
+      }
     }
 
     try {

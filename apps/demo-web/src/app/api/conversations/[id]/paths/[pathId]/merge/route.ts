@@ -152,9 +152,8 @@ export async function POST(
     // Terminate execution context for the source path (cleanup sandbox)
     if (executionContextManager && result.success) {
       try {
-        const sourceContext = await executionContextManager.getStats();
         // Check if there's an active context for the source path
-        const contextResult = await executionContextManager.config?.store?.getContextByPath({
+        const contextResult = await executionContextManager.getContextByPath({
           tenantId,
           conversationId,
           pathId: sourcePathId,

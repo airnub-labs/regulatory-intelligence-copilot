@@ -627,6 +627,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         authorizationSpec,
         title,
         replaceMessageId,
+        forceTool,
       } = body;
 
       const headerUserId = request.headers.get('x-user-id') ?? undefined;
@@ -865,6 +866,14 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               ? convertToolRegistryToExecutionTools(toolRegistry)
               : undefined;
 
+            // Validate forceTool if provided
+            const validatedForceTool = forceTool && typeof forceTool === 'object' && typeof (forceTool as Record<string, unknown>).name === 'string'
+              ? {
+                  name: (forceTool as Record<string, unknown>).name as string,
+                  args: ((forceTool as Record<string, unknown>).args as Record<string, unknown>) ?? {},
+                }
+              : undefined;
+
             // Use ComplianceEngine to handle chat with streaming
             // This ensures proper agent routing and graph querying
             for await (const chunk of complianceEngine.handleChatStream({
@@ -873,6 +882,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               tenantId,
               conversationId,
               executionTools,
+              forceTool: validatedForceTool,
             })) {
               if (chunk.type === 'metadata') {
                 // Send metadata with agent info, jurisdictions, and referenced nodes
