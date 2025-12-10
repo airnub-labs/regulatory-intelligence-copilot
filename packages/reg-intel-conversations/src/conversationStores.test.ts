@@ -152,9 +152,21 @@ describe('SupabaseConversationStore tracing', () => {
   });
 
   it('wraps createConversation mutations with Supabase spans', async () => {
+    const pathId = 'path-123';
     const single = vi.fn(async () => ({ data: { id: 'conv-123' }, error: null }));
     const insert = vi.fn(() => ({ select: vi.fn(() => ({ single })) }));
-    const from = vi.fn(() => ({ insert }));
+    // Mock the update chain for updating active_path_id
+    const eq = vi.fn().mockReturnThis();
+    const update = vi.fn(() => ({ eq: vi.fn(() => ({ eq, error: null })) }));
+    // Mock path insertion with single returning the path ID
+    const pathSingle = vi.fn(async () => ({ data: { id: pathId }, error: null }));
+    const pathInsert = vi.fn(() => ({ select: vi.fn(() => ({ single: pathSingle })) }));
+    const from = vi.fn((table: string) => {
+      if (table === 'conversation_paths') {
+        return { insert: pathInsert };
+      }
+      return { insert, update };
+    });
     const supabaseClient = { from } as unknown as Parameters<typeof SupabaseConversationStore>[0];
     const store = new SupabaseConversationStore(supabaseClient, supabaseClient);
 
