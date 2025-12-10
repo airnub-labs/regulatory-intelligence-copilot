@@ -13,6 +13,7 @@ import {
   type CanonicalConceptHandler,
   type ComplianceEngine,
   type EgressGuard,
+  type ExecutionTool,
   type GraphWriteService,
   type LlmClient,
   type LlmChatRequest,
@@ -479,6 +480,46 @@ class SseStreamWriter {
 }
 
 /**
+ * Convert ToolRegistry tools to ExecutionTool format for ComplianceEngine
+ */
+function convertToolRegistryToExecutionTools(toolRegistry: ToolRegistry): ExecutionTool[] {
+  const toolNames = toolRegistry.getToolNames();
+  const executionTools: ExecutionTool[] = [];
+
+  for (const name of toolNames) {
+    const tool = toolRegistry.getTool(name);
+    if (!tool) continue;
+
+    // Convert Zod schema to JSON schema format if needed
+    const parameters = tool.schema._def?.typeName === 'ZodObject'
+      ? {
+          type: 'object',
+          properties: Object.fromEntries(
+            Object.entries(tool.schema.shape || {}).map(([key, value]) => {
+              const zodType = value as { _def?: { typeName?: string; description?: string } };
+              return [key, {
+                type: zodType._def?.typeName?.replace('Zod', '').toLowerCase() || 'string',
+                description: zodType._def?.description || key,
+              }];
+            })
+          ),
+        }
+      : { type: 'object', properties: {} };
+
+    executionTools.push({
+      name: tool.name,
+      description: tool.description,
+      parameters,
+      execute: async (args: Record<string, unknown>) => {
+        return tool.execute(args);
+      },
+    });
+  }
+
+  return executionTools;
+}
+
+/**
  * Creates a Next.js API route handler for the regulatory compliance chat endpoint.
  *
  * The handler:
@@ -819,6 +860,11 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           });
 
           try {
+            // Convert ToolRegistry to ExecutionTools if available
+            const executionTools = toolRegistry
+              ? convertToolRegistryToExecutionTools(toolRegistry)
+              : undefined;
+
             // Use ComplianceEngine to handle chat with streaming
             // This ensures proper agent routing and graph querying
             for await (const chunk of complianceEngine.handleChatStream({
@@ -826,6 +872,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               profile: normalizedProfile,
               tenantId,
               conversationId,
+              executionTools,
             })) {
               if (chunk.type === 'metadata') {
                 // Send metadata with agent info, jurisdictions, and referenced nodes

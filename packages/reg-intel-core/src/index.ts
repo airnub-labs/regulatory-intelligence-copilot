@@ -185,6 +185,8 @@ export {
   type ConversationContext,
   type ConversationContextStore,
   type ConversationIdentity,
+  type ExecutionTool,
+  type ExecutionToolResult,
   EMPTY_CONVERSATION_CONTEXT,
 } from './orchestrator/complianceEngine.js';
 
