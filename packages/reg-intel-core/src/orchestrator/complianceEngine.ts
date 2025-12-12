@@ -56,6 +56,29 @@ export type {
 } from '../types.js';
 
 /**
+ * Execution tool definition for code execution
+ */
+export interface ExecutionTool {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  execute: (args: Record<string, unknown>) => Promise<ExecutionToolResult>;
+}
+
+/**
+ * Result from executing a code execution tool
+ */
+export interface ExecutionToolResult {
+  success: boolean;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  error?: string;
+  result?: unknown;
+  executionTimeMs?: number;
+}
+
+/**
  * Request to the compliance engine
  */
 export interface ComplianceRequest {
@@ -63,6 +86,13 @@ export interface ComplianceRequest {
   profile?: UserProfile;
   tenantId?: string;
   conversationId?: string;
+  /** Optional execution tools (run_code, run_analysis) to make available to the LLM */
+  executionTools?: ExecutionTool[];
+  /** Force a specific tool to be called (for UI-triggered execution) */
+  forceTool?: {
+    name: string;
+    args: Record<string, unknown>;
+  };
 }
 
 /**
@@ -87,7 +117,7 @@ export interface ComplianceResponse {
  * Streaming chunk from compliance engine
  */
 export interface ComplianceStreamChunk {
-  type: 'metadata' | 'text' | 'done' | 'error' | 'warning';
+  type: 'metadata' | 'text' | 'done' | 'error' | 'warning' | 'tool_call' | 'tool_result';
   // Metadata (sent first)
   metadata?: {
     agentUsed: string;
@@ -112,6 +142,13 @@ export interface ComplianceStreamChunk {
   }>;
   // Error
   error?: string;
+  // Tool call (when LLM invokes a tool)
+  toolCall?: {
+    name: string;
+    arguments: Record<string, unknown>;
+  };
+  // Tool result (after execution)
+  toolResult?: ExecutionToolResult;
 }
 
 /**
@@ -447,7 +484,8 @@ export class ComplianceEngine {
   private async *routeThroughRouter(
     request: LlmChatRequest,
     conceptNodeIds: Set<string>,
-    options: ToolAwareCompletionOptions
+    options: ToolAwareCompletionOptions,
+    executionTools?: ExecutionTool[]
   ): AsyncIterable<LlmStreamChunk> {
     const { messages, max_tokens, ...requestOptions } = request;
     const mergedOptions: ToolAwareCompletionOptions = { ...options };
@@ -475,10 +513,62 @@ export class ComplianceEngine {
       async () => this.deps.llmRouter.streamChat(messages, mergedOptions as LlmCompletionOptions)
     );
 
+    // Build a map of execution tools for quick lookup
+    const executionToolMap = new Map<string, ExecutionTool>();
+    if (executionTools?.length) {
+      for (const tool of executionTools) {
+        executionToolMap.set(tool.name, tool);
+      }
+    }
+
     for await (const chunk of stream as AsyncIterable<RouterChunk>) {
       if (chunk.type === 'tool') {
-        const resolvedIds = await this.handleConceptChunk(chunk as ToolStreamChunk);
-        resolvedIds.forEach(id => conceptNodeIds.add(id));
+        const toolChunk = chunk as ToolStreamChunk;
+        const toolName = this.extractToolName(toolChunk);
+
+        // Check if this is an execution tool
+        const executionTool = executionToolMap.get(toolName);
+        if (executionTool) {
+          // Handle execution tool call
+          const toolArgs = this.extractToolArgs(toolChunk);
+
+          // Yield tool call event (for UI display)
+          yield {
+            type: 'text',
+            delta: `\n\n**Executing ${toolName}...**\n`,
+          };
+
+          try {
+            // Execute the tool with tracing
+            const result = await this.runWithTracing(
+              `compliance.tool.${toolName}`,
+              { toolName, hasArgs: !!toolArgs },
+              async () => executionTool.execute(toolArgs)
+            );
+
+            // Yield the execution result as text for the LLM context
+            const resultText = this.formatToolResult(toolName, result);
+            yield { type: 'text', delta: resultText };
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.logger.error({ toolName, error: errorMessage }, 'Execution tool failed');
+            yield {
+              type: 'text',
+              delta: `\n**Error executing ${toolName}:** ${errorMessage}\n`,
+            };
+          }
+          continue;
+        }
+
+        // Handle concept capture tool (existing behavior)
+        if (toolName === 'capture_concepts') {
+          const resolvedIds = await this.handleConceptChunk(toolChunk);
+          resolvedIds.forEach(id => conceptNodeIds.add(id));
+          continue;
+        }
+
+        // Unknown tool - log warning
+        this.logger.warn({ toolName }, 'Unknown tool called by LLM');
         continue;
       }
 
@@ -493,11 +583,95 @@ export class ComplianceEngine {
     }
   }
 
+  /**
+   * Extract tool name from various LLM provider formats
+   */
+  private extractToolName(chunk: ToolStreamChunk): string {
+    // Try different property names used by different providers
+    if ('toolName' in chunk && typeof chunk.toolName === 'string') {
+      return chunk.toolName;
+    }
+    if ('name' in chunk && typeof (chunk as Record<string, unknown>).name === 'string') {
+      return (chunk as Record<string, unknown>).name as string;
+    }
+    if ('function' in chunk && typeof (chunk as Record<string, unknown>).function === 'object') {
+      const fn = (chunk as Record<string, unknown>).function as Record<string, unknown>;
+      if (typeof fn.name === 'string') return fn.name;
+    }
+    return 'unknown';
+  }
+
+  /**
+   * Extract tool arguments from various LLM provider formats
+   */
+  private extractToolArgs(chunk: ToolStreamChunk): Record<string, unknown> {
+    // Try argsJson first (from our router normalization)
+    if (chunk.argsJson && typeof chunk.argsJson === 'object') {
+      return chunk.argsJson as Record<string, unknown>;
+    }
+    // Try arguments
+    if (chunk.arguments && typeof chunk.arguments === 'object') {
+      return chunk.arguments as Record<string, unknown>;
+    }
+    // Try payload
+    if (chunk.payload && typeof chunk.payload === 'object') {
+      return chunk.payload as Record<string, unknown>;
+    }
+    return {};
+  }
+
+  /**
+   * Format tool execution result for display
+   */
+  private formatToolResult(toolName: string, result: ExecutionToolResult): string {
+    const parts: string[] = [];
+
+    if (result.success) {
+      parts.push(`\n**${toolName} completed successfully**`);
+    } else {
+      parts.push(`\n**${toolName} failed**`);
+    }
+
+    if (result.stdout) {
+      parts.push('\n```\n' + result.stdout + '\n```');
+    }
+
+    if (result.stderr) {
+      parts.push('\n**stderr:**\n```\n' + result.stderr + '\n```');
+    }
+
+    if (result.error) {
+      parts.push(`\n**Error:** ${result.error}`);
+    }
+
+    if (result.executionTimeMs !== undefined) {
+      parts.push(`\n*Execution time: ${result.executionTimeMs}ms*`);
+    }
+
+    parts.push('\n');
+
+    return parts.join('');
+  }
+
   private createConceptAwareLlmClient(
     conceptNodeIds: Set<string>,
-    tenantId?: string
+    tenantId?: string,
+    executionTools?: ExecutionTool[]
   ): LlmClient {
-    const tools = this.conceptCaptureEnabled ? [CAPTURE_CONCEPTS_TOOL] : [];
+    const tools: Array<Record<string, unknown>> = this.conceptCaptureEnabled ? [CAPTURE_CONCEPTS_TOOL] : [];
+
+    // Add execution tools if provided
+    if (executionTools?.length) {
+      for (const tool of executionTools) {
+        tools.push({
+          type: 'function',
+          name: tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        });
+      }
+    }
+
     const options: ToolAwareCompletionOptions = {
       task: 'main-chat',
       tenantId,
@@ -507,7 +681,7 @@ export class ComplianceEngine {
 
     return {
       chat: async (request: LlmChatRequest) => {
-        const chunks = this.routeThroughRouter(request, conceptNodeIds, options);
+        const chunks = this.routeThroughRouter(request, conceptNodeIds, options, executionTools);
         let content = '';
         for await (const chunk of chunks) {
           if (chunk.type === 'text') {
@@ -520,7 +694,7 @@ export class ComplianceEngine {
         return { content };
       },
       streamChat: (request: LlmChatRequest) =>
-        this.routeThroughRouter(request, conceptNodeIds, options),
+        this.routeThroughRouter(request, conceptNodeIds, options, executionTools),
     };
   }
 
@@ -747,7 +921,8 @@ export class ComplianceEngine {
             const conceptNodeIds = new Set<string>();
             const conceptAwareClient = this.createConceptAwareLlmClient(
               conceptNodeIds,
-              tenantId
+              tenantId,
+              request.executionTools
             );
 
             // Build agent context
@@ -820,7 +995,7 @@ export class ComplianceEngine {
   private async *handleChatStreamInternal(
     request: ComplianceRequest
   ): AsyncGenerator<ComplianceStreamChunk> {
-    const { messages, profile, tenantId, conversationId } = request;
+    const { messages, profile, tenantId, conversationId, executionTools, forceTool } = request;
 
     if (!messages || messages.length === 0) {
       yield { type: 'error', error: 'No messages provided' };
@@ -831,6 +1006,65 @@ export class ComplianceEngine {
     if (!lastMessage) {
       yield { type: 'error', error: 'No user message found' };
       return;
+    }
+
+    // Handle forced tool execution (from UI buttons)
+    if (forceTool && executionTools?.length) {
+      const tool = executionTools.find(t => t.name === forceTool.name);
+      if (tool) {
+        yield {
+          type: 'metadata',
+          metadata: {
+            agentUsed: 'direct-tool-execution',
+            jurisdictions: profile?.jurisdictions ?? [],
+            uncertaintyLevel: 'low',
+            referencedNodes: [],
+          },
+        };
+
+        yield {
+          type: 'tool_call',
+          toolCall: {
+            name: forceTool.name,
+            arguments: forceTool.args,
+          },
+        };
+
+        try {
+          const result = await this.runWithTracing(
+            `compliance.tool.${forceTool.name}`,
+            { toolName: forceTool.name, forced: true },
+            async () => tool.execute(forceTool.args)
+          );
+
+          yield {
+            type: 'tool_result',
+            toolResult: result,
+          };
+
+          // Format result as text for display
+          const resultText = this.formatToolResult(forceTool.name, result);
+          yield { type: 'text', delta: resultText };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          yield {
+            type: 'error',
+            error: `Tool execution failed: ${errorMessage}`,
+          };
+        }
+
+        yield {
+          type: 'done',
+          disclaimer: NON_ADVICE_DISCLAIMER,
+        };
+        return;
+      } else {
+        yield {
+          type: 'error',
+          error: `Tool '${forceTool.name}' not found. Available tools: ${executionTools.map(t => t.name).join(', ')}`,
+        };
+        return;
+      }
     }
 
     try {
@@ -848,7 +1082,8 @@ export class ComplianceEngine {
       const conceptNodeIds = new Set<string>();
       const conceptAwareClient = this.createConceptAwareLlmClient(
         conceptNodeIds,
-        tenantId
+        tenantId,
+        executionTools
       );
 
       const agentInput: AgentInput = {
