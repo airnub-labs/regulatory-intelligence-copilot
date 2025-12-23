@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
-> **Generated**: 2025-12-12
+> **Last Updated**: 2025-12-23
 > **Status**: Consolidated review of all architecture documents
-> **Branch**: `claude/review-architecture-plans-011etpa1nB9rSDLQTiLmDXpF`
+> **Previous Update**: 2025-12-12
 
 ---
 
@@ -14,8 +14,8 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 | Architecture Version | Feature Set | Backend | UI | Integration |
 |---------------------|-------------|---------|-----|-------------|
-| v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Mostly Complete | ✅ Wired |
-| v0.6 | AI Merge Summarization | ❌ Not Started | ❌ Not Started | ❌ |
+| v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Message Pinning | ✅ Complete | ❌ Not Started | ❌ |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | Observability & Cleanup | 🔄 Partial | N/A | 🔄 Partial |
@@ -63,7 +63,33 @@ This document consolidates all outstanding work identified from reviewing the ar
 - `packages/reg-intel-llm/src/tools/toolRegistry.ts`
 - `apps/demo-web/src/components/chat/prompt-input.tsx` (Run Code/Run Analysis buttons)
 
-### 1.3 Message Pinning (Backend Only)
+### 1.3 AI Merge Summarization (v0.6 Phase 6) ✅
+
+**Reference**: `docs/architecture/IMPLEMENTATION-PLAN.md` Phase 6, `docs/architecture/conversation-branching-and-merging.md` Part 9
+
+| Component | Status |
+|-----------|--------|
+| `MergeSummarizer` service | ✅ Complete |
+| Summarization prompts (regulatory-focused) | ✅ Complete |
+| Integration with merge API endpoint | ✅ Complete |
+| MergeDialog UI with summary mode | ✅ Complete |
+| Custom prompt input | ✅ Complete |
+| Fallback when LLM unavailable | ✅ Complete |
+
+**Files Implemented**:
+- `apps/demo-web/src/lib/server/mergeSummarizer.ts` - Full AI summarization with regulatory prompts
+- `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/merge/route.ts` - Integrated summarizer
+- `packages/reg-intel-ui/src/components/MergeDialog.tsx` - Complete merge UI with all modes
+
+**Features**:
+- AI-powered summary generation with temperature 0.3, max 600 tokens
+- Custom user-provided summarization instructions
+- Fallback summary when LLM unavailable
+- Preview of merge before execution
+- Support for `summary`, `full`, and `selective` merge modes
+- Archive source option
+
+### 1.4 Message Pinning (Backend Only)
 
 **Reference**: `docs/architecture/MESSAGE_PINNING.md`
 
@@ -74,79 +100,42 @@ This document consolidates all outstanding work identified from reviewing the ar
 | RLS policies and indexes | ✅ Complete |
 | TypeScript types | ✅ Complete |
 
+### 1.5 EgressGuard Validation ✅
+
+**Reference**: `docs/architecture/architecture_v_0_7.md` Section 7
+
+| Component | Status |
+|-----------|--------|
+| Core EgressGuard implementation | ✅ Complete |
+| PII detection patterns (email, phone, SSN, PPSN, IBAN, etc.) | ✅ Complete |
+| ML-based detection via @redactpii/node | ✅ Complete |
+| Unit tests (enforce, report-only, off modes) | ✅ Complete |
+| Integration tests | ✅ Complete |
+
+**Files**:
+- `packages/reg-intel-llm/src/egressGuard.ts`
+- `packages/reg-intel-llm/src/egressClient.ts`
+- `packages/reg-intel-llm/src/egressClient.test.ts`
+- `packages/reg-intel-llm/src/egressClient.spec.ts`
+- `packages/reg-intel-llm/src/egressModeResolver.test.ts`
+
 ---
 
 ## 2. Outstanding Work
 
-### 2.1 CRITICAL: AI Merge Summarization (v0.6 Phase 6)
-
-**Priority**: HIGH
-**Effort**: 8-12 hours
-**Reference**: `docs/architecture/IMPLEMENTATION-PLAN.md` Phase 6, `docs/architecture/conversation-branching-and-merging.md` Part 9
-
-**Description**: When merging a branch back to main, the system should AI-generate a summary of the branch findings instead of copying all messages.
-
-**Tasks**:
-
-- [ ] **Task 6.1**: Define summarization prompts
-  - Create `MERGE_SUMMARY_SYSTEM_PROMPT` following regulatory summarization guidelines
-  - Support custom user-provided summarization prompts
-  - File: `packages/reg-intel-core/src/orchestrator/mergeSummarizer.ts`
-
-- [ ] **Task 6.2**: Implement `MergeSummarizer` service
-  ```typescript
-  interface MergeSummarizerInput {
-    branchMessages: PathAwareMessage[];
-    branchPointMessage: PathAwareMessage;
-    mainConversationContext: PathAwareMessage[];
-    customPrompt?: string;
-    tenantId: string;
-  }
-
-  async function generateMergeSummary(input: MergeSummarizerInput): Promise<{
-    summary: string;
-    aiGenerated: boolean;
-    error?: string;
-  }>
-  ```
-
-- [ ] **Task 6.3**: Integrate with merge endpoint
-  - Update `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/merge/route.ts`
-  - Call summarizer when `mergeMode === 'summary'`
-  - Create system message with summary in target path
-  - Include metadata about source branch
-
-- [ ] **Task 6.4**: Update MergeDialog UI
-  - Add summary preview before merge
-  - Add custom prompt input field
-  - Show loading state during summarization
-  - Graceful fallback when LLM unavailable
-
-**Merge Summary Message Format**:
-```typescript
-{
-  role: 'system',
-  content: '**Branch Summary: PRSI Deep Dive** (5 messages merged)\n\n...',
-  metadata: {
-    type: 'merge_summary',
-    sourcePathId: 'uuid',
-    sourcePathName: 'PRSI Deep Dive',
-    mergedMessageCount: 5,
-    branchPointMessageId: 'uuid',
-    summarizedAt: '2024-12-12T10:30:00Z',
-  }
-}
-```
-
----
-
-### 2.2 CRITICAL: Message Pinning UI
+### 2.1 HIGH: Message Pinning UI
 
 **Priority**: HIGH
 **Effort**: 4-6 hours
 **Reference**: `docs/architecture/MESSAGE_PINNING.md`
 
 **Description**: Backend is complete but no UI exists for pinning/unpinning messages.
+
+**Backend (Complete)**:
+- `pinMessage()` method in `SupabaseConversationPathStore`
+- `unpinMessage()` method in `SupabaseConversationPathStore`
+- Database schema includes `is_pinned`, `pinned_at`, `pinned_by` columns
+- TypeScript types: `PinMessageInput`, `UnpinMessageInput`
 
 **Tasks**:
 
@@ -179,7 +168,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.3 MEDIUM: Cleanup Cron Job (v0.7 Phase 4)
+### 2.2 MEDIUM: Cleanup Cron Job (v0.7 Phase 4)
 
 **Priority**: MEDIUM
 **Effort**: 2-4 hours
@@ -215,13 +204,13 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.4 MEDIUM: Metrics Dashboard (v0.7 Phase 4)
+### 2.3 LOW: Metrics Dashboard (v0.7 Phase 4)
 
-**Priority**: MEDIUM (DEFERRED)
+**Priority**: LOW (DEFERRED)
 **Effort**: 4-6 hours
 **Reference**: `docs/architecture/E2B_ARCHITECTURE.md` Future Enhancements
 
-**Description**: Add metrics collection for sandbox operations.
+**Description**: Add metrics collection for sandbox operations. Deferred until production usage patterns are better understood.
 
 **Tasks**:
 
@@ -242,7 +231,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.5 LOW: Version Navigator Component
+### 2.4 LOW: Version Navigator Component
 
 **Priority**: LOW
 **Effort**: 2-4 hours
@@ -250,15 +239,22 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 **Description**: Component exists (`message-version-nav.tsx`) but is NOT wired into the main page.
 
+**Existing Component**: `apps/demo-web/src/components/chat/message-version-nav.tsx` (69 lines)
+- Full navigation with prev/next buttons
+- Version counter display (e.g., "2 / 5")
+- Timestamp with "time ago" formatting
+- Original/Latest labels
+- Disabled state handling
+
 **Tasks**:
 
-- [ ] **Task V.1**: Review existing `message-version-nav.tsx` component
-- [ ] **Task V.2**: Wire into `page.tsx` for message version navigation
+- [ ] **Task V.1**: Import `MessageVersionNav` into `page.tsx`
+- [ ] **Task V.2**: Wire component to display for messages with multiple versions
 - [ ] **Task V.3**: Ensure path resolution updates correctly when navigating versions
 
 ---
 
-### 2.6 LOW: PathAwareMessageList Component
+### 2.5 LOW: PathAwareMessageList Component
 
 **Priority**: LOW
 **Effort**: 2-4 hours
@@ -266,26 +262,21 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 **Description**: Component exists (`path-aware-message-list.tsx`) but main page renders messages inline instead.
 
+**Existing Component**: `apps/demo-web/src/components/chat/path-aware-message-list.tsx` (225 lines)
+- Full PathAwareMessageList implementation
+- Fallback mode when PathProvider unavailable
+- Path context integration via `useConversationPaths` hook
+- Branch indicators and branch count badges
+- Message editing support with custom renderer
+- Branch creation on hover
+
+**Current Status**: Main page at `apps/demo-web/src/app/page.tsx` renders messages directly in JSX instead of using this component.
+
 **Tasks**:
 
 - [ ] **Task L.1**: Replace inline message rendering in `page.tsx` with `PathAwareMessageList`
 - [ ] **Task L.2**: Verify branch indicators and path navigation work correctly
-
----
-
-### 2.7 LOW: EgressGuard Validation for Sandbox
-
-**Priority**: LOW
-**Effort**: 2-4 hours
-**Reference**: `docs/architecture/architecture_v_0_7.md` Section 7, `docs/architecture/execution-context/spec_v_0_1.md` Section 7
-
-**Description**: Architecture specifies all sandbox egress must flow through EgressGuard. Code structure supports this but validation is incomplete.
-
-**Tasks**:
-
-- [ ] **Task E.1**: Add integration test for egress guard in sandbox execution
-- [ ] **Task E.2**: Verify output sanitization is applied
-- [ ] **Task E.3**: Verify network restrictions are enforced
+- [ ] **Task L.3**: Ensure editing and branching behaviors are preserved
 
 ---
 
@@ -295,23 +286,21 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.1 AI Merge Summarization | HIGH | 8-12h | None |
-| 2.2 Message Pinning UI | HIGH | 4-6h | None |
+| 2.1 Message Pinning UI | HIGH | 4-6h | None |
 
 ### Phase B: Production Readiness
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.3 Cleanup Cron Job | MEDIUM | 2-4h | None |
-| 2.4 Metrics Dashboard | MEDIUM | 4-6h | 2.3 |
+| 2.2 Cleanup Cron Job | MEDIUM | 2-4h | None |
 
-### Phase C: Polish
+### Phase C: Polish (Deferred)
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.5 Version Navigator | LOW | 2-4h | None |
-| 2.6 PathAwareMessageList | LOW | 2-4h | None |
-| 2.7 EgressGuard Validation | LOW | 2-4h | None |
+| 2.3 Metrics Dashboard | LOW | 4-6h | 2.2 |
+| 2.4 Version Navigator | LOW | 2-4h | None |
+| 2.5 PathAwareMessageList | LOW | 2-4h | None |
 
 ---
 
@@ -339,13 +328,14 @@ This document consolidates all outstanding work identified from reviewing the ar
 - ✅ Code execution tools unit tests (22 tests)
 - ✅ Tool registry unit tests (23 tests)
 - ✅ Path store unit tests
+- ✅ EgressGuard unit tests (comprehensive)
+- ✅ EgressClient integration tests
+- ✅ EgressModeResolver tests
 
 ### Missing Tests
 
-- ❌ AI Merge Summarization integration tests
 - ❌ Message pinning API tests
 - ❌ Cleanup job integration tests
-- ❌ EgressGuard sandbox integration tests
 - ❌ Version navigator E2E tests
 
 ---
@@ -369,21 +359,37 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ## 7. Summary
 
-**Total Outstanding Effort**: ~26-42 hours
+**Total Outstanding Effort**: ~14-24 hours (significantly reduced from previous ~26-42 hours)
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 2 | 12-18h |
-| MEDIUM | 2 | 6-10h |
-| LOW | 3 | 6-12h |
+| HIGH | 1 | 4-6h |
+| MEDIUM | 1 | 2-4h |
+| LOW | 3 | 8-14h |
 
-**Recommended Next Steps**:
-1. Implement AI Merge Summarization (enables full branching workflow)
-2. Add Message Pinning UI (completes pinning feature)
-3. Set up Cleanup Cron Job (production requirement)
+### Recently Completed (Since 2025-12-12)
+
+1. **AI Merge Summarization** - Fully implemented with:
+   - AI-powered summary generation in `mergeSummarizer.ts`
+   - Integration with merge API endpoint
+   - MergeDialog UI with summary mode, custom prompts, and preview
+   - Fallback handling when LLM unavailable
+
+2. **EgressGuard Validation** - Complete with comprehensive test coverage
+
+### Recommended Next Steps
+
+1. **Add Message Pinning UI** (HIGH priority) - Backend complete, just needs UI components and API endpoints
+2. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
+3. **Integrate existing components** (LOW priority) - Version Navigator and PathAwareMessageList are complete but unused
+
+### Notes
+
+The codebase has excellent component implementations that aren't yet integrated into the main page. The Version Navigator and PathAwareMessageList components are production-ready and just need wiring.
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-12-12
+**Document Version**: 2.0
+**Last Updated**: 2025-12-23
+**Previous Version**: 1.0 (2025-12-12)
 **Author**: Claude Code
