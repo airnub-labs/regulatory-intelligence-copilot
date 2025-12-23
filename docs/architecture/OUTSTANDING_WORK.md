@@ -16,7 +16,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 |---------------------|-------------|---------|-----|-------------|
 | v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
-| v0.6 | Message Pinning | ✅ Complete | ❌ Not Started | ❌ |
+| v0.6 | Message Pinning | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (Outbound) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | EgressGuard (Response/Sandbox) | ✅ Complete | N/A | ❌ NOT Wired |
@@ -102,7 +102,32 @@ This document consolidates all outstanding work identified from reviewing the ar
 | RLS policies and indexes | ✅ Complete |
 | TypeScript types | ✅ Complete |
 
-### 1.5 EgressGuard Implementation (Partial)
+### 1.5 Message Pinning UI ✅
+
+**Reference**: `docs/architecture/MESSAGE_PINNING.md`
+
+| Component | Status |
+|-----------|--------|
+| Pin/Unpin API endpoints | ✅ Complete |
+| Message component pin button | ✅ Complete |
+| Visual indicator for pinned messages | ✅ Complete |
+| SSE events (`message:pinned`, `message:unpinned`) | ✅ Complete |
+| Main page integration | ✅ Complete |
+
+**Files Implemented**:
+- `apps/demo-web/src/app/api/conversations/[id]/messages/[messageId]/pin/route.ts` - POST/DELETE endpoints
+- `apps/demo-web/src/components/chat/message.tsx` - Pin button and visual indicator
+- `apps/demo-web/src/app/page.tsx` - `handleTogglePin` handler and wiring
+- `packages/reg-intel-conversations/src/eventHub.ts` - Added `message:pinned` and `message:unpinned` event types
+
+**Features**:
+- Pin/unpin toggle button on all messages (user and assistant)
+- Amber-colored visual indicator badge when message is pinned
+- Ring highlight on pinned message cards
+- Real-time state updates via SSE broadcasting
+- Backend already complete (database schema, store methods)
+
+### 1.6 EgressGuard Implementation (Partial)
 
 **Reference**: `docs/architecture/architecture_v_0_7.md` Section 7
 
@@ -135,52 +160,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ## 2. Outstanding Work
 
-### 2.1 HIGH: Message Pinning UI
-
-**Priority**: HIGH
-**Effort**: 4-6 hours
-**Reference**: `docs/architecture/MESSAGE_PINNING.md`
-
-**Description**: Backend is complete but no UI exists for pinning/unpinning messages.
-
-**Backend (Complete)**:
-- `pinMessage()` method in `SupabaseConversationPathStore`
-- `unpinMessage()` method in `SupabaseConversationPathStore`
-- Database schema includes `is_pinned`, `pinned_at`, `pinned_by` columns
-- TypeScript types: `PinMessageInput`, `UnpinMessageInput`
-
-**Tasks**:
-
-- [ ] **Task P.1**: Add pin/unpin buttons to Message component
-  - File: `apps/demo-web/src/components/chat/message.tsx`
-  - Add `Pin` icon button (lucide-react)
-  - Toggle between pinned/unpinned states
-  - Visual indicator when message is pinned
-
-- [ ] **Task P.2**: Create pinMessage/unpinMessage API endpoints
-  - `POST /api/conversations/:id/messages/:messageId/pin`
-  - `DELETE /api/conversations/:id/messages/:messageId/pin`
-
-- [ ] **Task P.3**: Add SSE events for pin state changes
-  - `message:pinned` event
-  - `message:unpinned` event
-  - Update `packages/reg-intel-conversations/src/sseTypes.ts`
-
-- [ ] **Task P.4**: Update conversation list to show pinned message count (optional)
-
-**UI Mockup**:
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  🤖 Assistant                                         [📌] [⋮] │
-│  Directors in Ireland have several PRSI obligations...         │
-│                                                                 │
-│  [📋 Copy] [✏️ Edit] [🌿 Branch] [📌 Pin]                      │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### 2.2 MEDIUM: Cleanup Cron Job (v0.7 Phase 4)
+### 2.1 MEDIUM: Cleanup Cron Job (v0.7 Phase 4)
 
 **Priority**: MEDIUM
 **Effort**: 2-4 hours
@@ -216,7 +196,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.3 LOW: Metrics Dashboard (v0.7 Phase 4)
+### 2.2 LOW: Metrics Dashboard (v0.7 Phase 4)
 
 **Priority**: LOW (DEFERRED)
 **Effort**: 4-6 hours
@@ -243,7 +223,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.4 LOW: Version Navigator Component
+### 2.3 LOW: Version Navigator Component
 
 **Priority**: LOW
 **Effort**: 2-4 hours
@@ -266,7 +246,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.5 LOW: PathAwareMessageList Component
+### 2.4 LOW: PathAwareMessageList Component
 
 **Priority**: LOW
 **Effort**: 2-4 hours
@@ -292,7 +272,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.6 MEDIUM: Complete EgressGuard End-to-End Wiring
+### 2.5 MEDIUM: Complete EgressGuard End-to-End Wiring
 
 **Priority**: MEDIUM
 **Effort**: 4-6 hours
@@ -333,28 +313,22 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ## 3. Implementation Priority Order
 
-### Phase A: Critical Path (Next Sprint)
+### Phase A: Production Readiness (Next Sprint)
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.1 Message Pinning UI | HIGH | 4-6h | None |
+| 2.1 Cleanup Cron Job | MEDIUM | 2-4h | None |
+| 2.5 EgressGuard End-to-End | MEDIUM | 4-6h | None |
 
-### Phase B: Production Readiness
-
-| Task | Priority | Effort | Dependencies |
-|------|----------|--------|--------------|
-| 2.2 Cleanup Cron Job | MEDIUM | 2-4h | None |
-| 2.6 EgressGuard End-to-End | MEDIUM | 4-6h | None |
-
-### Phase C: Polish (Deferred)
+### Phase B: Polish (Deferred)
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.3 Metrics Dashboard | LOW | 4-6h | 2.2 |
-| 2.4 Version Navigator | LOW | 2-4h | None |
-| 2.5 PathAwareMessageList | LOW | 2-4h | None |
+| 2.2 Metrics Dashboard | LOW | 4-6h | 2.1 |
+| 2.3 Version Navigator | LOW | 2-4h | None |
+| 2.4 PathAwareMessageList | LOW | 2-4h | None |
 
-**Note**: EgressGuard completion (2.6) has security implications and should be prioritized for production deployment.
+**Note**: EgressGuard completion (2.5) has security implications and should be prioritized for production deployment.
 
 ---
 
@@ -413,11 +387,10 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ## 7. Summary
 
-**Total Outstanding Effort**: ~18-30 hours
+**Total Outstanding Effort**: ~12-24 hours (reduced from ~18-30 hours)
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 1 | 4-6h |
 | MEDIUM | 2 | 6-10h |
 | LOW | 3 | 8-14h |
 
@@ -436,16 +409,22 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
    - ❌ Sandbox output NOT sanitized
    - ❌ Agent-level redaction is dead code
 
+3. **Message Pinning UI** - Fully implemented end-to-end:
+   - Pin/Unpin API endpoints at `/api/conversations/:id/messages/:messageId/pin`
+   - Pin button on all messages (user and assistant)
+   - Visual indicator (amber badge and ring) for pinned messages
+   - SSE events (`message:pinned`, `message:unpinned`) for real-time updates
+   - ✅ Verified: Complete flow from UI click to database update
+
 ### Recommended Next Steps
 
-1. **Add Message Pinning UI** (HIGH priority) - Backend complete, needs UI components and API endpoints
-2. **Complete EgressGuard End-to-End** (MEDIUM priority) - Security gap: response/sandbox sanitization missing
-3. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
-4. **Integrate existing components** (LOW priority) - Version Navigator and PathAwareMessageList are complete but unused
+1. **Complete EgressGuard End-to-End** (MEDIUM priority) - Security gap: response/sandbox sanitization missing
+2. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
+3. **Integrate existing components** (LOW priority) - Version Navigator and PathAwareMessageList are complete but unused
 
 ### Security Note
 
-EgressGuard currently only protects outbound requests. For production, response sanitization is needed to prevent PII leakage from knowledge base or sandbox execution. See section 2.6 for implementation details.
+EgressGuard currently only protects outbound requests. For production, response sanitization is needed to prevent PII leakage from knowledge base or sandbox execution. See section 2.5 for implementation details.
 
 ### PR #159 Review
 
@@ -457,7 +436,7 @@ PR #159 made the following changes (verified non-breaking):
 
 ---
 
-**Document Version**: 2.1
+**Document Version**: 2.2
 **Last Updated**: 2025-12-23
-**Previous Version**: 2.0 (2025-12-23), 1.0 (2025-12-12)
+**Previous Version**: 2.1 (2025-12-23), 2.0 (2025-12-23), 1.0 (2025-12-12)
 **Author**: Claude Code

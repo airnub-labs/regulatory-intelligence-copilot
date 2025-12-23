@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Bot, GitBranch, Pencil, ShieldCheck, User } from "lucide-react"
+import { Bot, GitBranch, Pencil, Pin, PinOff, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -161,6 +161,9 @@ interface MessageProps {
   isBranchPoint?: boolean
   branchedPaths?: string[]
   onViewBranch?: (pathId: string) => void
+  // Pinning props
+  isPinned?: boolean
+  onTogglePin?: (messageId: string, isPinned: boolean) => void
 }
 
 export function Message({
@@ -176,9 +179,11 @@ export function Message({
   isBranchPoint = false,
   branchedPaths = [],
   onViewBranch,
+  isPinned = false,
+  onTogglePin,
 }: MessageProps) {
   const isUser = role === "user"
-  const canShowActions = showActions && isUser && messageId
+  const canShowActions = showActions && messageId
   const hasBranches = isBranchPoint && branchedPaths.length > 0
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
@@ -221,9 +226,18 @@ export function Message({
               isUser
                 ? "bg-gradient-to-br from-primary to-primary/85 text-primary-foreground"
                 : "bg-card/90 text-foreground",
-              !isUser && "backdrop-blur supports-[backdrop-filter]:border-border/80"
+              !isUser && "backdrop-blur supports-[backdrop-filter]:border-border/80",
+              isPinned && "ring-2 ring-amber-400/50 border-amber-300 dark:ring-amber-500/30 dark:border-amber-700"
             )}
           >
+            {isPinned && (
+              <div className="absolute left-3 top-3 flex items-center gap-1">
+                <Badge className="flex items-center gap-1 bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-100" variant="secondary">
+                  <Pin className="h-3 w-3" />
+                  Pinned
+                </Badge>
+              </div>
+            )}
             {!isUser && (
               <Badge className="absolute right-3 top-3 flex items-center gap-1" variant="secondary">
                 <ShieldCheck className="h-3.5 w-3.5" />
@@ -237,7 +251,7 @@ export function Message({
               />
               {canShowActions && (
                 <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  {onEdit && (
+                  {isUser && onEdit && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -249,7 +263,7 @@ export function Message({
                       Edit
                     </Button>
                   )}
-                  {onBranch && (
+                  {isUser && onBranch && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -259,6 +273,30 @@ export function Message({
                     >
                       <GitBranch className="mr-1 h-3 w-3" />
                       Branch
+                    </Button>
+                  )}
+                  {onTogglePin && (
+                    <Button
+                      size="sm"
+                      variant={isPinned ? "secondary" : "ghost"}
+                      className={cn(
+                        "h-7 px-2 text-xs",
+                        isPinned && "bg-amber-100 text-amber-900 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:hover:bg-amber-900/50"
+                      )}
+                      onClick={() => onTogglePin(messageId!, isPinned)}
+                      title={isPinned ? "Unpin message" : "Pin message"}
+                    >
+                      {isPinned ? (
+                        <>
+                          <PinOff className="mr-1 h-3 w-3" />
+                          Unpin
+                        </>
+                      ) : (
+                        <>
+                          <Pin className="mr-1 h-3 w-3" />
+                          Pin
+                        </>
+                      )}
                     </Button>
                   )}
                 </div>

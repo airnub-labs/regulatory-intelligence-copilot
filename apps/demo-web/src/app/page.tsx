@@ -72,6 +72,8 @@ interface ChatMessage {
   sequenceInPath?: number
   isBranchPoint?: boolean
   branchedToPaths?: string[]
+  // Pinning
+  isPinned?: boolean
 }
 
 interface VersionedMessage {
@@ -384,6 +386,8 @@ export default function Home() {
         sequenceInPath: (msg as { sequenceInPath?: number }).sequenceInPath,
         isBranchPoint: (msg as { isBranchPoint?: boolean }).isBranchPoint,
         branchedToPaths: (msg as { branchedToPaths?: string[] }).branchedToPaths,
+        // Pinning
+        isPinned: (msg as { isPinned?: boolean }).isPinned,
       }))
       setMessages(loadedMessages)
       setConversationId(id)
@@ -983,6 +987,32 @@ export default function Home() {
     }
   }
 
+  const handleTogglePin = async (messageId: string, currentlyPinned: boolean) => {
+    if (!conversationId) return
+    if (!isAuthenticated) return
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/pin`, {
+        method: currentlyPinned ? 'DELETE' : 'POST',
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        // Update local state
+        setMessages(prev =>
+          prev.map(message =>
+            message.id === messageId ? { ...message, isPinned: !currentlyPinned } : message
+          )
+        )
+      } else {
+        const error = await response.json()
+        console.error('Failed to toggle pin:', error.error)
+      }
+    } catch (error) {
+      console.error('Failed to toggle pin:', error)
+    }
+  }
+
   const updateShareSettings = async (value: ShareOptionValue) => {
     if (!conversationIdRef.current) return
     if (!isAuthenticated) return
@@ -1272,6 +1302,8 @@ export default function Home() {
                             isBranchPoint={getBranchMetadata(currentMessage).isBranchPoint}
                             branchedPaths={getBranchMetadata(currentMessage).branchIds}
                             onViewBranch={handleViewBranch}
+                            isPinned={currentMessage.isPinned}
+                            onTogglePin={handleTogglePin}
                           />
                         )}
                       </div>
