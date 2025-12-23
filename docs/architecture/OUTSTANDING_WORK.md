@@ -18,6 +18,8 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Message Pinning | ✅ Complete | ❌ Not Started | ❌ |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.7 | EgressGuard (Outbound) | ✅ Complete | N/A | ✅ Wired |
+| v0.7 | EgressGuard (Response/Sandbox) | ✅ Complete | N/A | ❌ NOT Wired |
 | v0.7 | Observability & Cleanup | 🔄 Partial | N/A | 🔄 Partial |
 
 ---
@@ -100,7 +102,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | RLS policies and indexes | ✅ Complete |
 | TypeScript types | ✅ Complete |
 
-### 1.5 EgressGuard Validation ✅
+### 1.5 EgressGuard Implementation (Partial)
 
 **Reference**: `docs/architecture/architecture_v_0_7.md` Section 7
 
@@ -110,7 +112,11 @@ This document consolidates all outstanding work identified from reviewing the ar
 | PII detection patterns (email, phone, SSN, PPSN, IBAN, etc.) | ✅ Complete |
 | ML-based detection via @redactpii/node | ✅ Complete |
 | Unit tests (enforce, report-only, off modes) | ✅ Complete |
-| Integration tests | ✅ Complete |
+| Outbound LLM request protection | ✅ Wired |
+| User input sanitization | ⚠️ Partial (only user messages) |
+| **LLM response sanitization** | ❌ NOT WIRED |
+| **Sandbox egress protection** | ❌ NOT WIRED |
+| **Agent-level BasicEgressGuard** | ❌ Dead code (passed but never called) |
 
 **Files**:
 - `packages/reg-intel-llm/src/egressGuard.ts`
@@ -118,6 +124,12 @@ This document consolidates all outstanding work identified from reviewing the ar
 - `packages/reg-intel-llm/src/egressClient.test.ts`
 - `packages/reg-intel-llm/src/egressClient.spec.ts`
 - `packages/reg-intel-llm/src/egressModeResolver.test.ts`
+
+**Wiring Status**:
+- ✅ `LlmRouter.chat()` and `streamChat()` use `egressClient.guardAndExecute()` for OUTBOUND requests
+- ❌ LLM responses flow directly to client WITHOUT sanitization
+- ❌ Sandbox execution results NOT sanitized before use
+- ❌ `BasicEgressGuard` passed to agents but never invoked
 
 ---
 
@@ -280,6 +292,45 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
+### 2.6 MEDIUM: Complete EgressGuard End-to-End Wiring
+
+**Priority**: MEDIUM
+**Effort**: 4-6 hours
+**Reference**: `docs/architecture/architecture_v_0_7.md` Section 7, `docs/architecture/execution-context/spec_v_0_1.md` Section 7
+
+**Description**: EgressGuard protects outbound LLM requests but does NOT sanitize responses or sandbox output. Architecture specifies all egress should flow through EgressGuard.
+
+**Current State**:
+- ✅ Outbound LLM requests protected via `egressClient.guardAndExecute()` in `LlmRouter`
+- ❌ LLM responses NOT sanitized before reaching client
+- ❌ Sandbox execution results NOT sanitized
+- ❌ `BasicEgressGuard.redact()` passed to agents but never called
+
+**Tasks**:
+
+- [ ] **Task E.1**: Add response sanitization to LLM streaming
+  - File: `packages/reg-intel-llm/src/llmRouter.ts`
+  - Apply `sanitizeTextForEgress()` to response chunks before yielding
+  - Consider performance impact of per-chunk sanitization
+
+- [ ] **Task E.2**: Add sandbox egress protection
+  - File: `packages/reg-intel-llm/src/tools/codeExecutionTools.ts`
+  - Sanitize `stdout`, `stderr`, and `result` before returning
+  - Prevents PII leakage from code execution
+
+- [ ] **Task E.3**: Wire BasicEgressGuard in agents
+  - File: `packages/reg-intel-core/src/orchestrator/complianceEngine.ts`
+  - Actually invoke `egressGuard.redact()` on agent outputs
+  - Currently dead code (passed but never called)
+
+- [ ] **Task E.4**: Add integration tests for full flow
+  - Test that PII in knowledge base doesn't leak to client
+  - Test that sandbox output with PII is sanitized
+
+**Security Impact**: Without these changes, PII from the knowledge base or sandbox output could leak to clients.
+
+---
+
 ## 3. Implementation Priority Order
 
 ### Phase A: Critical Path (Next Sprint)
@@ -293,6 +344,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
 | 2.2 Cleanup Cron Job | MEDIUM | 2-4h | None |
+| 2.6 EgressGuard End-to-End | MEDIUM | 4-6h | None |
 
 ### Phase C: Polish (Deferred)
 
@@ -301,6 +353,8 @@ This document consolidates all outstanding work identified from reviewing the ar
 | 2.3 Metrics Dashboard | LOW | 4-6h | 2.2 |
 | 2.4 Version Navigator | LOW | 2-4h | None |
 | 2.5 PathAwareMessageList | LOW | 2-4h | None |
+
+**Note**: EgressGuard completion (2.6) has security implications and should be prioritized for production deployment.
 
 ---
 
@@ -359,37 +413,51 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ## 7. Summary
 
-**Total Outstanding Effort**: ~14-24 hours (significantly reduced from previous ~26-42 hours)
+**Total Outstanding Effort**: ~18-30 hours
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 4-6h |
-| MEDIUM | 1 | 2-4h |
+| MEDIUM | 2 | 6-10h |
 | LOW | 3 | 8-14h |
 
 ### Recently Completed (Since 2025-12-12)
 
-1. **AI Merge Summarization** - Fully implemented with:
+1. **AI Merge Summarization** - Fully implemented end-to-end:
    - AI-powered summary generation in `mergeSummarizer.ts`
    - Integration with merge API endpoint
    - MergeDialog UI with summary mode, custom prompts, and preview
    - Fallback handling when LLM unavailable
+   - ✅ Verified: Complete flow from UI to LLM and back
 
-2. **EgressGuard Validation** - Complete with comprehensive test coverage
+2. **EgressGuard Core** - Implementation and tests complete, but:
+   - ⚠️ Only OUTBOUND LLM requests are protected
+   - ❌ LLM responses NOT sanitized before reaching client
+   - ❌ Sandbox output NOT sanitized
+   - ❌ Agent-level redaction is dead code
 
 ### Recommended Next Steps
 
-1. **Add Message Pinning UI** (HIGH priority) - Backend complete, just needs UI components and API endpoints
-2. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
-3. **Integrate existing components** (LOW priority) - Version Navigator and PathAwareMessageList are complete but unused
+1. **Add Message Pinning UI** (HIGH priority) - Backend complete, needs UI components and API endpoints
+2. **Complete EgressGuard End-to-End** (MEDIUM priority) - Security gap: response/sandbox sanitization missing
+3. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
+4. **Integrate existing components** (LOW priority) - Version Navigator and PathAwareMessageList are complete but unused
 
-### Notes
+### Security Note
 
-The codebase has excellent component implementations that aren't yet integrated into the main page. The Version Navigator and PathAwareMessageList components are production-ready and just need wiring.
+EgressGuard currently only protects outbound requests. For production, response sanitization is needed to prevent PII leakage from knowledge base or sandbox execution. See section 2.6 for implementation details.
+
+### PR #159 Review
+
+PR #159 made the following changes (verified non-breaking):
+- Added execution context cleanup on merge (additive)
+- Added "Run Code" / "Run Analysis" buttons to PromptInput (backwards compatible)
+- Extended ComplianceEngine with ExecutionTool support (additive)
+- Created OUTSTANDING_WORK.md documentation
 
 ---
 
-**Document Version**: 2.0
+**Document Version**: 2.1
 **Last Updated**: 2025-12-23
-**Previous Version**: 1.0 (2025-12-12)
+**Previous Version**: 2.0 (2025-12-23), 1.0 (2025-12-12)
 **Author**: Claude Code
