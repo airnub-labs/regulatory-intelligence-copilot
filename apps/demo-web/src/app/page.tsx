@@ -264,15 +264,47 @@ const normalizePersonaType = (value?: string | null): UserProfile['personaType']
   return DEFAULT_PERSONA
 }
 
-// Simplified message building - path system handles branching
+// Build versioned messages - include branch points as versions
 // Each path shows its own linear sequence of messages
+// For branch points, we include placeholder versions for each branch
 const buildVersionedMessages = (messages: ChatMessage[]): VersionedMessage[] => {
-  // In path system, messages are already filtered by active path
-  // No need for supersededBy chains - just show messages as-is
-  return messages.map(message => ({
-    latestId: message.id,
-    versions: [message], // Single version - paths handle branching
-  }))
+  return messages.map(message => {
+    // Check if this message is a branch point with branches
+    const branchedPaths = message.branchedToPaths ?? []
+
+    if (branchedPaths.length > 0) {
+      // Create version entries for each branch
+      // Version 0 is the current message, versions 1+ are branch references
+      const versions: ChatMessage[] = [message]
+
+      // Add placeholder versions for each branch
+      // These will be rendered differently (as branch preview cards)
+      branchedPaths.forEach((pathId, index) => {
+        versions.push({
+          ...message,
+          id: `${message.id}-branch-${pathId}`,
+          content: `[Branch ${index + 1}]`, // Placeholder content
+          metadata: {
+            ...message.metadata,
+            isBranchPreview: true,
+            branchPathId: pathId,
+            branchIndex: index + 1,
+          } as ChatMessage['metadata'],
+        })
+      })
+
+      return {
+        latestId: message.id,
+        versions,
+      }
+    }
+
+    // Non-branch-point messages have a single version
+    return {
+      latestId: message.id,
+      versions: [message],
+    }
+  })
 }
 
 export default function Home() {
@@ -1290,21 +1322,45 @@ export default function Home() {
                             </div>
                           </div>
                         ) : (
-                          <Message
-                            role={currentMessage.role}
-                            content={currentMessage.content}
-                            disclaimer={currentMessage.disclaimer}
-                            metadata={currentMessage.metadata}
-                            messageId={currentMessage.id}
-                            onEdit={handleEdit}
-                            onBranch={handleBranch}
-                            showActions={true}
-                            isBranchPoint={getBranchMetadata(currentMessage).isBranchPoint}
-                            branchedPaths={getBranchMetadata(currentMessage).branchIds}
-                            onViewBranch={handleViewBranch}
-                            isPinned={currentMessage.isPinned}
-                            onTogglePin={handleTogglePin}
-                          />
+                          (() => {
+                            const versionCount = chain.versions.length
+                            const currentVersionIdx = activeVersionIndex[chain.latestId] ?? 0
+                            const displayedMessage = chain.versions[currentVersionIdx] ?? currentMessage
+                            const branchMeta = getBranchMetadata(displayedMessage)
+
+                            return (
+                              <Message
+                                role={displayedMessage.role}
+                                content={displayedMessage.content}
+                                disclaimer={displayedMessage.disclaimer}
+                                metadata={displayedMessage.metadata}
+                                messageId={displayedMessage.id}
+                                onEdit={handleEdit}
+                                onBranch={handleBranch}
+                                showActions={true}
+                                isBranchPoint={branchMeta.isBranchPoint}
+                                branchedPaths={branchMeta.branchIds}
+                                onViewBranch={handleViewBranch}
+                                isPinned={displayedMessage.isPinned}
+                                onTogglePin={handleTogglePin}
+                                versionCount={versionCount}
+                                currentVersionIndex={currentVersionIdx}
+                                versionTimestamp={new Date()}
+                                onVersionPrevious={versionCount > 1 ? () => {
+                                  setActiveVersionIndex(prev => ({
+                                    ...prev,
+                                    [chain.latestId]: Math.max(0, (prev[chain.latestId] ?? 0) - 1)
+                                  }))
+                                } : undefined}
+                                onVersionNext={versionCount > 1 ? () => {
+                                  setActiveVersionIndex(prev => ({
+                                    ...prev,
+                                    [chain.latestId]: Math.min(versionCount - 1, (prev[chain.latestId] ?? 0) + 1)
+                                  }))
+                                } : undefined}
+                              />
+                            )
+                          })()
                         )}
                       </div>
                     )

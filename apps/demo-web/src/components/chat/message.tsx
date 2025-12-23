@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { MessageVersionNav } from "./message-version-nav"
 
 type ListBuffer = {
   type: "ul" | "ol"
@@ -144,6 +145,10 @@ interface MessageMetadata {
   jurisdictions?: string[]
   uncertaintyLevel?: "low" | "medium" | "high"
   referencedNodes?: string[]
+  // Branch preview fields (for version navigation)
+  isBranchPreview?: boolean
+  branchPathId?: string
+  branchIndex?: number
 }
 
 interface MessageProps {
@@ -164,6 +169,12 @@ interface MessageProps {
   // Pinning props
   isPinned?: boolean
   onTogglePin?: (messageId: string, isPinned: boolean) => void
+  // Version navigation props (for messages with multiple versions/branches)
+  versionCount?: number
+  currentVersionIndex?: number
+  versionTimestamp?: Date
+  onVersionPrevious?: () => void
+  onVersionNext?: () => void
 }
 
 export function Message({
@@ -181,12 +192,81 @@ export function Message({
   onViewBranch,
   isPinned = false,
   onTogglePin,
+  versionCount = 1,
+  currentVersionIndex = 0,
+  versionTimestamp,
+  onVersionPrevious,
+  onVersionNext,
 }: MessageProps) {
   const isUser = role === "user"
   const canShowActions = showActions && messageId
   const hasBranches = isBranchPoint && branchedPaths.length > 0
+  const hasVersions = versionCount > 1 && onVersionPrevious && onVersionNext
+  const isBranchPreview = metadata?.isBranchPreview ?? false
+  const branchPathId = metadata?.branchPathId
+  const branchIndex = metadata?.branchIndex ?? 1
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
+
+  // Render branch preview card when viewing a branch version
+  if (isBranchPreview && branchPathId && onViewBranch) {
+    return (
+      <div className={cn("group flex w-full gap-3", isUser ? "justify-end" : "justify-start", className)}>
+        {!isUser && (
+          <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+            <AvatarFallback className="bg-primary/60 text-primary-foreground text-xs">
+              <GitBranch className="h-4 w-4" />
+            </AvatarFallback>
+          </Avatar>
+        )}
+        <div className={cn("flex max-w-[88%] flex-col gap-2", isUser && "items-end")}>
+          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <GitBranch className="h-3.5 w-3.5" />
+            Branch Preview
+            <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+            Alternative path
+          </div>
+          <div className="flex flex-col gap-2">
+            <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 px-4 py-4 shadow-sm">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <GitBranch className="h-5 w-5 text-primary" />
+                  Branch {branchIndex}
+                </div>
+                <p className="text-xs text-muted-foreground max-w-[200px]">
+                  This message has an alternative version on a different branch.
+                </p>
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="mt-1"
+                  onClick={() => onViewBranch(branchPathId)}
+                >
+                  <GitBranch className="mr-2 h-4 w-4" />
+                  View Branch
+                </Button>
+              </div>
+              {hasVersions && (
+                <MessageVersionNav
+                  currentIndex={currentVersionIndex}
+                  totalVersions={versionCount}
+                  currentTimestamp={versionTimestamp ?? new Date()}
+                  onPrevious={onVersionPrevious!}
+                  onNext={onVersionNext!}
+                  isOriginal={currentVersionIndex === 0}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        {isUser && (
+          <Avatar className="h-9 w-9 shrink-0 shadow-sm">
+            <AvatarFallback className="bg-secondary text-secondary-foreground text-xs">U</AvatarFallback>
+          </Avatar>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -325,6 +405,16 @@ export function Message({
                 <div className="rounded-xl border border-amber-200/60 bg-amber-50/60 p-3 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-100">
                   {disclaimer}
                 </div>
+              )}
+              {hasVersions && (
+                <MessageVersionNav
+                  currentIndex={currentVersionIndex}
+                  totalVersions={versionCount}
+                  currentTimestamp={versionTimestamp ?? new Date()}
+                  onPrevious={onVersionPrevious}
+                  onNext={onVersionNext}
+                  isOriginal={currentVersionIndex === 0}
+                />
               )}
             </div>
           </div>
