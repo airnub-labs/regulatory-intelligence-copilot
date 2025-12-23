@@ -27,7 +27,7 @@ import { getBranchMetadata } from '@/lib/pathMessageRenderer'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
 import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
-import { PromptInput } from '@/components/chat/prompt-input'
+import { PromptInput, type ForceTool } from '@/components/chat/prompt-input'
 import { AppHeader } from '@/components/layout/app-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -734,7 +734,7 @@ export default function Home() {
     }
   }
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (forceTool?: ForceTool) => {
     const messageText = (editingMessageId ? editingContent : input).trim()
     if (!messageText) return
 
@@ -781,6 +781,8 @@ export default function Home() {
           tenantAccess,
           title: conversationTitle,
           userId: (session?.user as { id?: string } | undefined)?.id,
+          // Pass force tool if UI button was clicked
+          forceTool: forceTool ? { name: forceTool.name, args: forceTool.args } : undefined,
         }),
         signal: controller.signal,
       })
@@ -1252,7 +1254,7 @@ export default function Home() {
                               <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
                                 <X className="mr-1 h-4 w-4" /> Cancel
                               </Button>
-                              <Button size="sm" onClick={handleSubmit} disabled={isLoading || !editingContent.trim()}>
+                              <Button size="sm" onClick={() => handleSubmit()} disabled={isLoading || !editingContent.trim()}>
                                 <PencilLine className="mr-1 h-4 w-4" /> Save edit
                               </Button>
                             </div>
@@ -1312,6 +1314,7 @@ export default function Home() {
                 placeholder="Ask about tax, welfare, pensions, or cross-border rules..."
                 disabled={isLoading || !isAuthenticated || Boolean(editingMessageId)}
                 isLoading={isLoading}
+                showExecutionButtons={true}
               />
               <p className="mt-2 text-center text-[10px] text-muted-foreground">
                 Research only · Not legal/tax advice

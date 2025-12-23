@@ -259,6 +259,19 @@ export class ExecutionContextManager {
   }
 
   /**
+   * Get execution context by path (if exists)
+   * This is useful for cleanup operations like merge
+   * Returns null if no context exists for the path
+   */
+  async getContextByPath(input: {
+    tenantId: string;
+    conversationId: string;
+    pathId: string;
+  }): Promise<ExecutionContext | null> {
+    return this.config.store.getContextByPath(input);
+  }
+
+  /**
    * Terminate execution context and kill sandbox
    * This is called when:
    * - Path is merged (source path cleanup)

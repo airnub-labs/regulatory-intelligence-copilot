@@ -4,7 +4,7 @@ import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
 
 import { authOptions } from '@/lib/auth/options';
-import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
+import { conversationPathStore, conversationStore, executionContextManager } from '@/lib/server/conversations';
 import { generateMergeSummary } from '@/lib/server/mergeSummarizer';
 
 export const dynamic = 'force-dynamic';
@@ -148,6 +148,32 @@ export async function POST(
       userId,
       archiveSource: archiveSource !== false, // Default to archiving
     });
+
+    // Terminate execution context for the source path (cleanup sandbox)
+    if (executionContextManager && result.success) {
+      try {
+        // Check if there's an active context for the source path
+        const contextResult = await executionContextManager.getContextByPath({
+          tenantId,
+          conversationId,
+          pathId: sourcePathId,
+        });
+
+        if (contextResult?.id) {
+          await executionContextManager.terminateContext(contextResult.id);
+          console.info('[merge] Terminated execution context for merged source path', {
+            sourcePathId,
+            contextId: contextResult.id,
+          });
+        }
+      } catch (cleanupError) {
+        // Log but don't fail the merge if cleanup fails
+        console.warn('[merge] Failed to cleanup execution context for source path', {
+          sourcePathId,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
 
     return NextResponse.json({
       success: result.success,

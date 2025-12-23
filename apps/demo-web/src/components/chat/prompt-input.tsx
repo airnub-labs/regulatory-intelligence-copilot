@@ -1,17 +1,24 @@
 import * as React from "react"
-import { Loader2, Send } from "lucide-react"
+import { Code, LineChart, Loader2, Send } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+export interface ForceTool {
+  name: string
+  args: Record<string, unknown>
+}
+
 interface PromptInputProps {
   value: string
   onChange: (value: string) => void
-  onSubmit: () => void
+  onSubmit: (forceTool?: ForceTool) => void
   placeholder?: string
   disabled?: boolean
   isLoading?: boolean
   className?: string
+  /** Enable code execution buttons (Run Code / Run Analysis) */
+  showExecutionButtons?: boolean
 }
 
 export function PromptInput({
@@ -22,11 +29,26 @@ export function PromptInput({
   disabled = false,
   isLoading = false,
   className,
+  showExecutionButtons = false,
 }: PromptInputProps) {
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, forceTool?: ForceTool) => {
     e.preventDefault()
     if (value.trim() && !disabled && !isLoading) {
-      onSubmit()
+      onSubmit(forceTool)
+    }
+  }
+
+  const handleRunCode = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (!disabled && !isLoading && value.trim()) {
+      onSubmit({ name: 'run_code', args: { code: value.trim() } })
+    }
+  }
+
+  const handleRunAnalysis = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (!disabled && !isLoading && value.trim()) {
+      onSubmit({ name: 'run_analysis', args: { query: value.trim() } })
     }
   }
 
@@ -59,24 +81,54 @@ export function PromptInput({
             <span className="rounded-full bg-muted px-2 py-1" title="Answers are generated via the Compliance Engine, which queries the regulatory graph and timeline engine.">Graph-grounded</span>
             <span className="rounded-full bg-muted px-2 py-1" title="Outbound LLM calls are sanitised and policy-checked by the egress guard.">Egress-guarded</span>
           </div>
-          <Button
-            type="submit"
-            disabled={disabled || isLoading || !value.trim()}
-            size="lg"
-            className="h-11 gap-2 px-5"
-          >
-            {isLoading ? (
+          <div className="flex items-center gap-2">
+            {showExecutionButtons && (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Sending
-              </>
-            ) : (
-              <>
-                Send
-                <Send className="h-4 w-4" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled || isLoading || !value.trim()}
+                  size="sm"
+                  className="h-9 gap-1.5 px-3"
+                  onClick={handleRunCode}
+                  title="Execute the input as Python code in an E2B sandbox"
+                >
+                  <Code className="h-4 w-4" />
+                  Run Code
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disabled || isLoading || !value.trim()}
+                  size="sm"
+                  className="h-9 gap-1.5 px-3"
+                  onClick={handleRunAnalysis}
+                  title="Run data analysis with the input query"
+                >
+                  <LineChart className="h-4 w-4" />
+                  Run Analysis
+                </Button>
               </>
             )}
-          </Button>
+            <Button
+              type="submit"
+              disabled={disabled || isLoading || !value.trim()}
+              size="lg"
+              className="h-11 gap-2 px-5"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Sending
+                </>
+              ) : (
+                <>
+                  Send
+                  <Send className="h-4 w-4" />
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </form>

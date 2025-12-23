@@ -784,17 +784,62 @@ describe('ComplianceEngine with Execution Tools', () => {
   }
   ```
 
-- [ ] **Task 3.1.5**: Pass sandbox to ComplianceEngine
-  ```typescript
-  const engine = new ComplianceEngine({
-    // ... existing config
-  });
+- [x] **Task 3.1.5**: Pass execution tools to ComplianceEngine ✅ COMPLETED
 
-  await engine.initializeTools({
-    // ... existing context
-    executionSandbox,
-  });
+  **Implementation Note**: The original plan suggested passing sandbox directly to ComplianceEngine.
+  Actual implementation uses an `ExecutionTool` interface bridge pattern:
+
+  ```typescript
+  // packages/reg-intel-core/src/orchestrator/complianceEngine.ts
+  export interface ExecutionTool {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    execute: (args: Record<string, unknown>) => Promise<ExecutionToolResult>;
+  }
+
+  export interface ExecutionToolResult {
+    success: boolean;
+    stdout?: string;
+    stderr?: string;
+    exitCode?: number;
+    error?: string;
+    result?: unknown;
+    executionTimeMs?: number;
+  }
+
+  // Extended ComplianceRequest to accept executionTools and forceTool
+  export interface ComplianceRequest {
+    messages: ChatMessage[];
+    profile?: UserProfile;
+    tenantId?: string;
+    conversationId?: string;
+    executionTools?: ExecutionTool[];
+    forceTool?: { name: string; args: Record<string, unknown> };
+  }
   ```
+
+  ```typescript
+  // packages/reg-intel-next-adapter/src/index.ts
+  // Bridge function to convert ToolRegistry to ExecutionTools
+  function convertToolRegistryToExecutionTools(toolRegistry: ToolRegistry): ExecutionTool[] {
+    const executionTools: ExecutionTool[] = [];
+    for (const name of toolRegistry.getToolNames()) {
+      const tool = toolRegistry.getTool(name);
+      if (tool) {
+        executionTools.push({
+          name: tool.name,
+          description: tool.description,
+          parameters: /* converted from Zod schema */,
+          execute: async (args) => tool.execute(args),
+        });
+      }
+    }
+    return executionTools;
+  }
+  ```
+
+  **UI Integration**: Added "Run Code" and "Run Analysis" buttons that use `forceTool` to bypass LLM decision-making.
 
 **Validation**:
 ```typescript
@@ -949,39 +994,58 @@ curl -X POST http://localhost:3000/api/chat \
 **File**: `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/merge/route.ts`
 
 **Tasks**:
-- [ ] **Task 3.3.1**: Terminate source path context on merge
+- [x] **Task 3.3.1**: Terminate source path context on merge ✅ COMPLETED
+
+  **Implementation Note**: The original plan accessed `manager.config.store` which is private.
+  Actual implementation adds a public `getContextByPath` method to `ExecutionContextManager`:
+
   ```typescript
-  export async function POST(request: Request, { params }: RouteParams) {
-    const { id: conversationId, pathId: sourcePathId } = params;
-
-    // ... existing merge logic
-
-    // After merge completes, terminate source path's execution context
-    const manager = getExecutionContextManager();
-    if (manager) {
-      try {
-        const context = await manager.config.store.getContextByPath({
-          tenantId,
-          conversationId,
-          pathId: sourcePathId,
-        });
-
-        if (context) {
-          await manager.terminateContext(context.id);
-          console.info('[merge] Terminated source path execution context', {
-            pathId: sourcePathId,
-            contextId: context.id,
-          });
-        }
-      } catch (error) {
-        console.error('[merge] Failed to terminate execution context', { error });
-        // Don't fail merge if cleanup fails
-      }
-    }
-
-    return Response.json({ success: true });
+  // packages/reg-intel-conversations/src/executionContextManager.ts
+  /**
+   * Get execution context by path (if exists)
+   * This is useful for cleanup operations like merge
+   * Returns null if no context exists for the path
+   */
+  async getContextByPath(input: {
+    tenantId: string;
+    conversationId: string;
+    pathId: string;
+  }): Promise<ExecutionContext | null> {
+    return this.config.store.getContextByPath(input);
   }
   ```
+
+  ```typescript
+  // apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/merge/route.ts
+  // Terminate execution context for the source path (cleanup sandbox)
+  if (executionContextManager && result.success) {
+    try {
+      // Check if there's an active context for the source path
+      const contextResult = await executionContextManager.getContextByPath({
+        tenantId,
+        conversationId,
+        pathId: sourcePathId,
+      });
+
+      if (contextResult?.id) {
+        await executionContextManager.terminateContext(contextResult.id);
+        console.info('[merge] Terminated execution context for merged source path', {
+          sourcePathId,
+          contextId: contextResult.id,
+        });
+      }
+    } catch (cleanupError) {
+      // Log but don't fail the merge if cleanup fails
+      console.warn('[merge] Failed to cleanup execution context for source path', {
+        sourcePathId,
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
+    }
+  }
+  ```
+
+  **Key Design Decision**: Cleanup errors don't fail the merge operation - this ensures merge
+  reliability even if E2B sandbox termination encounters issues.
 
 **Validation**:
 ```bash
@@ -1049,43 +1113,40 @@ curl -X POST http://localhost:3000/api/conversations/conv-1/paths/path-1/merge \
   }
   ```
 
-- [ ] **Task 4.1.2**: Add spans to tool executions
+- [x] **Task 4.1.2**: Add spans to tool executions ✅ COMPLETED
+
+  **Implementation Note**: Spans added in ComplianceEngine.routeThroughRouter rather than
+  codeExecutionTools.ts, providing tracing at the orchestration layer:
+
   ```typescript
-  // In codeExecutionTools.ts
-  export async function executeCode(input: RunCodeInput, sandbox: Sandbox) {
-    const tracer = trace.getTracer('code-execution-tools');
+  // packages/reg-intel-core/src/orchestrator/complianceEngine.ts
+  // In handleChatStreamInternal for forced tool execution:
+  const result = await this.runWithTracing(
+    `compliance.tool.${forceTool.name}`,
+    { toolName: forceTool.name, forced: true },
+    async () => tool.execute(forceTool.args)
+  );
 
-    return tracer.startActiveSpan('executeCode', async (span) => {
-      span.setAttributes({
-        'code.language': input.language,
-        'code.length': input.code.length,
-      });
-
-      try {
-        const result = await sandbox.runCode(input.code, {
-          language: input.language,
-        });
-
-        span.setAttributes({
-          'execution.exitCode': result.exitCode ?? 0,
-          'execution.stdout.length': result.logs.stdout.join('').length,
-          'execution.stderr.length': result.logs.stderr.join('').length,
-        });
-
-        return {
-          stdout: result.logs.stdout.join('\n'),
-          stderr: result.logs.stderr.join('\n'),
-          exitCode: result.exitCode ?? 0,
-        };
-      } catch (error) {
-        span.recordException(error as Error);
-        throw error;
-      } finally {
-        span.end();
-      }
-    });
-  }
+  // In routeThroughRouter for LLM-decided tool execution:
+  const toolResult = await this.runWithTracing(
+    `compliance.tool.${toolName}`,
+    {
+      toolName,
+      forced: false,
+      args: JSON.stringify(toolArgs).substring(0, 200), // Truncate for safety
+    },
+    async () => {
+      const tool = executionTools.find(t => t.name === toolName);
+      if (!tool) throw new Error(`Tool ${toolName} not found`);
+      return tool.execute(toolArgs);
+    }
+  );
   ```
+
+  **Span Attributes**:
+  - `toolName`: Name of the tool being executed
+  - `forced`: Whether execution was triggered by UI button (forceTool) or LLM decision
+  - `args`: Truncated arguments for debugging (first 200 chars)
 
 **Validation**:
 ```bash
