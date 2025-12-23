@@ -20,6 +20,7 @@ import type {
 } from '@reg-copilot/reg-intel-conversations'
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { Message, MessageLoading } from '@/components/chat/message'
+import { PathAwareMessageList } from '@/components/chat/path-aware-message-list'
 import { PathToolbar } from '@/components/chat/path-toolbar'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
@@ -74,11 +75,6 @@ interface ChatMessage {
   branchedToPaths?: string[]
   // Pinning
   isPinned?: boolean
-}
-
-interface VersionedMessage {
-  latestId: string
-  versions: ChatMessage[]
 }
 
 type ShareAudience = 'private' | 'tenant' | 'public'
@@ -264,49 +260,6 @@ const normalizePersonaType = (value?: string | null): UserProfile['personaType']
   return DEFAULT_PERSONA
 }
 
-// Build versioned messages - include branch points as versions
-// Each path shows its own linear sequence of messages
-// For branch points, we include placeholder versions for each branch
-const buildVersionedMessages = (messages: ChatMessage[]): VersionedMessage[] => {
-  return messages.map(message => {
-    // Check if this message is a branch point with branches
-    const branchedPaths = message.branchedToPaths ?? []
-
-    if (branchedPaths.length > 0) {
-      // Create version entries for each branch
-      // Version 0 is the current message, versions 1+ are branch references
-      const versions: ChatMessage[] = [message]
-
-      // Add placeholder versions for each branch
-      // These will be rendered differently (as branch preview cards)
-      branchedPaths.forEach((pathId, index) => {
-        versions.push({
-          ...message,
-          id: `${message.id}-branch-${pathId}`,
-          content: `[Branch ${index + 1}]`, // Placeholder content
-          metadata: {
-            ...message.metadata,
-            isBranchPreview: true,
-            branchPathId: pathId,
-            branchIndex: index + 1,
-          } as ChatMessage['metadata'],
-        })
-      })
-
-      return {
-        latestId: message.id,
-        versions,
-      }
-    }
-
-    // Non-branch-point messages have a single version
-    return {
-      latestId: message.id,
-      versions: [message],
-    }
-  })
-}
-
 export default function Home() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -321,7 +274,6 @@ export default function Home() {
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
-  const [activeVersionIndex, setActiveVersionIndex] = useState<Record<string, number>>({})
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [branchFromMessageId, setBranchFromMessageId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
@@ -346,7 +298,6 @@ export default function Home() {
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
-  const versionedMessages = useMemo(() => buildVersionedMessages(messages), [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -458,18 +409,7 @@ export default function Home() {
     prevMessageCountRef.current = messages.length
   }, [messages.length])
 
-  useEffect(() => {
-    setActiveVersionIndex(prev => {
-      const next = { ...prev }
-      versionedMessages.forEach(chain => {
-        const maxIndex = chain.versions.length - 1
-        if (!(chain.latestId in next) || next[chain.latestId] > maxIndex) {
-          next[chain.latestId] = maxIndex
-        }
-      })
-      return next
-    })
-  }, [versionedMessages])
+  // Version index tracking is now handled internally by PathAwareMessageList
 
   const applyMetadata = (metadata: ChatSseMetadata) => {
     if (metadata.conversationId) {
@@ -961,10 +901,9 @@ export default function Home() {
   }
 
   const lastEditableUserMessage = () => {
-    for (let i = versionedMessages.length - 1; i >= 0; i -= 1) {
-      const chain = versionedMessages[i]
-      const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
-      const candidate = chain.versions[currentIndex]
+    // Find the last user message in the messages array
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const candidate = messages[i]
       if (candidate.role === 'user') {
         return candidate
       }
@@ -1262,7 +1201,7 @@ export default function Home() {
             )}
 
             <ChatContainer className="flex-1 bg-transparent px-4">
-              {versionedMessages.length === 0 ? (
+              {messages.length === 0 && !isLoading ? (
                 <ChatWelcome>
                   <div className="mx-auto max-w-lg space-y-4 py-8 text-center">
                     <h2 className="text-xl font-semibold">Welcome to the Regulatory Intelligence Copilot</h2>
@@ -1288,90 +1227,32 @@ export default function Home() {
                   </div>
                 </ChatWelcome>
               ) : (
-                <>
-                  {versionedMessages.map(chain => {
-                    const currentMessage = chain.versions[0] // Path system - single version per message
-                    const isEditingCurrent = editingMessageId === currentMessage.id && currentMessage.role === 'user'
-
-                    return (
-                      <div key={chain.latestId} className="relative">
-                        {isEditingCurrent ? (
-                          <div className="rounded-2xl border bg-muted/40 p-4 shadow-sm">
-                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                              <PencilLine className="h-4 w-4" /> Editing last message
-                            </div>
-                            <Label htmlFor={`edit-${chain.latestId}`} className="sr-only">
-                              Edit message
-                            </Label>
-                            <textarea
-                              ref={editTextareaRef}
-                              id={`edit-${chain.latestId}`}
-                              value={editingContent}
-                              onChange={event => setEditingContent(event.target.value)}
-                              className="w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none"
-                              rows={3}
-                              disabled={isLoading}
-                            />
-                            <div className="mt-2 flex items-center justify-end gap-2">
-                              <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
-                                <X className="mr-1 h-4 w-4" /> Cancel
-                              </Button>
-                              <Button size="sm" onClick={() => handleSubmit()} disabled={isLoading || !editingContent.trim()}>
-                                <PencilLine className="mr-1 h-4 w-4" /> Save edit
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          (() => {
-                            const versionCount = chain.versions.length
-                            const currentVersionIdx = activeVersionIndex[chain.latestId] ?? 0
-                            const displayedMessage = chain.versions[currentVersionIdx] ?? currentMessage
-                            const branchMeta = getBranchMetadata(displayedMessage)
-
-                            return (
-                              <Message
-                                role={displayedMessage.role}
-                                content={displayedMessage.content}
-                                disclaimer={displayedMessage.disclaimer}
-                                metadata={displayedMessage.metadata}
-                                messageId={displayedMessage.id}
-                                onEdit={handleEdit}
-                                onBranch={handleBranch}
-                                showActions={true}
-                                isBranchPoint={branchMeta.isBranchPoint}
-                                branchedPaths={branchMeta.branchIds}
-                                onViewBranch={handleViewBranch}
-                                isPinned={displayedMessage.isPinned}
-                                onTogglePin={handleTogglePin}
-                                versionCount={versionCount}
-                                currentVersionIndex={currentVersionIdx}
-                                versionTimestamp={new Date()}
-                                onVersionPrevious={versionCount > 1 ? () => {
-                                  setActiveVersionIndex(prev => ({
-                                    ...prev,
-                                    [chain.latestId]: Math.max(0, (prev[chain.latestId] ?? 0) - 1)
-                                  }))
-                                } : undefined}
-                                onVersionNext={versionCount > 1 ? () => {
-                                  setActiveVersionIndex(prev => ({
-                                    ...prev,
-                                    [chain.latestId]: Math.min(versionCount - 1, (prev[chain.latestId] ?? 0) + 1)
-                                  }))
-                                } : undefined}
-                              />
-                            )
-                          })()
-                        )}
-                      </div>
-                    )
-                  })}
-                  {isLoading && (
-                    <>
-                      <ProgressIndicator currentStage={streamingStage} />
-                      <MessageLoading />
-                    </>
-                  )}
-                </>
+                <PathAwareMessageList
+                  fallbackMessages={messages.map(msg => ({
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                    metadata: msg.metadata,
+                    disclaimer: msg.disclaimer,
+                    isPinned: msg.isPinned,
+                    isBranchPoint: msg.isBranchPoint,
+                    branchedToPaths: msg.branchedToPaths,
+                  }))}
+                  isLoading={isLoading}
+                  streamingStage={streamingStage}
+                  editingMessageId={editingMessageId}
+                  editingContent={editingContent}
+                  onEditingContentChange={setEditingContent}
+                  onEditSubmit={() => handleSubmit()}
+                  onEditCancel={cancelEditing}
+                  onEditRequest={handleEdit}
+                  onBranchRequest={handleBranch}
+                  onViewBranch={handleViewBranch}
+                  onTogglePin={handleTogglePin}
+                  showBranchButtons={true}
+                  showActions={true}
+                  editTextareaRef={editTextareaRef}
+                />
               )}
               <div ref={messagesEndRef} />
             </ChatContainer>
@@ -1383,7 +1264,7 @@ export default function Home() {
                     Cancel
                   </Button>
                 )}
-                {versionedMessages.length > 0 && !editingMessageId && (
+                {messages.length > 0 && !editingMessageId && (
                   <Button
                     size="sm"
                     variant="ghost"
