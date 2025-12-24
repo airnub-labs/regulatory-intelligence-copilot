@@ -447,7 +447,7 @@ function PathContextMessageList({
               isBranchPoint={baseMessage.isBranchPoint}
               branchedPaths={baseMessage.branchedToPaths}
               onViewBranch={handleViewBranch}
-              isPinned={false} // PathMessage doesn't have isPinned yet
+              isPinned={baseMessage.isPinned ?? false}
               onTogglePin={onTogglePin}
               versionCount={versionCount}
               currentVersionIndex={currentVersionIdx}

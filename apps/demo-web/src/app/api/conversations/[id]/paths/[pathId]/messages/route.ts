@@ -75,6 +75,10 @@ export async function GET(
         branchedToPaths: msg.branchedToPaths,
         messageType: msg.messageType,
         createdAt: msg.createdAt.toISOString(),
+        // Pinning fields
+        isPinned: msg.isPinned ?? false,
+        pinnedAt: msg.pinnedAt?.toISOString() ?? null,
+        pinnedBy: msg.pinnedBy ?? null,
       })),
       path: {
         id: path.id,

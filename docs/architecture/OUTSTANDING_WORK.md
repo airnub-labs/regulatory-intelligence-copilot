@@ -281,31 +281,29 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.5 LOW: Add isPinned to PathMessage Type
+### 2.5 ~~LOW: Add isPinned to PathMessage Type~~ ✅ COMPLETE
 
-**Priority**: LOW
+**Priority**: LOW (COMPLETED)
 **Effort**: 1-2 hours
 **Reference**: `packages/reg-intel-ui/src/types.ts`
 
-**Description**: The `PathMessage` type in reg-intel-ui doesn't include `isPinned` field. This means pinning status is lost when using path context mode.
+**Description**: PathMessage type now includes isPinned field. Pinning works in both fallback and path context modes.
 
-**Current State**:
-- `PathMessage` type has: id, conversationId, pathId, role, content, metadata, sequenceInPath, effectiveSequence, isBranchPoint, branchedToPaths, messageType, createdAt
-- ❌ Missing: `isPinned`, `pinnedAt`, `pinnedBy`
-- In `PathContextMessageList`, pinning is hardcoded to `false`: `isPinned={false} // PathMessage doesn't have isPinned yet`
+**Implementation**:
+- Added `isPinned`, `pinnedAt`, `pinnedBy` fields to `PathMessage` type
+- Updated path messages API to include pinning data in response
+- Updated `PathContextMessageList` to use actual `isPinned` value from message
 
-**Tasks**:
+**Files Modified**:
+- `packages/reg-intel-ui/src/types.ts` - Added pinning fields to PathMessage
+- `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/messages/route.ts` - Include pinning in response
+- `apps/demo-web/src/components/chat/path-aware-message-list.tsx` - Use actual isPinned value
 
-- [ ] **Task P.1**: Add pinning fields to `PathMessage` type
-  - File: `packages/reg-intel-ui/src/types.ts`
-  - Add: `isPinned?: boolean`, `pinnedAt?: string`, `pinnedBy?: string`
+**Tasks** (all completed):
 
-- [ ] **Task P.2**: Update path API to include pinning data
-  - File: `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/messages/route.ts`
-  - Include pinning fields in message response
-
-- [ ] **Task P.3**: Update PathContextMessageList to use actual isPinned value
-  - File: `apps/demo-web/src/components/chat/path-aware-message-list.tsx`
+- [x] **Task P.1**: Add pinning fields to `PathMessage` type
+- [x] **Task P.2**: Update path API to include pinning data
+- [x] **Task P.3**: Update PathContextMessageList to use actual isPinned value
 
 ---
 
@@ -423,22 +421,28 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ## 7. Summary
 
-**Total Outstanding Effort**: ~9-18 hours
+**Total Outstanding Effort**: ~8-16 hours
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | MEDIUM | 2 | 6-10h |
-| LOW | 2 | 3-8h |
+| LOW | 1 | 4-6h |
 
 ### Recently Completed (Since 2025-12-12)
 
-1. **PathAwareMessageList Integration** - Fully implemented end-to-end:
+1. **PathMessage isPinned Support** - Fully implemented:
+   - Added `isPinned`, `pinnedAt`, `pinnedBy` fields to `PathMessage` type
+   - Updated path messages API to return pinning data
+   - Message pinning now works in path context mode
+   - ✅ Verified: Dev server starts without errors
+
+2. **PathAwareMessageList Integration** - Fully implemented end-to-end:
    - Enhanced `PathAwareMessageList` with version navigation, editing, pinning, and progress indicator
    - Replaced ~100 lines of inline message rendering in `page.tsx`
    - Works with both path context and fallback modes
    - ✅ Verified: Dev server starts without errors
 
-2. **Version Navigator** - Fully implemented end-to-end:
+3. **Version Navigator** - Fully implemented end-to-end:
    - `MessageVersionNav` component wired into message rendering
    - Branch points display version navigation to cycle through branches
    - Branch preview cards shown when viewing branch versions
@@ -469,8 +473,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 1. **Complete EgressGuard End-to-End** (MEDIUM priority) - Security gap: response/sandbox sanitization missing
 2. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
-3. **Add isPinned to PathMessage** (LOW priority) - Pinning broken in path context mode
-4. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
+3. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
 
 ### Security Note
 
