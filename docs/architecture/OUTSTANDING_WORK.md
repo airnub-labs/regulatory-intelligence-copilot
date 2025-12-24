@@ -20,7 +20,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (Outbound) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | EgressGuard (Response/Sandbox) | ✅ Complete | N/A | ❌ NOT Wired |
-| v0.7 | Observability & Cleanup | 🔄 Partial | N/A | 🔄 Partial |
+| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ✅ Wired |
 
 ---
 
@@ -55,7 +55,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Phase 1 | Foundation (ExecutionContextStore, Manager) | ✅ Complete |
 | Phase 2 | Tool Integration (`run_code`, `run_analysis` tools) | ✅ Complete |
 | Phase 3 | Path Integration (wiring through chat handler) | ✅ Complete |
-| Phase 4 | Observability | 🔄 Partial (spans added, cleanup job pending) |
+| Phase 4 | Observability | ✅ Complete (spans added, cleanup job implemented) |
 
 **Files Created/Modified**:
 - `supabase/migrations/20251210000000_execution_contexts.sql`
@@ -160,39 +160,30 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ## 2. Outstanding Work
 
-### 2.1 MEDIUM: Cleanup Cron Job (v0.7 Phase 4)
+### 2.1 ~~MEDIUM: Cleanup Cron Job (v0.7 Phase 4)~~ ✅ COMPLETE
 
-**Priority**: MEDIUM
+**Priority**: MEDIUM (COMPLETED)
 **Effort**: 2-4 hours
 **Reference**: `docs/architecture/execution-context/IMPLEMENTATION_PLAN.md` Tasks 4.3.1-4.3.3
 
-**Description**: No automated cleanup of expired execution contexts exists.
+**Description**: Automated cleanup of expired execution contexts is now implemented.
 
-**Tasks**:
+**Implementation**:
+- Created cleanup job function at `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts`
+- Created cron API endpoint at `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts`
+- Secured with `CRON_SECRET` authorization header (Bearer token)
+- Configured Vercel Cron in `vercel.json` to run hourly
 
-- [ ] **Task C.1**: Create cleanup job function
-  - File: `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts`
-  ```typescript
-  export async function cleanupExecutionContexts(
-    manager: ExecutionContextManager
-  ): Promise<{ cleaned: number; errors: number }>
-  ```
+**Files Created**:
+- `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts` - Job function with observability span
+- `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts` - POST endpoint for cron, GET for health check
+- `vercel.json` - Cron configuration (hourly at minute 0)
 
-- [ ] **Task C.2**: Create cron API endpoint
-  - File: `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts`
-  - Secure with `CRON_SECRET` authorization header
-  - Call `manager.cleanupExpired()`
+**Tasks** (all completed):
 
-- [ ] **Task C.3**: Configure Vercel Cron
-  - File: `vercel.json`
-  ```json
-  {
-    "crons": [{
-      "path": "/api/cron/cleanup-contexts",
-      "schedule": "0 * * * *"
-    }]
-  }
-  ```
+- [x] **Task C.1**: Create cleanup job function
+- [x] **Task C.2**: Create cron API endpoint with CRON_SECRET auth
+- [x] **Task C.3**: Configure Vercel Cron in vercel.json
 
 ---
 
@@ -352,15 +343,14 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.1 Cleanup Cron Job | MEDIUM | 2-4h | None |
+| ~~2.1 Cleanup Cron Job~~ | ~~MEDIUM~~ | ~~2-4h~~ | ✅ Complete |
 | 2.6 EgressGuard End-to-End | MEDIUM | 4-6h | None |
 
 ### Phase B: Polish (Deferred)
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.2 Metrics Dashboard | LOW | 4-6h | 2.1 |
-| 2.5 PathMessage isPinned | LOW | 1-2h | None |
+| 2.2 Metrics Dashboard | LOW | 4-6h | ~~2.1~~ (dependency complete) |
 
 **Note**: EgressGuard completion (2.6) has security implications and should be prioritized for production deployment.
 
@@ -421,48 +411,55 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ## 7. Summary
 
-**Total Outstanding Effort**: ~8-16 hours
+**Total Outstanding Effort**: ~8-12 hours
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| MEDIUM | 2 | 6-10h |
+| MEDIUM | 1 | 4-6h |
 | LOW | 1 | 4-6h |
 
 ### Recently Completed (Since 2025-12-12)
 
-1. **PathMessage isPinned Support** - Fully implemented:
+1. **Cleanup Cron Job** - Fully implemented:
+   - Created cleanup job function at `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts`
+   - Created cron API endpoint at `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts`
+   - Secured with `CRON_SECRET` Bearer token authorization
+   - Configured Vercel Cron in `vercel.json` to run hourly (0 * * * *)
+   - ✅ Verified: All files created correctly
+
+2. **PathMessage isPinned Support** - Fully implemented:
    - Added `isPinned`, `pinnedAt`, `pinnedBy` fields to `PathMessage` type
    - Updated path messages API to return pinning data
    - Message pinning now works in path context mode
    - ✅ Verified: Dev server starts without errors
 
-2. **PathAwareMessageList Integration** - Fully implemented end-to-end:
+3. **PathAwareMessageList Integration** - Fully implemented end-to-end:
    - Enhanced `PathAwareMessageList` with version navigation, editing, pinning, and progress indicator
    - Replaced ~100 lines of inline message rendering in `page.tsx`
    - Works with both path context and fallback modes
    - ✅ Verified: Dev server starts without errors
 
-3. **Version Navigator** - Fully implemented end-to-end:
+4. **Version Navigator** - Fully implemented end-to-end:
    - `MessageVersionNav` component wired into message rendering
    - Branch points display version navigation to cycle through branches
    - Branch preview cards shown when viewing branch versions
    - Quick access to view branches via "View Branch" button
    - ✅ Verified: Dev server starts without errors
 
-4. **AI Merge Summarization** - Fully implemented end-to-end:
+5. **AI Merge Summarization** - Fully implemented end-to-end:
    - AI-powered summary generation in `mergeSummarizer.ts`
    - Integration with merge API endpoint
    - MergeDialog UI with summary mode, custom prompts, and preview
    - Fallback handling when LLM unavailable
    - ✅ Verified: Complete flow from UI to LLM and back
 
-5. **EgressGuard Core** - Implementation and tests complete, but:
+6. **EgressGuard Core** - Implementation and tests complete, but:
    - ⚠️ Only OUTBOUND LLM requests are protected
    - ❌ LLM responses NOT sanitized before reaching client
    - ❌ Sandbox output NOT sanitized
    - ❌ Agent-level redaction is dead code
 
-6. **Message Pinning UI** - Fully implemented end-to-end:
+7. **Message Pinning UI** - Fully implemented end-to-end:
    - Pin/Unpin API endpoints at `/api/conversations/:id/messages/:messageId/pin`
    - Pin button on all messages (user and assistant)
    - Visual indicator (amber badge and ring) for pinned messages
@@ -472,8 +469,7 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 ### Recommended Next Steps
 
 1. **Complete EgressGuard End-to-End** (MEDIUM priority) - Security gap: response/sandbox sanitization missing
-2. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
-3. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
+2. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
 
 ### Security Note
 
@@ -489,7 +485,7 @@ PR #159 made the following changes (verified non-breaking):
 
 ---
 
-**Document Version**: 2.5
+**Document Version**: 2.6
 **Last Updated**: 2025-12-24
-**Previous Version**: 2.4 (2025-12-23), 2.3 (2025-12-23), 2.2 (2025-12-23), 2.1 (2025-12-23), 2.0 (2025-12-23), 1.0 (2025-12-12)
+**Previous Version**: 2.5 (2025-12-24), 2.4 (2025-12-23), 2.3 (2025-12-23), 2.2 (2025-12-23), 2.1 (2025-12-23), 2.0 (2025-12-23), 1.0 (2025-12-12)
 **Author**: Claude Code
