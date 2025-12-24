@@ -1,6 +1,8 @@
 # Egress Guard – v0_3 (Aspect-Based, Symmetric with Graph Ingress)
 
-> **Status:** Accepted (supersedes v0_2).
+> **Status:** Accepted and Implemented (supersedes v0_2).
+>
+> **Implementation Status:** ✅ Fully Complete (2025-12-24)
 >
 > Goal: Make the egress guard for MCP + LLM calls use the **same aspect pattern** as the Graph Ingress Guard, so both sides feel familiar and can even host AI policy agents while supporting staged rollout modes.
 
@@ -368,4 +370,93 @@ with a short note that:
 This brings the egress side up to the same level of customisability and
 robustness as the graph ingress side, while keeping both aligned in design and
 mental model.
+
+---
+
+## 9. Implementation Status (2025-12-24)
+
+The EgressGuard system is **fully implemented** with end-to-end PII protection at all egress points.
+
+### 9.1 Core Implementation Files
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `sanitizeTextForEgress()` | `packages/reg-intel-llm/src/egressGuard.ts` | ✅ Implemented |
+| `sanitizeObjectForEgress()` | `packages/reg-intel-llm/src/egressGuard.ts` | ✅ Implemented |
+| `EgressClient` | `packages/reg-intel-llm/src/egressClient.ts` | ✅ Implemented |
+| Mode resolver | `packages/reg-intel-llm/src/egressModeResolver.ts` | ✅ Implemented |
+
+### 9.2 PII Detection Capabilities
+
+The implementation includes both regex-based and ML-powered detection:
+
+**Regex Patterns** (custom patterns):
+- Irish PPSN (Personal Public Service Number)
+- API keys (sk_live_, sk_test_, api_key_, etc.)
+- JWT tokens
+- AWS access keys (AKIA*)
+- Database connection URLs
+- IP addresses (IPv4)
+- Credit card numbers
+- IBANs
+- Basic email and phone patterns
+
+**ML-Powered Detection** (via @redactpii/node):
+- EMAIL_ADDRESS
+- PHONE_NUMBER
+- US_SOCIAL_SECURITY_NUMBER
+- CREDIT_CARD_NUMBER
+- PERSON_NAME
+- LOCATION
+- And other entity types
+
+### 9.3 Egress Points Protected
+
+| Egress Point | Protection | Files |
+|--------------|------------|-------|
+| **Outbound LLM requests** | User messages sanitized before sending | `llmRouter.ts` |
+| **LLM responses** | Text sanitized before reaching client | `llmRouter.ts:chat()`, `streamChat()` |
+| **Sandbox stdout** | Sanitized before returning to caller | `codeExecutionTools.ts:executeCode()` |
+| **Sandbox stderr** | Sanitized before returning to caller | `codeExecutionTools.ts:executeCode()` |
+| **Sandbox error messages** | Sanitized before returning to caller | `codeExecutionTools.ts:executeCode()` |
+| **Analysis results** | Parsed JSON and results sanitized | `codeExecutionTools.ts:executeAnalysis()` |
+| **Agent outputs** | Defense-in-depth layer | `complianceEngine.ts:handleChat()` |
+| **Streaming responses** | Per-chunk sanitization | `complianceEngine.ts:handleChatStream()` |
+
+### 9.4 Mode Support
+
+All three modes are fully implemented:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `enforce` | Sanitize and execute sanitized payload | Production default |
+| `report-only` | Sanitize but execute original payload; log differences | Gradual rollout, debugging |
+| `off` | Skip sanitization (provider allowlist still enforced) | Testing only |
+
+### 9.5 Test Coverage
+
+- ✅ `egressGuard.test.ts` - Core sanitization unit tests
+- ✅ `egressClient.test.ts` - Client guard and execute tests
+- ✅ `egressClient.spec.ts` - Integration tests
+- ✅ `egressModeResolver.test.ts` - Mode resolution tests
+- ✅ `egressGuardIntegration.test.ts` - 22 end-to-end integration tests
+
+### 9.6 Defense-in-Depth Architecture
+
+The system implements multiple layers of protection:
+
+```
+User Input → [EgressGuard: User Message Sanitization]
+           ↓
+     LLM Provider → [Response Received]
+           ↓
+     [EgressGuard: LLM Response Sanitization] → [BasicEgressGuard: Agent Layer]
+           ↓
+     SSE Stream → Client
+
+Sandbox Code Execution:
+     Code → E2B Sandbox → [EgressGuard: stdout/stderr/results] → Response
+```
+
+This ensures that PII is caught at multiple points, providing resilience even if one layer is bypassed.
 
