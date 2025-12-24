@@ -12,21 +12,17 @@ import {
   PencilLine,
   Plus,
   Wand2,
-  X,
 } from 'lucide-react'
 import type {
   ConversationListEventPayloadMap,
   ClientConversation,
 } from '@reg-copilot/reg-intel-conversations'
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
-import { Message, MessageLoading } from '@/components/chat/message'
 import { PathAwareMessageList } from '@/components/chat/path-aware-message-list'
 import { PathToolbar } from '@/components/chat/path-toolbar'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
-import { getBranchMetadata } from '@/lib/pathMessageRenderer'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
-import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput, type ForceTool } from '@/components/chat/prompt-input'
 import { AppHeader } from '@/components/layout/app-header'
@@ -34,7 +30,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,

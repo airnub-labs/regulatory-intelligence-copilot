@@ -240,7 +240,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 **Files Modified**:
 - `apps/demo-web/src/components/chat/message.tsx` - Added version navigation props and branch preview rendering
-- `apps/demo-web/src/app/page.tsx` - Updated `buildVersionedMessages` to include branch versions, wired navigation handlers
+- `apps/demo-web/src/components/chat/path-aware-message-list.tsx` - Version navigation now handled here
 
 **Tasks** (all completed):
 
@@ -281,7 +281,35 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.5 MEDIUM: Complete EgressGuard End-to-End Wiring
+### 2.5 LOW: Add isPinned to PathMessage Type
+
+**Priority**: LOW
+**Effort**: 1-2 hours
+**Reference**: `packages/reg-intel-ui/src/types.ts`
+
+**Description**: The `PathMessage` type in reg-intel-ui doesn't include `isPinned` field. This means pinning status is lost when using path context mode.
+
+**Current State**:
+- `PathMessage` type has: id, conversationId, pathId, role, content, metadata, sequenceInPath, effectiveSequence, isBranchPoint, branchedToPaths, messageType, createdAt
+- ❌ Missing: `isPinned`, `pinnedAt`, `pinnedBy`
+- In `PathContextMessageList`, pinning is hardcoded to `false`: `isPinned={false} // PathMessage doesn't have isPinned yet`
+
+**Tasks**:
+
+- [ ] **Task P.1**: Add pinning fields to `PathMessage` type
+  - File: `packages/reg-intel-ui/src/types.ts`
+  - Add: `isPinned?: boolean`, `pinnedAt?: string`, `pinnedBy?: string`
+
+- [ ] **Task P.2**: Update path API to include pinning data
+  - File: `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/messages/route.ts`
+  - Include pinning fields in message response
+
+- [ ] **Task P.3**: Update PathContextMessageList to use actual isPinned value
+  - File: `apps/demo-web/src/components/chat/path-aware-message-list.tsx`
+
+---
+
+### 2.6 MEDIUM: Complete EgressGuard End-to-End Wiring
 
 **Priority**: MEDIUM
 **Effort**: 4-6 hours
@@ -327,17 +355,16 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
 | 2.1 Cleanup Cron Job | MEDIUM | 2-4h | None |
-| 2.5 EgressGuard End-to-End | MEDIUM | 4-6h | None |
+| 2.6 EgressGuard End-to-End | MEDIUM | 4-6h | None |
 
 ### Phase B: Polish (Deferred)
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
 | 2.2 Metrics Dashboard | LOW | 4-6h | 2.1 |
-| 2.3 Version Navigator | LOW | 2-4h | None |
-| 2.4 PathAwareMessageList | LOW | 2-4h | None |
+| 2.5 PathMessage isPinned | LOW | 1-2h | None |
 
-**Note**: EgressGuard completion (2.5) has security implications and should be prioritized for production deployment.
+**Note**: EgressGuard completion (2.6) has security implications and should be prioritized for production deployment.
 
 ---
 
@@ -396,12 +423,12 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 ## 7. Summary
 
-**Total Outstanding Effort**: ~8-16 hours (reduced from ~10-20 hours)
+**Total Outstanding Effort**: ~9-18 hours
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | MEDIUM | 2 | 6-10h |
-| LOW | 1 | 2-6h |
+| LOW | 2 | 3-8h |
 
 ### Recently Completed (Since 2025-12-12)
 
@@ -442,11 +469,12 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 1. **Complete EgressGuard End-to-End** (MEDIUM priority) - Security gap: response/sandbox sanitization missing
 2. **Set up Cleanup Cron Job** (MEDIUM priority) - Production requirement for sandbox cleanup
-3. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
+3. **Add isPinned to PathMessage** (LOW priority) - Pinning broken in path context mode
+4. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
 
 ### Security Note
 
-EgressGuard currently only protects outbound requests. For production, response sanitization is needed to prevent PII leakage from knowledge base or sandbox execution. See section 2.5 for implementation details.
+EgressGuard currently only protects outbound requests. For production, response sanitization is needed to prevent PII leakage from knowledge base or sandbox execution. See section 2.6 for implementation details.
 
 ### PR #159 Review
 
@@ -458,7 +486,7 @@ PR #159 made the following changes (verified non-breaking):
 
 ---
 
-**Document Version**: 2.4
-**Last Updated**: 2025-12-23
-**Previous Version**: 2.3 (2025-12-23), 2.2 (2025-12-23), 2.1 (2025-12-23), 2.0 (2025-12-23), 1.0 (2025-12-12)
+**Document Version**: 2.5
+**Last Updated**: 2025-12-24
+**Previous Version**: 2.4 (2025-12-23), 2.3 (2025-12-23), 2.2 (2025-12-23), 2.1 (2025-12-23), 2.0 (2025-12-23), 1.0 (2025-12-12)
 **Author**: Claude Code

@@ -6,20 +6,10 @@ import { useConversationPaths, useHasPathProvider } from '@reg-copilot/reg-intel
 import type { PathMessage } from '@reg-copilot/reg-intel-ui';
 
 import { Message, MessageLoading } from './message';
-import { MessageVersionNav } from './message-version-nav';
 import { ProgressIndicator } from './progress-indicator';
 import type { StreamingStage } from './progress-indicator';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-
-// Extended message type that includes version information
-interface VersionedPathMessage extends PathMessage {
-  versionIndex?: number;
-  totalVersions?: number;
-  isVersionPreview?: boolean;
-  branchPreviewPathId?: string;
-  isPinned?: boolean;
-}
 
 interface PathAwareMessageListProps {
   /** Fallback messages to show when path context is not available */
