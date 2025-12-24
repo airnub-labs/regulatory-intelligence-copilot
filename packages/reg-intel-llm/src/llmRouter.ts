@@ -28,6 +28,7 @@ import {
   type EgressMode,
 } from './egressClient.js';
 import { resolveEffectiveEgressMode } from './egressModeResolver.js';
+import { sanitizeTextForEgress } from './egressGuard.js';
 
 /**
  * LLM completion options
@@ -659,7 +660,7 @@ export class LlmRouter implements LlmClient {
       options
     );
 
-    return this.egressClient.guardAndExecute(
+    const response = await this.egressClient.guardAndExecute(
       {
         target: 'llm',
         providerId: provider,
@@ -691,6 +692,14 @@ export class LlmRouter implements LlmClient {
         );
       }
     );
+
+    // Sanitize response when egress mode is 'enforce' or 'report-only'
+    // This prevents PII leakage from LLM responses back to the client
+    if (effectiveMode !== 'off') {
+      return sanitizeTextForEgress(response);
+    }
+
+    return response;
   }
 
   async *streamChat(
@@ -743,8 +752,20 @@ export class LlmRouter implements LlmClient {
       }
     );
 
+    // Sanitize response chunks when egress mode is 'enforce' or 'report-only'
+    // This prevents PII leakage from LLM responses back to the client
+    const shouldSanitizeResponse = effectiveMode !== 'off';
+
     try {
-      yield* streamResult;
+      for await (const chunk of streamResult) {
+        if (chunk.type === 'text' && shouldSanitizeResponse) {
+          // Sanitize text deltas to remove any PII the LLM might have echoed or generated
+          const sanitizedDelta = sanitizeTextForEgress(chunk.delta);
+          yield { type: 'text', delta: sanitizedDelta };
+        } else {
+          yield chunk;
+        }
+      }
     } catch (error) {
       yield {
         type: 'error',

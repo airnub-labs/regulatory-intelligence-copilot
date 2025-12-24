@@ -953,8 +953,12 @@ export class ComplianceEngine {
               referencedNodes.map(node => node.id)
             );
 
+            // Apply EgressGuard sanitization to agent output as defense-in-depth
+            // This catches any PII that might have bypassed LLM-level sanitization
+            const sanitizedAnswer = this.instrumentedEgressGuard.redactText(agentResult.answer);
+
             return {
-              answer: agentResult.answer,
+              answer: sanitizedAnswer,
               referencedNodes,
               agentUsed: agentResult.agentId,
               jurisdictions: promptMetadata.jurisdictions,
@@ -1042,9 +1046,10 @@ export class ComplianceEngine {
             toolResult: result,
           };
 
-          // Format result as text for display
+          // Format result as text for display and apply EgressGuard sanitization
           const resultText = this.formatToolResult(forceTool.name, result);
-          yield { type: 'text', delta: resultText };
+          const sanitizedResultText = this.instrumentedEgressGuard.redactText(resultText);
+          yield { type: 'text', delta: sanitizedResultText };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           yield {
@@ -1142,7 +1147,9 @@ export class ComplianceEngine {
       while (currentResult && !currentResult.done) {
         const chunk = currentResult.value;
         if (chunk.type === 'text' && chunk.delta) {
-          yield { type: 'text', delta: chunk.delta };
+          // Apply EgressGuard sanitization to streaming text as defense-in-depth
+          const sanitizedDelta = this.instrumentedEgressGuard.redactText(chunk.delta);
+          yield { type: 'text', delta: sanitizedDelta };
         } else if (chunk.type === 'error') {
           yield { type: 'error', error: chunk.error?.message || 'Unknown error' };
           break;

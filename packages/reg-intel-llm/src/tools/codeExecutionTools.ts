@@ -4,9 +4,13 @@
  * Provides tools for executing code and running analyses in isolated E2B sandboxes.
  * These tools are integrated with the execution context manager to ensure
  * per-path sandbox isolation.
+ *
+ * IMPORTANT: All sandbox output (stdout, stderr, results) is sanitized through
+ * EgressGuard to prevent PII leakage from code execution.
  */
 
 import { z } from 'zod';
+import { sanitizeTextForEgress, sanitizeObjectForEgress } from '../egressGuard.js';
 
 // =============================================================================
 // E2B Sandbox Interface (Duck-typed to avoid hard dependency)
@@ -130,10 +134,14 @@ export async function executeCode(
     });
 
     const executionTimeMs = Date.now() - startTime;
-    const stdout = result.logs.stdout.join('\n');
-    const stderr = result.logs.stderr.join('\n');
+    const rawStdout = result.logs.stdout.join('\n');
+    const rawStderr = result.logs.stderr.join('\n');
     const exitCode = result.exitCode ?? 0;
     const success = exitCode === 0 && !result.error;
+
+    // Sanitize all output to prevent PII leakage from sandbox execution
+    const stdout = sanitizeTextForEgress(rawStdout);
+    const stderr = sanitizeTextForEgress(rawStderr);
 
     logger?.info?.('[executeCode] Code execution completed', {
       sandboxId: sandbox.sandboxId,
@@ -149,7 +157,7 @@ export async function executeCode(
       stdout,
       stderr,
       exitCode,
-      error: result.error ? String(result.error) : undefined,
+      error: result.error ? sanitizeTextForEgress(String(result.error)) : undefined,
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
     };
@@ -167,7 +175,7 @@ export async function executeCode(
       stdout: '',
       stderr: '',
       exitCode: 1,
-      error: error instanceof Error ? error.message : String(error),
+      error: sanitizeTextForEgress(error instanceof Error ? error.message : String(error)),
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
     };
@@ -203,22 +211,33 @@ export async function executeAnalysis(
     const result = await sandbox.runCode(code, { language: 'python' });
 
     const executionTimeMs = Date.now() - startTime;
-    const stdout = result.logs.stdout.join('\n');
-    const stderr = result.logs.stderr.join('\n');
+    const rawStdout = result.logs.stdout.join('\n');
+    const rawStderr = result.logs.stderr.join('\n');
     const exitCode = result.exitCode ?? 0;
     const success = exitCode === 0 && !result.error;
+
+    // Sanitize all output to prevent PII leakage from sandbox execution
+    const stdout = sanitizeTextForEgress(rawStdout);
+    const stderr = sanitizeTextForEgress(rawStderr);
 
     // Parse output if JSON format expected
     let parsedOutput: unknown;
     if (outputFormat === 'json' && stdout) {
       try {
-        parsedOutput = JSON.parse(stdout);
+        const parsed = JSON.parse(stdout);
+        // Sanitize parsed output to catch any PII in structured data
+        parsedOutput = sanitizeObjectForEgress(parsed);
       } catch (parseError) {
         logger?.error?.('[executeAnalysis] Failed to parse JSON output', {
           error: parseError instanceof Error ? parseError.message : String(parseError),
         });
       }
     }
+
+    // Sanitize results array if present
+    const sanitizedResults = result.results?.length
+      ? sanitizeObjectForEgress(result.results)
+      : result.results;
 
     logger?.info?.('[executeAnalysis] Analysis execution completed', {
       sandboxId: sandbox.sandboxId,
@@ -234,10 +253,10 @@ export async function executeAnalysis(
       stdout,
       stderr,
       exitCode,
-      error: result.error ? String(result.error) : undefined,
+      error: result.error ? sanitizeTextForEgress(String(result.error)) : undefined,
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
-      result: result.results,
+      result: sanitizedResults,
       parsedOutput,
     };
   } catch (error) {
@@ -255,7 +274,7 @@ export async function executeAnalysis(
       stdout: '',
       stderr: '',
       exitCode: 1,
-      error: error instanceof Error ? error.message : String(error),
+      error: sanitizeTextForEgress(error instanceof Error ? error.message : String(error)),
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
     };
