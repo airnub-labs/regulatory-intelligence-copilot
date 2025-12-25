@@ -24,6 +24,7 @@ import {
   type GraphWriteService,
 } from '../packages/reg-intel-graph/src/index.js';
 import { runWithScriptObservability } from './observability.js';
+import type { Logger } from 'pino';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -46,16 +47,26 @@ function createDriver(): Driver {
 /**
  * Seed the graph with special jurisdiction data using GraphWriteService
  */
-async function seedSpecialJurisdictions() {
-  console.log('🌱 Starting special jurisdictions seeding...');
-  console.log(`📍 Connecting to: ${MEMGRAPH_URI}`);
+async function seedSpecialJurisdictions(logger: Logger) {
+  const log = (...messages: unknown[]) => {
+    const serialized = messages.map(message => String(message)).join(' ');
+    logger.info({ messages }, serialized);
+  };
+
+  const logError = (...messages: unknown[]) => {
+    const serialized = messages.map(message => String(message)).join(' ');
+    logger.error({ messages }, serialized);
+  };
+
+  log('🌱 Starting special jurisdictions seeding...');
+  log(`📍 Connecting to: ${MEMGRAPH_URI}`);
 
   const driver = createDriver();
 
   try {
     // Test connection
     await driver.verifyConnectivity();
-    console.log('✅ Connected to Memgraph');
+    log('✅ Connected to Memgraph');
 
     // Create GraphWriteService
     const writeService: GraphWriteService = createGraphWriteService({
@@ -65,7 +76,7 @@ async function seedSpecialJurisdictions() {
     });
 
     // 1. Create Jurisdictions
-    console.log('\n🌍 Creating jurisdictions...');
+    log('\n🌍 Creating jurisdictions...');
 
     await writeService.upsertJurisdiction({
       id: 'IE',
@@ -95,10 +106,10 @@ async function seedSpecialJurisdictions() {
       code: 'EU',
     });
 
-    console.log('   ✅ Created: IE, UK, IM, EU');
+    log('   ✅ Created: IE, UK, IM, EU');
 
     // 2. Create Special Region: Northern Ireland
-    console.log('\n📍 Creating Northern Ireland region...');
+    log('\n📍 Creating Northern Ireland region...');
 
     await writeService.upsertRegion({
       id: 'NI',
@@ -107,10 +118,10 @@ async function seedSpecialJurisdictions() {
       parentJurisdictionId: 'UK',
     });
 
-    console.log('   ✅ Created: NI (part of UK)');
+    log('   ✅ Created: NI (part of UK)');
 
     // 3. Create Agreements
-    console.log('\n📜 Creating agreements...');
+    log('\n📜 Creating agreements...');
 
     await writeService.upsertAgreement({
       id: 'CTA',
@@ -133,10 +144,10 @@ async function seedSpecialJurisdictions() {
       description: 'Framework adjusting implementation of the NI Protocol',
     });
 
-    console.log('   ✅ Created: CTA, NI_PROTOCOL, WINDSOR_FRAMEWORK');
+    log('   ✅ Created: CTA, NI_PROTOCOL, WINDSOR_FRAMEWORK');
 
     // 4. Link Windsor Framework to NI Protocol
-    console.log('\n🔗 Linking Windsor Framework...');
+    log('\n🔗 Linking Windsor Framework...');
 
     await writeService.createRelationship({
       fromId: 'NI_PROTOCOL',
@@ -147,7 +158,7 @@ async function seedSpecialJurisdictions() {
     });
 
     // 5. Create parties to CTA
-    console.log('\n🤝 Creating CTA parties...');
+    log('\n🤝 Creating CTA parties...');
 
     await writeService.createRelationship({
       fromId: 'IE',
@@ -173,10 +184,10 @@ async function seedSpecialJurisdictions() {
       relType: 'PARTY_TO',
     });
 
-    console.log('   ✅ Linked: IE, UK, IM → CTA');
+    log('   ✅ Linked: IE, UK, IM → CTA');
 
     // 6. Create Regimes
-    console.log('\n⚖️  Creating regimes...');
+    log('\n⚖️  Creating regimes...');
 
     await writeService.upsertRegime({
       id: 'CTA_MOBILITY_RIGHTS',
@@ -192,10 +203,10 @@ async function seedSpecialJurisdictions() {
       description: 'Special goods regime for Northern Ireland under the NI Protocol/Windsor Framework',
     });
 
-    console.log('   ✅ Created: CTA_MOBILITY_RIGHTS, NI_EU_GOODS_REGIME');
+    log('   ✅ Created: CTA_MOBILITY_RIGHTS, NI_EU_GOODS_REGIME');
 
     // 7. Link regimes to agreements
-    console.log('\n🔗 Linking regimes to agreements...');
+    log('\n🔗 Linking regimes to agreements...');
 
     await writeService.createRelationship({
       fromId: 'CTA',
@@ -230,7 +241,7 @@ async function seedSpecialJurisdictions() {
     });
 
     // 8. Attach regimes to jurisdictions/regions
-    console.log('\n🔗 Attaching regimes to jurisdictions...');
+    log('\n🔗 Attaching regimes to jurisdictions...');
 
     await writeService.createRelationship({
       fromId: 'IE',
@@ -265,7 +276,7 @@ async function seedSpecialJurisdictions() {
     });
 
     // 9. Create example benefit
-    console.log('\n💼 Creating example CTA benefit...');
+    log('\n💼 Creating example CTA benefit...');
 
     await writeService.upsertBenefit({
       id: 'CTA_RIGHT_TO_LIVE_AND_WORK',
@@ -300,35 +311,35 @@ async function seedSpecialJurisdictions() {
       relType: 'IN_JURISDICTION',
     });
 
-    console.log('\n✅ Special jurisdictions seeding completed successfully!');
-    console.log('\n📊 Summary:');
-    console.log('   - Jurisdictions: 4 (IE, UK, IM, EU)');
-    console.log('   - Regions: 1 (NI)');
-    console.log('   - Agreements: 3 (CTA, NI_PROTOCOL, WINDSOR_FRAMEWORK)');
-    console.log('   - Regimes: 2 (CTA_MOBILITY_RIGHTS, NI_EU_GOODS_REGIME)');
-    console.log('   - Benefits: 1 (CTA mobility benefit)');
-    console.log('   - Relationships: ~15');
-    console.log('\n✨ All writes enforced via Graph Ingress Guard ✨');
+    log('\n✅ Special jurisdictions seeding completed successfully!');
+    log('\n📊 Summary:');
+    log('   - Jurisdictions: 4 (IE, UK, IM, EU)');
+    log('   - Regions: 1 (NI)');
+    log('   - Agreements: 3 (CTA, NI_PROTOCOL, WINDSOR_FRAMEWORK)');
+    log('   - Regimes: 2 (CTA_MOBILITY_RIGHTS, NI_EU_GOODS_REGIME)');
+    log('   - Benefits: 1 (CTA mobility benefit)');
+    log('   - Relationships: ~15');
+    log('\n✨ All writes enforced via Graph Ingress Guard ✨');
   } catch (error) {
-    console.error('❌ Error seeding special jurisdictions:', error);
+    logError('❌ Error seeding special jurisdictions:', error);
     if (error instanceof Error) {
-      console.error('   Message:', error.message);
-      console.error('   Stack:', error.stack);
+      logError('   Message:', error.message);
+      logError('   Stack:', error.stack);
     }
     throw error;
   } finally {
     await driver.close();
-    console.log('👋 Disconnected from Memgraph');
+    log('👋 Disconnected from Memgraph');
   }
 }
 
 await runWithScriptObservability(
   'seed-special-jurisdictions',
-  async ({ withSpan }) => {
+  async ({ logger, withSpan }) => {
     await withSpan(
       'script.seed-special-jurisdictions',
       { 'script.name': 'seed-special-jurisdictions', 'memgraph.uri': MEMGRAPH_URI },
-      () => seedSpecialJurisdictions()
+      () => seedSpecialJurisdictions(logger)
     );
   },
   { tenantId: 'system', agentId: 'seed-special-jurisdictions' }

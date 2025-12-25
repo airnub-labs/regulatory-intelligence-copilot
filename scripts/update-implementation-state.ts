@@ -12,6 +12,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import type { Logger } from 'pino';
+import { runWithScriptObservability } from './observability.js';
 
 interface TestResults {
   unit: {
@@ -56,6 +58,15 @@ interface ImplementationState {
 }
 
 const STATE_FILE = path.join(__dirname, '../docs/architecture/execution-context/IMPLEMENTATION_STATE.json');
+let scriptLogger: Logger;
+
+const log = (message: string, context: Record<string, unknown> = {}) => {
+  scriptLogger.info(context, message);
+};
+
+const logWarn = (message: string, context: Record<string, unknown> = {}) => {
+  scriptLogger.warn(context, message);
+};
 
 const fail = (message: string): never => {
   throw new Error(message);
@@ -73,7 +84,7 @@ function loadState(): ImplementationState {
 function saveState(state: ImplementationState): void {
   state.lastUpdated = new Date().toISOString();
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + '\n');
-  console.log('✅ State updated:', STATE_FILE);
+  log('✅ State updated:', STATE_FILE);
 }
 
 function calculateProgress(state: ImplementationState): void {
@@ -108,7 +119,7 @@ function updatePhaseStatus(state: ImplementationState, phaseKey: string): void {
       state.milestones[milestoneKey] = new Date().toISOString();
     }
 
-    console.log(`🎉 Phase ${phaseKey} completed!`);
+    log(`🎉 Phase ${phaseKey} completed!`);
   } else if (completedPhaseTasks > 0 || phase.currentTask) {
     if (phase.blockers.length > 0) {
       phase.status = 'blocked';
@@ -138,7 +149,7 @@ function completeTask(state: ImplementationState, taskId: string): void {
   }
 
   if (phase.completedTasks.includes(taskId)) {
-    console.warn(`⚠️  Task ${taskId} already completed`);
+    logWarn(`⚠️  Task ${taskId} already completed`);
     return;
   }
 
@@ -152,8 +163,8 @@ function completeTask(state: ImplementationState, taskId: string): void {
   updatePhaseStatus(state, phaseKey);
   calculateProgress(state);
 
-  console.log(`✅ Completed task ${taskId}: ${phase.tasks[taskId]}`);
-  console.log(`📊 Phase progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length}`);
+  log(`✅ Completed task ${taskId}: ${phase.tasks[taskId]}`);
+  log(`📊 Phase progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length}`);
 }
 
 function startTask(state: ImplementationState, taskId: string): void {
@@ -169,14 +180,14 @@ function startTask(state: ImplementationState, taskId: string): void {
   }
 
   if (phase.completedTasks.includes(taskId)) {
-    console.warn(`⚠️  Task ${taskId} already completed`);
+    logWarn(`⚠️  Task ${taskId} already completed`);
     return;
   }
 
   phase.currentTask = taskId;
   updatePhaseStatus(state, phaseKey);
 
-  console.log(`🚀 Started task ${taskId}: ${phase.tasks[taskId]}`);
+  log(`🚀 Started task ${taskId}: ${phase.tasks[taskId]}`);
 }
 
 function blockPhase(state: ImplementationState, phaseKey: string, blocker: string): void {
@@ -189,7 +200,7 @@ function blockPhase(state: ImplementationState, phaseKey: string, blocker: strin
   phase.blockers.push(blocker);
   phase.status = 'blocked';
 
-  console.log(`🚫 Blocked ${phaseKey}: ${blocker}`);
+  log(`🚫 Blocked ${phaseKey}: ${blocker}`);
 }
 
 function unblockPhase(state: ImplementationState, phaseKey: string, blocker?: string): void {
@@ -207,21 +218,21 @@ function unblockPhase(state: ImplementationState, phaseKey: string, blocker?: st
 
   updatePhaseStatus(state, phaseKey);
 
-  console.log(`✅ Unblocked ${phaseKey}`);
+  log(`✅ Unblocked ${phaseKey}`);
 }
 
 function addNote(state: ImplementationState, note: string): void {
   const timestamp = new Date().toISOString();
   state.notes.push(`[${timestamp}] ${note}`);
 
-  console.log(`📝 Added note: ${note}`);
+  log(`📝 Added note: ${note}`);
 }
 
 function showStatus(state: ImplementationState): void {
-  console.log('\n📊 E2B Execution Context Implementation Status\n');
-  console.log(`Version: ${state.version}`);
-  console.log(`Last Updated: ${state.lastUpdated}`);
-  console.log(`Overall Progress: ${state.overallProgress} (${state.completedTaskCount}/${state.totalTasks} tasks)\n`);
+  log('\n📊 E2B Execution Context Implementation Status\n');
+  log(`Version: ${state.version}`);
+  log(`Last Updated: ${state.lastUpdated}`);
+  log(`Overall Progress: ${state.overallProgress} (${state.completedTaskCount}/${state.totalTasks} tasks)\n`);
 
   Object.entries(state.phases).forEach(([key, phase]) => {
     const statusIcon =
@@ -230,49 +241,49 @@ function showStatus(state: ImplementationState): void {
       phase.status === 'blocked' ? '🚫' :
       '⏸️';
 
-    console.log(`${statusIcon} ${phase.name} (${phase.status})`);
-    console.log(`   Progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length} tasks`);
+    log(`${statusIcon} ${phase.name} (${phase.status})`);
+    log(`   Progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length} tasks`);
 
     if (phase.currentTask) {
-      console.log(`   Current: ${phase.currentTask} - ${phase.tasks[phase.currentTask]}`);
+      log(`   Current: ${phase.currentTask} - ${phase.tasks[phase.currentTask]}`);
     }
 
     if (phase.blockers.length > 0) {
-      console.log(`   ⚠️  Blockers:`);
+      log(`   ⚠️  Blockers:`);
       phase.blockers.forEach(blocker => {
-        console.log(`      - ${blocker}`);
+        log(`      - ${blocker}`);
       });
     }
 
-    console.log('');
+    log('');
   });
 
-  console.log('🏁 Milestones:');
+  log('🏁 Milestones:');
   Object.entries(state.milestones).forEach(([key, value]) => {
     const icon = value ? '✅' : '⏳';
-    console.log(`   ${icon} ${key}: ${value ?? 'Not reached'}`);
+    log(`   ${icon} ${key}: ${value ?? 'Not reached'}`);
   });
 
-  console.log('\n🧪 Test Results:');
-  console.log(`   Unit Tests: ${state.testResults.unit.passed} passed, ${state.testResults.unit.failed} failed (${state.testResults.unit.coverage} coverage)`);
-  console.log(`   Integration Tests: ${state.testResults.integration.passed} passed, ${state.testResults.integration.failed} failed`);
-  console.log(`   E2E Tests:`);
+  log('\n🧪 Test Results:');
+  log(`   Unit Tests: ${state.testResults.unit.passed} passed, ${state.testResults.unit.failed} failed (${state.testResults.unit.coverage} coverage)`);
+  log(`   Integration Tests: ${state.testResults.integration.passed} passed, ${state.testResults.integration.failed} failed`);
+  log(`   E2E Tests:`);
   Object.entries(state.testResults.e2e).forEach(([test, result]) => {
     const icon =
       result === 'passed' ? '✅' :
       result === 'failed' ? '❌' :
       '⏳';
-    console.log(`      ${icon} ${test}: ${result}`);
+    log(`      ${icon} ${test}: ${result}`);
   });
 
   if (state.notes.length > 0) {
-    console.log('\n📝 Recent Notes (last 5):');
+    log('\n📝 Recent Notes (last 5):');
     state.notes.slice(-5).forEach(note => {
-      console.log(`   ${note}`);
+      log(`   ${note}`);
     });
   }
 
-  console.log('');
+  log('');
 }
 
 function updateTests(state: ImplementationState, type: 'unit' | 'integration', passed: number, failed: number, coverage?: string): void {
@@ -282,18 +293,18 @@ function updateTests(state: ImplementationState, type: 'unit' | 'integration', p
     if (coverage) {
       state.testResults.unit.coverage = coverage;
     }
-    console.log(`🧪 Updated unit test results: ${passed} passed, ${failed} failed`);
+    log(`🧪 Updated unit test results: ${passed} passed, ${failed} failed`);
   } else if (type === 'integration') {
     state.testResults.integration.passed = passed;
     state.testResults.integration.failed = failed;
-    console.log(`🧪 Updated integration test results: ${passed} passed, ${failed} failed`);
+    log(`🧪 Updated integration test results: ${passed} passed, ${failed} failed`);
   }
 }
 
 function updateE2ETest(state: ImplementationState, testName: string, result: 'passed' | 'failed'): void {
   if (testName in state.testResults.e2e) {
     state.testResults.e2e[testName] = result;
-    console.log(`🧪 E2E test ${testName}: ${result}`);
+    log(`🧪 E2E test ${testName}: ${result}`);
   } else {
     fail(`E2E test ${testName} not found`);
   }
@@ -305,9 +316,10 @@ const command = args[0];
 
 await runWithScriptObservability(
   'update-implementation-state',
-  async () => {
+  async ({ logger }) => {
+    scriptLogger = logger;
     if (!command) {
-      console.log(`
+      log(`
 Usage:
   pnpm tsx scripts/update-implementation-state.ts <command> [args...]
 

@@ -20,6 +20,7 @@ import {
   type GraphWriteService,
 } from '../packages/reg-intel-graph/src/index.js';
 import { runWithScriptObservability } from './observability.js';
+import type { Logger } from 'pino';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -54,19 +55,29 @@ async function clearGraph(driver: Driver): Promise<void> {
 /**
  * Seed the graph with regulatory data using GraphWriteService
  */
-async function seedGraph() {
-  console.log('🌱 Starting graph seeding...');
-  console.log(`📍 Connecting to: ${MEMGRAPH_URI}`);
+async function seedGraph(logger: Logger) {
+  const log = (...messages: unknown[]) => {
+    const serialized = messages.map(message => String(message)).join(' ');
+    logger.info({ messages }, serialized);
+  };
+
+  const logError = (...messages: unknown[]) => {
+    const serialized = messages.map(message => String(message)).join(' ');
+    logger.error({ messages }, serialized);
+  };
+
+  log('🌱 Starting graph seeding...');
+  log(`📍 Connecting to: ${MEMGRAPH_URI}`);
 
   const driver = createDriver();
 
   try {
     // Test connection
     await driver.verifyConnectivity();
-    console.log('✅ Connected to Memgraph');
+    log('✅ Connected to Memgraph');
 
     // Clear existing data (optional - comment out for production)
-    console.log('🧹 Clearing existing data...');
+    log('🧹 Clearing existing data...');
     await clearGraph(driver);
 
     // Create GraphWriteService
@@ -77,7 +88,7 @@ async function seedGraph() {
     });
 
     // Create Jurisdictions
-    console.log('🌍 Creating jurisdictions...');
+    log('🌍 Creating jurisdictions...');
     await writeService.upsertJurisdiction({
       id: 'IE',
       name: 'Ireland',
@@ -99,10 +110,10 @@ async function seedGraph() {
       notes: 'Republic of Malta',
     });
 
-    console.log('   ✅ Created: IE, EU, MT');
+    log('   ✅ Created: IE, EU, MT');
 
     // Create Statutes
-    console.log('📜 Creating statutes...');
+    log('📜 Creating statutes...');
     await writeService.upsertStatute({
       id: 'IE_SW_CONS_ACT_2005',
       name: 'Social Welfare Consolidation Act 2005',
@@ -121,10 +132,10 @@ async function seedGraph() {
       source_url: 'https://www.irishstatutebook.ie/eli/1997/act/39/enacted/en/html',
     });
 
-    console.log('   ✅ Created: SWCA 2005, TCA 1997');
+    log('   ✅ Created: SWCA 2005, TCA 1997');
 
     // Create Sections
-    console.log('📄 Creating sections...');
+    log('📄 Creating sections...');
     await writeService.upsertSection({
       id: 'IE_SWCA_2005_S27',
       label: 'Section 27',
@@ -145,10 +156,10 @@ async function seedGraph() {
       jurisdictionId: 'IE',
     });
 
-    console.log('   ✅ Created: SWCA S27, TCA S766');
+    log('   ✅ Created: SWCA S27, TCA S766');
 
     // Create Benefits
-    console.log('💰 Creating benefits...');
+    log('💰 Creating benefits...');
     await writeService.upsertBenefit({
       id: 'IE_BENEFIT_JOBSEEKERS_SE',
       name: "Jobseeker's Benefit (Self-Employed)",
@@ -178,10 +189,10 @@ async function seedGraph() {
       jurisdictionId: 'IE',
     });
 
-    console.log('   ✅ Created: Jobseeker\'s Benefit, Illness Benefit, State Pension');
+    log('   ✅ Created: Jobseeker\'s Benefit, Illness Benefit, State Pension');
 
     // Create Reliefs
-    console.log('💡 Creating reliefs...');
+    log('💡 Creating reliefs...');
     await writeService.upsertRelief({
       id: 'IE_RELIEF_RND_CREDIT',
       name: 'R&D Tax Credit',
@@ -192,10 +203,10 @@ async function seedGraph() {
       jurisdictionId: 'IE',
     });
 
-    console.log('   ✅ Created: R&D Tax Credit');
+    log('   ✅ Created: R&D Tax Credit');
 
     // Create Timelines
-    console.log('⏱️  Creating timeline constraints...');
+    log('⏱️  Creating timeline constraints...');
     await writeService.upsertTimeline({
       id: 'IE_PRSI_12_MONTH_LOOKBACK',
       label: '12-month PRSI contribution lookback',
@@ -214,10 +225,10 @@ async function seedGraph() {
       description: 'R&D tax credit can be claimed over a 4-year accounting period',
     });
 
-    console.log('   ✅ Created: PRSI lookback, R&D period');
+    log('   ✅ Created: PRSI lookback, R&D period');
 
     // Create relationships
-    console.log('🔗 Creating relationships...');
+    log('🔗 Creating relationships...');
 
     // Link benefits to sections
     await writeService.createRelationship({
@@ -262,38 +273,38 @@ async function seedGraph() {
       relType: 'EFFECTIVE_WINDOW',
     });
 
-    console.log('   ✅ Created relationships');
+    log('   ✅ Created relationships');
 
-    console.log('\n✅ Graph seeding completed successfully!');
-    console.log('\n📊 Summary:');
-    console.log('   - Jurisdictions: 3 (IE, EU, MT)');
-    console.log('   - Statutes: 2');
-    console.log('   - Sections: 2');
-    console.log('   - Benefits: 3');
-    console.log('   - Reliefs: 1');
-    console.log('   - Timeline constraints: 2');
-    console.log('   - Relationships: ~5');
-    console.log('\n✨ All writes enforced via Graph Ingress Guard ✨');
+    log('\n✅ Graph seeding completed successfully!');
+    log('\n📊 Summary:');
+    log('   - Jurisdictions: 3 (IE, EU, MT)');
+    log('   - Statutes: 2');
+    log('   - Sections: 2');
+    log('   - Benefits: 3');
+    log('   - Reliefs: 1');
+    log('   - Timeline constraints: 2');
+    log('   - Relationships: ~5');
+    log('\n✨ All writes enforced via Graph Ingress Guard ✨');
   } catch (error) {
-    console.error('❌ Error seeding graph:', error);
+    logError('❌ Error seeding graph:', error);
     if (error instanceof Error) {
-      console.error('   Message:', error.message);
-      console.error('   Stack:', error.stack);
+      logError('   Message:', error.message);
+      logError('   Stack:', error.stack);
     }
     throw error;
   } finally {
     await driver.close();
-    console.log('👋 Disconnected from Memgraph');
+    log('👋 Disconnected from Memgraph');
   }
 }
 
 await runWithScriptObservability(
   'seed-graph',
-  async ({ withSpan }) => {
+  async ({ logger, withSpan }) => {
     await withSpan(
       'script.seed-graph',
       { 'script.name': 'seed-graph', 'memgraph.uri': MEMGRAPH_URI },
-      () => seedGraph()
+      () => seedGraph(logger)
     );
   },
   { tenantId: 'system', agentId: 'seed-graph' }

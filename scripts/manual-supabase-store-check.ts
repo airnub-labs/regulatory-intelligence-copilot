@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { SupabaseConversationStore } from '../packages/reg-intel-conversations/src/conversationStores';
 import { runWithScriptObservability } from './observability.js';
+import type { Logger } from 'pino';
 
 type TableRow = Record<string, unknown>;
 
@@ -151,7 +152,7 @@ class InMemorySupabaseClient {
   }
 }
 
-async function main(tenantId: string, userId: string) {
+async function main(tenantId: string, userId: string, logger: Logger) {
   const supabaseClient = new InMemorySupabaseClient();
   const store = new SupabaseConversationStore(supabaseClient as never);
 
@@ -181,14 +182,17 @@ async function main(tenantId: string, userId: string) {
   const conversation = await store.getConversation({ tenantId, conversationId, userId });
   const messages = await store.getMessages({ tenantId, conversationId, userId });
 
-  console.log('Conversation created and retrieved:', {
-    conversationId,
-    tenantId,
-    title: conversation?.title,
-    lastMessageAt: conversation?.lastMessageAt?.toISOString(),
-    messageCount: messages.length,
-    roles: messages.map(msg => msg.role),
-  });
+  logger.info(
+    {
+      conversationId,
+      tenantId,
+      title: conversation?.title,
+      lastMessageAt: conversation?.lastMessageAt?.toISOString(),
+      messageCount: messages.length,
+      roles: messages.map(msg => msg.role),
+    },
+    'Conversation created and retrieved'
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -197,8 +201,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   await runWithScriptObservability(
     'manual-supabase-store-check',
-    async () => {
-      await main(tenantId, userId);
+    async ({ logger }) => {
+      await main(tenantId, userId, logger);
     },
     { tenantId, userId, agentId: 'manual-supabase-store-check' }
   );
