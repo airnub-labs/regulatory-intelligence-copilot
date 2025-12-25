@@ -45,7 +45,7 @@ vi.mock('@e2b/code-interpreter', () => {
 });
 
 import { requestContext } from '@reg-copilot/reg-intel-observability';
-import { createSandbox } from './e2bClient.js';
+import { createSandbox, runInSandbox } from './e2bClient.js';
 
 let provider: BasicTracerProvider;
 let contextManager: AsyncLocalStorageContextManager;
@@ -85,5 +85,34 @@ describe('E2B sandbox client logging', () => {
     expect(logEntry?.span_id).toBeDefined();
     expect(logEntry?.tenantId).toBe('tenant-e2b');
     expect(logEntry?.conversationId).toBe('conversation-e2b');
+  });
+
+  it('logs sandbox command output with trace metadata', async () => {
+    const tracer = trace.getTracer('e2b-log-test');
+
+    const handle = await createSandbox();
+    const fakeSandbox = handle.sandbox as unknown as {
+      commands: { run: ReturnType<typeof vi.fn> };
+    };
+
+    fakeSandbox.commands.run.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({ result: 7 }),
+      stderr: 'warning',
+    });
+
+    await tracer.startActiveSpan('e2b-run-span', async (span) => {
+      await requestContext.run({ tenantId: 'tenant-e2b-run', conversationId: 'conversation-e2b-run' }, async () => {
+        const result = await runInSandbox<{ result: number }>(handle, 'return { result: 7 };');
+        expect(result).toEqual({ result: 7 });
+      });
+      span.end();
+    });
+
+    const outputLog = capturedLogs.find(entry => entry.event === 'sandbox.command.result');
+
+    expect(outputLog?.trace_id).toBeDefined();
+    expect(outputLog?.span_id).toBeDefined();
+    expect(outputLog?.tenantId).toBe('tenant-e2b-run');
   });
 });
