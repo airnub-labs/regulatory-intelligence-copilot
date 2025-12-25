@@ -107,6 +107,43 @@ interface GraphVisualizationProps {
   keyword?: string;
 }
 
+type ClientLogger = {
+  sessionId: string;
+  info: (context: Record<string, unknown>, message: string) => void;
+  warn: (context: Record<string, unknown>, message: string) => void;
+  error: (context: Record<string, unknown>, message: string) => void;
+};
+
+const generateClientId = (prefix: string) => {
+  const randomPart =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(16).slice(2);
+  return `${prefix}-${randomPart}`;
+};
+
+const createClientLogger = (scope: string): ClientLogger => {
+  const sessionId = generateClientId(scope);
+  const log = (level: 'info' | 'warn' | 'error') =>
+    (context: Record<string, unknown>, message: string) => {
+      const payload = { scope, sessionId, ...context };
+      if (level === 'info') {
+        console.info(payload, message);
+      } else if (level === 'warn') {
+        console.warn(payload, message);
+      } else {
+        console.error(payload, message);
+      }
+    };
+
+  return {
+    sessionId,
+    info: log('info'),
+    warn: log('warn'),
+    error: log('error'),
+  };
+};
+
 export function GraphVisualization({
   jurisdictions = ['IE'],
   profileType = DEFAULT_PROFILE_ID,
@@ -125,11 +162,18 @@ export function GraphVisualization({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [showControls, setShowControls] = useState(true);
+  const [streamRequestId, setStreamRequestId] = useState(() => generateClientId('graph-stream'));
   const eventSourceRef = useRef<EventSource | null>(null);
   const initialSnapshotLoaded = useRef(false);
   const pendingPatchesRef = useRef<GraphPatch[]>([]);
   const fgRef = useRef<ForceGraphRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const loggerRef = useRef<ClientLogger>();
+  if (!loggerRef.current) {
+    loggerRef.current = createClientLogger('GraphVisualization');
+  }
+  const logger = loggerRef.current;
 
   // Memoized node color mapping - prevents recreation on every render
   const getNodeColor = useCallback((node: GraphNode | { type: string }) => {
@@ -290,11 +334,11 @@ export function GraphVisualization({
       }
       setLoading(false);
     } catch (err) {
-      console.error('Error loading graph:', err);
+      logger.error({ err }, 'Error loading graph');
       setError(err instanceof Error ? err.message : 'Failed to load graph');
       setLoading(false);
     }
-  }, [jurisdictions, profileType, keyword, applyPatch]);
+  }, [jurisdictions, profileType, keyword, applyPatch, logger]);
 
   // Apply filters and search to graph data
   useEffect(() => {
@@ -403,10 +447,14 @@ export function GraphVisualization({
       profileType,
     });
 
+    const requestId = generateClientId('graph-stream');
+    setStreamRequestId(requestId);
+    logger.info({ streamRequestId: requestId, jurisdictions, profileType }, 'Opening graph stream');
+
     const eventSource = new EventSource(`/api/graph/stream?${params}`);
 
     eventSource.onopen = () => {
-      console.log('[GraphVisualization] SSE connected');
+      logger.info({ streamRequestId: requestId }, 'SSE connected');
       setConnected(true);
     };
 
@@ -415,30 +463,30 @@ export function GraphVisualization({
         const data = JSON.parse(event.data);
 
         if (data.type === 'connected') {
-          console.log('[GraphVisualization] Stream connected:', data.message);
+          logger.info({ streamRequestId: requestId, message: data.message }, 'Stream connected');
         } else if (data.type === 'graph_patch') {
-          console.log('[GraphVisualization] Received patch:', data);
+          logger.info({ streamRequestId: requestId, meta: data.meta }, 'Received patch');
           applyPatch(data);
         }
       } catch (err) {
-        console.error('[GraphVisualization] Error parsing SSE message:', err);
+        logger.error({ err, streamRequestId: requestId, rawEvent: event.data }, 'Error parsing SSE message');
       }
     };
 
     eventSource.onerror = (err) => {
-      console.error('[GraphVisualization] SSE error:', err);
+      logger.error({ err, streamRequestId: requestId }, 'SSE error');
       setConnected(false);
       eventSource.close();
 
       // Reconnect after 5 seconds
       setTimeout(() => {
-        console.log('[GraphVisualization] Reconnecting to stream...');
+        logger.warn({ streamRequestId: requestId }, 'Reconnecting to stream...');
         connectToStream();
       }, 5000);
     };
 
     eventSourceRef.current = eventSource;
-  }, [jurisdictions, profileType, applyPatch]);
+  }, [jurisdictions, profileType, applyPatch, logger]);
 
   // Initialize
   useEffect(() => {
