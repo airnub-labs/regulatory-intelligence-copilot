@@ -296,6 +296,7 @@ export default function Home() {
   const conversationIdRef = useRef<string | undefined>(undefined)
   const telemetryRef = useRef(createClientTelemetry('ChatPage'))
   const telemetry = telemetryRef.current
+  const isStreamingRef = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -584,7 +585,7 @@ export default function Home() {
 
             if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
               applyMetadata(parsedData)
-              if (conversationIdRef.current) {
+              if (conversationIdRef.current && !isStreamingRef.current) {
                 loadConversation(conversationIdRef.current)
               }
             } else if (parsedEvent.type === 'warning') {
@@ -593,7 +594,7 @@ export default function Home() {
                 setWarnings(warningList)
                 setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
               }
-            } else if (parsedEvent.type === 'done' && conversationIdRef.current) {
+            } else if (parsedEvent.type === 'done' && conversationIdRef.current && !isStreamingRef.current) {
               loadConversation(conversationIdRef.current)
             }
           }
@@ -627,8 +628,9 @@ export default function Home() {
       { conversationId: conversationIdRef.current }
     )
 
-    // Initialize streaming stage
+    // Initialize streaming stage and set streaming flag
     setStreamingStage('querying')
+    isStreamingRef.current = true
 
     const appendAssistantText = (delta: string) => {
       setMessages(prev =>
@@ -638,85 +640,93 @@ export default function Home() {
       )
     }
 
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
 
-      buffer += decoder.decode(value, { stream: true })
+        buffer += decoder.decode(value, { stream: true })
 
-      let boundaryIndex
-      while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
-        const rawEvent = buffer.slice(0, boundaryIndex).trim()
-        buffer = buffer.slice(boundaryIndex + 2)
+        let boundaryIndex
+        while ((boundaryIndex = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, boundaryIndex).trim()
+          buffer = buffer.slice(boundaryIndex + 2)
 
-        if (!rawEvent) continue
-        const parsedEvent = parseSseEvent(rawEvent)
-        if (!parsedEvent) continue
+          if (!rawEvent) continue
+          const parsedEvent = parseSseEvent(rawEvent)
+          if (!parsedEvent) continue
 
-        const parsedData = parseJsonSafe(parsedEvent.data, chatStreamLogger.warn)
+          const parsedData = parseJsonSafe(parsedEvent.data, chatStreamLogger.warn)
 
-        switch (parsedEvent.type) {
-          case 'metadata': {
-            if (!isChatSseMetadata(parsedData)) break
-            applyMetadata(parsedData)
-            setChatMetadata(parsedData)
-            setStreamingStage('generating') // Metadata received, now generating response
-            if (parsedData.warnings !== undefined) {
-              setWarnings(parsedData.warnings)
-            }
-            setMessages(prev =>
-              prev.map(message =>
-                message.id === assistantMessageId ? { ...message, metadata: parsedData } : message
-              )
-            )
-            break
-          }
-          case 'warning': {
-            const warningList = extractWarnings(parsedData)
-            if (warningList.length) {
-              setWarnings(warningList)
-              setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
+          switch (parsedEvent.type) {
+            case 'metadata': {
+              if (!isChatSseMetadata(parsedData)) break
+              applyMetadata(parsedData)
+              setChatMetadata(parsedData)
+              setStreamingStage('generating') // Metadata received, now generating response
+              if (parsedData.warnings !== undefined) {
+                setWarnings(parsedData.warnings)
+              }
               setMessages(prev =>
-                prev.map(message => {
-                  if (message.id === assistantMessageId) {
-                    const updatedMetadata: ChatMetadata = {
-                      ...message.metadata,
-                      warnings: warningList
-                    }
-                    return { ...message, metadata: updatedMetadata }
-                  }
-                  return message
-                })
+                prev.map(message =>
+                  message.id === assistantMessageId ? { ...message, metadata: parsedData } : message
+                )
               )
+              break
             }
-            break
-          }
-          case 'message': {
-            const textChunk = extractText(parsedData)
-            appendAssistantText(textChunk)
-            break
-          }
-          case 'disclaimer': {
-            const disclaimerText = extractText(parsedData)
-            setMessages(prev =>
-              prev.map(message =>
-                message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
+            case 'warning': {
+              const warningList = extractWarnings(parsedData)
+              if (warningList.length) {
+                setWarnings(warningList)
+                setChatMetadata(prev => (prev ? { ...prev, warnings: warningList } : prev))
+                setMessages(prev =>
+                  prev.map(message => {
+                    if (message.id === assistantMessageId) {
+                      const updatedMetadata: ChatMetadata = {
+                        ...message.metadata,
+                        warnings: warningList
+                      }
+                      return { ...message, metadata: updatedMetadata }
+                    }
+                    return message
+                  })
+                )
+              }
+              break
+            }
+            case 'message': {
+              const textChunk = extractText(parsedData)
+              appendAssistantText(textChunk)
+              break
+            }
+            case 'disclaimer': {
+              const disclaimerText = extractText(parsedData)
+              setMessages(prev =>
+                prev.map(message =>
+                  message.id === assistantMessageId ? { ...message, disclaimer: disclaimerText } : message
+                )
               )
-            )
-            break
+              break
+            }
+            case 'error': {
+              const errorMessage = extractErrorMessage(parsedData)
+              appendAssistantText(`Error: ${errorMessage}`)
+              setStreamingStage('complete')
+              return
+            }
+            case 'done':
+              setStreamingStage('complete')
+              return
+            default:
+              break
           }
-          case 'error': {
-            const errorMessage = extractErrorMessage(parsedData)
-            appendAssistantText(`Error: ${errorMessage}`)
-            setStreamingStage('complete')
-            return
-          }
-          case 'done':
-            setStreamingStage('complete')
-            return
-          default:
-            break
         }
+      }
+    } finally {
+      // Clear streaming flag and reload conversation to get final state
+      isStreamingRef.current = false
+      if (conversationIdRef.current) {
+        loadConversation(conversationIdRef.current)
       }
     }
   }
