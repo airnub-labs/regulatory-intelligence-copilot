@@ -6,8 +6,6 @@ const nextConfig = {
   serverExternalPackages: [
     '@reg-copilot/reg-intel-core',
     '@reg-copilot/reg-intel-graph',
-    '@reg-copilot/reg-intel-llm',
-    '@reg-copilot/reg-intel-observability',
     'neo4j-driver',
     'pino',
     'thread-stream',
@@ -33,7 +31,9 @@ const nextConfig = {
     '@e2b-auditor/core',
     '@reg-copilot/reg-intel-prompts',
     '@reg-copilot/reg-intel-conversations',
-    '@reg-copilot/reg-intel-next-adapter'
+    '@reg-copilot/reg-intel-next-adapter',
+    '@reg-copilot/reg-intel-observability',
+    '@reg-copilot/reg-intel-llm'
   ],
   experimental: {
     turbopackUseSystemTlsCerts: true,

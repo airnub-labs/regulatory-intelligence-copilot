@@ -313,6 +313,9 @@ importers:
       '@redactpii/node':
         specifier: ^1.0.0
         version: 1.0.11
+      '@reg-copilot/reg-intel-observability':
+        specifier: workspace:*
+        version: link:../reg-intel-observability
       ai:
         specifier: ^5.0.0
         version: 5.0.101(zod@3.25.76)

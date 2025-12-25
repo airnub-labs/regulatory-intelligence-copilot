@@ -127,7 +127,6 @@ export function GraphVisualization({
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [showControls, setShowControls] = useState(true);
   const telemetryRef = useRef(createClientTelemetry('GraphVisualization'));
-  const [streamRequestId, setStreamRequestId] = useState(() => telemetryRef.current.newRequestId('graph-stream'));
   const initialLoadLoggerRef = useRef(
     telemetryRef.current.withRequest(telemetryRef.current.newRequestId('graph-initial'))
   );
@@ -317,7 +316,7 @@ export function GraphVisualization({
       setError(err instanceof Error ? err.message : 'Failed to load graph');
       setLoading(false);
     }
-  }, [jurisdictions, profileType, keyword, applyPatch, telemetry]);
+  }, [jurisdictions, profileType, keyword, applyPatch]);
 
   // Apply filters and search to graph data
   useEffect(() => {
@@ -427,7 +426,6 @@ export function GraphVisualization({
     });
 
     const requestId = telemetry.newRequestId('graph-stream');
-    setStreamRequestId(requestId);
     const streamLogger = telemetry.withRequest(requestId, { jurisdictions, profileType });
     streamLogger.info({ streamRequestId: requestId }, 'Opening graph stream');
 

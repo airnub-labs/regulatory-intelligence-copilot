@@ -72,7 +72,7 @@ const sendTelemetry = async (
       body,
       keepalive: true,
     });
-  } catch (err) {
+  } catch {
     // Swallow client logging errors to avoid impacting UX
   }
 };
