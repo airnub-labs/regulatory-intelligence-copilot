@@ -153,26 +153,32 @@ pnpm install
 
 ### 3. Environment Configuration
 
-Create a `.env` / `.env.local` and configure environment variables, for example:
+> 📋 **See [ENV_SETUP.md](./ENV_SETUP.md) for detailed configuration guide**
+
+This repository uses different `.env` files for different purposes:
+
+- **`.env`** (root) - For repository scripts (graph seeding, migrations)
+- **`apps/demo-web/.env.local`** - For the Next.js web application
+
+**Quick setup for web app:**
 
 ```bash
-E2B_API_KEY=...
-OPENAI_API_KEY=...
-GROQ_API_KEY=...
-MEMGRAPH_URI=bolt://localhost:7687
-MEMGRAPH_USERNAME=...
-MEMGRAPH_PASSWORD=...
-MCP_GATEWAY_URL=http://localhost:4000
-
-# Conversation + tenant storage (Supabase / Postgres)
-SUPABASE_URL=...
-SUPABASE_SERVICE_ROLE_KEY=...
-DATABASE_URL=...
-
-# Conversation + graph write modes
-# COPILOT_CONVERSATIONS_MODE=auto
-# COPILOT_GRAPH_WRITE_MODE=auto
+cd apps/demo-web
+cp .env.local.example .env.local
+# Edit .env.local with your API keys
 ```
+
+**Required variables:**
+- At least one LLM provider API key (GROQ_API_KEY, OPENAI_API_KEY, etc.)
+- PERPLEXITY_API_KEY for web search
+- Memgraph connection (MEMGRAPH_URI)
+- Supabase configuration
+- NEXTAUTH_SECRET (generate with `openssl rand -base64 32`)
+
+For a complete list of all variables with detailed documentation, see:
+- Web app: [`apps/demo-web/.env.local.example`](./apps/demo-web/.env.local.example)
+- Scripts: [`.env.example`](./.env.example)
+- Full guide: [ENV_SETUP.md](./ENV_SETUP.md)
 
 For non‑development deployments, always provide `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` so the platform can use the
 Supabase/Postgres conversation store. Avoid forcing `COPILOT_CONVERSATIONS_MODE` to `memory` outside dev/test; leave it unset (or

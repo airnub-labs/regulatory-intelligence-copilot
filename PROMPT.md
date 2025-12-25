@@ -314,19 +314,71 @@ When a task involves scenario/what‑if:
 
 ## 8. Testing, style, and quality
 
-- Use **TypeScript strict mode** and avoid `any` unless absolutely necessary.  
-- Prefer small, composable functions and pure utilities where possible.  
+- Use **TypeScript strict mode** and avoid `any` unless absolutely necessary.
+- Prefer small, composable functions and pure utilities where possible.
 - Error handling:
-  - Fail fast for configuration/initialisation errors.  
+  - Fail fast for configuration/initialisation errors.
   - Gracefully degrade for provider/egress failures; propagate uncertainty.
-- Logging:
-  - No sensitive data in logs.  
-  - Prefer structured logs for agent IDs, task IDs, and model/provider identifiers.
+
+### 8.1 Logging (CRITICAL - Do not regress)
+
+All logging uses **Pino** from `@reg-copilot/reg-intel-observability`.
+
+**Pino API signature:** `logger.info(object, message)` - **object FIRST, message SECOND**.
+
+```typescript
+// ✅ CORRECT - object first, message second
+logger.info({ userId, tenantId, conversationId }, 'User started conversation');
+logger.error({ error, context }, 'Operation failed');
+logger.debug({ requestId, duration }, 'Request completed');
+
+// ❌ INCORRECT - DO NOT USE THIS PATTERN
+logger.info('User started conversation', { userId, tenantId });
+logger.error('Operation failed', { error });
+```
+
+**Rules:**
+- This applies to ALL log levels: `debug()`, `info()`, `warn()`, `error()`.
+- Use `logger.child({ persistentField: value })` for contextual loggers with persistent fields.
+- Never include PII or sensitive data in logs.
+- Prefer structured logs with agent IDs, task IDs, model/provider identifiers.
+- If you see logger calls with reversed arguments, **fix them immediately** - this breaks structured logging.
+
+### 8.2 Environment Configuration
+
+This repository uses **separate `.env` files** for different purposes:
+
+- **Root `.env`** (from `.env.example`) - For repository scripts (seed-graph, migrations)
+  - Required: `MEMGRAPH_URI`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+  - Used by: `scripts/*.ts`
+
+- **`apps/demo-web/.env.local`** (from `apps/demo-web/.env.local.example`) - For Next.js app
+  - Required: LLM provider keys, database config, auth secrets
+  - Used by: Next.js app, API routes, all runtime code
+
+**Rules:**
+- Never mix or combine these files - they have distinct scopes.
+- When adding environment variables:
+  - Determine if it's for scripts (→ root `.env.example`) or app (→ `apps/demo-web/.env.local.example`)
+  - Document the variable with comments explaining purpose and where to get values
+  - Update [`ENV_SETUP.md`](./ENV_SETUP.md) if the change affects setup flow
+- See [`ENV_SETUP.md`](./ENV_SETUP.md) for complete configuration guide.
+
+### 8.3 Observability (OpenTelemetry)
+
+OpenTelemetry is **optional** and configured via environment variables:
+
+- `OTEL_SERVICE_NAME` - Service identifier for traces
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP collector endpoint
+- `OTEL_TRACES_SAMPLING_RATIO` - Sampling ratio (0.0-1.0)
+- See `packages/reg-intel-observability` for trace/span utilities
+
+Do not create ad-hoc observability implementations - use the centralized observability package.
 
 When in doubt:
 
-- Align with existing patterns in each package.  
-- Keep changes minimal and architecture‑conformant.  
+- Align with existing patterns in each package.
+- Keep changes minimal and architecture‑conformant.
 - Update docs if code behaviour changes in ways that affect other contributors.
 
 ---
