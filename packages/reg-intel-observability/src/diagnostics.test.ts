@@ -29,7 +29,13 @@ describe('observability diagnostics', () => {
     expect(diagnostics.exporters.metrics.url).toBe('http://metrics-endpoint');
     expect(diagnostics.sampling?.parentBasedRatio).toBe(0.5);
     expect(diagnostics.sampling?.alwaysSampleErrors).toBe(true);
-    expect(diagnostics.instrumentations).toEqual([]);
+    expect(diagnostics.instrumentations).toEqual(
+      expect.arrayContaining([
+        '@opentelemetry/instrumentation-next',
+        '@opentelemetry/instrumentation-http',
+        '@opentelemetry/instrumentation-undici',
+      ])
+    );
     expect(diagnostics.startedAt).toBeDefined();
   });
 
