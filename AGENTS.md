@@ -37,6 +37,32 @@ v0.6 updates the v0.4 agent design by:
 - When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
 - Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
 
+**Environment configuration:**
+
+- This repository uses **separate `.env` files** for different purposes:
+  - **Root `.env`** - For repository scripts (graph seeding, migrations). See `.env.example`.
+  - **`apps/demo-web/.env.local`** - For the Next.js web application. See `apps/demo-web/.env.local.example`.
+- Complete setup guide: [`ENV_SETUP.md`](./ENV_SETUP.md)
+- Never mix or combine these files. Each has a specific scope and required variables.
+- When adding new environment variables, update the appropriate `.env.example` file with documentation.
+
+**Logging and observability:**
+
+- All logging uses **Pino** via `@reg-copilot/reg-intel-observability`.
+- **CRITICAL:** Pino logger API signature is `logger.info(object, message)` - object FIRST, message SECOND.
+  ```typescript
+  // CORRECT
+  logger.info({ userId, tenantId }, 'User logged in');
+
+  // INCORRECT - DO NOT USE
+  logger.info('User logged in', { userId, tenantId });
+  ```
+- The same applies to all log levels: `debug()`, `info()`, `warn()`, `error()`.
+- Never regress to incorrect argument order - this breaks structured logging.
+- Use `logger.child()` to create contextual loggers with persistent fields.
+- OpenTelemetry configuration is optional but available via environment variables (see `ENV_SETUP.md`).
+- Observability exports are configured in `packages/reg-intel-observability` - do not create ad-hoc logging implementations.
+
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.
