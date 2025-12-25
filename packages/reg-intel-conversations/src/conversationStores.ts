@@ -195,13 +195,13 @@ export class InMemoryConversationStore implements ConversationStore {
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
     const authorizationSpec = input.authorizationSpec ?? {};
-    this.logger.info('Creating in-memory conversation', {
+    this.logger.info({
       conversationId: id,
       tenantId: input.tenantId,
       userId: input.userId,
       shareAudience,
       tenantAccess,
-    });
+    }, 'Creating in-memory conversation');
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
@@ -244,12 +244,12 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!canWrite(record, input.userId, input.role)) {
       throw new Error('User not authorised for conversation');
     }
-    this.logger.info('Appending message in-memory', {
+    this.logger.info({
       conversationId: input.conversationId,
       tenantId: input.tenantId,
       role: input.role,
       userId: input.userId,
-    });
+    }, 'Appending message in-memory');
     const message: ConversationMessage = {
       id: randomUUID(),
       role: input.role,
@@ -295,12 +295,12 @@ export class InMemoryConversationStore implements ConversationStore {
     }
 
     const target = existing[targetIndex];
-    this.logger.info('Soft deleting message in-memory', {
+    this.logger.info({
       conversationId: input.conversationId,
       tenantId: input.tenantId,
       messageId: input.messageId,
       supersededBy: input.supersededBy,
-    });
+    }, 'Soft deleting message in-memory');
     existing[targetIndex] = {
       ...target,
       deletedAt: new Date(),
@@ -443,11 +443,11 @@ export class InMemoryConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
-    this.logger.info('Saving conversation context', {
+    this.logger.info({
       conversationId: identity.conversationId,
       tenantId: identity.tenantId,
       activeNodeCount: ctx.activeNodeIds?.length ?? 0,
-    });
+    }, 'Saving conversation context');
     this.contexts.set(this.key(identity), {
       activeNodeIds: ctx.activeNodeIds ?? [],
       traceId: ctx.traceId,
@@ -461,12 +461,12 @@ export class InMemoryConversationContextStore implements ConversationContextStor
   ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
-    this.logger.info('Merging active node ids', {
+    this.logger.info({
       conversationId: identity.conversationId,
       tenantId: identity.tenantId,
       added: nodeIds.length,
       total: merged.length,
-    });
+    }, 'Merging active node ids');
     await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
   }
 }
@@ -628,12 +628,12 @@ export class SupabaseConversationStore implements ConversationStore {
         const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
         const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
         const authorizationSpec = input.authorizationSpec ?? {};
-        this.logger.info('Creating Supabase conversation', {
+        this.logger.info({
           tenantId: input.tenantId,
           userId: input.userId,
           shareAudience,
           tenantAccess,
-        });
+        }, 'Creating Supabase conversation');
 
         const { data, error } = await this.internalClient
           .from('conversations')
@@ -728,12 +728,12 @@ export class SupabaseConversationStore implements ConversationStore {
           throw new Error('User not authorised for conversation');
         }
 
-        this.logger.info('Appending Supabase conversation message', {
+        this.logger.info({
           conversationId: input.conversationId,
           tenantId: input.tenantId,
           role: input.role,
           userId: input.userId,
-        });
+        }, 'Appending Supabase conversation message');
 
         // Use explicit pathId if provided, otherwise ensure conversation has an active path
         let pathId = input.pathId ?? conversation.activePathId;
@@ -854,12 +854,12 @@ export class SupabaseConversationStore implements ConversationStore {
           throw new Error('User not authorised for conversation');
         }
 
-        this.logger.info('Soft deleting Supabase conversation message', {
+        this.logger.info({
           conversationId: input.conversationId,
           tenantId: input.tenantId,
           messageId: input.messageId,
           supersededBy: input.supersededBy,
-        });
+        }, 'Soft deleting Supabase conversation message');
 
         const messageLookup = (await this.client
           .from('conversation_messages_view')
@@ -1108,11 +1108,11 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
-    this.logger.info('Saving Supabase conversation context', {
+    this.logger.info({
       conversationId: identity.conversationId,
       tenantId: identity.tenantId,
       activeNodeCount: ctx.activeNodeIds?.length ?? 0,
-    });
+    }, 'Saving Supabase conversation context');
     await withSpan(
       'db.supabase.mutation',
       {
@@ -1148,12 +1148,12 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
-    this.logger.info('Merging Supabase active node ids', {
+    this.logger.info({
       conversationId: identity.conversationId,
       tenantId: identity.tenantId,
       added: nodeIds.length,
       total: merged.length,
-    });
+    }, 'Merging Supabase active node ids');
     await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
   }
 }

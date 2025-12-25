@@ -298,7 +298,7 @@ const chatRouteLogger = adapterLogger.child({ route: 'chat' });
 const toolRegistryLogger = adapterLogger.child({ component: 'tool-registry' });
 
   function logConversationStore(mode: string, message: string, payload?: Record<string, unknown>) {
-    conversationStoreLogger.info(message, { mode, ...(payload ?? {}) });
+    conversationStoreLogger.info({ mode, ...(payload ?? {}) }, message);
   }
 
 async function validateSupabaseHealth(client: ReturnType<typeof createClient>) {
@@ -423,12 +423,12 @@ function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencie
   driver
     .verifyConnectivity()
     .then(() => {
-        graphLogger.info('Graph write dependencies verified', { uri });
+        graphLogger.info({ uri }, 'Graph write dependencies verified');
       })
     .catch(error => {
       graphLogger.warn(
-        'Graph write connectivity check failed; concept capture will be disabled unless configuration is fixed.',
-        { error }
+        { error },
+        'Graph write connectivity check failed; concept capture will be disabled unless configuration is fixed.'
       );
     });
   const graphWriteService = createGraphWriteService({
@@ -561,7 +561,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       try {
         return resolveGraphWriteDependencies(options?.tenantId);
       } catch (error) {
-        graphLogger.warn('Graph write service unavailable; falling back to read-only mode', { error });
+        graphLogger.warn({ error }, 'Graph write service unavailable; falling back to read-only mode');
         return null;
       }
     })();
@@ -669,9 +669,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         return requestContext.run(
           { tenantId, userId, conversationId: requestConversationId as string | undefined },
           async () => {
-            routeLogger.info('Handling chat request', {
+            routeLogger.info({
               conversationId: requestConversationId,
-            });
+            }, 'Handling chat request');
 
             let conversationId = requestConversationId as string | undefined;
             if (!conversationId) {
@@ -691,12 +691,12 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               });
               conversationId = created.conversationId;
               requestContext.set({ tenantId, userId, conversationId });
-              routeLogger.info('Created new conversation', { conversationId });
+              routeLogger.info({ conversationId }, 'Created new conversation');
             }
 
             if (conversationId) {
               requestContext.set({ tenantId, userId, conversationId });
-              routeLogger.info('Conversation resolved', { conversationId });
+              routeLogger.info({ conversationId }, 'Conversation resolved');
             }
 
             const conversationRecord = await conversationStore.getConversation({
@@ -728,20 +728,20 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   sandbox,
                   logger: {
                     info: (msg: string, meta?: unknown) =>
-                      toolRegistryLogger.info(msg, meta as Record<string, unknown> | undefined),
+                      toolRegistryLogger.info(meta as Record<string, unknown> | undefined ?? {}, msg),
                     error: (msg: string, meta?: unknown) =>
-                      toolRegistryLogger.error(msg, meta as Record<string, unknown> | undefined),
+                      toolRegistryLogger.error(meta as Record<string, unknown> | undefined ?? {}, msg),
                   },
                 });
 
-                chatRouteLogger.info('Execution context ready', {
+                chatRouteLogger.info({
                   pathId: conversationRecord.activePathId,
                   sandboxId: sandbox.sandboxId,
                   wasCreated: contextResult.wasCreated,
                   toolsRegistered: toolRegistry.getToolNames(),
-                });
+                }, 'Execution context ready');
               } catch (error) {
-                chatRouteLogger.error('Failed to setup execution context', { error });
+                chatRouteLogger.error({ error }, 'Failed to setup execution context');
                 // Continue without code execution tools if setup fails
               }
             }
@@ -1008,7 +1008,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           }
         );
     } catch (error) {
-      routeLogger.error('Chat route failed', { error });
+      chatRouteLogger.error({ error }, 'Chat route failed');
       const message = error instanceof Error ? error.message : 'Unknown error';
       const stream = new ReadableStream({
         start(controller) {

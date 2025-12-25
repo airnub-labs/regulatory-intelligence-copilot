@@ -49,7 +49,7 @@ export class BoltGraphClient implements GraphClient {
     this.driver = neo4j.driver(config.uri, auth);
     this.database = config.database || 'memgraph';
 
-    this.logger.info(`${LOG_PREFIX.graph} BoltGraphClient initialized`, { uri: config.uri });
+    this.logger.info({ uri: config.uri }, `${LOG_PREFIX.graph} BoltGraphClient initialized`);
   }
 
   /**
@@ -73,10 +73,10 @@ export class BoltGraphClient implements GraphClient {
           const result = await session.run(query, params || {});
           return result.records.map(record => record.toObject());
         } catch (error) {
-          this.logger.error(`${LOG_PREFIX.graph} Cypher execution error`, {
+          this.logger.error({
             error,
             queryHash,
-          });
+          }, `${LOG_PREFIX.graph} Cypher execution error`);
           throw new GraphError(
             `Failed to execute Cypher query: ${error instanceof Error ? error.message : 'Unknown error'}`
           );
@@ -205,11 +205,11 @@ export class BoltGraphClient implements GraphClient {
     jurisdictionId: string,
     keyword?: string
   ): Promise<GraphContext> {
-    this.logger.info(`${LOG_PREFIX.graph} Getting rules`, {
+    this.logger.info({
       profileId,
       jurisdictionId,
       keyword,
-    });
+    }, `${LOG_PREFIX.graph} Getting rules`);
 
     let query = `
       MATCH (p:ProfileTag {id: $profileId})
@@ -245,7 +245,7 @@ export class BoltGraphClient implements GraphClient {
    * Get neighbourhood of a node (1-2 hops)
    */
   async getNeighbourhood(nodeId: string): Promise<GraphContext> {
-    this.logger.info(`${LOG_PREFIX.graph} Getting neighbourhood`, { nodeId });
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting neighbourhood`);
 
     const query = `
       MATCH (n {id: $nodeId})
@@ -264,7 +264,7 @@ export class BoltGraphClient implements GraphClient {
    * Get mutual exclusions for a node
    */
   async getMutualExclusions(nodeId: string): Promise<GraphNode[]> {
-    this.logger.info(`${LOG_PREFIX.graph} Getting mutual exclusions`, { nodeId });
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting mutual exclusions`);
 
     const query = `
       MATCH (n {id: $nodeId})-[:EXCLUDES|MUTUALLY_EXCLUSIVE_WITH]-(excluded)
@@ -280,7 +280,7 @@ export class BoltGraphClient implements GraphClient {
    * Get timeline constraints for a node
    */
   async getTimelines(nodeId: string): Promise<Timeline[]> {
-    this.logger.info(`${LOG_PREFIX.graph} Getting timelines`, { nodeId });
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting timelines`);
 
     const query = `
       MATCH (n {id: $nodeId})-[:LOOKBACK_WINDOW|LOCKS_IN_FOR_PERIOD|FILING_DEADLINE|EFFECTIVE_WINDOW]->(t:Timeline)
@@ -312,7 +312,7 @@ export class BoltGraphClient implements GraphClient {
    * Get cross-border slice for multiple jurisdictions
    */
   async getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext> {
-    this.logger.info(`${LOG_PREFIX.graph} Getting cross-border slice`, { jurisdictions: jurisdictionIds });
+    this.logger.info({ jurisdictions: jurisdictionIds }, `${LOG_PREFIX.graph} Getting cross-border slice`);
 
     const query = `
       MATCH (j:Jurisdiction)

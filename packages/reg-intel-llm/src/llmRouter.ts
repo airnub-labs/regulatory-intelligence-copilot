@@ -688,27 +688,12 @@ export class LlmRouter implements LlmClient {
       userId: options?.userId,
     });
 
-    contextualLogger.info('Routing streaming chat request through LlmRouter', {
+    contextualLogger.info({
       egressMode: {
         requested: requestedMode ?? this.egressDefaultMode,
         effective: effectiveMode,
       },
-    });
-
-    const contextualLogger = this.logger.child({
-      task: options?.task ?? 'main-chat',
-      provider,
-      model,
-      tenantId: options?.tenantId,
-      userId: options?.userId,
-    });
-
-    contextualLogger.info('Routing chat request through LlmRouter', {
-      egressMode: {
-        requested: requestedMode ?? this.egressDefaultMode,
-        effective: effectiveMode,
-      },
-    });
+    }, 'Routing chat request through LlmRouter');
 
     const response = await this.egressClient.guardAndExecute(
       {
@@ -775,6 +760,21 @@ export class LlmRouter implements LlmClient {
       options
     );
 
+    const contextualLogger = this.logger.child({
+      task: options?.task ?? 'main-chat',
+      provider,
+      model,
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+    });
+
+    contextualLogger.info({
+      egressMode: {
+        requested: requestedMode ?? this.egressDefaultMode,
+        effective: effectiveMode,
+      },
+    }, 'Routing streaming chat request through LlmRouter');
+
     const streamResult = await this.egressClient.guardAndExecute(
       {
         target: 'llm',
@@ -834,7 +834,7 @@ export class LlmRouter implements LlmClient {
         }
       }
     } catch (error) {
-      contextualLogger.error('Streaming chat failed', { error });
+      contextualLogger.error({ error }, 'Streaming chat failed');
       yield {
         type: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
@@ -942,12 +942,12 @@ export class LlmRouter implements LlmClient {
       model = options.model;
     }
 
-    this.logger.info('Resolved provider and model for request', {
+    this.logger.info({
       provider,
       model,
       tenantId,
       task,
-    });
+    }, 'Resolved provider and model for request');
 
     return { provider, model, taskOptions, tenantPolicy: policy };
   }
