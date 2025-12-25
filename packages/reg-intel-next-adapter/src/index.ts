@@ -465,7 +465,7 @@ class SseStreamWriter {
    * @param event - Event type name
    * @param data - Event payload (will be JSON stringified if not a string)
    */
-  send(event: 'message' | 'metadata' | 'error' | 'done' | 'disclaimer' | 'warning', data: unknown) {
+  send(event: ConversationEventType, data: unknown) {
     const payload = typeof data === 'string' ? data : JSON.stringify(data);
     const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
     this.controller.enqueue(this.encoder.encode(chunk));

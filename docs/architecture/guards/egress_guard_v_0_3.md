@@ -1,6 +1,8 @@
 # Egress Guard – v0_3 (Aspect-Based, Symmetric with Graph Ingress)
 
-> **Status:** Accepted (supersedes v0_2).
+> **Status:** Accepted and Implemented (supersedes v0_2).
+>
+> **Implementation Status:** ✅ Fully Complete (2025-12-24)
 >
 > Goal: Make the egress guard for MCP + LLM calls use the **same aspect pattern** as the Graph Ingress Guard, so both sides feel familiar and can even host AI policy agents while supporting staged rollout modes.
 
@@ -368,4 +370,186 @@ with a short note that:
 This brings the egress side up to the same level of customisability and
 robustness as the graph ingress side, while keeping both aligned in design and
 mental model.
+
+---
+
+## 9. Implementation Status (2025-12-24)
+
+The EgressGuard system is **fully implemented** with end-to-end PII protection at all egress points.
+
+### 9.1 Core Implementation Files
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `sanitizeTextForEgress()` | `packages/reg-intel-llm/src/egressGuard.ts` | ✅ Implemented |
+| `sanitizeObjectForEgress()` | `packages/reg-intel-llm/src/egressGuard.ts` | ✅ Implemented |
+| `EgressClient` | `packages/reg-intel-llm/src/egressClient.ts` | ✅ Implemented |
+| Mode resolver | `packages/reg-intel-llm/src/egressModeResolver.ts` | ✅ Implemented |
+
+### 9.2 PII Detection Capabilities
+
+The implementation includes both regex-based and ML-powered detection:
+
+**Regex Patterns** (custom patterns):
+- Irish PPSN (Personal Public Service Number)
+- API keys (sk_live_, sk_test_, api_key_, etc.)
+- JWT tokens
+- AWS access keys (AKIA*)
+- Database connection URLs
+- IP addresses (IPv4)
+- Credit card numbers
+- IBANs
+- Basic email and phone patterns
+
+**ML-Powered Detection** (via @redactpii/node):
+- EMAIL_ADDRESS
+- PHONE_NUMBER
+- US_SOCIAL_SECURITY_NUMBER
+- CREDIT_CARD_NUMBER
+- PERSON_NAME
+- LOCATION
+- And other entity types
+
+### 9.3 Egress Points Protected
+
+| Egress Point | Protection | Files |
+|--------------|------------|-------|
+| **Outbound LLM requests** | User messages sanitized before sending | `llmRouter.ts` |
+| **LLM responses** | Text sanitized before reaching client | `llmRouter.ts:chat()`, `streamChat()` |
+| **Sandbox stdout** | Sanitized before returning to caller | `codeExecutionTools.ts:executeCode()` |
+| **Sandbox stderr** | Sanitized before returning to caller | `codeExecutionTools.ts:executeCode()` |
+| **Sandbox error messages** | Sanitized before returning to caller | `codeExecutionTools.ts:executeCode()` |
+| **Analysis results** | Parsed JSON and results sanitized | `codeExecutionTools.ts:executeAnalysis()` |
+| **Agent outputs** | Defense-in-depth layer | `complianceEngine.ts:handleChat()` |
+| **Streaming responses** | Per-chunk sanitization | `complianceEngine.ts:handleChatStream()` |
+
+### 9.4 Mode Support
+
+All three modes are fully implemented:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| `enforce` | Sanitize and execute sanitized payload | Production default |
+| `report-only` | Sanitize but execute original payload; log differences | Gradual rollout, debugging |
+| `off` | Skip sanitization (provider allowlist still enforced) | Testing only |
+
+### 9.5 Test Coverage
+
+- ✅ `egressGuard.test.ts` - Core sanitization unit tests
+- ✅ `egressClient.test.ts` - Client guard and execute tests
+- ✅ `egressClient.spec.ts` - Integration tests
+- ✅ `egressModeResolver.test.ts` - Mode resolution tests
+- ✅ `egressGuardIntegration.test.ts` - 22 end-to-end integration tests
+
+### 9.6 Defense-in-Depth Architecture
+
+The system implements multiple layers of protection:
+
+```
+User Input → [EgressGuard: User Message Sanitization]
+           ↓
+     LLM Provider → [Response Received]
+           ↓
+     [EgressGuard: LLM Response Sanitization] → [BasicEgressGuard: Agent Layer]
+           ↓
+     SSE Stream → Client
+
+Sandbox Code Execution:
+     Code → E2B Sandbox → [EgressGuard: stdout/stderr/results] → Response
+```
+
+This ensures that PII is caught at multiple points, providing resilience even if one layer is bypassed.
+
+### 9.7 Context-Aware Sanitization (2025-12-25)
+
+To prevent false positives on regulatory data, version numbers, and calculation results, the EgressGuard now supports **context-aware sanitization**:
+
+| Context | Description | ML Detection | Pattern Set | Use Case |
+|---------|-------------|--------------|-------------|----------|
+| `chat` | Full sanitization | ✅ Enabled | All patterns | User-facing LLM responses (default) |
+| `calculation` | Conservative | ❌ Disabled | High-confidence only | E2B sandbox output (default) |
+| `strict` | Aggressive | ✅ Enabled | All + broad patterns | High-security scenarios |
+| `off` | None | ❌ Disabled | None | Trusted internal use |
+
+**Pattern Categories:**
+
+| Category | Patterns | Applies To |
+|----------|----------|------------|
+| High-confidence | Email, SSN, Credit Card, API Keys, JWT, AWS Keys, DB URLs | All contexts |
+| Medium-confidence | Phone, PPSN, IBAN, IP Address (valid ranges) | chat, strict |
+| Aggressive | Broad IBAN, Any IP-like pattern | strict only |
+
+**Sandbox Configuration:**
+
+```typescript
+// Default: calculation context (conservative, avoids false positives)
+const result = await executeCode(input, sandbox);
+
+// Disable sanitization for trusted sandbox output
+const result = await executeCode(input, sandbox, logger, { sanitization: 'off' });
+
+// Use full chat-level sanitization for sandbox
+const result = await executeCode(input, sandbox, logger, { sanitization: 'chat' });
+```
+
+**LLM Response Configuration:**
+
+```typescript
+// Default: chat context
+const response = await llmRouter.chat(messages);
+
+// Use conservative sanitization for calculation responses
+const response = await llmRouter.chat(messages, {
+  responseSanitization: 'calculation',
+});
+
+// Disable response sanitization
+const response = await llmRouter.chat(messages, {
+  responseSanitization: 'off',
+});
+```
+
+**Pre-configured Sanitizers:**
+
+```typescript
+import { Sanitizers } from '@reg-intel/llm';
+
+// Use pre-configured sanitizers
+const safe = Sanitizers.chat.sanitizeText(content);
+const calcSafe = Sanitizers.calculation.sanitizeText(content);
+const raw = Sanitizers.off.sanitizeText(content);
+```
+
+**Audit Trail:**
+
+```typescript
+import { sanitizeTextWithAudit } from '@reg-intel/llm';
+
+const result = sanitizeTextWithAudit(content, { context: 'chat' });
+// result.redacted: boolean
+// result.redactionTypes: string[] (e.g., ['[EMAIL]', '[SSN]'])
+// result.originalLength: number
+// result.sanitizedLength: number
+```
+
+### 9.8 False Positive Prevention
+
+The calculation context specifically preserves:
+
+- ✅ Version numbers (e.g., `1.2.3.4`)
+- ✅ Regulatory reference codes (e.g., `EU2020/1234`, `UK22ABC456`)
+- ✅ Legal document identifiers (e.g., `S.I. No. 123/2024`)
+- ✅ Financial figures with phone-like patterns (e.g., `555,123,4567 EUR`)
+- ✅ PPSN-like reference codes when not actual PPSNs
+- ✅ All numeric primitive values (never sanitized)
+
+While still sanitizing:
+
+- ❌ Email addresses
+- ❌ US Social Security Numbers (XXX-XX-XXXX format)
+- ❌ Credit card numbers
+- ❌ API keys (sk_live_*, sk_test_*)
+- ❌ JWT tokens
+- ❌ AWS access keys
+- ❌ Database connection URLs with credentials
 

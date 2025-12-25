@@ -12,20 +12,17 @@ import {
   PencilLine,
   Plus,
   Wand2,
-  X,
 } from 'lucide-react'
 import type {
   ConversationListEventPayloadMap,
   ClientConversation,
 } from '@reg-copilot/reg-intel-conversations'
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
-import { Message, MessageLoading } from '@/components/chat/message'
+import { PathAwareMessageList } from '@/components/chat/path-aware-message-list'
 import { PathToolbar } from '@/components/chat/path-toolbar'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
-import { getBranchMetadata } from '@/lib/pathMessageRenderer'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
-import { ProgressIndicator } from '@/components/chat/progress-indicator'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput, type ForceTool } from '@/components/chat/prompt-input'
 import { AppHeader } from '@/components/layout/app-header'
@@ -33,7 +30,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -72,11 +68,8 @@ interface ChatMessage {
   sequenceInPath?: number
   isBranchPoint?: boolean
   branchedToPaths?: string[]
-}
-
-interface VersionedMessage {
-  latestId: string
-  versions: ChatMessage[]
+  // Pinning
+  isPinned?: boolean
 }
 
 type ShareAudience = 'private' | 'tenant' | 'public'
@@ -262,17 +255,6 @@ const normalizePersonaType = (value?: string | null): UserProfile['personaType']
   return DEFAULT_PERSONA
 }
 
-// Simplified message building - path system handles branching
-// Each path shows its own linear sequence of messages
-const buildVersionedMessages = (messages: ChatMessage[]): VersionedMessage[] => {
-  // In path system, messages are already filtered by active path
-  // No need for supersededBy chains - just show messages as-is
-  return messages.map(message => ({
-    latestId: message.id,
-    versions: [message], // Single version - paths handle branching
-  }))
-}
-
 export default function Home() {
   const router = useRouter()
   const { data: session, status } = useSession()
@@ -287,7 +269,6 @@ export default function Home() {
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
-  const [activeVersionIndex, setActiveVersionIndex] = useState<Record<string, number>>({})
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [branchFromMessageId, setBranchFromMessageId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
@@ -312,7 +293,6 @@ export default function Home() {
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
-  const versionedMessages = useMemo(() => buildVersionedMessages(messages), [messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -384,6 +364,8 @@ export default function Home() {
         sequenceInPath: (msg as { sequenceInPath?: number }).sequenceInPath,
         isBranchPoint: (msg as { isBranchPoint?: boolean }).isBranchPoint,
         branchedToPaths: (msg as { branchedToPaths?: string[] }).branchedToPaths,
+        // Pinning
+        isPinned: (msg as { isPinned?: boolean }).isPinned,
       }))
       setMessages(loadedMessages)
       setConversationId(id)
@@ -422,18 +404,7 @@ export default function Home() {
     prevMessageCountRef.current = messages.length
   }, [messages.length])
 
-  useEffect(() => {
-    setActiveVersionIndex(prev => {
-      const next = { ...prev }
-      versionedMessages.forEach(chain => {
-        const maxIndex = chain.versions.length - 1
-        if (!(chain.latestId in next) || next[chain.latestId] > maxIndex) {
-          next[chain.latestId] = maxIndex
-        }
-      })
-      return next
-    })
-  }, [versionedMessages])
+  // Version index tracking is now handled internally by PathAwareMessageList
 
   const applyMetadata = (metadata: ChatSseMetadata) => {
     if (metadata.conversationId) {
@@ -925,10 +896,9 @@ export default function Home() {
   }
 
   const lastEditableUserMessage = () => {
-    for (let i = versionedMessages.length - 1; i >= 0; i -= 1) {
-      const chain = versionedMessages[i]
-      const currentIndex = activeVersionIndex[chain.latestId] ?? chain.versions.length - 1
-      const candidate = chain.versions[currentIndex]
+    // Find the last user message in the messages array
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const candidate = messages[i]
       if (candidate.role === 'user') {
         return candidate
       }
@@ -980,6 +950,32 @@ export default function Home() {
     if (conversationId) {
       const url = `/?conversationId=${conversationId}&pathId=${pathId}`
       window.open(url, '_blank')
+    }
+  }
+
+  const handleTogglePin = async (messageId: string, currentlyPinned: boolean) => {
+    if (!conversationId) return
+    if (!isAuthenticated) return
+
+    try {
+      const response = await fetch(`/api/conversations/${conversationId}/messages/${messageId}/pin`, {
+        method: currentlyPinned ? 'DELETE' : 'POST',
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        // Update local state
+        setMessages(prev =>
+          prev.map(message =>
+            message.id === messageId ? { ...message, isPinned: !currentlyPinned } : message
+          )
+        )
+      } else {
+        const error = await response.json()
+        console.error('Failed to toggle pin:', error.error)
+      }
+    } catch (error) {
+      console.error('Failed to toggle pin:', error)
     }
   }
 
@@ -1200,7 +1196,7 @@ export default function Home() {
             )}
 
             <ChatContainer className="flex-1 bg-transparent px-4">
-              {versionedMessages.length === 0 ? (
+              {messages.length === 0 && !isLoading ? (
                 <ChatWelcome>
                   <div className="mx-auto max-w-lg space-y-4 py-8 text-center">
                     <h2 className="text-xl font-semibold">Welcome to the Regulatory Intelligence Copilot</h2>
@@ -1226,64 +1222,32 @@ export default function Home() {
                   </div>
                 </ChatWelcome>
               ) : (
-                <>
-                  {versionedMessages.map(chain => {
-                    const currentMessage = chain.versions[0] // Path system - single version per message
-                    const isEditingCurrent = editingMessageId === currentMessage.id && currentMessage.role === 'user'
-
-                    return (
-                      <div key={chain.latestId} className="relative">
-                        {isEditingCurrent ? (
-                          <div className="rounded-2xl border bg-muted/40 p-4 shadow-sm">
-                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                              <PencilLine className="h-4 w-4" /> Editing last message
-                            </div>
-                            <Label htmlFor={`edit-${chain.latestId}`} className="sr-only">
-                              Edit message
-                            </Label>
-                            <textarea
-                              ref={editTextareaRef}
-                              id={`edit-${chain.latestId}`}
-                              value={editingContent}
-                              onChange={event => setEditingContent(event.target.value)}
-                              className="w-full resize-none rounded-xl border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none"
-                              rows={3}
-                              disabled={isLoading}
-                            />
-                            <div className="mt-2 flex items-center justify-end gap-2">
-                              <Button size="sm" variant="ghost" onClick={cancelEditing} disabled={isLoading}>
-                                <X className="mr-1 h-4 w-4" /> Cancel
-                              </Button>
-                              <Button size="sm" onClick={() => handleSubmit()} disabled={isLoading || !editingContent.trim()}>
-                                <PencilLine className="mr-1 h-4 w-4" /> Save edit
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <Message
-                            role={currentMessage.role}
-                            content={currentMessage.content}
-                            disclaimer={currentMessage.disclaimer}
-                            metadata={currentMessage.metadata}
-                            messageId={currentMessage.id}
-                            onEdit={handleEdit}
-                            onBranch={handleBranch}
-                            showActions={true}
-                            isBranchPoint={getBranchMetadata(currentMessage).isBranchPoint}
-                            branchedPaths={getBranchMetadata(currentMessage).branchIds}
-                            onViewBranch={handleViewBranch}
-                          />
-                        )}
-                      </div>
-                    )
-                  })}
-                  {isLoading && (
-                    <>
-                      <ProgressIndicator currentStage={streamingStage} />
-                      <MessageLoading />
-                    </>
-                  )}
-                </>
+                <PathAwareMessageList
+                  fallbackMessages={messages.map(msg => ({
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                    metadata: msg.metadata as Record<string, unknown> | undefined,
+                    disclaimer: msg.disclaimer,
+                    isPinned: msg.isPinned,
+                    isBranchPoint: msg.isBranchPoint,
+                    branchedToPaths: msg.branchedToPaths,
+                  }))}
+                  isLoading={isLoading}
+                  streamingStage={streamingStage}
+                  editingMessageId={editingMessageId}
+                  editingContent={editingContent}
+                  onEditingContentChange={setEditingContent}
+                  onEditSubmit={() => handleSubmit()}
+                  onEditCancel={cancelEditing}
+                  onEditRequest={handleEdit}
+                  onBranchRequest={handleBranch}
+                  onViewBranch={handleViewBranch}
+                  onTogglePin={handleTogglePin}
+                  showBranchButtons={true}
+                  showActions={true}
+                  editTextareaRef={editTextareaRef}
+                />
               )}
               <div ref={messagesEndRef} />
             </ChatContainer>
@@ -1295,7 +1259,7 @@ export default function Home() {
                     Cancel
                   </Button>
                 )}
-                {versionedMessages.length > 0 && !editingMessageId && (
+                {messages.length > 0 && !editingMessageId && (
                   <Button
                     size="sm"
                     variant="ghost"
