@@ -28,6 +28,7 @@ import {
   createGraphWriteService,
   type GraphWriteService,
 } from '@reg-copilot/reg-intel-graph';
+import { runWithScriptObservability } from './observability.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -260,9 +261,10 @@ async function simulateChanges(
 /**
  * Main function
  */
-async function main() {
-  const action = process.argv[2] || 'simulate';
+const action = process.argv[2] || 'simulate';
 
+async function main(selectedAction: string) {
+  
   console.log('🧪 Test Graph Changes');
   console.log(`📍 Connecting to: ${MEMGRAPH_URI}\n`);
 
@@ -279,7 +281,7 @@ async function main() {
       tenantId: 'test',
     });
 
-    switch (action) {
+    switch (selectedAction) {
       case 'add-node':
         await addTestNode(writeService);
         break;
@@ -299,7 +301,7 @@ async function main() {
         await simulateChanges(driver, writeService);
         break;
       default:
-        console.error(`❌ Unknown action: ${action}`);
+        console.error(`❌ Unknown action: ${selectedAction}`);
         console.log('\nAvailable actions:');
         console.log('  - add-node');
         console.log('  - update-node');
@@ -307,7 +309,7 @@ async function main() {
         console.log('  - add-edge');
         console.log('  - remove-edge');
         console.log('  - simulate (default)');
-        process.exit(1);
+        throw new Error(`Unknown action: ${selectedAction}`);
     }
   } catch (error) {
     console.error('❌ Error:', error);
@@ -315,14 +317,21 @@ async function main() {
       console.error('   Message:', error.message);
       console.error('   Stack:', error.stack);
     }
-    process.exit(1);
+    throw error;
   } finally {
     await driver.close();
   }
 }
 
 // Run
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'test-graph-changes',
+  async ({ withSpan }) => {
+    await withSpan(
+      'script.test-graph-changes',
+      { 'script.name': 'test-graph-changes', action },
+      () => main(action)
+    );
+  },
+  { tenantId: 'test', agentId: 'test-graph-changes' }
+);

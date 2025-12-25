@@ -19,6 +19,7 @@ import {
   computeLockInEnd,
   isWithinLookback,
 } from '../packages/reg-intel-core/src/timeline/timelineEngine.js';
+import { runWithScriptObservability } from './observability.js';
 
 async function testTimelineIntegration() {
   console.log('🧪 Testing Timeline Engine integration with seeded graph data\n');
@@ -109,14 +110,21 @@ async function testTimelineIntegration() {
     if (error instanceof Error) {
       console.error('   Error message:', error.message);
     }
-    process.exit(1);
+    throw error;
   } finally {
     await graphClient.close();
   }
 }
 
 // Run tests
-testTimelineIntegration().catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'test-timeline-integration',
+  async ({ withSpan }) => {
+    await withSpan(
+      'script.test-timeline-integration',
+      { 'script.name': 'test-timeline-integration' },
+      () => testTimelineIntegration()
+    );
+  },
+  { agentId: 'test-timeline-integration' }
+);

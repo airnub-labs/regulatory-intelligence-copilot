@@ -19,6 +19,7 @@ import {
   createGraphWriteService,
   type GraphWriteService,
 } from '../packages/reg-intel-graph/src/index.js';
+import { runWithScriptObservability } from './observability.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -279,15 +280,21 @@ async function seedGraph() {
       console.error('   Message:', error.message);
       console.error('   Stack:', error.stack);
     }
-    process.exit(1);
+    throw error;
   } finally {
     await driver.close();
     console.log('👋 Disconnected from Memgraph');
   }
 }
 
-// Run the seeding
-seedGraph().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'seed-graph',
+  async ({ withSpan }) => {
+    await withSpan(
+      'script.seed-graph',
+      { 'script.name': 'seed-graph', 'memgraph.uri': MEMGRAPH_URI },
+      () => seedGraph()
+    );
+  },
+  { tenantId: 'system', agentId: 'seed-graph' }
+);

@@ -19,6 +19,7 @@ import {
   createTimelineEngine,
   type ComplianceStreamChunk,
 } from '../packages/reg-intel-core/src/index.js';
+import { runWithScriptObservability } from './observability.js';
 
 // Mock egress guard for testing
 class MockEgressGuard {
@@ -258,14 +259,21 @@ async function main() {
 
   if (allPassed) {
     console.log('\n🎉 All Phase 3 tests passed! Architecture is compliant.');
-    process.exit(0);
-  } else {
-    console.log('\n💥 Some tests failed. Please review the implementation.');
-    process.exit(1);
+    return;
   }
+
+  console.log('\n💥 Some tests failed. Please review the implementation.');
+  throw new Error('One or more Phase 3 integration tests failed');
 }
 
-main().catch((error) => {
-  console.error('\n💥 Test suite crashed:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'test-phase3-integration',
+  async ({ withSpan }) => {
+    await withSpan(
+      'script.test-phase3-integration',
+      { 'script.name': 'test-phase3-integration' },
+      () => main()
+    );
+  },
+  { agentId: 'test-phase3-integration' }
+);

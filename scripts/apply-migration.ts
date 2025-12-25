@@ -8,14 +8,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import { runWithScriptObservability } from './observability.js';
 
 async function applyMigration(migrationPath: string) {
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error('Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables must be set');
-    process.exit(1);
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables must be set');
   }
 
   console.log(`Connecting to Supabase at ${supabaseUrl}...`);
@@ -82,7 +82,7 @@ async function applyMigration(migrationPath: string) {
     if (failCount > 0) {
       console.error('\n⚠️  Some statements failed. Please apply the migration manually via Supabase dashboard.');
       console.error('You can copy the SQL from:', fullPath);
-      process.exit(1);
+      throw new Error('One or more migration statements failed');
     }
   } else {
     console.log('✓ Migration applied successfully!');
@@ -93,13 +93,16 @@ async function applyMigration(migrationPath: string) {
 // Get migration path from command line args
 const migrationPath = process.argv[2];
 
-if (!migrationPath) {
-  console.error('Usage: tsx scripts/apply-migration.ts <migration-file-path>');
-  console.error('Example: tsx scripts/apply-migration.ts supabase/migrations/20251208000000_fix_conversation_paths_permissions.sql');
-  process.exit(1);
-}
+await runWithScriptObservability(
+  'apply-migration',
+  async () => {
+    if (!migrationPath) {
+      throw new Error(
+        'Usage: tsx scripts/apply-migration.ts <migration-file-path> (example: supabase/migrations/20251208000000_fix_conversation_paths_permissions.sql)'
+      );
+    }
 
-applyMigration(migrationPath).catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+    await applyMigration(migrationPath);
+  },
+  { agentId: 'apply-migration' }
+);

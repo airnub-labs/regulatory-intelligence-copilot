@@ -57,10 +57,13 @@ interface ImplementationState {
 
 const STATE_FILE = path.join(__dirname, '../docs/architecture/execution-context/IMPLEMENTATION_STATE.json');
 
+const fail = (message: string): never => {
+  throw new Error(message);
+};
+
 function loadState(): ImplementationState {
   if (!fs.existsSync(STATE_FILE)) {
-    console.error('State file not found:', STATE_FILE);
-    process.exit(1);
+    fail(`State file not found: ${STATE_FILE}`);
   }
 
   const content = fs.readFileSync(STATE_FILE, 'utf-8');
@@ -127,13 +130,11 @@ function completeTask(state: ImplementationState, taskId: string): void {
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase not found for task ${taskId}`);
-    process.exit(1);
+    fail(`Phase not found for task ${taskId}`);
   }
 
   if (!phase.tasks[taskId]) {
-    console.error(`Task ${taskId} not found in ${phaseKey}`);
-    process.exit(1);
+    fail(`Task ${taskId} not found in ${phaseKey}`);
   }
 
   if (phase.completedTasks.includes(taskId)) {
@@ -160,13 +161,11 @@ function startTask(state: ImplementationState, taskId: string): void {
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase not found for task ${taskId}`);
-    process.exit(1);
+    fail(`Phase not found for task ${taskId}`);
   }
 
   if (!phase.tasks[taskId]) {
-    console.error(`Task ${taskId} not found in ${phaseKey}`);
-    process.exit(1);
+    fail(`Task ${taskId} not found in ${phaseKey}`);
   }
 
   if (phase.completedTasks.includes(taskId)) {
@@ -184,8 +183,7 @@ function blockPhase(state: ImplementationState, phaseKey: string, blocker: strin
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase ${phaseKey} not found`);
-    process.exit(1);
+    fail(`Phase ${phaseKey} not found`);
   }
 
   phase.blockers.push(blocker);
@@ -198,8 +196,7 @@ function unblockPhase(state: ImplementationState, phaseKey: string, blocker?: st
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase ${phaseKey} not found`);
-    process.exit(1);
+    fail(`Phase ${phaseKey} not found`);
   }
 
   if (blocker) {
@@ -298,8 +295,7 @@ function updateE2ETest(state: ImplementationState, testName: string, result: 'pa
     state.testResults.e2e[testName] = result;
     console.log(`🧪 E2E test ${testName}: ${result}`);
   } else {
-    console.error(`E2E test ${testName} not found`);
-    process.exit(1);
+    fail(`E2E test ${testName} not found`);
   }
 }
 
@@ -307,8 +303,11 @@ function updateE2ETest(state: ImplementationState, testName: string, result: 'pa
 const args = process.argv.slice(2);
 const command = args[0];
 
-if (!command) {
-  console.log(`
+await runWithScriptObservability(
+  'update-implementation-state',
+  async () => {
+    if (!command) {
+      console.log(`
 Usage:
   pnpm tsx scripts/update-implementation-state.ts <command> [args...]
 
@@ -333,93 +332,86 @@ Examples:
   pnpm tsx scripts/update-implementation-state.ts test:unit 42 0 85%
   pnpm tsx scripts/update-implementation-state.ts test:e2e test1_basic_execution passed
   `);
-  process.exit(0);
-}
-
-const state = loadState();
-
-switch (command) {
-  case 'complete':
-    if (!args[1]) {
-      console.error('Task ID required');
-      process.exit(1);
+      return;
     }
-    completeTask(state, args[1]);
-    saveState(state);
-    break;
 
-  case 'start':
-    if (!args[1]) {
-      console.error('Task ID required');
-      process.exit(1);
+    const state = loadState();
+
+    switch (command) {
+      case 'complete':
+        if (!args[1]) {
+          fail('Task ID required');
+        }
+        completeTask(state, args[1]);
+        saveState(state);
+        break;
+
+      case 'start':
+        if (!args[1]) {
+          fail('Task ID required');
+        }
+        startTask(state, args[1]);
+        saveState(state);
+        break;
+
+      case 'block':
+        if (!args[1] || !args[2]) {
+          fail('Phase key and blocker reason required');
+        }
+        blockPhase(state, args[1], args.slice(2).join(' '));
+        saveState(state);
+        break;
+
+      case 'unblock':
+        if (!args[1]) {
+          fail('Phase key required');
+        }
+        unblockPhase(state, args[1], args[2]);
+        saveState(state);
+        break;
+
+      case 'note':
+        if (!args[1]) {
+          fail('Note message required');
+        }
+        addNote(state, args.slice(1).join(' '));
+        saveState(state);
+        break;
+
+      case 'status':
+        showStatus(state);
+        break;
+
+      case 'test:unit':
+        if (!args[1] || !args[2]) {
+          fail('Passed and failed counts required');
+        }
+        updateTests(state, 'unit', parseInt(args[1]), parseInt(args[2]), args[3]);
+        saveState(state);
+        break;
+
+      case 'test:integration':
+        if (!args[1] || !args[2]) {
+          fail('Passed and failed counts required');
+        }
+        updateTests(state, 'integration', parseInt(args[1]), parseInt(args[2]));
+        saveState(state);
+        break;
+
+      case 'test:e2e':
+        if (!args[1] || !args[2]) {
+          fail('Test name and result (passed/failed) required');
+        }
+        if (args[2] !== 'passed' && args[2] !== 'failed') {
+          fail('Result must be "passed" or "failed"');
+        }
+        updateE2ETest(state, args[1], args[2]);
+        saveState(state);
+        break;
+
+      default:
+        fail(`Unknown command: ${command}`);
     }
-    startTask(state, args[1]);
-    saveState(state);
-    break;
-
-  case 'block':
-    if (!args[1] || !args[2]) {
-      console.error('Phase key and blocker reason required');
-      process.exit(1);
-    }
-    blockPhase(state, args[1], args.slice(2).join(' '));
-    saveState(state);
-    break;
-
-  case 'unblock':
-    if (!args[1]) {
-      console.error('Phase key required');
-      process.exit(1);
-    }
-    unblockPhase(state, args[1], args[2]);
-    saveState(state);
-    break;
-
-  case 'note':
-    if (!args[1]) {
-      console.error('Note message required');
-      process.exit(1);
-    }
-    addNote(state, args.slice(1).join(' '));
-    saveState(state);
-    break;
-
-  case 'status':
-    showStatus(state);
-    break;
-
-  case 'test:unit':
-    if (!args[1] || !args[2]) {
-      console.error('Passed and failed counts required');
-      process.exit(1);
-    }
-    updateTests(state, 'unit', parseInt(args[1]), parseInt(args[2]), args[3]);
-    saveState(state);
-    break;
-
-  case 'test:integration':
-    if (!args[1] || !args[2]) {
-      console.error('Passed and failed counts required');
-      process.exit(1);
-    }
-    updateTests(state, 'integration', parseInt(args[1]), parseInt(args[2]));
-    saveState(state);
-    break;
-
-  case 'test:e2e':
-    if (!args[1] || !args[2]) {
-      console.error('Test name and result (passed/failed) required');
-      process.exit(1);
-    }
-    if (args[2] !== 'passed' && args[2] !== 'failed') {
-      console.error('Result must be "passed" or "failed"');
-      process.exit(1);
-    }
-    updateE2ETest(state, args[1], args[2]);
-    saveState(state);
-    break;
-
-  default:
-    console.error(`Unknown command: ${command}`);
-    process.exit(1);
-}
+  },
+  { agentId: 'update-implementation-state' }
+);

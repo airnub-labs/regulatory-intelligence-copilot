@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { SupabaseConversationStore } from '../packages/reg-intel-conversations/src/conversationStores';
+import { runWithScriptObservability } from './observability.js';
 
 type TableRow = Record<string, unknown>;
 
@@ -150,11 +151,9 @@ class InMemorySupabaseClient {
   }
 }
 
-async function main() {
+async function main(tenantId: string, userId: string) {
   const supabaseClient = new InMemorySupabaseClient();
   const store = new SupabaseConversationStore(supabaseClient as never);
-  const tenantId = randomUUID();
-  const userId = randomUUID();
 
   const { conversationId } = await store.createConversation({
     tenantId,
@@ -193,8 +192,14 @@ async function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(error => {
-    console.error('Manual SupabaseConversationStore flow failed', error);
-    process.exit(1);
-  });
+  const tenantId = randomUUID();
+  const userId = randomUUID();
+
+  await runWithScriptObservability(
+    'manual-supabase-store-check',
+    async () => {
+      await main(tenantId, userId);
+    },
+    { tenantId, userId, agentId: 'manual-supabase-store-check' }
+  );
 }

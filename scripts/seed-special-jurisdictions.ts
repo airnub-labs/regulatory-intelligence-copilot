@@ -23,6 +23,7 @@ import {
   createGraphWriteService,
   type GraphWriteService,
 } from '../packages/reg-intel-graph/src/index.js';
+import { runWithScriptObservability } from './observability.js';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
@@ -314,15 +315,21 @@ async function seedSpecialJurisdictions() {
       console.error('   Message:', error.message);
       console.error('   Stack:', error.stack);
     }
-    process.exit(1);
+    throw error;
   } finally {
     await driver.close();
     console.log('👋 Disconnected from Memgraph');
   }
 }
 
-// Run the seeding
-seedSpecialJurisdictions().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'seed-special-jurisdictions',
+  async ({ withSpan }) => {
+    await withSpan(
+      'script.seed-special-jurisdictions',
+      { 'script.name': 'seed-special-jurisdictions', 'memgraph.uri': MEMGRAPH_URI },
+      () => seedSpecialJurisdictions()
+    );
+  },
+  { tenantId: 'system', agentId: 'seed-special-jurisdictions' }
+);
