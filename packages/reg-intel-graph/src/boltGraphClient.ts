@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto';
 import neo4j, { Driver, Session } from 'neo4j-driver';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_STATEMENT } from '@opentelemetry/semantic-conventions';
-import { withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import type {
   GraphClient,
   GraphContext,
@@ -35,6 +35,7 @@ export interface BoltGraphClientConfig {
 export class BoltGraphClient implements GraphClient {
   private driver: Driver;
   private database: string;
+  private logger = createLogger('BoltGraphClient', { component: 'GraphClient' });
 
   constructor(config: BoltGraphClientConfig) {
     let auth;
@@ -48,7 +49,7 @@ export class BoltGraphClient implements GraphClient {
     this.driver = neo4j.driver(config.uri, auth);
     this.database = config.database || 'memgraph';
 
-    console.log(`${LOG_PREFIX.graph} BoltGraphClient initialized: ${config.uri}`);
+    this.logger.info(`${LOG_PREFIX.graph} BoltGraphClient initialized`, { uri: config.uri });
   }
 
   /**
@@ -72,7 +73,10 @@ export class BoltGraphClient implements GraphClient {
           const result = await session.run(query, params || {});
           return result.records.map(record => record.toObject());
         } catch (error) {
-          console.error(`${LOG_PREFIX.graph} Cypher execution error:`, error);
+          this.logger.error(`${LOG_PREFIX.graph} Cypher execution error`, {
+            error,
+            queryHash,
+          });
           throw new GraphError(
             `Failed to execute Cypher query: ${error instanceof Error ? error.message : 'Unknown error'}`
           );
@@ -201,7 +205,11 @@ export class BoltGraphClient implements GraphClient {
     jurisdictionId: string,
     keyword?: string
   ): Promise<GraphContext> {
-    console.log(`${LOG_PREFIX.graph} Getting rules for profile=${profileId}, jurisdiction=${jurisdictionId}, keyword=${keyword}`);
+    this.logger.info(`${LOG_PREFIX.graph} Getting rules`, {
+      profileId,
+      jurisdictionId,
+      keyword,
+    });
 
     let query = `
       MATCH (p:ProfileTag {id: $profileId})
@@ -237,7 +245,7 @@ export class BoltGraphClient implements GraphClient {
    * Get neighbourhood of a node (1-2 hops)
    */
   async getNeighbourhood(nodeId: string): Promise<GraphContext> {
-    console.log(`${LOG_PREFIX.graph} Getting neighbourhood for node=${nodeId}`);
+    this.logger.info(`${LOG_PREFIX.graph} Getting neighbourhood`, { nodeId });
 
     const query = `
       MATCH (n {id: $nodeId})
@@ -256,7 +264,7 @@ export class BoltGraphClient implements GraphClient {
    * Get mutual exclusions for a node
    */
   async getMutualExclusions(nodeId: string): Promise<GraphNode[]> {
-    console.log(`${LOG_PREFIX.graph} Getting mutual exclusions for node=${nodeId}`);
+    this.logger.info(`${LOG_PREFIX.graph} Getting mutual exclusions`, { nodeId });
 
     const query = `
       MATCH (n {id: $nodeId})-[:EXCLUDES|MUTUALLY_EXCLUSIVE_WITH]-(excluded)
@@ -272,7 +280,7 @@ export class BoltGraphClient implements GraphClient {
    * Get timeline constraints for a node
    */
   async getTimelines(nodeId: string): Promise<Timeline[]> {
-    console.log(`${LOG_PREFIX.graph} Getting timelines for node=${nodeId}`);
+    this.logger.info(`${LOG_PREFIX.graph} Getting timelines`, { nodeId });
 
     const query = `
       MATCH (n {id: $nodeId})-[:LOOKBACK_WINDOW|LOCKS_IN_FOR_PERIOD|FILING_DEADLINE|EFFECTIVE_WINDOW]->(t:Timeline)
@@ -304,7 +312,7 @@ export class BoltGraphClient implements GraphClient {
    * Get cross-border slice for multiple jurisdictions
    */
   async getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext> {
-    console.log(`${LOG_PREFIX.graph} Getting cross-border slice for jurisdictions=${jurisdictionIds.join(', ')}`);
+    this.logger.info(`${LOG_PREFIX.graph} Getting cross-border slice`, { jurisdictions: jurisdictionIds });
 
     const query = `
       MATCH (j:Jurisdiction)
@@ -324,7 +332,7 @@ export class BoltGraphClient implements GraphClient {
    */
   async close(): Promise<void> {
     await this.driver.close();
-    console.log(`${LOG_PREFIX.graph} BoltGraphClient closed`);
+    this.logger.info(`${LOG_PREFIX.graph} BoltGraphClient closed`);
   }
 }
 

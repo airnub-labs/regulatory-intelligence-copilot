@@ -16,7 +16,7 @@
  * - docs/architecture/execution-context/spec_v_0_1.md
  */
 
-import { withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import type {
   ExecutionContextStore,
   ExecutionContext,
@@ -125,10 +125,12 @@ export class ExecutionContextManager {
   private activeSandboxes = new Map<string, E2BSandbox>(); // contextId -> Sandbox
   private readonly defaultTtl: number;
   private readonly sandboxTimeout: number;
+  private logger: ExecutionContextLogger;
 
   constructor(private config: ExecutionContextManagerConfig) {
     this.defaultTtl = config.defaultTtlMinutes ?? 30;
     this.sandboxTimeout = config.sandboxTimeoutMs ?? 600_000; // 10 minutes
+    this.logger = config.logger ?? createLogger('ExecutionContextManager');
   }
 
   /**
@@ -150,7 +152,7 @@ export class ExecutionContextManager {
         'execution_context.path_id': input.pathId,
       },
       async () => {
-        this.config.logger?.info('[ExecutionContextManager] Getting or creating context', {
+        this.logger.info('Getting or creating context', {
           tenantId: input.tenantId,
           conversationId: input.conversationId,
           pathId: input.pathId,
@@ -161,7 +163,7 @@ export class ExecutionContextManager {
 
     // If context was terminated, treat as non-existent
     if (context && context.terminatedAt) {
-      this.config.logger?.info('[ExecutionContextManager] Context was terminated, creating new one', {
+      this.logger.info('Context was terminated, creating new one', {
         contextId: context.id,
         pathId: input.pathId,
       });
@@ -177,7 +179,7 @@ export class ExecutionContextManager {
 
       if (!sandbox) {
         // Sandbox not in memory, try to reconnect
-        this.config.logger?.info('[ExecutionContextManager] Reconnecting to sandbox', {
+        this.logger.info('Reconnecting to sandbox', {
           contextId: context.id,
           sandboxId: context.sandboxId,
         });
@@ -189,13 +191,13 @@ export class ExecutionContextManager {
 
           this.activeSandboxes.set(context.id, sandbox);
 
-          this.config.logger?.info('[ExecutionContextManager] Reconnected to sandbox', {
+          this.logger.info('Reconnected to sandbox', {
             contextId: context.id,
             sandboxId: context.sandboxId,
           });
         } catch (error) {
           // Reconnection failed - sandbox might have been killed
-          this.config.logger?.error('[ExecutionContextManager] Failed to reconnect to sandbox', {
+          this.logger.error('Failed to reconnect to sandbox', {
             contextId: context.id,
             sandboxId: context.sandboxId,
             error,
@@ -217,8 +219,10 @@ export class ExecutionContextManager {
     }
 
     // Create new sandbox
-    this.config.logger?.info('[ExecutionContextManager] Creating new sandbox', {
+    this.logger.info('Creating new sandbox', {
       pathId: input.pathId,
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
     });
 
     const sandbox = await this.config.e2bClient.create({
@@ -242,7 +246,7 @@ export class ExecutionContextManager {
     // Cache sandbox
     this.activeSandboxes.set(newContext.id, sandbox);
 
-        this.config.logger?.info('[ExecutionContextManager] Created new context', {
+        this.logger.info('Created new context', {
           contextId: newContext.id,
           pathId: input.pathId,
           sandboxId: sandbox.sandboxId,
@@ -279,7 +283,7 @@ export class ExecutionContextManager {
    * - Cleanup job finds expired context
    */
   async terminateContext(contextId: string): Promise<void> {
-    this.config.logger?.info('[ExecutionContextManager] Terminating context', {
+    this.logger.info('Terminating context', {
       contextId,
     });
 
@@ -291,12 +295,12 @@ export class ExecutionContextManager {
         // Kill the sandbox
         await sandbox.kill();
 
-        this.config.logger?.info('[ExecutionContextManager] Sandbox killed', {
+        this.logger.info('Sandbox killed', {
           contextId,
           sandboxId: sandbox.sandboxId,
         });
       } catch (error) {
-        this.config.logger?.error('[ExecutionContextManager] Failed to kill sandbox', {
+        this.logger.error('Failed to kill sandbox', {
           contextId,
           error,
         });
@@ -310,7 +314,7 @@ export class ExecutionContextManager {
     // Mark context as terminated in database
     await this.config.store.terminateContext(contextId);
 
-    this.config.logger?.info('[ExecutionContextManager] Context terminated', {
+    this.logger.info('Context terminated', {
       contextId,
     });
   }
@@ -325,16 +329,16 @@ export class ExecutionContextManager {
    * 3. Return cleanup statistics
    */
   async cleanupExpired(limit: number = 50): Promise<CleanupResult> {
-    this.config.logger?.info('[ExecutionContextManager] Starting cleanup', { limit });
+    this.logger.info('Starting execution context cleanup', { limit });
 
     const expired = await this.config.store.getExpiredContexts(limit);
 
     if (expired.length === 0) {
-      this.config.logger?.info('[ExecutionContextManager] No expired contexts found');
+      this.logger.info('No expired execution contexts found');
       return { cleaned: 0, errors: 0 };
     }
 
-    this.config.logger?.info('[ExecutionContextManager] Found expired contexts', {
+    this.logger.info('Found expired execution contexts', {
       count: expired.length,
     });
 
@@ -355,7 +359,7 @@ export class ExecutionContextManager {
           error: errorMessage,
         });
 
-        this.config.logger?.error('[ExecutionContextManager] Failed to cleanup context', {
+        this.logger.error('Failed to cleanup execution context', {
           contextId: context.id,
           pathId: context.pathId,
           error: errorMessage,
@@ -363,7 +367,7 @@ export class ExecutionContextManager {
       }
     }
 
-    this.config.logger?.info('[ExecutionContextManager] Cleanup completed', {
+    this.logger.info('Execution context cleanup completed', {
       cleaned,
       errors,
       total: expired.length,
@@ -386,7 +390,7 @@ export class ExecutionContextManager {
   ): Promise<void> {
     // Note: This would require adding a method to ExecutionContextStore
     // For now, just log it
-    this.config.logger?.info('[ExecutionContextManager] Resource usage update', {
+    this.logger.info('Resource usage update', {
       contextId,
       usage,
     });
@@ -415,7 +419,7 @@ export class ExecutionContextManager {
       const storeReady = await this.config.store.isReady();
 
       if (!storeReady) {
-        this.config.logger?.error('[ExecutionContextManager] Store not ready');
+        this.logger.error('ExecutionContextManager store not ready');
         return false;
       }
 
@@ -423,7 +427,7 @@ export class ExecutionContextManager {
 
       return true;
     } catch (error) {
-      this.config.logger?.error('[ExecutionContextManager] Health check failed', { error });
+      this.logger.error('ExecutionContextManager health check failed', { error });
       return false;
     }
   }
@@ -433,7 +437,7 @@ export class ExecutionContextManager {
    * This should be called on application shutdown
    */
   async shutdown(): Promise<void> {
-    this.config.logger?.info('[ExecutionContextManager] Shutting down', {
+    this.logger.info('Shutting down execution contexts', {
       activeSandboxes: this.activeSandboxes.size,
     });
 
@@ -444,12 +448,12 @@ export class ExecutionContextManager {
         (async () => {
           try {
             await sandbox.kill();
-            this.config.logger?.info('[ExecutionContextManager] Killed sandbox during shutdown', {
+            this.logger.info('Killed sandbox during shutdown', {
               contextId,
               sandboxId: sandbox.sandboxId,
             });
           } catch (error) {
-            this.config.logger?.error('[ExecutionContextManager] Failed to kill sandbox during shutdown', {
+            this.logger.error('Failed to kill sandbox during shutdown', {
               contextId,
               error,
             });
@@ -461,6 +465,6 @@ export class ExecutionContextManager {
     await Promise.all(killPromises);
     this.activeSandboxes.clear();
 
-    this.config.logger?.info('[ExecutionContextManager] Shutdown complete');
+    this.logger.info('Execution context shutdown complete');
   }
 }
