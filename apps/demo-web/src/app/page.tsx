@@ -1227,7 +1227,7 @@ export default function Home() {
                     id: msg.id,
                     role: msg.role,
                     content: msg.content,
-                    metadata: msg.metadata,
+                    metadata: msg.metadata as Record<string, unknown> | undefined,
                     disclaimer: msg.disclaimer,
                     isPinned: msg.isPinned,
                     isBranchPoint: msg.isBranchPoint,
