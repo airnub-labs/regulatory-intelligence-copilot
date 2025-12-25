@@ -1,7 +1,9 @@
 import 'server-only';
 
 import type { ExecutionContextManager, CleanupResult } from '@reg-copilot/reg-intel-conversations';
-import { withSpan } from '@reg-copilot/reg-intel-observability';
+import { withSpan, createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('CleanupExecutionContexts');
 
 /**
  * Cleanup job for expired execution contexts
@@ -22,23 +24,22 @@ export async function cleanupExecutionContexts(
     'cron.cleanup_execution_contexts',
     { 'cleanup.limit': limit },
     async () => {
-      console.info('[cleanup-job] Starting execution context cleanup', { limit });
+      logger.info({ limit }, 'Starting execution context cleanup');
 
       const startTime = Date.now();
       const result = await manager.cleanupExpired(limit);
       const durationMs = Date.now() - startTime;
 
-      console.info('[cleanup-job] Cleanup completed', {
-        cleaned: result.cleaned,
-        errors: result.errors,
-        durationMs,
-      });
+      logger.info(
+        { cleaned: result.cleaned, errors: result.errors, durationMs },
+        'Cleanup completed'
+      );
 
       if (result.errors > 0 && result.errorDetails) {
-        console.warn('[cleanup-job] Cleanup had errors', {
-          errorCount: result.errors,
-          details: result.errorDetails,
-        });
+        logger.warn(
+          { errorCount: result.errors, details: result.errorDetails },
+          'Cleanup had errors'
+        );
       }
 
       return result;

@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore, executionContextManager } from '@/lib/server/conversations';
 import { generateMergeSummary } from '@/lib/server/mergeSummarizer';
+
+const logger = createLogger('MergeRoute');
 
 export const dynamic = 'force-dynamic';
 
@@ -128,10 +131,10 @@ export async function POST(
           finalSummaryContent = summaryResult.summary;
 
           if (summaryResult.error) {
-            console.warn('[merge] Summary generation warning:', summaryResult.error);
+            logger.warn({ error: summaryResult.error }, 'Summary generation warning');
           }
         } catch (summaryError) {
-          console.error('[merge] Failed to generate AI summary:', summaryError);
+          logger.error({ err: summaryError }, 'Failed to generate AI summary');
           // Continue with basic summary from store
         }
       }
@@ -161,17 +164,20 @@ export async function POST(
 
         if (contextResult?.id) {
           await executionContextManager.terminateContext(contextResult.id);
-          console.info('[merge] Terminated execution context for merged source path', {
-            sourcePathId,
-            contextId: contextResult.id,
-          });
+          logger.info(
+            { sourcePathId, contextId: contextResult.id },
+            'Terminated execution context for merged source path'
+          );
         }
       } catch (cleanupError) {
         // Log but don't fail the merge if cleanup fails
-        console.warn('[merge] Failed to cleanup execution context for source path', {
-          sourcePathId,
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
+        logger.warn(
+          {
+            sourcePathId,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          },
+          'Failed to cleanup execution context for source path'
+        );
       }
     }
 

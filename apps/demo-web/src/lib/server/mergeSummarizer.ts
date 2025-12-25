@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { createDefaultLlmRouter } from '@reg-copilot/reg-intel-core';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { PathAwareMessage, ConversationPath } from '@reg-copilot/reg-intel-conversations';
+
+const logger = createLogger('MergeSummarizer');
 
 /**
  * Chat message for LLM interaction
@@ -108,7 +111,7 @@ export async function generateMergeSummary(
   try {
     router = createDefaultLlmRouter();
   } catch (error) {
-    console.warn('[merge-summarizer] LLM router not available:', error);
+    logger.warn({ err: error }, 'LLM router not available');
     return {
       summary: generateFallbackSummary(input),
       aiGenerated: false,
@@ -162,7 +165,7 @@ ${branchContent}
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('[merge-summarizer] AI generation failed:', error);
+    logger.error({ err: error }, 'AI generation failed');
 
     return {
       summary: generateFallbackSummary(input),
