@@ -1,71 +1,107 @@
-import { describe, expect, it, vi } from 'vitest';
+import { Writable } from 'node:stream';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { trace } from '@opentelemetry/api';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 
+const capturedLogs: Array<Record<string, unknown>> = [];
+
+vi.mock('@reg-copilot/reg-intel-observability', async () => {
+  const actual = await vi.importActual<typeof import('@reg-copilot/reg-intel-observability')>(
+    '@reg-copilot/reg-intel-observability'
+  );
+  const destination = new Writable({
+    write(chunk, _encoding, callback) {
+      try {
+        capturedLogs.push(JSON.parse(chunk.toString()));
+      } catch (error) {
+        // Ignore non-JSON logs
+      }
+      callback();
+    },
+  });
+
+  return {
+    ...actual,
+    createLogger: (scope: string, bindings?: Record<string, unknown>) =>
+      actual.createLogger(scope, { ...bindings, destination }),
+  };
+});
+
+vi.mock('@reg-copilot/reg-intel-prompts', () => ({
+  buildPromptWithAspects: vi.fn(() => 'mocked-global-prompt'),
+}));
+
+vi.mock('../llm/llmClient.js', () => ({
+  REGULATORY_COPILOT_SYSTEM_PROMPT: 'mock-global-system-prompt',
+}));
+
+import { requestContext } from '@reg-copilot/reg-intel-observability';
+import type { AgentContext, AgentInput } from '../types.js';
 import { GlobalRegulatoryComplianceAgent } from './GlobalRegulatoryComplianceAgent.js';
-import type {
-  AgentContext,
-  AgentInput,
-  GraphClient,
-  TimelineEngine,
-  EgressGuard,
-  LlmClient,
-} from '../types.js';
 
-const baseGraphContext = { nodes: [], edges: [] };
+type MockedAgentContext = AgentContext & { llmClient: Required<AgentContext['llmClient']> };
 
-const graphClient: GraphClient = {
-  getRulesForProfileAndJurisdiction: vi
-    .fn()
-    .mockResolvedValue(baseGraphContext),
-  getNeighbourhood: vi.fn().mockResolvedValue(baseGraphContext),
-  getMutualExclusions: vi.fn().mockResolvedValue([]),
-  getTimelines: vi.fn().mockResolvedValue([]),
-  getCrossBorderSlice: vi.fn().mockResolvedValue(baseGraphContext),
-  executeCypher: vi.fn().mockResolvedValue([]),
-};
+let provider: BasicTracerProvider;
+let contextManager: AsyncLocalStorageContextManager;
+let exporter: InMemorySpanExporter;
 
-const timelineEngine: TimelineEngine = {
-  computeLookbackRange: vi.fn(),
-  isWithinLookback: vi.fn(),
-  computeLockInEnd: vi.fn(),
-  isLockInActive: vi.fn(),
-};
+describe('GlobalRegulatoryComplianceAgent logging', () => {
+  beforeEach(() => {
+    capturedLogs.length = 0;
+    exporter = new InMemorySpanExporter();
+    provider = new BasicTracerProvider();
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+    contextManager = new AsyncLocalStorageContextManager().enable();
+    provider.register({ contextManager });
+  });
 
-const egressGuard: EgressGuard = {
-  redact: vi.fn(input => ({ content: input, redactionCount: 0, redactedTypes: [] })),
-  redactText: vi.fn(text => text),
-};
+  afterEach(async () => {
+    await provider.shutdown();
+    contextManager.disable();
+    exporter.reset();
+  });
 
-describe('GlobalRegulatoryComplianceAgent.handleStream', () => {
-  it('wraps non-streaming agents into an async iterable', async () => {
-    const llmClient: LlmClient = {
-      chat: vi.fn().mockResolvedValue({ content: 'Full answer' }),
-    };
-
-    const ctx: AgentContext = {
-      graphClient,
-      timeline: timelineEngine,
-      egressGuard,
-      llmClient,
-      now: new Date(),
-      profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
-    };
-
+  it('enriches logs with trace and request context metadata', async () => {
     const input: AgentInput = {
-      question: 'Test question',
+      question: 'What should I know about compliance?',
       profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
     };
 
-    const result = await GlobalRegulatoryComplianceAgent.handleStream!(input, ctx);
+    const ctx: MockedAgentContext = {
+      graphClient: {
+        getRulesForProfileAndJurisdiction: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
+        getCrossBorderSlice: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
+        getNeighbourhood: vi.fn(),
+        getTimelines: vi.fn().mockResolvedValue([]),
+      } as unknown as AgentContext['graphClient'],
+      timeline: {} as AgentContext['timeline'],
+      egressGuard: {} as AgentContext['egressGuard'],
+      llmClient: {
+        chat: vi.fn().mockResolvedValue({ content: 'response' }),
+        streamChat: undefined,
+      },
+      now: new Date(),
+      profile: input.profile,
+    };
 
-    const streamedChunks = [] as Array<{ type: string; delta?: string }>;
-    for await (const chunk of result.stream) {
-      streamedChunks.push(chunk as { type: string; delta?: string });
-    }
+    const tracer = trace.getTracer('global-agent-log-test');
 
-    expect(result.agentId).toBe('GlobalRegulatoryComplianceAgent');
-    expect(streamedChunks).toEqual([
-      { type: 'text', delta: 'Full answer' },
-      { type: 'done' },
-    ]);
+    await tracer.startActiveSpan('global-agent-span', async (span) => {
+      await requestContext.run({ tenantId: 'tenant-global', conversationId: 'conversation-global' }, async () => {
+        await GlobalRegulatoryComplianceAgent.handle(input, ctx);
+      });
+      span.end();
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(capturedLogs.length).toBeGreaterThan(0);
+    const logEntry = capturedLogs.find(entry => entry.scope === 'GlobalRegulatoryComplianceAgent');
+
+    expect(logEntry?.trace_id).toBeDefined();
+    expect(logEntry?.span_id).toBeDefined();
+    expect(logEntry?.tenantId).toBe('tenant-global');
+    expect(logEntry?.conversationId).toBe('conversation-global');
   });
 });
