@@ -5,12 +5,34 @@
  * These tools are integrated with the execution context manager to ensure
  * per-path sandbox isolation.
  *
- * IMPORTANT: All sandbox output (stdout, stderr, results) is sanitized through
- * EgressGuard to prevent PII leakage from code execution.
+ * ## Sanitization Modes
+ *
+ * Sandbox output sanitization can be configured independently:
+ *
+ * - **calculation** (default): Conservative sanitization, avoids false positives
+ *   on regulatory references and version numbers
+ * - **chat**: Full sanitization (same as LLM chat)
+ * - **off**: No sanitization (for trusted/internal use)
+ *
+ * ```typescript
+ * // Default: calculation mode (conservative)
+ * const result = await executeCode(input, sandbox);
+ *
+ * // Disable sanitization for this execution
+ * const result = await executeCode(input, sandbox, logger, { sanitization: 'off' });
+ *
+ * // Use full chat-level sanitization
+ * const result = await executeCode(input, sandbox, logger, { sanitization: 'chat' });
+ * ```
  */
 
 import { z } from 'zod';
-import { sanitizeTextForEgress, sanitizeObjectForEgress } from '../egressGuard.js';
+import {
+  sanitizeTextForEgress,
+  sanitizeObjectForEgress,
+  type SanitizationContext,
+  type SanitizationOptions,
+} from '../egressGuard.js';
 
 // =============================================================================
 // E2B Sandbox Interface (Duck-typed to avoid hard dependency)
@@ -34,6 +56,29 @@ export interface E2BExecutionResult {
   results: unknown[];
   exitCode?: number;
   error?: unknown;
+}
+
+// =============================================================================
+// Execution Options
+// =============================================================================
+
+/**
+ * Options for code execution
+ */
+export interface CodeExecutionOptions {
+  /**
+   * Sanitization mode for output:
+   * - 'calculation': Conservative sanitization (default) - avoids false positives
+   * - 'chat': Full sanitization
+   * - 'strict': Aggressive sanitization
+   * - 'off': No sanitization
+   */
+  sanitization?: SanitizationContext;
+
+  /**
+   * Additional sanitization options
+   */
+  sanitizationOptions?: Omit<SanitizationOptions, 'context'>;
 }
 
 // =============================================================================
@@ -101,6 +146,8 @@ export interface CodeExecutionResult {
   error?: string;
   executionTimeMs?: number;
   sandboxId?: string;
+  /** Indicates which sanitization mode was used */
+  sanitizationMode?: SanitizationContext;
 }
 
 export interface AnalysisExecutionResult extends CodeExecutionResult {
@@ -109,24 +156,67 @@ export interface AnalysisExecutionResult extends CodeExecutionResult {
 }
 
 // =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Create sanitization options for sandbox output
+ */
+function getSanitizationOptions(execOptions?: CodeExecutionOptions): SanitizationOptions {
+  const context = execOptions?.sanitization ?? 'calculation';
+  return {
+    context,
+    ...execOptions?.sanitizationOptions,
+  };
+}
+
+/**
+ * Conditionally sanitize text based on options
+ */
+function sanitizeOutput(text: string, options: SanitizationOptions): string {
+  if (options.context === 'off') {
+    return text;
+  }
+  return sanitizeTextForEgress(text, options);
+}
+
+/**
+ * Conditionally sanitize object based on options
+ */
+function sanitizeOutputObject<T>(obj: T, options: SanitizationOptions): T {
+  if (options.context === 'off') {
+    return obj;
+  }
+  return sanitizeObjectForEgress(obj, options);
+}
+
+// =============================================================================
 // Tool Implementations
 // =============================================================================
 
 /**
  * Execute code in E2B sandbox
+ *
+ * @param input - Code execution input
+ * @param sandbox - E2B sandbox instance
+ * @param logger - Optional logger
+ * @param execOptions - Execution options including sanitization mode
  */
 export async function executeCode(
   input: RunCodeInput,
   sandbox: E2BSandbox,
-  logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void }
+  logger?: { info?: (msg: string, meta?: unknown) => void; error?: (msg: string, meta?: unknown) => void },
+  execOptions?: CodeExecutionOptions
 ): Promise<CodeExecutionResult> {
   const startTime = Date.now();
+  const sanitizationOpts = getSanitizationOptions(execOptions);
 
   try {
     logger?.info?.('[executeCode] Starting code execution', {
       language: input.language,
       sandboxId: sandbox.sandboxId,
       description: input.description,
+      sanitizationMode: sanitizationOpts.context,
     });
 
     const result = await sandbox.runCode(input.code, {
@@ -139,9 +229,9 @@ export async function executeCode(
     const exitCode = result.exitCode ?? 0;
     const success = exitCode === 0 && !result.error;
 
-    // Sanitize all output to prevent PII leakage from sandbox execution
-    const stdout = sanitizeTextForEgress(rawStdout);
-    const stderr = sanitizeTextForEgress(rawStderr);
+    // Sanitize all output based on configured mode
+    const stdout = sanitizeOutput(rawStdout, sanitizationOpts);
+    const stderr = sanitizeOutput(rawStderr, sanitizationOpts);
 
     logger?.info?.('[executeCode] Code execution completed', {
       sandboxId: sandbox.sandboxId,
@@ -150,6 +240,7 @@ export async function executeCode(
       executionTimeMs,
       stdoutLength: stdout.length,
       stderrLength: stderr.length,
+      sanitizationMode: sanitizationOpts.context,
     });
 
     return {
@@ -157,9 +248,10 @@ export async function executeCode(
       stdout,
       stderr,
       exitCode,
-      error: result.error ? sanitizeTextForEgress(String(result.error)) : undefined,
+      error: result.error ? sanitizeOutput(String(result.error), sanitizationOpts) : undefined,
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
+      sanitizationMode: sanitizationOpts.context,
     };
   } catch (error) {
     const executionTimeMs = Date.now() - startTime;
@@ -175,29 +267,38 @@ export async function executeCode(
       stdout: '',
       stderr: '',
       exitCode: 1,
-      error: sanitizeTextForEgress(error instanceof Error ? error.message : String(error)),
+      error: sanitizeOutput(error instanceof Error ? error.message : String(error), sanitizationOpts),
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
+      sanitizationMode: sanitizationOpts.context,
     };
   }
 }
 
 /**
  * Execute analysis in E2B sandbox
+ *
+ * @param input - Analysis input
+ * @param sandbox - E2B sandbox instance
+ * @param logger - Optional logger
+ * @param execOptions - Execution options including sanitization mode
  */
 export async function executeAnalysis(
   input: RunAnalysisInput,
   sandbox: E2BSandbox,
-  logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void }
+  logger?: { info?: (msg: string, meta?: unknown) => void; error?: (msg: string, meta?: unknown) => void },
+  execOptions?: CodeExecutionOptions
 ): Promise<AnalysisExecutionResult> {
   const startTime = Date.now();
-  const outputFormat = input.outputFormat ?? 'json'; // Default to JSON
+  const outputFormat = input.outputFormat ?? 'json';
+  const sanitizationOpts = getSanitizationOptions(execOptions);
 
   try {
     logger?.info?.('[executeAnalysis] Starting analysis execution', {
       analysisType: input.analysisType,
       sandboxId: sandbox.sandboxId,
       hasCustomCode: !!input.code,
+      sanitizationMode: sanitizationOpts.context,
     });
 
     // Generate or use provided code
@@ -216,17 +317,17 @@ export async function executeAnalysis(
     const exitCode = result.exitCode ?? 0;
     const success = exitCode === 0 && !result.error;
 
-    // Sanitize all output to prevent PII leakage from sandbox execution
-    const stdout = sanitizeTextForEgress(rawStdout);
-    const stderr = sanitizeTextForEgress(rawStderr);
+    // Sanitize all output based on configured mode
+    const stdout = sanitizeOutput(rawStdout, sanitizationOpts);
+    const stderr = sanitizeOutput(rawStderr, sanitizationOpts);
 
     // Parse output if JSON format expected
     let parsedOutput: unknown;
     if (outputFormat === 'json' && stdout) {
       try {
         const parsed = JSON.parse(stdout);
-        // Sanitize parsed output to catch any PII in structured data
-        parsedOutput = sanitizeObjectForEgress(parsed);
+        // Sanitize parsed output
+        parsedOutput = sanitizeOutputObject(parsed, sanitizationOpts);
       } catch (parseError) {
         logger?.error?.('[executeAnalysis] Failed to parse JSON output', {
           error: parseError instanceof Error ? parseError.message : String(parseError),
@@ -236,7 +337,7 @@ export async function executeAnalysis(
 
     // Sanitize results array if present
     const sanitizedResults = result.results?.length
-      ? sanitizeObjectForEgress(result.results)
+      ? sanitizeOutputObject(result.results, sanitizationOpts)
       : result.results;
 
     logger?.info?.('[executeAnalysis] Analysis execution completed', {
@@ -246,6 +347,7 @@ export async function executeAnalysis(
       executionTimeMs,
       hasResults: !!result.results?.length,
       hasParsedOutput: !!parsedOutput,
+      sanitizationMode: sanitizationOpts.context,
     });
 
     return {
@@ -253,11 +355,12 @@ export async function executeAnalysis(
       stdout,
       stderr,
       exitCode,
-      error: result.error ? sanitizeTextForEgress(String(result.error)) : undefined,
+      error: result.error ? sanitizeOutput(String(result.error), sanitizationOpts) : undefined,
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
       result: sanitizedResults,
       parsedOutput,
+      sanitizationMode: sanitizationOpts.context,
     };
   } catch (error) {
     const executionTimeMs = Date.now() - startTime;
@@ -274,9 +377,10 @@ export async function executeAnalysis(
       stdout: '',
       stderr: '',
       exitCode: 1,
-      error: sanitizeTextForEgress(error instanceof Error ? error.message : String(error)),
+      error: sanitizeOutput(error instanceof Error ? error.message : String(error), sanitizationOpts),
       executionTimeMs,
       sandboxId: sandbox.sandboxId,
+      sanitizationMode: sanitizationOpts.context,
     };
   }
 }

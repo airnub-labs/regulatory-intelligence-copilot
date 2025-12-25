@@ -460,3 +460,96 @@ Sandbox Code Execution:
 
 This ensures that PII is caught at multiple points, providing resilience even if one layer is bypassed.
 
+### 9.7 Context-Aware Sanitization (2025-12-25)
+
+To prevent false positives on regulatory data, version numbers, and calculation results, the EgressGuard now supports **context-aware sanitization**:
+
+| Context | Description | ML Detection | Pattern Set | Use Case |
+|---------|-------------|--------------|-------------|----------|
+| `chat` | Full sanitization | ✅ Enabled | All patterns | User-facing LLM responses (default) |
+| `calculation` | Conservative | ❌ Disabled | High-confidence only | E2B sandbox output (default) |
+| `strict` | Aggressive | ✅ Enabled | All + broad patterns | High-security scenarios |
+| `off` | None | ❌ Disabled | None | Trusted internal use |
+
+**Pattern Categories:**
+
+| Category | Patterns | Applies To |
+|----------|----------|------------|
+| High-confidence | Email, SSN, Credit Card, API Keys, JWT, AWS Keys, DB URLs | All contexts |
+| Medium-confidence | Phone, PPSN, IBAN, IP Address (valid ranges) | chat, strict |
+| Aggressive | Broad IBAN, Any IP-like pattern | strict only |
+
+**Sandbox Configuration:**
+
+```typescript
+// Default: calculation context (conservative, avoids false positives)
+const result = await executeCode(input, sandbox);
+
+// Disable sanitization for trusted sandbox output
+const result = await executeCode(input, sandbox, logger, { sanitization: 'off' });
+
+// Use full chat-level sanitization for sandbox
+const result = await executeCode(input, sandbox, logger, { sanitization: 'chat' });
+```
+
+**LLM Response Configuration:**
+
+```typescript
+// Default: chat context
+const response = await llmRouter.chat(messages);
+
+// Use conservative sanitization for calculation responses
+const response = await llmRouter.chat(messages, {
+  responseSanitization: 'calculation',
+});
+
+// Disable response sanitization
+const response = await llmRouter.chat(messages, {
+  responseSanitization: 'off',
+});
+```
+
+**Pre-configured Sanitizers:**
+
+```typescript
+import { Sanitizers } from '@reg-intel/llm';
+
+// Use pre-configured sanitizers
+const safe = Sanitizers.chat.sanitizeText(content);
+const calcSafe = Sanitizers.calculation.sanitizeText(content);
+const raw = Sanitizers.off.sanitizeText(content);
+```
+
+**Audit Trail:**
+
+```typescript
+import { sanitizeTextWithAudit } from '@reg-intel/llm';
+
+const result = sanitizeTextWithAudit(content, { context: 'chat' });
+// result.redacted: boolean
+// result.redactionTypes: string[] (e.g., ['[EMAIL]', '[SSN]'])
+// result.originalLength: number
+// result.sanitizedLength: number
+```
+
+### 9.8 False Positive Prevention
+
+The calculation context specifically preserves:
+
+- ✅ Version numbers (e.g., `1.2.3.4`)
+- ✅ Regulatory reference codes (e.g., `EU2020/1234`, `UK22ABC456`)
+- ✅ Legal document identifiers (e.g., `S.I. No. 123/2024`)
+- ✅ Financial figures with phone-like patterns (e.g., `555,123,4567 EUR`)
+- ✅ PPSN-like reference codes when not actual PPSNs
+- ✅ All numeric primitive values (never sanitized)
+
+While still sanitizing:
+
+- ❌ Email addresses
+- ❌ US Social Security Numbers (XXX-XX-XXXX format)
+- ❌ Credit card numbers
+- ❌ API keys (sk_live_*, sk_test_*)
+- ❌ JWT tokens
+- ❌ AWS access keys
+- ❌ Database connection URLs with credentials
+
