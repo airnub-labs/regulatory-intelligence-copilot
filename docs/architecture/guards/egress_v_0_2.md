@@ -1,6 +1,15 @@
 # Egress Guard – v0_2 (Aspect-Based, Symmetric with Graph Ingress)
 
-> **Status:** Proposed update (supersedes earlier informal egress guard description once adopted).
+> **Status:** ⚠️ **SUPERSEDED** - See `egress_guard_v_0_3.md` for the current spec.
+>
+> This document is retained for historical reference only. v0_3 extends this spec with:
+> - Egress modes (`enforce`, `report-only`, `off`) for staged rollout
+> - Safe sanitization semantics
+> - Complete implementation with end-to-end PII protection
+>
+> ---
+>
+> **Original Status:** Proposed update (supersedes earlier informal egress guard description once adopted).
 >
 > Goal: Make the egress guard for MCP + LLM calls use the **same aspect pattern** as the Graph Ingress Guard, so both sides feel familiar and can even host AI policy agents.
 

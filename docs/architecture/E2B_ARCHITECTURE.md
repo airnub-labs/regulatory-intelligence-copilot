@@ -428,11 +428,33 @@ await pathStore.mergePath({
 - **Ephemeral Storage**: All data cleared on termination
 - **Timeout Limits**: 10-minute max execution time
 
-### PII Protection
+### PII Protection ✅ Fully Implemented (2025-12-24)
 
-- **EgressGuard Integration**: Sanitize code output before returning
+The E2B sandbox integration includes comprehensive PII protection via EgressGuard:
+
+**Sandbox Output Sanitization**:
+- All `stdout` output is sanitized via `sanitizeTextForEgress()` before returning
+- All `stderr` output is sanitized before returning
+- Error messages are sanitized to prevent PII leakage in exception traces
+- Parsed JSON results are deep-sanitized via `sanitizeObjectForEgress()`
+- Analysis results arrays are sanitized before being returned
+
+**Implementation Files**:
+- `packages/reg-intel-llm/src/tools/codeExecutionTools.ts` - `executeCode()` and `executeAnalysis()`
+- `packages/reg-intel-llm/src/egressGuard.ts` - Core sanitization functions
+
+**PII Types Detected**:
+- Email addresses, phone numbers, SSNs, Irish PPSNs
+- Credit card numbers, IBANs
+- API keys, JWT tokens, AWS access keys
+- Database connection URLs, IP addresses
+- ML-powered detection via @redactpii/node for additional entity types
+
+**Additional Protections**:
 - **Audit Trail**: Track who executed what code
 - **Resource Usage**: Monitor compute consumption per tenant
+
+See `docs/architecture/guards/egress_guard_v_0_3.md` Section 9 for complete implementation details.
 
 ## Error Handling
 

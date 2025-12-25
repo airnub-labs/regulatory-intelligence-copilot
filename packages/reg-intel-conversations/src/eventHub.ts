@@ -4,7 +4,9 @@ export type ConversationEventType =
   | 'error'
   | 'done'
   | 'disclaimer'
-  | 'warning';
+  | 'warning'
+  | 'message:pinned'
+  | 'message:unpinned';
 
 export type ConversationListEventType =
   | 'snapshot'
