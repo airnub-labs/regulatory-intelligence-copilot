@@ -11,7 +11,7 @@ interface TelemetryOptions {
   defaultContext?: TelemetryContext;
 }
 
-interface ClientTelemetry {
+export interface ClientTelemetry {
   sessionId: string;
   newRequestId: (prefix?: string) => string;
   info: ClientTelemetrySink;

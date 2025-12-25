@@ -1267,6 +1267,7 @@ export default function Home() {
                   showBranchButtons={true}
                   showActions={true}
                   editTextareaRef={editTextareaRef}
+                  telemetryContext={{ conversationId }}
                 />
               )}
               <div ref={messagesEndRef} />
@@ -1299,6 +1300,7 @@ export default function Home() {
                 disabled={isLoading || !isAuthenticated || Boolean(editingMessageId)}
                 isLoading={isLoading}
                 showExecutionButtons={true}
+                telemetryContext={{ conversationId }}
               />
               <p className="mt-2 text-center text-[10px] text-muted-foreground">
                 Research only · Not legal/tax advice
