@@ -5,6 +5,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { FsInstrumentation } from '@opentelemetry/instrumentation-fs';
 import { Instrumentation } from '@opentelemetry/instrumentation';
+import { NextInstrumentation } from '@opentelemetry/instrumentation-next';
 import { UndiciInstrumentation } from '@opentelemetry/instrumentation-undici';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
@@ -40,6 +41,7 @@ export interface ObservabilityOptions {
   traceExporter?: ExporterEndpointOptions;
   metricsExporter?: ExporterEndpointOptions;
   enableFsInstrumentation?: boolean;
+  enableNextInstrumentation?: boolean;
   instrumentations?: Instrumentation[];
   traceSampling?: TraceSamplingOptions;
 }
@@ -124,10 +126,13 @@ export const initObservability = async (options: ObservabilityOptions) => {
     }),
   });
 
-  const instrumentations: Instrumentation[] = [
-    new HttpInstrumentation(),
-    new UndiciInstrumentation(),
-  ];
+  const instrumentations: Instrumentation[] = [];
+
+  if (options.enableNextInstrumentation ?? true) {
+    instrumentations.push(new NextInstrumentation());
+  }
+
+  instrumentations.push(new HttpInstrumentation(), new UndiciInstrumentation());
 
   if (options.enableFsInstrumentation) {
     instrumentations.push(new FsInstrumentation());
