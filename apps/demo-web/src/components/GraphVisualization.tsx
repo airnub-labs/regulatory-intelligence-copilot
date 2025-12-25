@@ -29,6 +29,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { DEFAULT_PROFILE_ID, type ProfileId } from '@reg-copilot/reg-intel-core/client';
+import { createClientTelemetry } from '@/lib/clientTelemetry';
 
 // Dynamically import ForceGraph2D to avoid SSR issues
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
@@ -107,43 +108,6 @@ interface GraphVisualizationProps {
   keyword?: string;
 }
 
-type ClientLogger = {
-  sessionId: string;
-  info: (context: Record<string, unknown>, message: string) => void;
-  warn: (context: Record<string, unknown>, message: string) => void;
-  error: (context: Record<string, unknown>, message: string) => void;
-};
-
-const generateClientId = (prefix: string) => {
-  const randomPart =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(16).slice(2);
-  return `${prefix}-${randomPart}`;
-};
-
-const createClientLogger = (scope: string): ClientLogger => {
-  const sessionId = generateClientId(scope);
-  const log = (level: 'info' | 'warn' | 'error') =>
-    (context: Record<string, unknown>, message: string) => {
-      const payload = { scope, sessionId, ...context };
-      if (level === 'info') {
-        console.info(payload, message);
-      } else if (level === 'warn') {
-        console.warn(payload, message);
-      } else {
-        console.error(payload, message);
-      }
-    };
-
-  return {
-    sessionId,
-    info: log('info'),
-    warn: log('warn'),
-    error: log('error'),
-  };
-};
-
 export function GraphVisualization({
   jurisdictions = ['IE'],
   profileType = DEFAULT_PROFILE_ID,
@@ -162,18 +126,14 @@ export function GraphVisualization({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [showControls, setShowControls] = useState(true);
-  const [streamRequestId, setStreamRequestId] = useState(() => generateClientId('graph-stream'));
+  const telemetryRef = useRef(createClientTelemetry('GraphVisualization'));
+  const [streamRequestId, setStreamRequestId] = useState(() => telemetryRef.current.newRequestId('graph-stream'));
   const eventSourceRef = useRef<EventSource | null>(null);
   const initialSnapshotLoaded = useRef(false);
   const pendingPatchesRef = useRef<GraphPatch[]>([]);
   const fgRef = useRef<ForceGraphRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const loggerRef = useRef<ClientLogger>();
-  if (!loggerRef.current) {
-    loggerRef.current = createClientLogger('GraphVisualization');
-  }
-  const logger = loggerRef.current;
+  const telemetry = telemetryRef.current;
 
   // Memoized node color mapping - prevents recreation on every render
   const getNodeColor = useCallback((node: GraphNode | { type: string }) => {
@@ -334,11 +294,11 @@ export function GraphVisualization({
       }
       setLoading(false);
     } catch (err) {
-      logger.error({ err }, 'Error loading graph');
+      telemetry.error({ err }, 'Error loading graph');
       setError(err instanceof Error ? err.message : 'Failed to load graph');
       setLoading(false);
     }
-  }, [jurisdictions, profileType, keyword, applyPatch, logger]);
+  }, [jurisdictions, profileType, keyword, applyPatch, telemetry]);
 
   // Apply filters and search to graph data
   useEffect(() => {
@@ -447,14 +407,15 @@ export function GraphVisualization({
       profileType,
     });
 
-    const requestId = generateClientId('graph-stream');
+    const requestId = telemetry.newRequestId('graph-stream');
     setStreamRequestId(requestId);
-    logger.info({ streamRequestId: requestId, jurisdictions, profileType }, 'Opening graph stream');
+    const streamLogger = telemetry.withRequest(requestId, { jurisdictions, profileType });
+    streamLogger.info({ streamRequestId: requestId }, 'Opening graph stream');
 
     const eventSource = new EventSource(`/api/graph/stream?${params}`);
 
     eventSource.onopen = () => {
-      logger.info({ streamRequestId: requestId }, 'SSE connected');
+      streamLogger.info({ streamRequestId: requestId }, 'SSE connected');
       setConnected(true);
     };
 
@@ -463,30 +424,30 @@ export function GraphVisualization({
         const data = JSON.parse(event.data);
 
         if (data.type === 'connected') {
-          logger.info({ streamRequestId: requestId, message: data.message }, 'Stream connected');
+          streamLogger.info({ streamRequestId: requestId, message: data.message }, 'Stream connected');
         } else if (data.type === 'graph_patch') {
-          logger.info({ streamRequestId: requestId, meta: data.meta }, 'Received patch');
+          streamLogger.info({ streamRequestId: requestId, meta: data.meta }, 'Received patch');
           applyPatch(data);
         }
       } catch (err) {
-        logger.error({ err, streamRequestId: requestId, rawEvent: event.data }, 'Error parsing SSE message');
+        streamLogger.error({ err, streamRequestId: requestId, rawEvent: event.data }, 'Error parsing SSE message');
       }
     };
 
     eventSource.onerror = (err) => {
-      logger.error({ err, streamRequestId: requestId }, 'SSE error');
+      streamLogger.error({ err, streamRequestId: requestId }, 'SSE error');
       setConnected(false);
       eventSource.close();
 
       // Reconnect after 5 seconds
       setTimeout(() => {
-        logger.warn({ streamRequestId: requestId }, 'Reconnecting to stream...');
+        streamLogger.warn({ streamRequestId: requestId }, 'Reconnecting to stream...');
         connectToStream();
       }, 5000);
     };
 
     eventSourceRef.current = eventSource;
-  }, [jurisdictions, profileType, applyPatch, logger]);
+  }, [jurisdictions, profileType, applyPatch, telemetry]);
 
   // Initialize
   useEffect(() => {
