@@ -6,8 +6,16 @@ import { createParser, type EventSourceMessage } from 'eventsource-parser';
 import type { MCPCallParams, MCPCallResponse } from './types.js';
 import { applyAspects, type Aspect } from '@reg-copilot/reg-intel-prompts';
 import { sanitizeObjectForEgress } from '@reg-copilot/reg-intel-llm';
-import { injectTraceContextHeaders, withSpan } from '@reg-copilot/reg-intel-observability';
+import {
+  createLogger,
+  injectTraceContextHeaders,
+  requestContext,
+  withSpan,
+} from '@reg-copilot/reg-intel-observability';
+import { trace } from '@opentelemetry/api';
 import { SEMATTRS_HTTP_METHOD, SEMATTRS_HTTP_URL } from '@opentelemetry/semantic-conventions';
+
+const logger = createLogger('McpClient', { component: 'mcp' });
 
 // MCP Gateway configuration - set once from the active sandbox
 let mcpGatewayUrl = '';
@@ -30,7 +38,10 @@ export function configureMcpGateway(url: string, token: string, sandboxId?: stri
   }
 
   persistMcpGatewayConfig(url, token, sandboxId);
-  console.log('[MCP] Gateway configured - Perplexity and Memgraph tools available');
+  logger.info(
+    { event: 'mcp.gateway.configured', sandboxId: mcpGatewaySandboxId, url },
+    'MCP gateway configured'
+  );
 }
 
 /**
@@ -77,6 +88,15 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
       }
 
       injectTraceContextHeaders(headers);
+      if (!headers.has('traceparent')) {
+        const spanContext = trace.getActiveSpan()?.spanContext();
+        if (spanContext) {
+          headers.set(
+            'traceparent',
+            `00-${spanContext.traceId}-${spanContext.spanId}-01`
+          );
+        }
+      }
 
       // MCP uses JSON-RPC 2.0 format
       const jsonRpcRequest = {
@@ -179,16 +199,44 @@ const mcpLoggingAspect: Aspect<MCPCallParams, MCPCallResponse> = async (req, nex
       ? 'Memgraph (knowledge graph)'
       : req.toolName;
 
-  console.log(`[MCP] Calling ${toolDisplayName}...`);
+  logger.info(
+    {
+      event: 'mcp.call.start',
+      toolName: req.toolName,
+      toolDisplayName,
+      sandboxId: mcpGatewaySandboxId,
+      ...requestContext.get(),
+    },
+    'Calling MCP tool'
+  );
 
   try {
     const result = await next(req);
     const duration = Date.now() - start;
-    console.log(`[MCP] ${toolDisplayName} completed in ${duration}ms`);
+    logger.info(
+      {
+        event: 'mcp.call.finish',
+        toolName: req.toolName,
+        toolDisplayName,
+        durationMs: duration,
+        sandboxId: mcpGatewaySandboxId,
+      },
+      'MCP tool completed'
+    );
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`[MCP] ${toolDisplayName} failed after ${duration}ms`);
+    logger.error(
+      {
+        event: 'mcp.call.error',
+        toolName: req.toolName,
+        toolDisplayName,
+        durationMs: duration,
+        sandboxId: mcpGatewaySandboxId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      'MCP tool failed'
+    );
     throw error;
   }
 };

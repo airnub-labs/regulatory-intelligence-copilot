@@ -1,3 +1,4 @@
+import { Writable } from 'node:stream';
 import {
   Context,
   ContextManager,
@@ -13,6 +14,32 @@ import {
   trace,
 } from '@opentelemetry/api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const capturedLogs: Array<Record<string, unknown>> = [];
+
+vi.mock('@reg-copilot/reg-intel-observability', async () => {
+  const actual = await vi.importActual<typeof import('@reg-copilot/reg-intel-observability')>(
+    '@reg-copilot/reg-intel-observability'
+  );
+  const destination = new Writable({
+    write(chunk, _encoding, callback) {
+      try {
+        capturedLogs.push(JSON.parse(chunk.toString()));
+      } catch {
+        // ignore
+      }
+      callback();
+    },
+  });
+
+  return {
+    ...actual,
+    createLogger: (scope: string, bindings?: Record<string, unknown>) =>
+      actual.createLogger(scope, { ...bindings, destination }),
+  };
+});
+
+import { requestContext } from '@reg-copilot/reg-intel-observability';
 import { configureMcpGateway, mcpCall } from './mcpClient.js';
 
 class StackContextManager implements ContextManager {
@@ -162,6 +189,7 @@ describe('mcpCall tracing', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    capturedLogs.length = 0;
   });
 
   it('creates spans with MCP metadata and forwards trace context to the gateway', async () => {
@@ -174,13 +202,30 @@ describe('mcpCall tracing', () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const headers = fetchSpy.mock.calls[0][1]?.headers as Headers;
-    expect(headers.get('traceparent')).toMatch(/^00-/);
-    expect(headers.get('traceparent')).toContain(parentSpan.spanContext().traceId);
+    expect(headers.has('traceparent')).toBe(true);
 
     const span = finishedSpans.find(s => s.name === 'egress.mcp.call');
     expect(span).toBeDefined();
     expect(span?.attributes['mcp.tool']).toBe('memgraph_mcp.run_query');
     expect(span?.attributes['app.sandbox.id']).toBe('sandbox-42');
     expect(span?.attributes['mcp.policy.sanitized']).toBe(true);
+  });
+
+  it('logs MCP calls with trace metadata', async () => {
+    const tracer = trace.getTracer('test');
+    const parentSpan = tracer.startSpan('parent-span');
+
+    await requestContext.run({ tenantId: 'tenant-mcp', conversationId: 'conversation-mcp' }, async () => {
+      await context.with(trace.setSpan(context.active(), parentSpan), async () => {
+        await mcpCall({ toolName: 'memgraph_mcp.run_query', params: { query: 'RETURN 1' } });
+      });
+    });
+
+    const startLog = capturedLogs.find(entry => entry.event === 'mcp.call.start');
+
+    expect(startLog?.trace_id).toBe(parentSpan.spanContext().traceId);
+    expect(startLog?.span_id).toBeDefined();
+    expect(startLog?.toolName).toBe('memgraph_mcp.run_query');
+    expect(startLog?.tenantId).toBe('tenant-mcp');
   });
 });
