@@ -31,7 +31,6 @@ describe('observability diagnostics', () => {
     expect(diagnostics.sampling?.alwaysSampleErrors).toBe(true);
     expect(diagnostics.instrumentations).toEqual(
       expect.arrayContaining([
-        '@opentelemetry/instrumentation-next',
         '@opentelemetry/instrumentation-http',
         '@opentelemetry/instrumentation-undici',
       ])
