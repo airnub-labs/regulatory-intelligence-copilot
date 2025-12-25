@@ -12,6 +12,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import type { Logger } from 'pino';
+import { runWithScriptObservability } from './observability.js';
 
 interface TestResults {
   unit: {
@@ -56,11 +58,23 @@ interface ImplementationState {
 }
 
 const STATE_FILE = path.join(__dirname, '../docs/architecture/execution-context/IMPLEMENTATION_STATE.json');
+let scriptLogger: Logger;
+
+const log = (message: string, context: Record<string, unknown> = {}) => {
+  scriptLogger.info(context, message);
+};
+
+const logWarn = (message: string, context: Record<string, unknown> = {}) => {
+  scriptLogger.warn(context, message);
+};
+
+const fail = (message: string): never => {
+  throw new Error(message);
+};
 
 function loadState(): ImplementationState {
   if (!fs.existsSync(STATE_FILE)) {
-    console.error('State file not found:', STATE_FILE);
-    process.exit(1);
+    fail(`State file not found: ${STATE_FILE}`);
   }
 
   const content = fs.readFileSync(STATE_FILE, 'utf-8');
@@ -70,7 +84,7 @@ function loadState(): ImplementationState {
 function saveState(state: ImplementationState): void {
   state.lastUpdated = new Date().toISOString();
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2) + '\n');
-  console.log('✅ State updated:', STATE_FILE);
+  log('✅ State updated:', STATE_FILE);
 }
 
 function calculateProgress(state: ImplementationState): void {
@@ -105,7 +119,7 @@ function updatePhaseStatus(state: ImplementationState, phaseKey: string): void {
       state.milestones[milestoneKey] = new Date().toISOString();
     }
 
-    console.log(`🎉 Phase ${phaseKey} completed!`);
+    log(`🎉 Phase ${phaseKey} completed!`);
   } else if (completedPhaseTasks > 0 || phase.currentTask) {
     if (phase.blockers.length > 0) {
       phase.status = 'blocked';
@@ -127,17 +141,15 @@ function completeTask(state: ImplementationState, taskId: string): void {
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase not found for task ${taskId}`);
-    process.exit(1);
+    fail(`Phase not found for task ${taskId}`);
   }
 
   if (!phase.tasks[taskId]) {
-    console.error(`Task ${taskId} not found in ${phaseKey}`);
-    process.exit(1);
+    fail(`Task ${taskId} not found in ${phaseKey}`);
   }
 
   if (phase.completedTasks.includes(taskId)) {
-    console.warn(`⚠️  Task ${taskId} already completed`);
+    logWarn(`⚠️  Task ${taskId} already completed`);
     return;
   }
 
@@ -151,8 +163,8 @@ function completeTask(state: ImplementationState, taskId: string): void {
   updatePhaseStatus(state, phaseKey);
   calculateProgress(state);
 
-  console.log(`✅ Completed task ${taskId}: ${phase.tasks[taskId]}`);
-  console.log(`📊 Phase progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length}`);
+  log(`✅ Completed task ${taskId}: ${phase.tasks[taskId]}`);
+  log(`📊 Phase progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length}`);
 }
 
 function startTask(state: ImplementationState, taskId: string): void {
@@ -160,46 +172,42 @@ function startTask(state: ImplementationState, taskId: string): void {
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase not found for task ${taskId}`);
-    process.exit(1);
+    fail(`Phase not found for task ${taskId}`);
   }
 
   if (!phase.tasks[taskId]) {
-    console.error(`Task ${taskId} not found in ${phaseKey}`);
-    process.exit(1);
+    fail(`Task ${taskId} not found in ${phaseKey}`);
   }
 
   if (phase.completedTasks.includes(taskId)) {
-    console.warn(`⚠️  Task ${taskId} already completed`);
+    logWarn(`⚠️  Task ${taskId} already completed`);
     return;
   }
 
   phase.currentTask = taskId;
   updatePhaseStatus(state, phaseKey);
 
-  console.log(`🚀 Started task ${taskId}: ${phase.tasks[taskId]}`);
+  log(`🚀 Started task ${taskId}: ${phase.tasks[taskId]}`);
 }
 
 function blockPhase(state: ImplementationState, phaseKey: string, blocker: string): void {
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase ${phaseKey} not found`);
-    process.exit(1);
+    fail(`Phase ${phaseKey} not found`);
   }
 
   phase.blockers.push(blocker);
   phase.status = 'blocked';
 
-  console.log(`🚫 Blocked ${phaseKey}: ${blocker}`);
+  log(`🚫 Blocked ${phaseKey}: ${blocker}`);
 }
 
 function unblockPhase(state: ImplementationState, phaseKey: string, blocker?: string): void {
   const phase = state.phases[phaseKey];
 
   if (!phase) {
-    console.error(`Phase ${phaseKey} not found`);
-    process.exit(1);
+    fail(`Phase ${phaseKey} not found`);
   }
 
   if (blocker) {
@@ -210,21 +218,21 @@ function unblockPhase(state: ImplementationState, phaseKey: string, blocker?: st
 
   updatePhaseStatus(state, phaseKey);
 
-  console.log(`✅ Unblocked ${phaseKey}`);
+  log(`✅ Unblocked ${phaseKey}`);
 }
 
 function addNote(state: ImplementationState, note: string): void {
   const timestamp = new Date().toISOString();
   state.notes.push(`[${timestamp}] ${note}`);
 
-  console.log(`📝 Added note: ${note}`);
+  log(`📝 Added note: ${note}`);
 }
 
 function showStatus(state: ImplementationState): void {
-  console.log('\n📊 E2B Execution Context Implementation Status\n');
-  console.log(`Version: ${state.version}`);
-  console.log(`Last Updated: ${state.lastUpdated}`);
-  console.log(`Overall Progress: ${state.overallProgress} (${state.completedTaskCount}/${state.totalTasks} tasks)\n`);
+  log('\n📊 E2B Execution Context Implementation Status\n');
+  log(`Version: ${state.version}`);
+  log(`Last Updated: ${state.lastUpdated}`);
+  log(`Overall Progress: ${state.overallProgress} (${state.completedTaskCount}/${state.totalTasks} tasks)\n`);
 
   Object.entries(state.phases).forEach(([key, phase]) => {
     const statusIcon =
@@ -233,49 +241,49 @@ function showStatus(state: ImplementationState): void {
       phase.status === 'blocked' ? '🚫' :
       '⏸️';
 
-    console.log(`${statusIcon} ${phase.name} (${phase.status})`);
-    console.log(`   Progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length} tasks`);
+    log(`${statusIcon} ${phase.name} (${phase.status})`);
+    log(`   Progress: ${phase.completedTasks.length}/${Object.keys(phase.tasks).length} tasks`);
 
     if (phase.currentTask) {
-      console.log(`   Current: ${phase.currentTask} - ${phase.tasks[phase.currentTask]}`);
+      log(`   Current: ${phase.currentTask} - ${phase.tasks[phase.currentTask]}`);
     }
 
     if (phase.blockers.length > 0) {
-      console.log(`   ⚠️  Blockers:`);
+      log(`   ⚠️  Blockers:`);
       phase.blockers.forEach(blocker => {
-        console.log(`      - ${blocker}`);
+        log(`      - ${blocker}`);
       });
     }
 
-    console.log('');
+    log('');
   });
 
-  console.log('🏁 Milestones:');
+  log('🏁 Milestones:');
   Object.entries(state.milestones).forEach(([key, value]) => {
     const icon = value ? '✅' : '⏳';
-    console.log(`   ${icon} ${key}: ${value ?? 'Not reached'}`);
+    log(`   ${icon} ${key}: ${value ?? 'Not reached'}`);
   });
 
-  console.log('\n🧪 Test Results:');
-  console.log(`   Unit Tests: ${state.testResults.unit.passed} passed, ${state.testResults.unit.failed} failed (${state.testResults.unit.coverage} coverage)`);
-  console.log(`   Integration Tests: ${state.testResults.integration.passed} passed, ${state.testResults.integration.failed} failed`);
-  console.log(`   E2E Tests:`);
+  log('\n🧪 Test Results:');
+  log(`   Unit Tests: ${state.testResults.unit.passed} passed, ${state.testResults.unit.failed} failed (${state.testResults.unit.coverage} coverage)`);
+  log(`   Integration Tests: ${state.testResults.integration.passed} passed, ${state.testResults.integration.failed} failed`);
+  log(`   E2E Tests:`);
   Object.entries(state.testResults.e2e).forEach(([test, result]) => {
     const icon =
       result === 'passed' ? '✅' :
       result === 'failed' ? '❌' :
       '⏳';
-    console.log(`      ${icon} ${test}: ${result}`);
+    log(`      ${icon} ${test}: ${result}`);
   });
 
   if (state.notes.length > 0) {
-    console.log('\n📝 Recent Notes (last 5):');
+    log('\n📝 Recent Notes (last 5):');
     state.notes.slice(-5).forEach(note => {
-      console.log(`   ${note}`);
+      log(`   ${note}`);
     });
   }
 
-  console.log('');
+  log('');
 }
 
 function updateTests(state: ImplementationState, type: 'unit' | 'integration', passed: number, failed: number, coverage?: string): void {
@@ -285,21 +293,20 @@ function updateTests(state: ImplementationState, type: 'unit' | 'integration', p
     if (coverage) {
       state.testResults.unit.coverage = coverage;
     }
-    console.log(`🧪 Updated unit test results: ${passed} passed, ${failed} failed`);
+    log(`🧪 Updated unit test results: ${passed} passed, ${failed} failed`);
   } else if (type === 'integration') {
     state.testResults.integration.passed = passed;
     state.testResults.integration.failed = failed;
-    console.log(`🧪 Updated integration test results: ${passed} passed, ${failed} failed`);
+    log(`🧪 Updated integration test results: ${passed} passed, ${failed} failed`);
   }
 }
 
 function updateE2ETest(state: ImplementationState, testName: string, result: 'passed' | 'failed'): void {
   if (testName in state.testResults.e2e) {
     state.testResults.e2e[testName] = result;
-    console.log(`🧪 E2E test ${testName}: ${result}`);
+    log(`🧪 E2E test ${testName}: ${result}`);
   } else {
-    console.error(`E2E test ${testName} not found`);
-    process.exit(1);
+    fail(`E2E test ${testName} not found`);
   }
 }
 
@@ -307,8 +314,12 @@ function updateE2ETest(state: ImplementationState, testName: string, result: 'pa
 const args = process.argv.slice(2);
 const command = args[0];
 
-if (!command) {
-  console.log(`
+await runWithScriptObservability(
+  'update-implementation-state',
+  async ({ logger }) => {
+    scriptLogger = logger;
+    if (!command) {
+      log(`
 Usage:
   pnpm tsx scripts/update-implementation-state.ts <command> [args...]
 
@@ -333,93 +344,86 @@ Examples:
   pnpm tsx scripts/update-implementation-state.ts test:unit 42 0 85%
   pnpm tsx scripts/update-implementation-state.ts test:e2e test1_basic_execution passed
   `);
-  process.exit(0);
-}
-
-const state = loadState();
-
-switch (command) {
-  case 'complete':
-    if (!args[1]) {
-      console.error('Task ID required');
-      process.exit(1);
+      return;
     }
-    completeTask(state, args[1]);
-    saveState(state);
-    break;
 
-  case 'start':
-    if (!args[1]) {
-      console.error('Task ID required');
-      process.exit(1);
+    const state = loadState();
+
+    switch (command) {
+      case 'complete':
+        if (!args[1]) {
+          fail('Task ID required');
+        }
+        completeTask(state, args[1]);
+        saveState(state);
+        break;
+
+      case 'start':
+        if (!args[1]) {
+          fail('Task ID required');
+        }
+        startTask(state, args[1]);
+        saveState(state);
+        break;
+
+      case 'block':
+        if (!args[1] || !args[2]) {
+          fail('Phase key and blocker reason required');
+        }
+        blockPhase(state, args[1], args.slice(2).join(' '));
+        saveState(state);
+        break;
+
+      case 'unblock':
+        if (!args[1]) {
+          fail('Phase key required');
+        }
+        unblockPhase(state, args[1], args[2]);
+        saveState(state);
+        break;
+
+      case 'note':
+        if (!args[1]) {
+          fail('Note message required');
+        }
+        addNote(state, args.slice(1).join(' '));
+        saveState(state);
+        break;
+
+      case 'status':
+        showStatus(state);
+        break;
+
+      case 'test:unit':
+        if (!args[1] || !args[2]) {
+          fail('Passed and failed counts required');
+        }
+        updateTests(state, 'unit', parseInt(args[1]), parseInt(args[2]), args[3]);
+        saveState(state);
+        break;
+
+      case 'test:integration':
+        if (!args[1] || !args[2]) {
+          fail('Passed and failed counts required');
+        }
+        updateTests(state, 'integration', parseInt(args[1]), parseInt(args[2]));
+        saveState(state);
+        break;
+
+      case 'test:e2e':
+        if (!args[1] || !args[2]) {
+          fail('Test name and result (passed/failed) required');
+        }
+        if (args[2] !== 'passed' && args[2] !== 'failed') {
+          fail('Result must be "passed" or "failed"');
+        }
+        updateE2ETest(state, args[1], args[2]);
+        saveState(state);
+        break;
+
+      default:
+        fail(`Unknown command: ${command}`);
     }
-    startTask(state, args[1]);
-    saveState(state);
-    break;
-
-  case 'block':
-    if (!args[1] || !args[2]) {
-      console.error('Phase key and blocker reason required');
-      process.exit(1);
-    }
-    blockPhase(state, args[1], args.slice(2).join(' '));
-    saveState(state);
-    break;
-
-  case 'unblock':
-    if (!args[1]) {
-      console.error('Phase key required');
-      process.exit(1);
-    }
-    unblockPhase(state, args[1], args[2]);
-    saveState(state);
-    break;
-
-  case 'note':
-    if (!args[1]) {
-      console.error('Note message required');
-      process.exit(1);
-    }
-    addNote(state, args.slice(1).join(' '));
-    saveState(state);
-    break;
-
-  case 'status':
-    showStatus(state);
-    break;
-
-  case 'test:unit':
-    if (!args[1] || !args[2]) {
-      console.error('Passed and failed counts required');
-      process.exit(1);
-    }
-    updateTests(state, 'unit', parseInt(args[1]), parseInt(args[2]), args[3]);
-    saveState(state);
-    break;
-
-  case 'test:integration':
-    if (!args[1] || !args[2]) {
-      console.error('Passed and failed counts required');
-      process.exit(1);
-    }
-    updateTests(state, 'integration', parseInt(args[1]), parseInt(args[2]));
-    saveState(state);
-    break;
-
-  case 'test:e2e':
-    if (!args[1] || !args[2]) {
-      console.error('Test name and result (passed/failed) required');
-      process.exit(1);
-    }
-    if (args[2] !== 'passed' && args[2] !== 'failed') {
-      console.error('Result must be "passed" or "failed"');
-      process.exit(1);
-    }
-    updateE2ETest(state, args[1], args[2]);
-    saveState(state);
-    break;
-
-  default:
-    console.error(`Unknown command: ${command}`);
-    process.exit(1);
-}
+  },
+  { agentId: 'update-implementation-state' }
+);

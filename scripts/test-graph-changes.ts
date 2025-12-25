@@ -28,10 +28,15 @@ import {
   createGraphWriteService,
   type GraphWriteService,
 } from '@reg-copilot/reg-intel-graph';
+import { runWithScriptObservability } from './observability.js';
+import type { Logger } from 'pino';
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;
 const MEMGRAPH_PASSWORD = process.env.MEMGRAPH_PASSWORD;
+
+let log: (...messages: unknown[]) => void;
+let logError: (...messages: unknown[]) => void;
 
 /**
  * Create driver connection
@@ -54,7 +59,7 @@ async function addTestNode(writeService: GraphWriteService): Promise<string> {
   const timestamp = Date.now();
   const nodeId = `TEST_BENEFIT_${timestamp}`;
 
-  console.log(`➕ Adding test node: ${nodeId}`);
+  log(`➕ Adding test node: ${nodeId}`);
 
   // Create the benefit using GraphWriteService
   await writeService.upsertBenefit({
@@ -66,7 +71,7 @@ async function addTestNode(writeService: GraphWriteService): Promise<string> {
     jurisdictionId: 'IE',
   });
 
-  console.log('✅ Test node added successfully');
+  log('✅ Test node added successfully');
   return nodeId;
 }
 
@@ -74,7 +79,7 @@ async function addTestNode(writeService: GraphWriteService): Promise<string> {
  * Update an existing test node (uses direct query for read, GraphWriteService for write)
  */
 async function updateTestNode(driver: Driver, writeService: GraphWriteService): Promise<void> {
-  console.log('🔄 Updating test node...');
+  log('🔄 Updating test node...');
 
   const session = driver.session();
   try {
@@ -88,13 +93,13 @@ async function updateTestNode(driver: Driver, writeService: GraphWriteService): 
     `);
 
     if (result.records.length === 0) {
-      console.log('⚠️  No test nodes found. Run "add-node" first.');
+      log('⚠️  No test nodes found. Run "add-node" first.');
       return;
     }
 
     const record = result.records[0];
     const nodeId = record.get('id');
-    console.log(`   Updating node: ${nodeId}`);
+    log(`   Updating node: ${nodeId}`);
 
     // Update using GraphWriteService
     await writeService.upsertBenefit({
@@ -106,7 +111,7 @@ async function updateTestNode(driver: Driver, writeService: GraphWriteService): 
       jurisdictionId: 'IE',
     });
 
-    console.log('✅ Test node updated successfully');
+    log('✅ Test node updated successfully');
   } finally {
     await session.close();
   }
@@ -120,7 +125,7 @@ async function updateTestNode(driver: Driver, writeService: GraphWriteService): 
  * through a guarded service.
  */
 async function removeTestNode(driver: Driver): Promise<void> {
-  console.log('🗑️  Removing test node...');
+  log('🗑️  Removing test node...');
 
   const session = driver.session();
   try {
@@ -136,9 +141,9 @@ async function removeTestNode(driver: Driver): Promise<void> {
     const deleted = result.records[0].get('deleted').toNumber();
 
     if (deleted === 0) {
-      console.log('⚠️  No test nodes found to remove.');
+      log('⚠️  No test nodes found to remove.');
     } else {
-      console.log('✅ Test node removed successfully');
+      log('✅ Test node removed successfully');
     }
   } finally {
     await session.close();
@@ -149,7 +154,7 @@ async function removeTestNode(driver: Driver): Promise<void> {
  * Add a test edge using GraphWriteService
  */
 async function addTestEdge(driver: Driver, writeService: GraphWriteService): Promise<void> {
-  console.log('➕ Adding test edge...');
+  log('➕ Adding test edge...');
 
   const session = driver.session();
   try {
@@ -164,7 +169,7 @@ async function addTestEdge(driver: Driver, writeService: GraphWriteService): Pro
     `);
 
     if (result.records.length === 0) {
-      console.log('⚠️  Need at least 2 test nodes. Creating them...');
+      log('⚠️  Need at least 2 test nodes. Creating them...');
       await addTestNode(writeService);
       await new Promise((resolve) => setTimeout(resolve, 100));
       await addTestNode(writeService);
@@ -176,7 +181,7 @@ async function addTestEdge(driver: Driver, writeService: GraphWriteService): Pro
     const id1 = result.records[0].get('id1');
     const id2 = result.records[0].get('id2');
 
-    console.log(`   Creating edge: ${id1} -> ${id2}`);
+    log(`   Creating edge: ${id1} -> ${id2}`);
 
     // Create relationship using GraphWriteService
     await writeService.createRelationship({
@@ -187,7 +192,7 @@ async function addTestEdge(driver: Driver, writeService: GraphWriteService): Pro
       relType: 'MUTUALLY_EXCLUSIVE_WITH',
     });
 
-    console.log('✅ Test edge added successfully');
+    log('✅ Test edge added successfully');
   } finally {
     await session.close();
   }
@@ -200,7 +205,7 @@ async function addTestEdge(driver: Driver, writeService: GraphWriteService): Pro
  * supported by GraphWriteService.
  */
 async function removeTestEdge(driver: Driver): Promise<void> {
-  console.log('🗑️  Removing test edge...');
+  log('🗑️  Removing test edge...');
 
   const session = driver.session();
   try {
@@ -216,9 +221,9 @@ async function removeTestEdge(driver: Driver): Promise<void> {
     const deleted = result.records[0].get('deleted').toNumber();
 
     if (deleted === 0) {
-      console.log('⚠️  No test edges found to remove.');
+      log('⚠️  No test edges found to remove.');
     } else {
-      console.log('✅ Test edge removed successfully');
+      log('✅ Test edge removed successfully');
     }
   } finally {
     await session.close();
@@ -232,7 +237,7 @@ async function simulateChanges(
   driver: Driver,
   writeService: GraphWriteService,
 ): Promise<void> {
-  console.log('🎬 Starting simulation of graph changes...\n');
+  log('🎬 Starting simulation of graph changes...\n');
 
   const actions = [
     { name: 'Add Node 1', fn: () => addTestNode(writeService), delay: 2000 },
@@ -245,32 +250,42 @@ async function simulateChanges(
   ];
 
   for (const action of actions) {
-    console.log(`\n[${new Date().toISOString()}] ${action.name}`);
-    console.log('─'.repeat(50));
+    log(`\n[${new Date().toISOString()}] ${action.name}`);
+    log('─'.repeat(50));
     await action.fn();
-    console.log(`   ⏳ Waiting ${action.delay}ms before next action...\n`);
+    log(`   ⏳ Waiting ${action.delay}ms before next action...\n`);
     await new Promise((resolve) => setTimeout(resolve, action.delay));
   }
 
-  console.log('\n✅ Simulation complete!');
-  console.log('✨ Write operations enforced via Graph Ingress Guard ✨');
-  console.log('⚠️  DELETE operations use direct Cypher (not yet in GraphWriteService API)');
+  log('\n✅ Simulation complete!');
+  log('✨ Write operations enforced via Graph Ingress Guard ✨');
+  log('⚠️  DELETE operations use direct Cypher (not yet in GraphWriteService API)');
 }
 
 /**
  * Main function
  */
-async function main() {
-  const action = process.argv[2] || 'simulate';
+const action = process.argv[2] || 'simulate';
 
-  console.log('🧪 Test Graph Changes');
-  console.log(`📍 Connecting to: ${MEMGRAPH_URI}\n`);
+async function main(selectedAction: string, logger: Logger) {
+  log = (...messages: unknown[]) => {
+    const serialized = messages.map(message => String(message)).join(' ');
+    logger.info({ messages }, serialized);
+  };
+
+  logError = (...messages: unknown[]) => {
+    const serialized = messages.map(message => String(message)).join(' ');
+    logger.error({ messages }, serialized);
+  };
+
+  log('🧪 Test Graph Changes');
+  log(`📍 Connecting to: ${MEMGRAPH_URI}\n`);
 
   const driver = createDriver();
 
   try {
     await driver.verifyConnectivity();
-    console.log('✅ Connected to Memgraph\n');
+    log('✅ Connected to Memgraph\n');
 
     // Create GraphWriteService
     const writeService: GraphWriteService = createGraphWriteService({
@@ -279,7 +294,7 @@ async function main() {
       tenantId: 'test',
     });
 
-    switch (action) {
+    switch (selectedAction) {
       case 'add-node':
         await addTestNode(writeService);
         break;
@@ -299,30 +314,37 @@ async function main() {
         await simulateChanges(driver, writeService);
         break;
       default:
-        console.error(`❌ Unknown action: ${action}`);
-        console.log('\nAvailable actions:');
-        console.log('  - add-node');
-        console.log('  - update-node');
-        console.log('  - remove-node');
-        console.log('  - add-edge');
-        console.log('  - remove-edge');
-        console.log('  - simulate (default)');
-        process.exit(1);
+        logError(`❌ Unknown action: ${selectedAction}`);
+        log('\nAvailable actions:');
+        log('  - add-node');
+        log('  - update-node');
+        log('  - remove-node');
+        log('  - add-edge');
+        log('  - remove-edge');
+        log('  - simulate (default)');
+        throw new Error(`Unknown action: ${selectedAction}`);
     }
   } catch (error) {
-    console.error('❌ Error:', error);
+    logError('❌ Error:', error);
     if (error instanceof Error) {
-      console.error('   Message:', error.message);
-      console.error('   Stack:', error.stack);
+      logError('   Message:', error.message);
+      logError('   Stack:', error.stack);
     }
-    process.exit(1);
+    throw error;
   } finally {
     await driver.close();
   }
 }
 
 // Run
-main().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'test-graph-changes',
+  async ({ logger, withSpan }) => {
+    await withSpan(
+      'script.test-graph-changes',
+      { 'script.name': 'test-graph-changes', action },
+      () => main(action, logger)
+    );
+  },
+  { tenantId: 'test', agentId: 'test-graph-changes' }
+);

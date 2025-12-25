@@ -18,6 +18,7 @@ import type {
   ClientConversation,
 } from '@reg-copilot/reg-intel-conversations'
 import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
+import { createClientTelemetry, type ClientTelemetrySink } from '@/lib/clientTelemetry'
 import { PathAwareMessageList } from '@/components/chat/path-aware-message-list'
 import { PathToolbar } from '@/components/chat/path-toolbar'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
@@ -101,11 +102,11 @@ function parseSseEvent(eventBlock: string): { type: string; data: string } | nul
 
 type ParsedSseData = string | Record<string, unknown>
 
-function parseJsonSafe(value: string): ParsedSseData {
+function parseJsonSafe(value: string, log?: ClientTelemetrySink): ParsedSseData {
   try {
     return JSON.parse(value)
   } catch (error) {
-    console.warn('Failed to parse SSE data', error)
+    log?.({ err: error, raw: value }, 'Failed to parse SSE data')
     return value
   }
 }
@@ -293,6 +294,8 @@ export default function Home() {
   const prevMessageCountRef = useRef(0)
   const abortControllerRef = useRef<AbortController | null>(null)
   const conversationIdRef = useRef<string | undefined>(undefined)
+  const telemetryRef = useRef(createClientTelemetry('ChatPage'))
+  const telemetry = telemetryRef.current
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -321,7 +324,7 @@ export default function Home() {
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          console.error('Failed to fetch node summaries', error)
+          telemetry.error({ err: error, ids }, 'Failed to fetch node summaries')
           setReferencedNodeSummaries([])
         }
       } finally {
@@ -334,7 +337,7 @@ export default function Home() {
     fetchSummaries()
 
     return () => controller.abort()
-  }, [chatMetadata?.referencedNodes])
+  }, [chatMetadata?.referencedNodes, telemetry])
 
   const loadConversations = useCallback(async (status: 'active' | 'archived' = conversationListTab) => {
     if (!isAuthenticated) return
@@ -446,6 +449,10 @@ export default function Home() {
   useEffect(() => {
     if (!isAuthenticated) return
     const controller = new AbortController()
+    const listLogger = telemetry.withRequest(
+      telemetry.newRequestId('conversation-list'),
+      { tab: conversationListTab }
+    )
 
     const subscribe = async () => {
       try {
@@ -473,7 +480,7 @@ export default function Home() {
             if (!rawEvent) continue
             const parsedEvent = parseSseEvent(rawEvent)
             if (!parsedEvent) continue
-            const parsedData = parseJsonSafe(parsedEvent.data)
+            const parsedData = parseJsonSafe(parsedEvent.data, listLogger.warn)
 
             if (parsedEvent.type === 'snapshot' && typeof parsedData === 'object' && parsedData !== null) {
               // Type-safe cast using unknown intermediate step
@@ -526,7 +533,7 @@ export default function Home() {
       } catch (error) {
         // Ignore abort errors - they're expected when cleaning up
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Conversations list stream error:', error)
+          listLogger.error({ err: error }, 'Conversations list stream error')
         }
       }
     }
@@ -536,12 +543,16 @@ export default function Home() {
     return () => {
       controller.abort()
     }
-  }, [isAuthenticated, conversationListTab, conversationId])
+  }, [isAuthenticated, conversationListTab, conversationId, telemetry])
 
   // Subscribe to individual conversation updates for real-time changes
   useEffect(() => {
     if (!conversationId || !isAuthenticated) return
     const controller = new AbortController()
+    const streamLogger = telemetry.withRequest(
+      telemetry.newRequestId('conversation-stream'),
+      { conversationId }
+    )
 
     const subscribe = async () => {
       try {
@@ -569,7 +580,7 @@ export default function Home() {
             if (!rawEvent) continue
             const parsedEvent = parseSseEvent(rawEvent)
             if (!parsedEvent) continue
-            const parsedData = parseJsonSafe(parsedEvent.data)
+            const parsedData = parseJsonSafe(parsedEvent.data, streamLogger.warn)
 
             if (parsedEvent.type === 'metadata' && isChatSseMetadata(parsedData)) {
               applyMetadata(parsedData)
@@ -590,7 +601,7 @@ export default function Home() {
       } catch (error) {
         // Ignore abort errors - they're expected when cleaning up
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Conversation stream error:', error)
+          streamLogger.error({ err: error }, 'Conversation stream error')
         }
       }
     }
@@ -600,7 +611,7 @@ export default function Home() {
     return () => {
       controller.abort()
     }
-  }, [conversationId, isAuthenticated, loadConversation])
+  }, [conversationId, isAuthenticated, loadConversation, telemetry])
 
   const streamChatResponse = async (response: Response, assistantMessageId: string) => {
     if (!response.body) {
@@ -610,6 +621,11 @@ export default function Home() {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
+
+    const chatStreamLogger = telemetry.withRequest(
+      telemetry.newRequestId('chat-response'),
+      { conversationId: conversationIdRef.current }
+    )
 
     // Initialize streaming stage
     setStreamingStage('querying')
@@ -637,7 +653,7 @@ export default function Home() {
         const parsedEvent = parseSseEvent(rawEvent)
         if (!parsedEvent) continue
 
-        const parsedData = parseJsonSafe(parsedEvent.data)
+        const parsedData = parseJsonSafe(parsedEvent.data, chatStreamLogger.warn)
 
         switch (parsedEvent.type) {
           case 'metadata': {
@@ -779,7 +795,7 @@ export default function Home() {
 
   const handleEditAsBranch = async (messageId: string, newContent: string) => {
     if (!conversationId) {
-      console.error('Cannot edit message: no conversation ID')
+      telemetry.error({ messageId }, 'Cannot edit message: no conversation ID')
       return
     }
 
@@ -876,7 +892,7 @@ export default function Home() {
         loadConversation(conversationId)
       }, 100)
     } catch (error) {
-      console.error('Error creating branch for edit:', error)
+      telemetry.error({ err: error, conversationId, messageId }, 'Error creating branch for edit')
       alert('Failed to edit message: ' + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setIsLoading(false)
@@ -972,10 +988,14 @@ export default function Home() {
         )
       } else {
         const error = await response.json()
-        console.error('Failed to toggle pin:', error.error)
+        telemetry.error({
+          conversationId,
+          messageId,
+          serverError: error?.error,
+        }, 'Failed to toggle pin')
       }
     } catch (error) {
-      console.error('Failed to toggle pin:', error)
+      telemetry.error({ err: error, conversationId, messageId }, 'Failed to toggle pin')
     }
   }
 
@@ -1075,7 +1095,7 @@ export default function Home() {
           <ConditionalPathProvider
             conversationId={conversationId}
             apiClient={pathApiClient}
-            onError={(err) => console.error('Path error:', err)}
+            onError={(err) => telemetry.error({ err, conversationId }, 'Path error')}
           >
             <section className="flex min-h-[70vh] flex-col overflow-hidden rounded-3xl border bg-card/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:border-border/80">
             <div className="flex items-center justify-between border-b bg-gradient-to-r from-muted/60 via-background to-muted/40 px-6 py-4">

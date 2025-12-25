@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import { SupabaseConversationStore } from '../packages/reg-intel-conversations/src/conversationStores';
+import { runWithScriptObservability } from './observability.js';
+import type { Logger } from 'pino';
 
 type TableRow = Record<string, unknown>;
 
@@ -150,11 +152,9 @@ class InMemorySupabaseClient {
   }
 }
 
-async function main() {
+async function main(tenantId: string, userId: string, logger: Logger) {
   const supabaseClient = new InMemorySupabaseClient();
   const store = new SupabaseConversationStore(supabaseClient as never);
-  const tenantId = randomUUID();
-  const userId = randomUUID();
 
   const { conversationId } = await store.createConversation({
     tenantId,
@@ -182,19 +182,28 @@ async function main() {
   const conversation = await store.getConversation({ tenantId, conversationId, userId });
   const messages = await store.getMessages({ tenantId, conversationId, userId });
 
-  console.log('Conversation created and retrieved:', {
-    conversationId,
-    tenantId,
-    title: conversation?.title,
-    lastMessageAt: conversation?.lastMessageAt?.toISOString(),
-    messageCount: messages.length,
-    roles: messages.map(msg => msg.role),
-  });
+  logger.info(
+    {
+      conversationId,
+      tenantId,
+      title: conversation?.title,
+      lastMessageAt: conversation?.lastMessageAt?.toISOString(),
+      messageCount: messages.length,
+      roles: messages.map(msg => msg.role),
+    },
+    'Conversation created and retrieved'
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(error => {
-    console.error('Manual SupabaseConversationStore flow failed', error);
-    process.exit(1);
-  });
+  const tenantId = randomUUID();
+  const userId = randomUUID();
+
+  await runWithScriptObservability(
+    'manual-supabase-store-check',
+    async ({ logger }) => {
+      await main(tenantId, userId, logger);
+    },
+    { tenantId, userId, agentId: 'manual-supabase-store-check' }
+  );
 }

@@ -14,11 +14,12 @@
 
 import {
   createComplianceEngine,
-  createDefaultLlmRouter,
   createGraphClient,
   createTimelineEngine,
   type ComplianceStreamChunk,
 } from '../packages/reg-intel-core/src/index.js';
+import type { Logger } from 'pino';
+import { runWithScriptObservability } from './observability.js';
 
 // Mock egress guard for testing
 class MockEgressGuard {
@@ -55,9 +56,10 @@ class MockLlmClient {
   }
 }
 
-async function testComplianceEngineRouting() {
-  console.log('\n🔬 Test 1: ComplianceEngine Routing');
-  console.log('━'.repeat(60));
+async function testComplianceEngineRouting(logger: Logger) {
+  const testLogger = logger.child({ test: 'routing' });
+  testLogger.info({ banner: true }, '\n🔬 Test 1: ComplianceEngine Routing');
+  testLogger.info({ separator: true }, '━'.repeat(60));
 
   try {
     const engine = createComplianceEngine({
@@ -75,14 +77,15 @@ async function testComplianceEngineRouting() {
       },
     };
 
-    console.log('   Testing non-streaming method...');
+    testLogger.info({ step: 'non-streaming' }, 'Testing non-streaming method...');
     const response = await engine.handleChat(request);
 
-    console.log('   ✅ Non-streaming response received');
-    console.log('      Agent:', response.agentUsed);
-    console.log('      Jurisdictions:', response.jurisdictions);
-    console.log('      Referenced nodes:', response.referencedNodes.length);
-    console.log('      Uncertainty:', response.uncertaintyLevel);
+    testLogger.info({ agent: response.agentUsed }, '✅ Non-streaming response received');
+    testLogger.info(
+      { jurisdictions: response.jurisdictions, referencedNodes: response.referencedNodes.length },
+      'Response metadata'
+    );
+    testLogger.info({ uncertainty: response.uncertaintyLevel }, 'Uncertainty level');
 
     if (response.agentUsed !== 'GlobalRegulatoryComplianceAgent') {
       throw new Error('Expected GlobalRegulatoryComplianceAgent, got: ' + response.agentUsed);
@@ -90,14 +93,15 @@ async function testComplianceEngineRouting() {
 
     return true;
   } catch (error) {
-    console.error('   ❌ Error:', error);
+    testLogger.error({ err: error }, '❌ Error during routing test');
     return false;
   }
 }
 
-async function testComplianceEngineStreaming() {
-  console.log('\n🔬 Test 2: ComplianceEngine Streaming');
-  console.log('━'.repeat(60));
+async function testComplianceEngineStreaming(logger: Logger) {
+  const testLogger = logger.child({ test: 'streaming' });
+  testLogger.info({ banner: true }, '\n🔬 Test 2: ComplianceEngine Streaming');
+  testLogger.info({ separator: true }, '━'.repeat(60));
 
   try {
     const engine = createComplianceEngine({
@@ -115,7 +119,7 @@ async function testComplianceEngineStreaming() {
       },
     };
 
-    console.log('   Testing streaming method...');
+    testLogger.info({ step: 'streaming' }, 'Testing streaming method...');
 
     let metadataReceived = false;
     let textChunks = 0;
@@ -130,17 +134,18 @@ async function testComplianceEngineStreaming() {
         agentUsed = chunk.metadata!.agentUsed;
         jurisdictions = chunk.metadata!.jurisdictions;
         referencedNodes = chunk.metadata!.referencedNodes.length;
-        console.log('   ✅ Metadata received');
-        console.log('      Agent:', agentUsed);
-        console.log('      Jurisdictions:', jurisdictions);
-        console.log('      Referenced nodes:', referencedNodes);
+        testLogger.info(
+          { agentUsed, jurisdictions, referencedNodes },
+          '✅ Metadata received from stream'
+        );
       } else if (chunk.type === 'text') {
         textChunks++;
       } else if (chunk.type === 'done') {
         doneReceived = true;
-        console.log('   ✅ Stream completed');
-        console.log('      Text chunks:', textChunks);
-        console.log('      Follow-ups:', chunk.followUps?.length || 0);
+        testLogger.info(
+          { textChunks, followUps: chunk.followUps?.length || 0 },
+          '✅ Stream completed'
+        );
       }
     }
 
@@ -158,17 +163,18 @@ async function testComplianceEngineStreaming() {
 
     return true;
   } catch (error) {
-    console.error('   ❌ Error:', error);
+    testLogger.error({ err: error }, '❌ Error during streaming test');
     return false;
   }
 }
 
-async function testGraphQueryExecution() {
-  console.log('\n🔬 Test 3: Graph Query Execution');
-  console.log('━'.repeat(60));
+async function testGraphQueryExecution(logger: Logger) {
+  const testLogger = logger.child({ test: 'graph-query' });
+  testLogger.info({ banner: true }, '\n🔬 Test 3: Graph Query Execution');
+  testLogger.info({ separator: true }, '━'.repeat(60));
 
   try {
-    console.log('   Testing graph client...');
+    testLogger.info({ step: 'graph-client' }, 'Testing graph client...');
     const graphClient = createGraphClient();
 
     // Test that graph queries work
@@ -178,30 +184,28 @@ async function testGraphQueryExecution() {
       undefined
     );
 
-    console.log('   ✅ Graph query executed');
-    console.log('      Nodes returned:', result.nodes.length);
-    console.log('      Edges returned:', result.edges.length);
+    testLogger.info({ nodes: result.nodes.length, edges: result.edges.length }, '✅ Graph query executed');
 
     if (result.nodes.length > 0) {
-      console.log('      Sample node:', result.nodes[0].label);
+      testLogger.info({ sampleNode: result.nodes[0].label }, 'Sample node from response');
     }
 
     return true;
   } catch (error) {
     // Graph query might fail if MCP is not set up, which is expected
-    console.log('   ℹ️  Graph query failed (expected if MCP not configured)');
-    console.log('      Error:', (error as Error).message);
+    testLogger.warn({ err: error }, 'ℹ️  Graph query failed (expected if MCP not configured)');
     return true; // Don't fail the test for this
   }
 }
 
-async function testArchitecturalIntegrity() {
-  console.log('\n🔬 Test 4: Architectural Integrity');
-  console.log('━'.repeat(60));
+async function testArchitecturalIntegrity(logger: Logger) {
+  const testLogger = logger.child({ test: 'architecture' });
+  testLogger.info({ banner: true }, '\n🔬 Test 4: Architectural Integrity');
+  testLogger.info({ separator: true }, '━'.repeat(60));
 
   try {
     // Verify that ComplianceEngine exports exist
-    console.log('   Checking exports...');
+    testLogger.info({ step: 'exports' }, 'Checking exports...');
 
     const coreExports = await import('../packages/reg-intel-core/src/index.js');
 
@@ -216,7 +220,7 @@ async function testArchitecturalIntegrity() {
       if (!(exportName in coreExports)) {
         throw new Error(`Missing export: ${exportName}`);
       }
-      console.log(`   ✅ ${exportName} exported`);
+      testLogger.info({ exportName }, '✅ Export available');
     }
 
     // Verify agent has streaming support
@@ -224,48 +228,55 @@ async function testArchitecturalIntegrity() {
     if (!agent.handleStream) {
       throw new Error('GlobalRegulatoryComplianceAgent missing handleStream method');
     }
-    console.log('   ✅ Agent has streaming support');
+    testLogger.info({ component: 'GlobalRegulatoryComplianceAgent' }, '✅ Agent has streaming support');
 
     return true;
   } catch (error) {
-    console.error('   ❌ Error:', error);
+    testLogger.error({ err: error }, '❌ Error during architectural integrity test');
     return false;
   }
 }
 
-async function main() {
-  console.log('\n╔══════════════════════════════════════════════════════════╗');
-  console.log('║  Phase 3 Integration Test Suite                         ║');
-  console.log('║  Testing ComplianceEngine routing and graph queries     ║');
-  console.log('╚══════════════════════════════════════════════════════════╝');
+async function main(logger: Logger) {
+  logger.info({ banner: true }, '\n╔══════════════════════════════════════════════════════════╗');
+  logger.info({ banner: true }, '║  Phase 3 Integration Test Suite                         ║');
+  logger.info({ banner: true }, '║  Testing ComplianceEngine routing and graph queries     ║');
+  logger.info({ banner: true }, '╚══════════════════════════════════════════════════════════╝');
 
   const results = {
-    routing: await testComplianceEngineRouting(),
-    streaming: await testComplianceEngineStreaming(),
-    graphQuery: await testGraphQueryExecution(),
-    architecture: await testArchitecturalIntegrity(),
+    routing: await testComplianceEngineRouting(logger),
+    streaming: await testComplianceEngineStreaming(logger),
+    graphQuery: await testGraphQueryExecution(logger),
+    architecture: await testArchitecturalIntegrity(logger),
   };
 
-  console.log('\n╔══════════════════════════════════════════════════════════╗');
-  console.log('║  Test Results Summary                                    ║');
-  console.log('╚══════════════════════════════════════════════════════════╝');
-  console.log(`   ComplianceEngine Routing:  ${results.routing ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`   ComplianceEngine Streaming: ${results.streaming ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`   Graph Query Execution:      ${results.graphQuery ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`   Architectural Integrity:    ${results.architecture ? '✅ PASS' : '❌ FAIL'}`);
+  logger.info({ banner: true }, '\n╔══════════════════════════════════════════════════════════╗');
+  logger.info({ banner: true }, '║  Test Results Summary                                    ║');
+  logger.info({ banner: true }, '╚══════════════════════════════════════════════════════════╝');
+  logger.info({ result: results.routing }, 'ComplianceEngine Routing');
+  logger.info({ result: results.streaming }, 'ComplianceEngine Streaming');
+  logger.info({ result: results.graphQuery }, 'Graph Query Execution');
+  logger.info({ result: results.architecture }, 'Architectural Integrity');
 
   const allPassed = Object.values(results).every(r => r);
 
   if (allPassed) {
-    console.log('\n🎉 All Phase 3 tests passed! Architecture is compliant.');
-    process.exit(0);
-  } else {
-    console.log('\n💥 Some tests failed. Please review the implementation.');
-    process.exit(1);
+    logger.info({ success: true }, '\n🎉 All Phase 3 tests passed! Architecture is compliant.');
+    return;
   }
+
+  logger.error({ success: false }, '\n💥 Some tests failed. Please review the implementation.');
+  throw new Error('One or more Phase 3 integration tests failed');
 }
 
-main().catch((error) => {
-  console.error('\n💥 Test suite crashed:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'test-phase3-integration',
+  async ({ withSpan, logger }) => {
+    await withSpan(
+      'script.test-phase3-integration',
+      { 'script.name': 'test-phase3-integration' },
+      () => main(logger)
+    );
+  },
+  { agentId: 'test-phase3-integration' }
+);

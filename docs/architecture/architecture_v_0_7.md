@@ -705,6 +705,8 @@ interface ConversationContext {
 
 v0.7 adds **execution state** as a separate concern via `ExecutionContext`, not inside `ConversationContext`.
 
+**Trace persistence contract:** The conversation-facing stores must keep `trace_id`, `root_span_id`, and `root_span_name` populated on conversations, messages, and conversation context rows. Values come from the **root span** created at `/api/chat` (or any future entrypoint) so operators can pivot from any row back to the originating trace. Background jobs must thread the same context instead of generating new trace IDs. See the observability runbook for the regression checklist.
+
 ---
 
 ## 9. Self‑Populating Rules Graph (unchanged from v0.6)

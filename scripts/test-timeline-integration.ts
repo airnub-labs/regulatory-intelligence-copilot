@@ -19,41 +19,50 @@ import {
   computeLockInEnd,
   isWithinLookback,
 } from '../packages/reg-intel-core/src/timeline/timelineEngine.js';
+import type { Logger } from 'pino';
+import { runWithScriptObservability } from './observability.js';
 
-async function testTimelineIntegration() {
-  console.log('🧪 Testing Timeline Engine integration with seeded graph data\n');
+async function testTimelineIntegration(logger: Logger) {
+  const testLogger = logger.child({ test: 'timeline-integration' });
+  testLogger.info({ banner: true }, '🧪 Testing Timeline Engine integration with seeded graph data');
 
   const graphClient = createBoltGraphClient();
 
   try {
     // Test 1: Fetch timelines for Jobseeker's Benefit
-    console.log('📋 Test 1: Fetching timelines for Jobseeker\'s Benefit (Self-Employed)');
+    testLogger.info({ step: 'timelines' }, "📋 Test 1: Fetching timelines for Jobseeker's Benefit (Self-Employed)");
     const benefitId = 'jobseekers-benefit-self-employed';
     const timelines = await graphClient.getTimelines(benefitId);
 
-    console.log(`   ✅ Found ${timelines.length} timeline(s)`);
-    for (const timeline of timelines) {
-      console.log(`      - ${timeline.label} (${timeline.id})`);
-    }
+    testLogger.info({ timelineCount: timelines.length }, '✅ Fetched timelines');
+    timelines.forEach(timeline => {
+      testLogger.info({ timelineId: timeline.id, label: timeline.label }, 'Timeline found');
+    });
 
     if (timelines.length === 0) {
-      console.log('   ⚠️  No timelines found. Make sure graph is seeded.');
+      testLogger.warn({ step: 'timelines' }, '⚠️  No timelines found. Make sure graph is seeded.');
       return;
     }
 
     // Test 2: Compute lookback ranges
-    console.log('\n📅 Test 2: Computing lookback ranges (as of today)');
+    testLogger.info({ step: 'lookback' }, '\n📅 Test 2: Computing lookback ranges (as of today)');
     const now = new Date();
 
     for (const timeline of timelines) {
       const result = computeLookbackRange(timeline, now);
-      console.log(`\n   Timeline: ${timeline.label}`);
-      console.log(`   Range: ${result.range.start.toISOString().split('T')[0]} to ${result.range.end.toISOString().split('T')[0]}`);
-      console.log(`   Description: ${result.description}`);
+      testLogger.info(
+        {
+          timeline: timeline.label,
+          rangeStart: result.range.start.toISOString(),
+          rangeEnd: result.range.end.toISOString(),
+          description: result.description,
+        },
+        'Lookback range computed'
+      );
     }
 
     // Test 3: Check if example contribution dates fall within lookback
-    console.log('\n📊 Test 3: Checking example contribution dates');
+    testLogger.info({ step: 'contribution-check' }, '\n📊 Test 3: Checking example contribution dates');
 
     // Example: PRSI contributions from 6 months ago
     const sixMonthsAgo = new Date();
@@ -64,59 +73,74 @@ async function testTimelineIntegration() {
     threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
 
     for (const timeline of timelines.slice(0, 2)) { // Test first 2 timelines
-      console.log(`\n   Timeline: ${timeline.label}`);
+      testLogger.info({ timeline: timeline.label }, 'Checking contribution windows');
 
       const withinSixMonths = isWithinLookback(sixMonthsAgo, timeline, now);
-      console.log(`   - Contribution from 6 months ago: ${withinSixMonths.within ? '✅ WITHIN' : '❌ OUTSIDE'}`);
+      testLogger.info({ within: withinSixMonths.within }, 'Contribution from 6 months ago');
 
       const withinThreeYears = isWithinLookback(threeYearsAgo, timeline, now);
-      console.log(`   - Contribution from 3 years ago: ${withinThreeYears.within ? '✅ WITHIN' : '❌ OUTSIDE'}`);
+      testLogger.info({ within: withinThreeYears.within }, 'Contribution from 3 years ago');
     }
 
     // Test 4: Compute lock-in periods
-    console.log('\n🔒 Test 4: Computing lock-in periods');
+    testLogger.info({ step: 'lock-in' }, '\n🔒 Test 4: Computing lock-in periods');
     const claimDate = new Date('2024-01-01');
 
     for (const timeline of timelines.slice(0, 2)) {
       const result = computeLockInEnd(claimDate, timeline);
-      console.log(`\n   Timeline: ${timeline.label}`);
-      console.log(`   If claimed on ${claimDate.toISOString().split('T')[0]}, lock-in ends: ${result.end.toISOString().split('T')[0]}`);
-      console.log(`   Description: ${result.description}`);
+      testLogger.info(
+        {
+          timeline: timeline.label,
+          claimDate: claimDate.toISOString(),
+          lockInEnd: result.end.toISOString(),
+          description: result.description,
+        },
+        'Computed lock-in period'
+      );
     }
 
     // Test 5: Fetch rules with profile and jurisdiction
-    console.log('\n🔍 Test 5: Fetching rules for profile and jurisdiction');
+    testLogger.info({ step: 'graph-rules' }, '\n🔍 Test 5: Fetching rules for profile and jurisdiction');
     const graphContext = await graphClient.getRulesForProfileAndJurisdiction(
       'single-director-ie',
       'IE',
       'jobseeker'
     );
 
-    console.log(`   ✅ Found ${graphContext.nodes.length} nodes and ${graphContext.edges.length} edges`);
+    testLogger.info(
+      { nodeCount: graphContext.nodes.length, edgeCount: graphContext.edges.length },
+      '✅ Graph rules fetched'
+    );
     const benefits = graphContext.nodes.filter(n => n.type === 'Benefit');
-    console.log(`   Benefits: ${benefits.map(b => b.label).join(', ')}`);
+    testLogger.info({ benefits: benefits.map(b => b.label) }, 'Benefits list');
 
     const timelineNodes = graphContext.nodes.filter(n => n.type === 'Timeline');
-    console.log(`   Timelines: ${timelineNodes.map(t => t.label).join(', ')}`);
+    testLogger.info({ timelines: timelineNodes.map(t => t.label) }, 'Timeline nodes list');
 
-    console.log('\n✅ All timeline integration tests passed!');
-    console.log('\n💡 The Timeline Engine is correctly integrated with the graph data.');
-    console.log('   Agents can now fetch timeline constraints and compute date ranges');
-    console.log('   for PRSI contribution requirements, benefit eligibility windows, etc.');
+    testLogger.info({ success: true }, '\n✅ All timeline integration tests passed!');
+    testLogger.info({ success: true }, '\n💡 The Timeline Engine is correctly integrated with the graph data.');
+    testLogger.info(
+      { guidance: true },
+      'Agents can now fetch timeline constraints and compute date ranges for PRSI contribution requirements, benefit eligibility windows, etc.'
+    );
 
   } catch (error) {
-    console.error('\n❌ Test failed:', error);
-    if (error instanceof Error) {
-      console.error('   Error message:', error.message);
-    }
-    process.exit(1);
+    testLogger.error({ err: error }, '\n❌ Test failed');
+    throw error;
   } finally {
     await graphClient.close();
   }
 }
 
 // Run tests
-testTimelineIntegration().catch(error => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+await runWithScriptObservability(
+  'test-timeline-integration',
+  async ({ withSpan, logger }) => {
+    await withSpan(
+      'script.test-timeline-integration',
+      { 'script.name': 'test-timeline-integration' },
+      () => testTimelineIntegration(logger)
+    );
+  },
+  { agentId: 'test-timeline-integration' }
+);
