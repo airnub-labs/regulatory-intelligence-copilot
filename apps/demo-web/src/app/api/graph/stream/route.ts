@@ -16,8 +16,11 @@ import {
   type GraphPatch,
   type ProfileId,
 } from '@reg-copilot/reg-intel-core';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { getServerSession } from 'next-auth/next';
+
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
+import { authOptions } from '@/lib/auth/options';
 
 const logger = createLogger('GraphStreamRoute');
 
@@ -45,6 +48,10 @@ interface ConnectionMessage {
 }
 
 export async function GET(request: Request) {
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
+  const tenantId = session?.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const userId = session?.user?.id;
+
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
   const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
@@ -52,21 +59,35 @@ export async function GET(request: Request) {
 
   const filter: ChangeFilter = { jurisdictions, profileType, keyword };
 
-  logger.info({ filter }, 'Client connected to graph stream');
+  logger.info({ filter, tenantId, userId }, 'Client connected to graph stream');
 
-  const upgradeHeader = request.headers.get('upgrade');
-  const supportsWebSocket = typeof (globalThis as CloudflareGlobalThis).WebSocketPair !== 'undefined';
+  return requestContext.run({ tenantId, userId }, () =>
+    withSpan(
+      'api.graph.stream',
+      {
+        'app.route': '/api/graph/stream',
+        'app.tenant.id': tenantId,
+        ...(userId ? { 'app.user.id': userId } : {}),
+      },
+      () => {
+        const upgradeHeader = request.headers.get('upgrade');
+        const supportsWebSocket = typeof (globalThis as CloudflareGlobalThis).WebSocketPair !== 'undefined';
 
-  if (upgradeHeader?.toLowerCase() === 'websocket' && supportsWebSocket) {
-    return handleWebSocket(filter);
-  }
+        if (upgradeHeader?.toLowerCase() === 'websocket' && supportsWebSocket) {
+          return handleWebSocket(filter, tenantId, userId);
+        }
 
-  return handleSse(request, filter);
+        return handleSse(request, filter, tenantId, userId);
+      },
+    ),
+  );
 }
 
 function handleSse(
   request: Request,
-  filter: ChangeFilter
+  filter: ChangeFilter,
+  tenantId: string,
+  userId?: string
 ): Response {
   const encoder = new TextEncoder();
 
@@ -96,13 +117,13 @@ function handleSse(
         subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(patch)}\n\n`));
-            logger.info({ meta: patch.meta }, 'Sent patch to SSE client');
+            logger.info({ meta: patch.meta, tenantId, userId }, 'Sent patch to SSE client');
           } catch (error) {
-            logger.error({ err: error }, 'Error sending patch to SSE client');
+            logger.error({ err: error, tenantId, userId }, 'Error sending patch to SSE client');
           }
         });
       } else {
-        logger.info('No active sandbox - streaming keepalive only');
+        logger.info({ tenantId, userId }, 'No active sandbox - streaming keepalive only');
       }
 
       request.signal.addEventListener('abort', () => {
@@ -123,7 +144,7 @@ function handleSse(
   });
 }
 
-function handleWebSocket(filter: ChangeFilter) {
+function handleWebSocket(filter: ChangeFilter, tenantId: string, userId?: string) {
   const WebSocketPair = (globalThis as CloudflareGlobalThis).WebSocketPair;
   if (!WebSocketPair) {
     throw new Error('WebSocketPair not available');
@@ -141,12 +162,12 @@ function handleWebSocket(filter: ChangeFilter) {
       try {
         server.send(JSON.stringify(patch));
       } catch (error) {
-        logger.error({ err: error }, 'WebSocket send failed');
+        logger.error({ err: error, tenantId, userId }, 'WebSocket send failed');
         server.close();
       }
     });
   } else {
-    logger.info('No active sandbox - WebSocket keepalive only');
+    logger.info({ tenantId, userId }, 'No active sandbox - WebSocket keepalive only');
   }
 
   const connectionMessage: ConnectionMessage = {

@@ -18,8 +18,10 @@ import {
   type GraphNode,
   type ProfileId,
 } from '@reg-copilot/reg-intel-core';
-import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { getServerSession } from 'next-auth/next';
 
+import { authOptions } from '@/lib/auth/options';
 const logger = createLogger('GraphApiRoute');
 
 const MAX_INITIAL_NODES = 250;
@@ -80,7 +82,19 @@ function boundGraphContext(graphContext: GraphContext) {
 }
 
 export async function GET(request: Request) {
-  return withSpan('api.graph.snapshot', { 'app.route': '/api/graph' }, async () => {
+  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
+  const tenantId = session?.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+  const userId = session?.user?.id;
+
+  return requestContext.run({ tenantId, userId }, () =>
+    withSpan(
+      'api.graph.snapshot',
+      {
+        'app.route': '/api/graph',
+        'app.tenant.id': tenantId,
+        ...(userId ? { 'app.user.id': userId } : {}),
+      },
+      async () => {
     try {
       const { searchParams } = new URL(request.url);
       const idsParam = searchParams.get('ids');
@@ -149,7 +163,7 @@ export async function GET(request: Request) {
       const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
       const keyword = searchParams.get('keyword') || undefined;
 
-      const scopedLogger = logger.child({ jurisdictions, profileType, keyword });
+      const scopedLogger = logger.child({ jurisdictions, profileType, keyword, tenantId, userId });
       scopedLogger.info('Fetching initial graph snapshot');
 
       // Create graph client
@@ -222,7 +236,7 @@ export async function GET(request: Request) {
         },
       });
     } catch (error) {
-      logger.error({ err: error }, 'Graph snapshot request failed');
+      logger.error({ err: error, tenantId, userId }, 'Graph snapshot request failed');
       let errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
       if (errorMessage.toLowerCase().includes('sandbox')) {
@@ -238,5 +252,7 @@ export async function GET(request: Request) {
         { status: 500 }
       );
     }
-  });
+      },
+    ),
+  );
 }
