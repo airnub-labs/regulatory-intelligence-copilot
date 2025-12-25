@@ -127,7 +127,6 @@ export function GraphVisualization({
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [showControls, setShowControls] = useState(true);
   const telemetryRef = useRef(createClientTelemetry('GraphVisualization'));
-  const [streamRequestId, setStreamRequestId] = useState(() => telemetryRef.current.newRequestId('graph-stream'));
   const initialLoadLoggerRef = useRef(
     telemetryRef.current.withRequest(telemetryRef.current.newRequestId('graph-initial'))
   );
@@ -136,7 +135,6 @@ export function GraphVisualization({
   const pendingPatchesRef = useRef<GraphPatch[]>([]);
   const fgRef = useRef<ForceGraphRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const telemetry = telemetryRef.current;
 
   // Memoized node color mapping - prevents recreation on every render
   const getNodeColor = useCallback((node: GraphNode | { type: string }) => {
@@ -426,9 +424,8 @@ export function GraphVisualization({
       profileType,
     });
 
-    const requestId = telemetry.newRequestId('graph-stream');
-    setStreamRequestId(requestId);
-    const streamLogger = telemetry.withRequest(requestId, { jurisdictions, profileType });
+    const requestId = telemetryRef.current.newRequestId('graph-stream');
+    const streamLogger = telemetryRef.current.withRequest(requestId, { jurisdictions, profileType });
     streamLogger.info({ streamRequestId: requestId }, 'Opening graph stream');
 
     const eventSource = new EventSource(`/api/graph/stream?${params}`);
@@ -466,7 +463,7 @@ export function GraphVisualization({
     };
 
     eventSourceRef.current = eventSource;
-  }, [jurisdictions, profileType, applyPatch, telemetry]);
+  }, [jurisdictions, profileType, applyPatch]);
 
   // Initialize
   useEffect(() => {
