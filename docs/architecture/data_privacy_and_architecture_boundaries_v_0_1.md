@@ -228,6 +228,8 @@ This maintains a clear separation between:
 
 ## 7. LLM Providers, Egress Control & GDPR
 
+> **Implementation Status (2025-12-24):** ✅ EgressGuard is fully implemented with end-to-end PII protection. See `docs/architecture/guards/egress_guard_v_0_3.md` Section 9 for details.
+
 ### 7.1 Provider-Agnostic LLM Router
 
 The LLM layer must:
@@ -245,7 +247,7 @@ This enables:
 - Separation of concerns (e.g. a small PII sanitiser model that never leaves
   the platform, even if the main reasoning model is remote).
 
-### 7.2 Egress Guard & Data Minimisation
+### 7.2 Egress Guard & Data Minimisation ✅ Implemented
 
 For SOC 2/GDPR alignment, the architecture must:
 
@@ -325,9 +327,11 @@ mandatory**:
    - Supports EU-friendly/self-hosted models.
    - Allows per-tenant, per-function model selection.
 
-6. **Egress Guard & Data Minimisation**
+6. **Egress Guard & Data Minimisation** ✅ Fully Implemented
    - All outbound LLM/MCP calls pass through controlled clients.
    - PII sanitisation before external calls where applicable.
+   - LLM responses and sandbox output sanitized before reaching clients.
+   - Defense-in-depth with multiple sanitization layers.
 
 7. **Logs & Telemetry Avoid PII by Default**
    - Focus on operational metrics, not content.

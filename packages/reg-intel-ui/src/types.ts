@@ -111,6 +111,10 @@ export interface PathMessage {
   branchedToPaths: string[];
   messageType: string;
   createdAt: string;
+  // Pinning fields
+  isPinned?: boolean;
+  pinnedAt?: string;
+  pinnedBy?: string;
 }
 
 /**

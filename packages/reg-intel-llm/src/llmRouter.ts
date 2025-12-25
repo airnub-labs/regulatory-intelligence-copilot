@@ -28,6 +28,11 @@ import {
   type EgressMode,
 } from './egressClient.js';
 import { resolveEffectiveEgressMode } from './egressModeResolver.js';
+import {
+  sanitizeTextForEgress,
+  type SanitizationContext,
+  type SanitizationOptions,
+} from './egressGuard.js';
 
 /**
  * LLM completion options
@@ -45,6 +50,20 @@ export interface LlmCompletionOptions {
 
   /** Optional per-call override for egress mode. */
   egressModeOverride?: EgressMode;
+
+  /**
+   * Sanitization context for response processing:
+   * - 'chat': Full sanitization (default for LLM responses)
+   * - 'calculation': Conservative sanitization
+   * - 'strict': Aggressive sanitization
+   * - 'off': No response sanitization
+   */
+  responseSanitization?: SanitizationContext;
+
+  /**
+   * Additional sanitization options for response processing
+   */
+  sanitizationOptions?: Omit<SanitizationOptions, 'context'>;
 }
 
 /**
@@ -659,7 +678,7 @@ export class LlmRouter implements LlmClient {
       options
     );
 
-    return this.egressClient.guardAndExecute(
+    const response = await this.egressClient.guardAndExecute(
       {
         target: 'llm',
         providerId: provider,
@@ -691,6 +710,20 @@ export class LlmRouter implements LlmClient {
         );
       }
     );
+
+    // Sanitize response when egress mode is 'enforce' or 'report-only'
+    // This prevents PII leakage from LLM responses back to the client
+    if (effectiveMode !== 'off') {
+      const sanitizationContext = options?.responseSanitization ?? 'chat';
+      if (sanitizationContext !== 'off') {
+        return sanitizeTextForEgress(response, {
+          context: sanitizationContext,
+          ...options?.sanitizationOptions,
+        });
+      }
+    }
+
+    return response;
   }
 
   async *streamChat(
@@ -743,8 +776,25 @@ export class LlmRouter implements LlmClient {
       }
     );
 
+    // Sanitize response chunks when egress mode is 'enforce' or 'report-only'
+    // This prevents PII leakage from LLM responses back to the client
+    const sanitizationContext = options?.responseSanitization ?? 'chat';
+    const shouldSanitizeResponse = effectiveMode !== 'off' && sanitizationContext !== 'off';
+    const sanitizationOpts: SanitizationOptions = {
+      context: sanitizationContext,
+      ...options?.sanitizationOptions,
+    };
+
     try {
-      yield* streamResult;
+      for await (const chunk of streamResult) {
+        if (chunk.type === 'text' && shouldSanitizeResponse) {
+          // Sanitize text deltas to remove any PII the LLM might have echoed or generated
+          const sanitizedDelta = sanitizeTextForEgress(chunk.delta, sanitizationOpts);
+          yield { type: 'text', delta: sanitizedDelta };
+        } else {
+          yield chunk;
+        }
+      }
     } catch (error) {
       yield {
         type: 'error',
