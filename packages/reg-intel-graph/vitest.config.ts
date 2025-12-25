@@ -12,14 +12,6 @@ const resolveModule = (specifier: string) =>
 export default defineConfig({
   resolve: {
     alias: {
-      '@reg-copilot/reg-intel-llm': path.resolve(
-        __dirname,
-        '../reg-intel-llm/src/index.ts'
-      ),
-      '@reg-copilot/reg-intel-prompts': path.resolve(
-        __dirname,
-        '../reg-intel-prompts/src/index.ts'
-      ),
       '@reg-copilot/reg-intel-observability': path.resolve(
         __dirname,
         '../reg-intel-observability/src/index.ts'
@@ -38,7 +30,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.{test,spec}.ts', 'src/types.ts'],
+      exclude: ['src/**/*.{test,spec}.ts'],
     },
   },
 });

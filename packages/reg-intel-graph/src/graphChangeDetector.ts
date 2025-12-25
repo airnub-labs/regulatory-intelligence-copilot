@@ -17,6 +17,8 @@
 
 import type { GraphNode, GraphEdge, GraphContext } from './types.js';
 import { LOG_PREFIX } from './constants.js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+import type { Logger } from 'pino';
 
 /**
  * Graph patch format per v0.3 spec
@@ -120,6 +122,8 @@ interface LastPollInfo {
   hasData: boolean;
 }
 
+const graphLogger = createLogger('GraphChangeDetector', { component: 'GraphChangeDetector' });
+
 /**
  * Graph Change Detector Service
  *
@@ -136,6 +140,7 @@ export class GraphChangeDetector {
   private config: Required<GraphChangeDetectorConfig>;
   private graphQueryFn: (filter: ChangeFilter) => Promise<GraphContext>;
   private timestampQueryFn?: (filter: ChangeFilter, since: Date) => Promise<GraphContext>;
+  private logger: Logger;
 
   /**
    * Create a new GraphChangeDetector
@@ -147,7 +152,8 @@ export class GraphChangeDetector {
   constructor(
     graphQueryFn: (filter: ChangeFilter) => Promise<GraphContext>,
     config?: GraphChangeDetectorConfig,
-    timestampQueryFn?: (filter: ChangeFilter, since: Date) => Promise<GraphContext>
+    timestampQueryFn?: (filter: ChangeFilter, since: Date) => Promise<GraphContext>,
+    logger: Logger = graphLogger
   ) {
     this.graphQueryFn = graphQueryFn;
     this.timestampQueryFn = timestampQueryFn;
@@ -160,6 +166,7 @@ export class GraphChangeDetector {
       maxEdgesPerPatch: config?.maxEdgesPerPatch ?? 1000,
       maxTotalChanges: config?.maxTotalChanges ?? 1200,
     };
+    this.logger = logger;
   }
 
   /**
@@ -167,21 +174,29 @@ export class GraphChangeDetector {
    */
   start(): void {
     if (this.pollIntervalId) {
-      console.log(`${LOG_PREFIX.graph} Change detector already running`);
+      this.logger.info(`${LOG_PREFIX.graph} Change detector already running`);
       return;
     }
 
-    console.log(`${LOG_PREFIX.graph} Starting change detector (poll interval: ${this.config.pollIntervalMs}ms, timestamps: ${this.config.useTimestamps}, batching: ${this.config.enableBatching})`);
+    this.logger.info(
+      {
+        pollIntervalMs: this.config.pollIntervalMs,
+        useTimestamps: this.config.useTimestamps,
+        enableBatching: this.config.enableBatching,
+        batchWindowMs: this.config.batchWindowMs,
+      },
+      `${LOG_PREFIX.graph} Starting change detector`
+    );
 
     // Poll immediately on start
     this.pollAllFilters().catch((error) => {
-      console.error(`${LOG_PREFIX.graph} Error in initial poll:`, error);
+      this.logger.error({ err: error }, `${LOG_PREFIX.graph} Error in initial poll`);
     });
 
     // Set up periodic polling
     this.pollIntervalId = setInterval(() => {
       this.pollAllFilters().catch((error) => {
-        console.error(`${LOG_PREFIX.graph} Error in polling:`, error);
+        this.logger.error({ err: error }, `${LOG_PREFIX.graph} Error in polling`);
       });
     }, this.config.pollIntervalMs);
   }
@@ -191,7 +206,7 @@ export class GraphChangeDetector {
    */
   stop(): void {
     if (this.pollIntervalId) {
-      console.log(`${LOG_PREFIX.graph} Stopping change detector`);
+      this.logger.info(`${LOG_PREFIX.graph} Stopping change detector`);
       clearInterval(this.pollIntervalId);
       this.pollIntervalId = null;
     }
@@ -213,12 +228,12 @@ export class GraphChangeDetector {
 
     this.listeners.get(filterKey)!.add(callback);
 
-    console.log(`${LOG_PREFIX.graph} New subscription for filter: ${filterKey}`);
+    this.logger.info({ filterKey }, `${LOG_PREFIX.graph} New subscription registered`);
 
     // Initialize snapshot if this is the first subscriber
     if (!this.snapshots.has(filterKey)) {
       this.initializeSnapshot(filter).catch((error) => {
-        console.error(`${LOG_PREFIX.graph} Error initializing snapshot:`, error);
+        this.logger.error({ err: error, filterKey }, `${LOG_PREFIX.graph} Error initializing snapshot`);
       });
     }
 
@@ -230,7 +245,7 @@ export class GraphChangeDetector {
           if (listeners.size === 0) {
             this.listeners.delete(filterKey);
             this.snapshots.delete(filterKey);
-            console.log(`${LOG_PREFIX.graph} Removed subscription and snapshot for: ${filterKey}`);
+            this.logger.info({ filterKey }, `${LOG_PREFIX.graph} Removed subscription and snapshot`);
           }
         }
       },
@@ -289,7 +304,15 @@ export class GraphChangeDetector {
         currentContext = await this.timestampQueryFn(filter, lastPoll.timestamp);
 
         if (currentContext.nodes.length > 0 || currentContext.edges.length > 0) {
-          console.log(`${LOG_PREFIX.graph} Timestamp query for ${filterKey}: ${currentContext.nodes.length} nodes since ${lastPoll.timestamp.toISOString()}`);
+          this.logger.info(
+            {
+              filterKey,
+              nodeCount: currentContext.nodes.length,
+              edgeCount: currentContext.edges.length,
+              since: lastPoll.timestamp.toISOString(),
+            },
+            `${LOG_PREFIX.graph} Timestamp query returned changes`
+          );
         }
 
         // Compute diff from timestamp query results BEFORE updating snapshot
@@ -347,7 +370,7 @@ export class GraphChangeDetector {
         this.emitPatchWithBatching(filterKey, patch);
       }
     } catch (error) {
-      console.error(`${LOG_PREFIX.graph} Error polling filter ${filterKey}:`, error);
+      this.logger.error({ err: error, filterKey }, `${LOG_PREFIX.graph} Error polling filter`);
     }
   }
 
@@ -371,9 +394,16 @@ export class GraphChangeDetector {
         hasData: true,
       });
 
-      console.log(`${LOG_PREFIX.graph} Initialized snapshot for ${filterKey}: ${context.nodes.length} nodes, ${context.edges.length} edges`);
+      this.logger.info(
+        {
+          filterKey,
+          nodeCount: context.nodes.length,
+          edgeCount: context.edges.length,
+        },
+        `${LOG_PREFIX.graph} Initialized snapshot`
+      );
     } catch (error) {
-      console.error(`${LOG_PREFIX.graph} Error initializing snapshot for ${filterKey}:`, error);
+      this.logger.error({ err: error, filterKey }, `${LOG_PREFIX.graph} Error initializing snapshot`);
     }
   }
 
@@ -461,21 +491,25 @@ export class GraphChangeDetector {
     const listeners = this.listeners.get(filterKey);
     if (!listeners || listeners.size === 0) return;
 
-    console.log(`${LOG_PREFIX.graph} Emitting patch for ${filterKey}:`, {
-      nodesAdded: patch.nodes.added.length,
-      nodesUpdated: patch.nodes.updated.length,
-      nodesRemoved: patch.nodes.removed.length,
-      edgesAdded: patch.edges.added.length,
-      edgesUpdated: patch.edges.updated.length,
-      edgesRemoved: patch.edges.removed.length,
-      truncated: patch.meta.truncated,
-    });
+    this.logger.info(
+      {
+        filterKey,
+        nodesAdded: patch.nodes.added.length,
+        nodesUpdated: patch.nodes.updated.length,
+        nodesRemoved: patch.nodes.removed.length,
+        edgesAdded: patch.edges.added.length,
+        edgesUpdated: patch.edges.updated.length,
+        edgesRemoved: patch.edges.removed.length,
+        truncated: patch.meta.truncated,
+      },
+      `${LOG_PREFIX.graph} Emitting patch`
+    );
 
     for (const callback of listeners) {
       try {
         callback(patch);
       } catch (error) {
-        console.error(`${LOG_PREFIX.graph} Error in change callback:`, error);
+        this.logger.error({ err: error, filterKey }, `${LOG_PREFIX.graph} Error in change callback`);
       }
     }
   }
