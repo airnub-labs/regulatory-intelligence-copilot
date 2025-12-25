@@ -31,6 +31,7 @@ vi.mock('@/lib/server/conversations', () => ({
   conversationEventHub: {},
   conversationListEventHub: {},
   conversationStore: {},
+  executionContextManager: {},
 }));
 
 describe('chat route tracing', () => {
