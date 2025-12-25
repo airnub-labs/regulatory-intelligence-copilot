@@ -16,7 +16,10 @@ import {
   type GraphPatch,
   type ProfileId,
 } from '@reg-copilot/reg-intel-core';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
+
+const logger = createLogger('GraphStreamRoute');
 
 type WebSocketPairType = {
   0: WebSocket;
@@ -49,7 +52,7 @@ export async function GET(request: Request) {
 
   const filter: ChangeFilter = { jurisdictions, profileType, keyword };
 
-  console.log('[API/graph/stream] Client connected:', filter);
+  logger.info({ filter }, 'Client connected to graph stream');
 
   const upgradeHeader = request.headers.get('upgrade');
   const supportsWebSocket = typeof (globalThis as CloudflareGlobalThis).WebSocketPair !== 'undefined';
@@ -93,13 +96,13 @@ function handleSse(
         subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
           try {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(patch)}\n\n`));
-            console.log('[API/graph/stream] Sent patch to SSE client:', patch.meta);
+            logger.info({ meta: patch.meta }, 'Sent patch to SSE client');
           } catch (error) {
-            console.error('[API/graph/stream] Error sending patch:', error);
+            logger.error({ err: error }, 'Error sending patch to SSE client');
           }
         });
       } else {
-        console.log('[API/graph/stream] No active sandbox - streaming keepalive only');
+        logger.info('No active sandbox - streaming keepalive only');
       }
 
       request.signal.addEventListener('abort', () => {
@@ -138,12 +141,12 @@ function handleWebSocket(filter: ChangeFilter) {
       try {
         server.send(JSON.stringify(patch));
       } catch (error) {
-        console.error('[API/graph/stream] WebSocket send failed:', error);
+        logger.error({ err: error }, 'WebSocket send failed');
         server.close();
       }
     });
   } else {
-    console.log('[API/graph/stream] No active sandbox - WebSocket keepalive only');
+    logger.info('No active sandbox - WebSocket keepalive only');
   }
 
   const connectionMessage: ConnectionMessage = {

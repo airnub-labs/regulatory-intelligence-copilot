@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { executionContextManager } from '@/lib/server/conversations';
 import { cleanupExecutionContexts } from '@/lib/jobs/cleanupExecutionContexts';
+
+const logger = createLogger('CronCleanupContextsRoute');
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60 seconds for cleanup
@@ -22,7 +25,7 @@ export async function POST(request: NextRequest) {
   // Verify CRON_SECRET
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
-    console.error('[cron/cleanup-contexts] CRON_SECRET not configured');
+    logger.error('CRON_SECRET not configured');
     return NextResponse.json(
       { error: 'Cron endpoint not configured' },
       { status: 500 }
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
   const providedSecret = authHeader?.replace('Bearer ', '');
 
   if (providedSecret !== cronSecret) {
-    console.warn('[cron/cleanup-contexts] Unauthorized request');
+    logger.warn('Unauthorized request');
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   // Check if ExecutionContextManager is available
   if (!executionContextManager) {
-    console.info('[cron/cleanup-contexts] ExecutionContextManager not configured (E2B disabled)');
+    logger.info('ExecutionContextManager not configured (E2B disabled)');
     return NextResponse.json({
       message: 'Execution context cleanup skipped - E2B not configured',
       cleaned: 0,
@@ -61,7 +64,7 @@ export async function POST(request: NextRequest) {
       ...(result.errorDetails && { errorDetails: result.errorDetails }),
     });
   } catch (error) {
-    console.error('[cron/cleanup-contexts] Cleanup failed', error);
+    logger.error({ err: error }, 'Cleanup failed');
     return NextResponse.json(
       {
         error: 'Cleanup failed',

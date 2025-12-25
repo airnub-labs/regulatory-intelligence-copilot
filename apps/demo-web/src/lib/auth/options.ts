@@ -2,6 +2,9 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextAuthOptions, Session } from 'next-auth'
+import { createLogger } from '@reg-copilot/reg-intel-observability'
+
+const logger = createLogger('AuthOptions')
 
 // Define extended types for our auth callbacks
 interface ExtendedJWT {
@@ -33,7 +36,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 const fallbackTenantId = process.env.SUPABASE_DEMO_TENANT_ID ?? 'default'
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase URL or anon key missing. Authentication will not work until configured.')
+  logger.warn('Supabase URL or anon key missing. Authentication will not work until configured.')
 }
 
 export const authOptions: NextAuthOptions = {

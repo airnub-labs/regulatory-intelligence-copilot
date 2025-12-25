@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
 import { generateMergeSummary } from '@/lib/server/mergeSummarizer';
+
+const logger = createLogger('MergePreviewRoute');
 
 export const dynamic = 'force-dynamic';
 
@@ -94,10 +97,10 @@ export async function POST(
         aiGenerated = summaryResult.aiGenerated;
 
         if (summaryResult.error) {
-          console.warn('[merge-preview] Summary generation warning:', summaryResult.error);
+          logger.warn({ error: summaryResult.error }, 'Summary generation warning');
         }
       } catch (summaryError) {
-        console.error('[merge-preview] Failed to generate AI summary:', summaryError);
+        logger.error({ err: summaryError }, 'Failed to generate AI summary');
         // Fall through - use basic preview summary from store
       }
     }

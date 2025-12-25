@@ -10,10 +10,12 @@ import {
   SupabaseConversationStore,
   SupabaseConversationPathStore,
 } from '@reg-copilot/reg-intel-conversations';
-import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
+import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
+
+const logger = createLogger('ConversationStoreWiring');
 
 const normalizeConversationStoreMode = (
   process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
@@ -39,7 +41,7 @@ if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseSer
   const message =
     'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable the Supabase conversation store';
   if (isDevLike) {
-    console.warn(`[conversation-store:${normalizeConversationStoreMode}] ${message}`);
+    logger.warn({ mode: normalizeConversationStoreMode }, message);
   } else {
     throw new Error(message);
   }
@@ -87,14 +89,15 @@ async function validateSupabaseHealth() {
 }
 
 if (supabaseClient) {
-  console.info(`[conversation-store:${normalizeConversationStoreMode}] Using SupabaseConversationStore`, {
-    supabaseUrl,
-  });
+  logger.info(
+    { mode: normalizeConversationStoreMode, supabaseUrl },
+    'Using SupabaseConversationStore'
+  );
   void validateSupabaseHealth().catch(error => {
-    console.error('[conversation-store] Supabase readiness check failed', error);
+    logger.error({ err: error }, 'Supabase readiness check failed');
   });
 } else {
-  console.info(`[conversation-store:${normalizeConversationStoreMode}] Using in-memory conversation store`);
+  logger.info({ mode: normalizeConversationStoreMode }, 'Using in-memory conversation store');
 }
 
 export const conversationStore = supabaseClient
@@ -127,7 +130,7 @@ export const executionContextManager = e2bApiKey
   : undefined;
 
 if (executionContextManager) {
-  console.info('[execution-context] ExecutionContextManager initialized with E2B integration');
+  logger.info('ExecutionContextManager initialized with E2B integration');
 } else {
-  console.info('[execution-context] E2B_API_KEY not configured; code execution tools disabled');
+  logger.info('E2B_API_KEY not configured; code execution tools disabled');
 }

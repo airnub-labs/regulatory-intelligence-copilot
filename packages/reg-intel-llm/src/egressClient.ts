@@ -1,5 +1,8 @@
 import { sanitizeObjectForEgress } from './egressGuard.js';
 import { LlmError } from './errors.js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('EgressClient');
 
 export type EgressTarget = 'llm' | 'mcp' | 'http';
 
@@ -110,11 +113,10 @@ function providerAllowlistAspect(
     const isAllowed = allowed.includes(ctx.providerId);
 
     if (!isAllowed) {
-      console.warn('[Egress] Disallowed provider used', {
-        providerId: ctx.providerId,
-        tenantId: ctx.tenantId,
-        task: ctx.task,
-      });
+      logger.warn(
+        { providerId: ctx.providerId, tenantId: ctx.tenantId, task: ctx.task },
+        'Disallowed provider used'
+      );
 
       throw new LlmError(
         `Provider ${ctx.providerId} is not allowed by the current egress policy`
@@ -165,10 +167,10 @@ function sanitizeRequestAspect(
       }
 
       if (redactionApplied) {
-        console.warn('[Egress][report-only] PII sanitiser changed payload', {
-          tenantId: ctx.tenantId,
-          task: ctx.task,
-        });
+        logger.warn(
+          { tenantId: ctx.tenantId, task: ctx.task, mode: 'report-only' },
+          'PII sanitiser changed payload'
+        );
       }
     }
 
