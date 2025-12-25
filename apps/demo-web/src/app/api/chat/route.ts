@@ -84,6 +84,10 @@ export async function POST(request: Request) {
         const serializedBody = JSON.stringify({ ...normalizedBody, tenantId, traceContext });
         propagation.inject(context.active(), headers, headerSetter);
 
+        if (!headers.has('traceparent') && activeSpanContext) {
+          headers.set('traceparent', `00-${activeSpanContext.traceId}-${activeSpanContext.spanId}-01`);
+        }
+
         return handler(
           new Request(request.url, {
             method: request.method,

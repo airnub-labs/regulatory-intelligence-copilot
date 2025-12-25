@@ -14,6 +14,9 @@ import {
   type GraphPatch,
 } from '@reg-copilot/reg-intel-core';
 import { normalizeProfileType, type ProfileId } from '@reg-copilot/reg-intel-core';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('GraphChangeDetectorInstance');
 
 let detectorInstance: GraphChangeDetector | null = null;
 const MAX_PATCH_NODE_CHANGES = 250;
@@ -36,6 +39,9 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
   const profileType: ProfileId = normalizeProfileType(filter.profileType);
 
   try {
+    const scopedLogger = logger.child({ jurisdictions, profileType, keyword: filter.keyword });
+    scopedLogger.info('Querying graph snapshot for change detection');
+
     // Get rules for primary jurisdiction
     const primaryJurisdiction = jurisdictions[0];
     const graphContext = await graphClient.getRulesForProfileAndJurisdiction(
@@ -74,7 +80,7 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
 
     return graphContext;
   } catch (error) {
-    console.error('[GraphChangeDetector] Error querying graph:', error);
+    logger.error({ err: error }, 'Error querying graph snapshot for change detection');
     // Return empty context on error
     return { nodes: [], edges: [] };
   }
@@ -101,6 +107,9 @@ async function queryGraphByTimestamp(
     // Convert timestamp to ISO format for Cypher query
     const sinceIso = since.toISOString();
 
+    const scopedLogger = logger.child({ jurisdictions, profileType, since: sinceIso, keyword: filter.keyword });
+    scopedLogger.info('Running timestamp-based graph query');
+
     // Build jurisdiction filter
     const jurisdictionList = jurisdictions.map(j => `'${j}'`).join(', ');
 
@@ -120,7 +129,6 @@ async function queryGraphByTimestamp(
       RETURN n, collect(r) AS rels, collect(m) AS neighbours
     `;
 
-    console.log(`[GraphChangeDetector] Timestamp query since ${sinceIso}`);
     const result = await graphClient.executeCypher(query);
 
     // Parse result into GraphContext format
@@ -171,7 +179,7 @@ async function queryGraphByTimestamp(
 
     return { nodes, edges };
   } catch (error) {
-    console.error('[GraphChangeDetector] Error in timestamp query:', error);
+    logger.error({ err: error }, 'Error in timestamp-based graph query');
     // Return empty context on error
     return { nodes: [], edges: [] };
   }
@@ -193,7 +201,7 @@ export function getGraphChangeDetector(config?: {
   maxTotalChanges?: number;
 }): GraphChangeDetector {
   if (!detectorInstance) {
-    console.log('[GraphChangeDetector] Creating new detector instance with config:', config);
+    logger.info({ config }, 'Creating new graph change detector instance');
 
     // Create detector with timestamp-based queries and change batching enabled
     const mergedConfig = {
@@ -218,7 +226,7 @@ export function getGraphChangeDetector(config?: {
     // Set up cleanup on process exit
     const cleanup = () => {
       if (detectorInstance) {
-        console.log('[GraphChangeDetector] Stopping detector on process exit');
+        logger.info('Stopping detector on process exit');
         detectorInstance.stop();
       }
     };
@@ -240,10 +248,7 @@ function getFilterKey(filter: ChangeFilter): string {
 function shouldThrottlePatch(filter: ChangeFilter, patch: GraphPatch): boolean {
   const filterKey = getFilterKey(filter);
   if (patch.meta.truncated || patch.meta.totalChanges > MAX_PATCH_TOTAL_CHANGES) {
-    console.warn('[GraphChangeDetector] Dropping oversized patch', {
-      filter: filterKey,
-      meta: patch.meta,
-    });
+    logger.warn({ filter: filterKey, meta: patch.meta }, 'Dropping oversized patch');
     return true;
   }
 

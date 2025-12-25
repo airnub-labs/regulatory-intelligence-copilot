@@ -688,21 +688,6 @@ export class LlmRouter implements LlmClient {
       userId: options?.userId,
     });
 
-    contextualLogger.info('Routing streaming chat request through LlmRouter', {
-      egressMode: {
-        requested: requestedMode ?? this.egressDefaultMode,
-        effective: effectiveMode,
-      },
-    });
-
-    const contextualLogger = this.logger.child({
-      task: options?.task ?? 'main-chat',
-      provider,
-      model,
-      tenantId: options?.tenantId,
-      userId: options?.userId,
-    });
-
     contextualLogger.info('Routing chat request through LlmRouter', {
       egressMode: {
         requested: requestedMode ?? this.egressDefaultMode,

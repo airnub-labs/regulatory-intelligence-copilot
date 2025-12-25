@@ -11,6 +11,11 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { trace } from '@opentelemetry/api';
+import { requestContext, createLogger } from '@reg-copilot/reg-intel-observability';
+import { Writable } from 'node:stream';
 import { GraphChangeDetector, type GraphPatch, type ChangeFilter } from './graphChangeDetector.js';
 import type { GraphContext, GraphNode, GraphEdge } from './types.js';
 
@@ -601,6 +606,77 @@ describe('GraphChangeDetector', () => {
       // Error in one callback should not prevent others from being called
       expect(errorCallback).toHaveBeenCalled();
       expect(normalCallback).toHaveBeenCalled();
+    });
+  });
+
+  describe('Logging correlation', () => {
+    let provider: BasicTracerProvider;
+    let contextManager: AsyncLocalStorageContextManager;
+    let exporter: InMemorySpanExporter;
+
+    beforeEach(() => {
+      exporter = new InMemorySpanExporter();
+      provider = new BasicTracerProvider();
+      provider.addSpanProcessor(new SimpleSpanProcessor(exporter));
+      contextManager = new AsyncLocalStorageContextManager().enable();
+      provider.register({ contextManager });
+    });
+
+    afterEach(async () => {
+      await provider.shutdown();
+      contextManager.disable();
+      exporter.reset();
+    });
+
+    it('includes trace and request context metadata in logs', async () => {
+      const captured: Array<Record<string, unknown>> = [];
+      const destination = new Writable({
+        write(chunk, _encoding, callback) {
+          try {
+            captured.push(JSON.parse(chunk.toString()));
+          } catch (error) {
+            // Ignore non-JSON logs
+          }
+          callback();
+        },
+      });
+      const logger = createLogger('GraphChangeDetector', {
+        component: 'GraphChangeDetector',
+        destination,
+      });
+
+      const mock = createMockQueryFn({ nodes: [], edges: [] });
+      const tracer = trace.getTracer('graph-change-detector-log-test');
+
+      await tracer.startActiveSpan('graph-change-detector-log-span', async (span) => {
+        await requestContext.run({ tenantId: 'tenant-graph', conversationId: 'conversation-graph' }, async () => {
+          const detector = new GraphChangeDetector(
+            mock.queryFn,
+            { pollIntervalMs: 50, enableBatching: false, useTimestamps: false },
+            undefined,
+            logger
+          );
+
+          detector.subscribe({ jurisdictions: ['IE'] }, vi.fn());
+          detector.start();
+          detector.stop();
+        });
+        span.end();
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      const logEntry = captured.find(
+        (entry) =>
+          entry.scope === 'GraphChangeDetector' &&
+          typeof entry.message === 'string' &&
+          entry.message.includes('Starting change detector')
+      );
+
+      expect(logEntry?.trace_id).toBeDefined();
+      expect(logEntry?.span_id).toBeDefined();
+      expect(logEntry?.tenantId).toBe('tenant-graph');
+      expect(logEntry?.conversationId).toBe('conversation-graph');
     });
   });
 });

@@ -318,12 +318,7 @@ export class ComplianceEngine {
 
   private getActiveTraceId() {
     const spanContext = trace.getActiveSpan()?.spanContext();
-
-    if (!spanContext || !trace.isSpanContextValid(spanContext)) {
-      return undefined;
-    }
-
-    return spanContext.traceId;
+    return spanContext?.traceId ?? 'no-active-span';
   }
 
   private instrumentAsyncWithSpan<T extends object>(
@@ -405,7 +400,10 @@ export class ComplianceEngine {
       try {
         return this.parseCapturedConcepts(JSON.parse(payload));
       } catch (error) {
-        console.warn('Failed to parse capture_concepts payload', error);
+        this.logger.warn(
+          { error: error instanceof Error ? error.message : String(error) },
+          'Failed to parse capture_concepts payload'
+        );
         return [];
       }
     }
@@ -422,7 +420,7 @@ export class ComplianceEngine {
       return payload as CapturedConcept[];
     }
 
-    console.warn('Unrecognized capture_concepts payload shape', { payload });
+    this.logger.warn({ payload }, 'Unrecognized capture_concepts payload shape');
     return [];
   }
 
@@ -434,9 +432,14 @@ export class ComplianceEngine {
       async () => {
         if (!this.conceptCaptureEnabled || !this.deps.canonicalConceptHandler || !this.deps.graphWriteService) {
           if (!this.conceptWarningLogged) {
-            console.warn(
-              this.conceptCaptureWarning ||
-                'Concept capture skipped: Graph write dependencies are not available.'
+            this.logger.warn(
+              {
+                event: 'concept.capture.skipped',
+                reason:
+                  this.conceptCaptureWarning ||
+                  'Concept capture skipped: Graph write dependencies are not available.',
+              },
+              'Concept capture skipped: graph write dependencies unavailable'
             );
             this.conceptWarningLogged = true;
           }
@@ -462,7 +465,10 @@ export class ComplianceEngine {
             this.deps.graphWriteService
           );
         } catch (error) {
-          console.warn('Failed to resolve and upsert captured concepts', error);
+          this.logger.warn(
+            { error: error instanceof Error ? error.message : String(error) },
+            'Failed to resolve and upsert captured concepts'
+          );
           return [];
         }
       }
@@ -783,7 +789,10 @@ export class ComplianceEngine {
         }
       );
     } catch (error) {
-      console.warn('Failed to resolve conversation context nodes', error);
+      this.logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to resolve conversation context nodes'
+      );
       return [];
     }
   }
@@ -829,7 +838,10 @@ export class ComplianceEngine {
         }
       );
     } catch (error) {
-      console.warn('Failed to load conversation context', error);
+      this.logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to load conversation context'
+      );
       return { context: EMPTY_CONVERSATION_CONTEXT, nodes: [] };
     }
   }
@@ -872,7 +884,10 @@ export class ComplianceEngine {
         }
       );
     } catch (error) {
-      console.warn('Failed to persist conversation context', error);
+      this.logger.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        'Failed to persist conversation context'
+      );
     }
   }
 

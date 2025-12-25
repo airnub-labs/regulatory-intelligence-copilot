@@ -19,9 +19,11 @@ import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../cons
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 import { buildPromptWithAspects } from '@reg-copilot/reg-intel-prompts';
 import { SingleDirector_IE_SocialSafetyNet_Agent } from './SingleDirector_IE_SocialSafetyNet_Agent.js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 const AGENT_ID = 'GlobalRegulatoryComplianceAgent';
 const AGENT_NAME = 'Global Regulatory Compliance Agent';
+const logger = createLogger(AGENT_ID, { component: 'Agent' });
 
 /**
  * Registry of available domain agents
@@ -80,23 +82,27 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
   },
 
   async handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult> {
-    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} processing request`);
+    logger.info({
+      event: 'handle.start',
+      jurisdictions: input.profile?.jurisdictions || [DEFAULT_JURISDICTION],
+      personaType: input.profile?.personaType,
+    });
 
     // Try to find a specialized domain agent
     for (const agent of DOMAIN_AGENTS) {
       try {
         const canHandle = await agent.canHandle(input);
         if (canHandle) {
-          console.log(`${LOG_PREFIX.agent} Delegating to ${agent.id}`);
+          logger.info({ event: 'delegate.agent', agentId: agent.id });
           return agent.handle(input, ctx);
         }
       } catch (error) {
-        console.log(`${LOG_PREFIX.agent} Error checking ${agent.id}:`, error);
+        logger.error({ event: 'delegate.error', agentId: agent.id, err: error });
       }
     }
 
     // No specialized agent matched, handle globally
-    console.log(`${LOG_PREFIX.agent} No specialized agent matched, handling globally`);
+    logger.info({ event: 'handle.global' });
 
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
@@ -115,7 +121,7 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
         );
       }
     } catch (error) {
-      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      logger.error({ event: 'graph.error', err: error });
       warnings.push(
         'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
       );
@@ -171,7 +177,11 @@ Please provide a comprehensive response considering all relevant regulatory doma
   },
 
   async handleStream(input: AgentInput, ctx: AgentContext): Promise<AgentStreamResult> {
-    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} processing streaming request`);
+    logger.info({
+      event: 'handleStream.start',
+      jurisdictions: input.profile?.jurisdictions || [DEFAULT_JURISDICTION],
+      personaType: input.profile?.personaType,
+    });
 
     const wrapAsStream = (result: AgentResult): AgentStreamResult => {
       async function* stream(): AsyncGenerator<LlmStreamChunk> {
@@ -199,7 +209,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
       try {
         const canHandle = await agent.canHandle(input);
         if (canHandle && agent.handleStream) {
-          console.log(`${LOG_PREFIX.agent} Delegating to ${agent.id} (streaming)`);
+          logger.info({ event: 'delegate.agent.streaming', agentId: agent.id });
           const streamed = await agent.handleStream(input, ctx);
           if (isAsyncIterable(streamed.stream)) {
             return streamed;
@@ -210,12 +220,12 @@ Please provide a comprehensive response considering all relevant regulatory doma
           return wrapAsStream(fallbackResult);
         }
       } catch (error) {
-        console.log(`${LOG_PREFIX.agent} Error checking ${agent.id}:`, error);
+        logger.error({ event: 'delegate.error', agentId: agent.id, err: error });
       }
     }
 
     // No specialized agent matched, handle globally with streaming
-    console.log(`${LOG_PREFIX.agent} No specialized agent matched, handling globally with streaming`);
+    logger.info({ event: 'handleStream.global' });
 
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];
@@ -234,7 +244,7 @@ Please provide a comprehensive response considering all relevant regulatory doma
         );
       }
     } catch (error) {
-      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      logger.error({ event: 'graph.error', err: error });
       warnings.push(
         'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
       );

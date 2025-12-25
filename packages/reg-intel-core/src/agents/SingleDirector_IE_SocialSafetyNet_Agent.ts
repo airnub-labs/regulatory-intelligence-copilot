@@ -17,10 +17,12 @@ import type {
 import { LOG_PREFIX, NON_ADVICE_DISCLAIMER } from '../constants.js';
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 import { buildPromptWithAspects } from '@reg-copilot/reg-intel-prompts';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { computeLookbackRange, computeLockInEnd } from '../timeline/timelineEngine.js';
 
 const AGENT_ID = 'SingleDirector_IE_SocialSafetyNet_Agent';
 const AGENT_NAME = 'Single Director Ireland Social Safety Net Agent';
+const logger = createLogger(AGENT_ID, { component: 'Agent' });
 
 /**
  * Keywords that indicate this agent should handle the question
@@ -224,7 +226,10 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
   },
 
   async handle(input: AgentInput, ctx: AgentContext): Promise<AgentResult> {
-    console.log(`${LOG_PREFIX.agent} ${AGENT_ID} handling question`);
+    logger.info(
+      { question: input.question, jurisdictions: input.profile?.jurisdictions },
+      `${LOG_PREFIX.agent} ${AGENT_ID} handling question`
+    );
 
     // Get profile tag ID
     const profileId = input.profile?.personaType === 'single-director'
@@ -253,7 +258,7 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
         }
       }
     } catch (error) {
-      console.log(`${LOG_PREFIX.agent} Graph query error:`, error);
+      logger.error({ err: error, question: input.question }, `${LOG_PREFIX.agent} Graph query error`);
       warnings.push(
         'Memgraph (regulatory graph) is unreachable, so relationship context may be missing in this answer.'
       );
@@ -306,7 +311,10 @@ export const SingleDirector_IE_SocialSafetyNet_Agent: Agent = {
           });
         }
       } catch (error) {
-        console.log(`${LOG_PREFIX.agent} Timeline calculation error for ${benefit.id}:`, error);
+        logger.error(
+          { err: error, benefitId: benefit.id },
+          `${LOG_PREFIX.agent} Timeline calculation error`
+        );
       }
     }
 

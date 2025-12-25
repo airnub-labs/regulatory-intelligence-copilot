@@ -4,8 +4,11 @@
  */
 
 import { Sandbox } from '@e2b/code-interpreter';
-import { DEFAULT_SANDBOX_TIMEOUT_MS, LOG_PREFIX } from './constants.js';
+import { DEFAULT_SANDBOX_TIMEOUT_MS } from './constants.js';
 import { SandboxError } from './errors.js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('E2BSandboxClient', { component: 'Sandbox' });
 
 export interface SandboxHandle {
   sandbox: Sandbox;
@@ -97,9 +100,9 @@ export async function createSandbox(options?: {
 
   const { mcpUrl, mcpToken } = await getMcpCredentials(sandbox);
 
-  console.log(`${LOG_PREFIX.e2b} Sandbox created: ${sandbox.sandboxId}`);
-  console.log(`${LOG_PREFIX.e2b} MCP Gateway URL: ${mcpUrl}`);
-  console.log(`${LOG_PREFIX.e2b} MCP Token available: ${mcpToken ? 'yes' : 'no'}`);
+  logger.info({ event: 'sandbox.created', sandboxId: sandbox.sandboxId });
+  logger.info({ event: 'sandbox.mcp.gateway', mcpUrl });
+  logger.info({ event: 'sandbox.mcp.token.available', available: Boolean(mcpToken) });
 
   return {
     sandbox,
@@ -123,10 +126,10 @@ export async function runInSandbox<T>(
       ${code}
     })().then(result => {
       if (result !== undefined) {
-        console.log(JSON.stringify(result));
+        process.stdout.write(JSON.stringify(result));
       }
     }).catch(err => {
-      console.error('Error:', err.message);
+      process.stderr.write('Error: ' + err.message);
       process.exit(1);
     });
   `;
@@ -135,6 +138,17 @@ export async function runInSandbox<T>(
   await sandbox.files.write(scriptPath, wrappedCode);
 
   const result = await sandbox.commands.run(`node ${scriptPath}`);
+
+  logger.info(
+    {
+      event: 'sandbox.command.result',
+      sandboxId: handle.id,
+      exitCode: result.exitCode,
+      stdoutBytes: result.stdout?.length ?? 0,
+      stderrBytes: result.stderr?.length ?? 0,
+    },
+    'Sandbox command completed'
+  );
 
   if (result.exitCode !== 0) {
     throw new Error(`Sandbox execution error: ${result.stderr || 'Unknown error'}`);
