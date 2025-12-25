@@ -19,6 +19,7 @@ const nextConfig = {
     '@opentelemetry/instrumentation-http',
     '@opentelemetry/instrumentation-undici',
     '@opentelemetry/resources',
+    '@opentelemetry/sdk-logs',
     '@opentelemetry/sdk-metrics',
     '@opentelemetry/sdk-node',
     '@opentelemetry/sdk-trace-base',
