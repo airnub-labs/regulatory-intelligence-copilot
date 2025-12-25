@@ -21,7 +21,6 @@ const initialiseObservability = async () => {
     serviceName: process.env.OTEL_SERVICE_NAME ?? '@reg-copilot/reg-intel-observability/cli',
     serviceVersion: process.env.npm_package_version,
     environment: process.env.NODE_ENV,
-    enableNextInstrumentation: false,
     traceExporter: {
       url:
         process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
