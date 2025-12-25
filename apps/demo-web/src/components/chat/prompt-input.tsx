@@ -2,6 +2,7 @@ import * as React from "react"
 import { Code, LineChart, Loader2, Send } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { useClientTelemetry } from "@/lib/clientTelemetry"
 import { cn } from "@/lib/utils"
 
 export interface ForceTool {
@@ -19,6 +20,9 @@ interface PromptInputProps {
   className?: string
   /** Enable code execution buttons (Run Code / Run Analysis) */
   showExecutionButtons?: boolean
+  telemetryContext?: {
+    conversationId?: string
+  }
 }
 
 export function PromptInput({
@@ -30,10 +34,33 @@ export function PromptInput({
   isLoading = false,
   className,
   showExecutionButtons = false,
+  telemetryContext,
 }: PromptInputProps) {
+  const telemetry = useClientTelemetry("ChatPromptInput", {
+    defaultContext: telemetryContext,
+  })
+
+  const logSubmission = React.useCallback(
+    (action: "prompt" | "run_code" | "run_analysis", trimmed: string) => {
+      const logger = telemetry.withRequest(
+        telemetry.newRequestId(`prompt-${action}`),
+        {
+          ...telemetryContext,
+          action,
+        }
+      )
+      logger.info(
+        { messageLength: trimmed.length },
+        `Submitting ${action.replace("_", " ")} request`
+      )
+    },
+    [telemetry, telemetryContext]
+  )
+
   const handleSubmit = (e: React.FormEvent, forceTool?: ForceTool) => {
     e.preventDefault()
     if (value.trim() && !disabled && !isLoading) {
+      logSubmission("prompt", value.trim())
       onSubmit(forceTool)
     }
   }
@@ -41,6 +68,7 @@ export function PromptInput({
   const handleRunCode = (e: React.MouseEvent) => {
     e.preventDefault()
     if (!disabled && !isLoading && value.trim()) {
+      logSubmission("run_code", value.trim())
       onSubmit({ name: 'run_code', args: { code: value.trim() } })
     }
   }
@@ -48,6 +76,7 @@ export function PromptInput({
   const handleRunAnalysis = (e: React.MouseEvent) => {
     e.preventDefault()
     if (!disabled && !isLoading && value.trim()) {
+      logSubmission("run_analysis", value.trim())
       onSubmit({ name: 'run_analysis', args: { query: value.trim() } })
     }
   }

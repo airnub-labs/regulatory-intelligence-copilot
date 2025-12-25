@@ -128,6 +128,9 @@ export function GraphVisualization({
   const [showControls, setShowControls] = useState(true);
   const telemetryRef = useRef(createClientTelemetry('GraphVisualization'));
   const [streamRequestId, setStreamRequestId] = useState(() => telemetryRef.current.newRequestId('graph-stream'));
+  const initialLoadLoggerRef = useRef(
+    telemetryRef.current.withRequest(telemetryRef.current.newRequestId('graph-initial'))
+  );
   const eventSourceRef = useRef<EventSource | null>(null);
   const initialSnapshotLoaded = useRef(false);
   const pendingPatchesRef = useRef<GraphPatch[]>([]);
@@ -248,6 +251,11 @@ export function GraphVisualization({
 
   // Load initial graph snapshot
   const loadInitialGraph = useCallback(async () => {
+    initialLoadLoggerRef.current.info(
+      { requestId: initialLoadLoggerRef.current.requestId, jurisdictions, profileType, keyword },
+      'Loading initial graph snapshot'
+    );
+
     try {
       setLoading(true);
       setError(null);
@@ -285,6 +293,17 @@ export function GraphVisualization({
       setEmptyMessage(data.metadata?.message || null);
       initialSnapshotLoaded.current = true;
 
+      initialLoadLoggerRef.current.info(
+        {
+          requestId: initialLoadLoggerRef.current.requestId,
+          nodeCount: data.nodes?.length ?? 0,
+          edgeCount: data.edges?.length ?? 0,
+          timestamp: data.timestamp,
+          metadata: data.metadata,
+        },
+        'Initial graph snapshot loaded'
+      );
+
       // Apply any queued patches that arrived before the initial snapshot completed
       if (pendingPatchesRef.current.length > 0) {
         for (const queuedPatch of pendingPatchesRef.current) {
@@ -294,7 +313,7 @@ export function GraphVisualization({
       }
       setLoading(false);
     } catch (err) {
-      telemetry.error({ err }, 'Error loading graph');
+      initialLoadLoggerRef.current.error({ err, requestId: initialLoadLoggerRef.current.requestId }, 'Error loading graph');
       setError(err instanceof Error ? err.message : 'Failed to load graph');
       setLoading(false);
     }

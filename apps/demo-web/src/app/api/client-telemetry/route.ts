@@ -42,9 +42,9 @@ export async function POST(request: Request) {
     return new Response(null, { status: 204 });
   } catch (error) {
     const errObject = error instanceof Error ? { err: error } : { err: new Error('Unknown telemetry error') };
-    requestContext.getStore()
-      ? logger.error({ ...errObject }, 'Failed to process client telemetry')
-      : logger.error(errObject, 'Failed to process client telemetry');
+    const activeContext = requestContext.get();
+
+    logger.error({ ...activeContext, ...errObject }, 'Failed to process client telemetry');
     return Response.json({ error: 'Invalid telemetry payload' }, { status: 400 });
   }
 }

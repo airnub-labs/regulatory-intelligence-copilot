@@ -10,6 +10,7 @@ import { ProgressIndicator } from './progress-indicator';
 import type { StreamingStage } from './progress-indicator';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useClientTelemetry } from '@/lib/clientTelemetry';
 
 interface PathAwareMessageListProps {
   /** Fallback messages to show when path context is not available */
@@ -51,6 +52,9 @@ interface PathAwareMessageListProps {
   showActions?: boolean;
   /** Reference to the textarea for editing */
   editTextareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  telemetryContext?: {
+    conversationId?: string;
+  };
 }
 
 /**
@@ -73,8 +77,12 @@ export function PathAwareMessageList({
   showBranchButtons = true,
   showActions = true,
   editTextareaRef,
+  telemetryContext,
 }: PathAwareMessageListProps) {
   const hasPathProvider = useHasPathProvider();
+  const telemetry = useClientTelemetry('ChatMessageList', {
+    defaultContext: telemetryContext,
+  });
 
   if (!hasPathProvider) {
     // Render fallback messages without path context
@@ -94,6 +102,7 @@ export function PathAwareMessageList({
         onTogglePin={onTogglePin}
         showActions={showActions}
         editTextareaRef={editTextareaRef}
+        telemetry={telemetry}
       />
     );
   }
@@ -114,6 +123,7 @@ export function PathAwareMessageList({
       showBranchButtons={showBranchButtons}
       showActions={showActions}
       editTextareaRef={editTextareaRef}
+      telemetry={telemetry}
     />
   );
 }
@@ -142,6 +152,7 @@ interface FallbackMessageListProps {
   onTogglePin?: (messageId: string, isPinned: boolean) => void;
   showActions?: boolean;
   editTextareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  telemetry: ReturnType<typeof useClientTelemetry>;
 }
 
 function FallbackMessageList({
@@ -159,6 +170,7 @@ function FallbackMessageList({
   onTogglePin,
   showActions = true,
   editTextareaRef,
+  telemetry,
 }: FallbackMessageListProps) {
   // Track active version index for each message with branches
   const [activeVersionIndex, setActiveVersionIndex] = useState<Record<string, number>>({});
@@ -190,6 +202,19 @@ function FallbackMessageList({
     });
   }, [messages]);
 
+  const logMessageAction = (
+    action: string,
+    messageId: string,
+    context?: Record<string, unknown>
+  ) => {
+    const logger = telemetry.withRequest(telemetry.newRequestId(`message-${action}`), {
+      messageId,
+      action,
+      ...context,
+    });
+    logger.info({ action }, 'Chat message action triggered');
+  };
+
   return (
     <>
       {versionedMessages.map(chain => {
@@ -218,10 +243,27 @@ function FallbackMessageList({
                 disabled={isLoading}
               />
               <div className="mt-2 flex items-center justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={onEditCancel} disabled={isLoading}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    logMessageAction('edit-cancel', chain.latestId);
+                    onEditCancel();
+                  }}
+                  disabled={isLoading}
+                >
                   <X className="mr-1 h-4 w-4" /> Cancel
                 </Button>
-                <Button size="sm" onClick={onEditSubmit} disabled={isLoading || !editingContent.trim()}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    logMessageAction('edit-submit', chain.latestId, {
+                      contentLength: editingContent.length,
+                    });
+                    onEditSubmit();
+                  }}
+                  disabled={isLoading || !editingContent.trim()}
+                >
                   <PencilLine className="mr-1 h-4 w-4" /> Save edit
                 </Button>
               </div>
@@ -239,14 +281,44 @@ function FallbackMessageList({
               disclaimer={displayedMessage.disclaimer}
               metadata={metadata}
               messageId={displayedMessage.id}
-              onEdit={onEditRequest}
-              onBranch={onBranchRequest ? (id) => onBranchRequest(id, displayedMessage.content) : undefined}
+              onEdit={
+                onEditRequest
+                  ? () => {
+                      logMessageAction('edit-request', displayedMessage.id);
+                      onEditRequest(displayedMessage.id);
+                    }
+                  : undefined
+              }
+              onBranch={
+                onBranchRequest
+                  ? id => {
+                      logMessageAction('branch-request', displayedMessage.id, {
+                        contentLength: displayedMessage.content.length,
+                      });
+                      onBranchRequest(id, displayedMessage.content);
+                    }
+                  : undefined
+              }
               showActions={showActions}
               isBranchPoint={baseMessage.isBranchPoint}
               branchedPaths={baseMessage.branchedToPaths}
-              onViewBranch={onViewBranch}
+              onViewBranch={
+                onViewBranch
+                  ? pathId => {
+                      logMessageAction('view-branch', displayedMessage.id, { pathId });
+                      onViewBranch(pathId);
+                    }
+                  : undefined
+              }
               isPinned={displayedMessage.isPinned}
-              onTogglePin={onTogglePin}
+              onTogglePin={
+                onTogglePin
+                  ? (id, isPinned) => {
+                      logMessageAction('pin-toggle', displayedMessage.id, { isPinned });
+                      onTogglePin(id, isPinned);
+                    }
+                  : undefined
+              }
               versionCount={versionCount}
               currentVersionIndex={currentVersionIdx}
               versionTimestamp={new Date()}
@@ -291,6 +363,7 @@ interface PathContextMessageListProps {
   showBranchButtons: boolean;
   showActions: boolean;
   editTextareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  telemetry: ReturnType<typeof useClientTelemetry>;
 }
 
 function PathContextMessageList({
@@ -308,6 +381,7 @@ function PathContextMessageList({
   showBranchButtons,
   showActions,
   editTextareaRef,
+  telemetry,
 }: PathContextMessageListProps) {
   const {
     messages,
@@ -322,7 +396,27 @@ function PathContextMessageList({
   const [branchingMessageId, setBranchingMessageId] = useState<string | null>(null);
   const [activeVersionIndex, setActiveVersionIndex] = useState<Record<string, number>>({});
 
+  const logPathMessageAction = (
+    action: string,
+    messageId: string,
+    context?: Record<string, unknown>
+  ) => {
+    const logger = telemetry.withRequest(telemetry.newRequestId(`message-${action}`), {
+      messageId,
+      action,
+      pathId: activePath?.id,
+      ...context,
+    });
+    logger.info({ action }, 'Path-aware chat message action');
+  };
+
   const handleBranch = async (messageId: string, content: string) => {
+    const logger = telemetry.withRequest(telemetry.newRequestId('branch-action'), {
+      messageId,
+      pathId: activePath?.id,
+      action: 'branch',
+    });
+    logger.info({ contentLength: content.length }, 'Branch requested from message');
     if (onBranchRequest) {
       onBranchRequest(messageId, content);
       return;
@@ -332,18 +426,33 @@ function PathContextMessageList({
       setBranchingMessageId(messageId);
       const branchName = `Branch from: ${content.slice(0, 30)}${content.length > 30 ? '...' : ''}`;
       await createBranch(messageId, branchName);
+      logger.info({ branchName, pathId: activePath?.id }, 'Branch created');
+    } catch (error) {
+      logger.error({ err: error, pathId: activePath?.id }, 'Branch creation failed');
+      throw error;
     } finally {
       setBranchingMessageId(null);
     }
   };
 
   const handleViewBranch = async (pathId: string) => {
+    const logger = telemetry.withRequest(telemetry.newRequestId('view-branch'), {
+      pathId,
+      action: 'switch-path',
+    });
+    logger.info({ availablePaths: paths.length }, 'Switching to branch view');
     if (onViewBranch) {
       onViewBranch(pathId);
       return;
     }
     // Default: switch to the branch path
-    await switchPath(pathId);
+    try {
+      await switchPath(pathId);
+      logger.info({ pathId }, 'Switched to branch path');
+    } catch (error) {
+      logger.error({ err: error, pathId }, 'Failed to switch to branch path');
+      throw error;
+    }
   };
 
   // Build versioned messages with branch previews
@@ -421,10 +530,27 @@ function PathContextMessageList({
                 disabled={isLoading}
               />
               <div className="mt-2 flex items-center justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={onEditCancel} disabled={isLoading}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    logPathMessageAction('edit-cancel', chain.latestId);
+                    onEditCancel();
+                  }}
+                  disabled={isLoading}
+                >
                   <X className="mr-1 h-4 w-4" /> Cancel
                 </Button>
-                <Button size="sm" onClick={onEditSubmit} disabled={isLoading || !editingContent.trim()}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    logPathMessageAction('edit-submit', chain.latestId, {
+                      contentLength: editingContent.length,
+                    });
+                    onEditSubmit();
+                  }}
+                  disabled={isLoading || !editingContent.trim()}
+                >
                   <PencilLine className="mr-1 h-4 w-4" /> Save edit
                 </Button>
               </div>
@@ -441,14 +567,28 @@ function PathContextMessageList({
               content={displayedMessage.content}
               metadata={metadata}
               messageId={displayedMessage.id}
-              onEdit={onEditRequest}
+              onEdit={
+                onEditRequest
+                  ? () => {
+                      logPathMessageAction('edit-request', displayedMessage.id);
+                      onEditRequest(displayedMessage.id);
+                    }
+                  : undefined
+              }
               onBranch={showBranchButtons ? (id) => handleBranch(id, displayedMessage.content) : undefined}
               showActions={showActions}
               isBranchPoint={baseMessage.isBranchPoint}
               branchedPaths={baseMessage.branchedToPaths}
               onViewBranch={handleViewBranch}
               isPinned={baseMessage.isPinned ?? false}
-              onTogglePin={onTogglePin}
+              onTogglePin={
+                onTogglePin
+                  ? (id, isPinned) => {
+                      logPathMessageAction('pin-toggle', displayedMessage.id, { isPinned });
+                      onTogglePin(id, isPinned);
+                    }
+                  : undefined
+              }
               versionCount={versionCount}
               currentVersionIndex={currentVersionIdx}
               versionTimestamp={new Date(displayedMessage.createdAt)}
