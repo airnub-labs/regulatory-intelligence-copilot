@@ -5,7 +5,7 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
-import { withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_SQL_TABLE } from '@opentelemetry/semantic-conventions';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
@@ -143,6 +143,8 @@ function resolveTenantAccess(input: { tenantAccess?: TenantAccess }) {
   return 'view';
 }
 
+const baseConversationLogger = createLogger('ConversationStore');
+
 export function effectiveShareAudience(record: ConversationRecord) {
   if (record.authorizationModel === 'supabase_rbac') return record.shareAudience;
   return record.authorizationSpec?.fallbackShareAudience ?? 'private';
@@ -171,6 +173,7 @@ function canWrite(record: ConversationRecord, userId?: string | null, role?: 'us
 export class InMemoryConversationStore implements ConversationStore {
   private conversations = new Map<string, ConversationRecord>();
   private messages = new Map<string, ConversationMessage[]>();
+  private logger = baseConversationLogger.child({ store: 'memory' });
 
   async createConversation(input: {
     tenantId: string;
@@ -192,6 +195,13 @@ export class InMemoryConversationStore implements ConversationStore {
     const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
     const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
     const authorizationSpec = input.authorizationSpec ?? {};
+    this.logger.info('Creating in-memory conversation', {
+      conversationId: id,
+      tenantId: input.tenantId,
+      userId: input.userId,
+      shareAudience,
+      tenantAccess,
+    });
     this.conversations.set(id, {
       id,
       tenantId: input.tenantId,
@@ -234,6 +244,12 @@ export class InMemoryConversationStore implements ConversationStore {
     if (!canWrite(record, input.userId, input.role)) {
       throw new Error('User not authorised for conversation');
     }
+    this.logger.info('Appending message in-memory', {
+      conversationId: input.conversationId,
+      tenantId: input.tenantId,
+      role: input.role,
+      userId: input.userId,
+    });
     const message: ConversationMessage = {
       id: randomUUID(),
       role: input.role,
@@ -279,6 +295,12 @@ export class InMemoryConversationStore implements ConversationStore {
     }
 
     const target = existing[targetIndex];
+    this.logger.info('Soft deleting message in-memory', {
+      conversationId: input.conversationId,
+      tenantId: input.tenantId,
+      messageId: input.messageId,
+      supersededBy: input.supersededBy,
+    });
     existing[targetIndex] = {
       ...target,
       deletedAt: new Date(),
@@ -410,6 +432,7 @@ export class InMemoryConversationStore implements ConversationStore {
 
 export class InMemoryConversationContextStore implements ConversationContextStore {
   private contexts = new Map<string, ConversationContext>();
+  private logger = baseConversationLogger.child({ store: 'memory', entity: 'context' });
 
   private key(identity: ConversationIdentity) {
     return `${identity.tenantId}:${identity.conversationId}`;
@@ -420,6 +443,11 @@ export class InMemoryConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
+    this.logger.info('Saving conversation context', {
+      conversationId: identity.conversationId,
+      tenantId: identity.tenantId,
+      activeNodeCount: ctx.activeNodeIds?.length ?? 0,
+    });
     this.contexts.set(this.key(identity), {
       activeNodeIds: ctx.activeNodeIds ?? [],
       traceId: ctx.traceId,
@@ -433,6 +461,12 @@ export class InMemoryConversationContextStore implements ConversationContextStor
   ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
+    this.logger.info('Merging active node ids', {
+      conversationId: identity.conversationId,
+      tenantId: identity.tenantId,
+      added: nodeIds.length,
+      total: merged.length,
+    });
     await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
   }
 }
@@ -527,6 +561,7 @@ function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage
 
 export class SupabaseConversationStore implements ConversationStore {
   private readonly internalClient: SupabaseLikeClient;
+  private logger = baseConversationLogger.child({ store: 'supabase' });
 
   constructor(private client: SupabaseLikeClient, internalClient?: SupabaseLikeClient) {
     this.internalClient = internalClient ?? client;
@@ -593,6 +628,12 @@ export class SupabaseConversationStore implements ConversationStore {
         const tenantAccess = resolveTenantAccess({ tenantAccess: input.tenantAccess });
         const authorizationModel = input.authorizationModel ?? 'supabase_rbac';
         const authorizationSpec = input.authorizationSpec ?? {};
+        this.logger.info('Creating Supabase conversation', {
+          tenantId: input.tenantId,
+          userId: input.userId,
+          shareAudience,
+          tenantAccess,
+        });
 
         const { data, error } = await this.internalClient
           .from('conversations')
@@ -686,6 +727,13 @@ export class SupabaseConversationStore implements ConversationStore {
         if (!canWrite(conversation, input.userId, input.role)) {
           throw new Error('User not authorised for conversation');
         }
+
+        this.logger.info('Appending Supabase conversation message', {
+          conversationId: input.conversationId,
+          tenantId: input.tenantId,
+          role: input.role,
+          userId: input.userId,
+        });
 
         // Use explicit pathId if provided, otherwise ensure conversation has an active path
         let pathId = input.pathId ?? conversation.activePathId;
@@ -805,6 +853,13 @@ export class SupabaseConversationStore implements ConversationStore {
         if (!canWrite(conversation, input.userId)) {
           throw new Error('User not authorised for conversation');
         }
+
+        this.logger.info('Soft deleting Supabase conversation message', {
+          conversationId: input.conversationId,
+          tenantId: input.tenantId,
+          messageId: input.messageId,
+          supersededBy: input.supersededBy,
+        });
 
         const messageLookup = (await this.client
           .from('conversation_messages_view')
@@ -1026,6 +1081,7 @@ export class SupabaseConversationStore implements ConversationStore {
 
 export class SupabaseConversationContextStore implements ConversationContextStore {
   private readonly internalClient: SupabaseLikeClient;
+  private logger = baseConversationLogger.child({ store: 'supabase', entity: 'context' });
 
   constructor(private client: SupabaseLikeClient, internalClient?: SupabaseLikeClient) {
     this.internalClient = internalClient ?? client;
@@ -1052,6 +1108,11 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   }
 
   async save(identity: ConversationIdentity, ctx: ConversationContext): Promise<void> {
+    this.logger.info('Saving Supabase conversation context', {
+      conversationId: identity.conversationId,
+      tenantId: identity.tenantId,
+      activeNodeCount: ctx.activeNodeIds?.length ?? 0,
+    });
     await withSpan(
       'db.supabase.mutation',
       {
@@ -1087,6 +1148,12 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
+    this.logger.info('Merging Supabase active node ids', {
+      conversationId: identity.conversationId,
+      tenantId: identity.tenantId,
+      added: nodeIds.length,
+      total: merged.length,
+    });
     await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
   }
 }

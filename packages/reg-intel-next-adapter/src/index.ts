@@ -56,10 +56,11 @@ import {
 } from '@reg-copilot/reg-intel-conversations';
 import { createClient } from '@supabase/supabase-js';
 import neo4j, { type Driver } from 'neo4j-driver';
-import { createTracingFetch } from '@reg-copilot/reg-intel-observability';
+import { createLogger, createTracingFetch, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { trace } from '@opentelemetry/api';
 
 const DEFAULT_DISCLAIMER_KEY = 'non_advice_research_tool';
+const adapterLogger = createLogger('NextAdapter');
 
 export interface ChatRouteHandlerOptions {
   tenantId?: string;
@@ -291,9 +292,13 @@ function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
   return 'auto';
 }
 
+const conversationStoreLogger = adapterLogger.child({ component: 'conversation-store' });
+const graphLogger = adapterLogger.child({ component: 'graph-write' });
+const chatRouteLogger = adapterLogger.child({ route: 'chat' });
+const toolRegistryLogger = adapterLogger.child({ component: 'tool-registry' });
+
   function logConversationStore(mode: string, message: string, payload?: Record<string, unknown>) {
-    const context = payload ? ` ${JSON.stringify(payload)}` : '';
-    console.info(`[conversation-store:${mode}] ${message}${context}`);
+    conversationStoreLogger.info(message, { mode, ...(payload ?? {}) });
   }
 
 async function validateSupabaseHealth(client: ReturnType<typeof createClient>) {
@@ -390,7 +395,7 @@ type GraphWriteDependencies = {
 function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencies | null {
   const graphWriteMode = resolveGraphWriteMode();
   if (graphWriteMode === 'memory') {
-    console.info(
+    graphLogger.info(
       'Graph write path disabled: COPILOT_GRAPH_WRITE_MODE is set to memory. Concept capture will use in-memory fallbacks only.',
     );
     return null;
@@ -406,7 +411,7 @@ function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencie
       graphWriteMode === 'memgraph'
         ? 'Graph write mode is set to memgraph but MEMGRAPH_URI/MEMGRAPH_URL is missing.'
         : 'MEMGRAPH_URI (or MEMGRAPH_URL) is not configured. Set MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD in your deployment to enable concept capture.';
-    console.warn(`Graph write path disabled: ${hint}`);
+    graphLogger.warn(`Graph write path disabled: ${hint}`);
     return null;
   }
 
@@ -418,12 +423,12 @@ function resolveGraphWriteDependencies(tenantId?: string): GraphWriteDependencie
   driver
     .verifyConnectivity()
     .then(() => {
-      console.info(`Graph write dependencies verified for ${uri}`);
-    })
+        graphLogger.info('Graph write dependencies verified', { uri });
+      })
     .catch(error => {
-      console.warn(
+      graphLogger.warn(
         'Graph write connectivity check failed; concept capture will be disabled unless configuration is fixed.',
-        error,
+        { error }
       );
     });
   const graphWriteService = createGraphWriteService({
@@ -552,14 +557,14 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   const conversationStoreReady = readinessCheck?.();
   const eventHub = options?.eventHub ?? new ConversationEventHub();
   const conversationListHub = options?.conversationListEventHub ?? new ConversationListEventHub();
-  const graphDeps = (() => {
-    try {
-      return resolveGraphWriteDependencies(options?.tenantId);
-    } catch (error) {
-      console.warn('Graph write service unavailable; falling back to read-only mode', error);
-      return null;
-    }
-  })();
+    const graphDeps = (() => {
+      try {
+        return resolveGraphWriteDependencies(options?.tenantId);
+      } catch (error) {
+        graphLogger.warn('Graph write service unavailable; falling back to read-only mode', { error });
+        return null;
+      }
+    })();
   const graphWarning = graphDeps
     ? undefined
     : 'Concept capture is disabled: configure MEMGRAPH_URI, MEMGRAPH_USERNAME, and MEMGRAPH_PASSWORD to persist captured concepts to Memgraph.';
@@ -643,161 +648,178 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
       const traceContext = resolveTraceContext(incomingTraceContext);
 
       // Validate profile if provided
-      if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
-        return new Response('Invalid profile format', { status: 400 });
-      }
+        if (profile !== undefined && (typeof profile !== 'object' || profile === null)) {
+          return new Response('Invalid profile format', { status: 400 });
+        }
 
-      const tenantId = body.tenantId ?? options?.tenantId ?? 'default';
+        const tenantId = body.tenantId ?? options?.tenantId ?? 'default';
+        const routeLogger = chatRouteLogger.child({ tenantId, userId });
 
-      const sanitizeIncomingMessages = Array.isArray(messages)
-        ? sanitizeMessages(messages as Array<{ role: string; content: string }>)
-        : [];
+        const sanitizeIncomingMessages = Array.isArray(messages)
+          ? sanitizeMessages(messages as Array<{ role: string; content: string }>)
+          : [];
       const incomingMessageContent =
-        typeof message === 'string'
-          ? message
-          : sanitizeIncomingMessages.filter(m => m.role === 'user').pop()?.content;
-      if (!incomingMessageContent) {
-        return new Response('No message provided', { status: 400 });
-      }
-
-      let conversationId = requestConversationId as string | undefined;
-      if (!conversationId) {
-        const created = await conversationStore.createConversation({
-          tenantId,
-          userId,
-          traceId: traceContext.traceId,
-          rootSpanId: traceContext.rootSpanId,
-          rootSpanName: traceContext.rootSpanName,
-          personaId: normalizedProfile?.personaType,
-          jurisdictions: normalizedProfile?.jurisdictions,
-          title: typeof title === 'string' ? title : undefined,
-          shareAudience: shareAudience as ShareAudience | undefined,
-          tenantAccess: tenantAccess as TenantAccess | undefined,
-          authorizationModel: authorizationModel as AuthorizationModel | undefined,
-          authorizationSpec: authorizationSpec as AuthorizationSpec | undefined,
-        });
-        conversationId = created.conversationId;
-      }
-
-      const conversationRecord = await conversationStore.getConversation({
-        tenantId,
-        conversationId,
-        userId,
-      });
-
-      if (!conversationRecord) {
-        return new Response('Conversation not found or access denied', { status: 404 });
-      }
-
-      // Get or create execution context for this path (if ExecutionContextManager configured)
-      let toolRegistry: ToolRegistry | undefined;
-
-      if (options?.executionContextManager && conversationRecord.activePathId) {
-        try {
-          const contextResult = await options.executionContextManager.getOrCreateContext({
-            tenantId,
-            conversationId,
-            pathId: conversationRecord.activePathId,
-          });
-
-          // Cast sandbox to llm package's E2BSandbox type for compatibility
-          const sandbox = contextResult.sandbox as unknown as E2BSandbox;
-
-          // Create tool registry with the sandbox
-          toolRegistry = new ToolRegistry({
-            sandbox,
-            logger: {
-              info: (msg: string, meta?: unknown) => console.info(`[ToolRegistry] ${msg}`, meta),
-              error: (msg: string, meta?: unknown) => console.error(`[ToolRegistry] ${msg}`, meta),
-            },
-          });
-
-          console.info('[ChatHandler] Execution context ready', {
-            pathId: conversationRecord.activePathId,
-            sandboxId: sandbox.sandboxId,
-            wasCreated: contextResult.wasCreated,
-            toolsRegistered: toolRegistry.getToolNames(),
-          });
-        } catch (error) {
-          console.error('[ChatHandler] Failed to setup execution context', error);
-          // Continue without code execution tools if setup fails
+          typeof message === 'string'
+            ? message
+            : sanitizeIncomingMessages.filter(m => m.role === 'user').pop()?.content;
+        if (!incomingMessageContent) {
+          return new Response('No message provided', { status: 400 });
         }
-      }
 
-      const existingMessages = await conversationStore.getMessages({
-        tenantId,
-        conversationId,
-        userId,
-        limit: 50,
-      });
+        return requestContext.run(
+          { tenantId, userId, conversationId: requestConversationId as string | undefined },
+          async () => {
+            routeLogger.info('Handling chat request', {
+              conversationId: requestConversationId,
+            });
 
-      const activeMessages = existingMessages.filter(msg => {
-        const metadataDeleted = Boolean((msg.metadata as { deletedAt?: unknown } | undefined)?.deletedAt);
-        return !msg.deletedAt && !metadataDeleted;
-      });
+            let conversationId = requestConversationId as string | undefined;
+            if (!conversationId) {
+              const created = await conversationStore.createConversation({
+                tenantId,
+                userId,
+                traceId: traceContext.traceId,
+                rootSpanId: traceContext.rootSpanId,
+                rootSpanName: traceContext.rootSpanName,
+                personaId: normalizedProfile?.personaType,
+                jurisdictions: normalizedProfile?.jurisdictions,
+                title: typeof title === 'string' ? title : undefined,
+                shareAudience: shareAudience as ShareAudience | undefined,
+                tenantAccess: tenantAccess as TenantAccess | undefined,
+                authorizationModel: authorizationModel as AuthorizationModel | undefined,
+                authorizationSpec: authorizationSpec as AuthorizationSpec | undefined,
+              });
+              conversationId = created.conversationId;
+              requestContext.set({ tenantId, userId, conversationId });
+              routeLogger.info('Created new conversation', { conversationId });
+            }
 
-      // Validate replaceMessageId if provided
-      let editIndex = -1;
-      if (replaceMessageId) {
-        editIndex = activeMessages.findIndex(msg => msg.id === replaceMessageId);
-        const messageToReplace = activeMessages[editIndex];
-        if (!messageToReplace) {
-          return new Response('Message to replace not found', { status: 404 });
-        }
-        if (messageToReplace.role !== 'user') {
-          return new Response('Only user messages can be replaced', { status: 400 });
-        }
-      }
+            if (conversationId) {
+              requestContext.set({ tenantId, userId, conversationId });
+              routeLogger.info('Conversation resolved', { conversationId });
+            }
 
-      // Build message history for LLM:
-      // - If editing (replaceMessageId exists): include only messages BEFORE the edited message
-      // - If not editing: include all active messages
-      // This creates a branch effect when editing mid-conversation
-      const messagesToInclude = editIndex >= 0
-        ? activeMessages.slice(0, editIndex)
-        : activeMessages;
+            const conversationRecord = await conversationStore.getConversation({
+              tenantId,
+              conversationId,
+              userId,
+            });
 
-      const sanitizedMessages = [
-        ...messagesToInclude.map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
-        { role: 'user', content: incomingMessageContent } as ChatMessage,
-      ];
-      const { messageId: appendedMessageId } = await conversationStore.appendMessage({
-        tenantId,
-        conversationId,
-        role: 'user',
-        content: incomingMessageContent,
-        userId,
-        traceId: traceContext.traceId,
-        rootSpanId: traceContext.rootSpanId,
-        rootSpanName: traceContext.rootSpanName,
-        metadata: normalizedProfile ? { profile: normalizedProfile } : undefined,
-      });
+            if (!conversationRecord) {
+              return new Response('Conversation not found or access denied', { status: 404 });
+            }
 
-      const conversationAfterUser = await conversationStore.getConversation({
-        tenantId,
-        conversationId,
-        userId,
-      });
+            // Get or create execution context for this path (if ExecutionContextManager configured)
+            let toolRegistry: ToolRegistry | undefined;
 
-      if (conversationAfterUser && !conversationAfterUser.title) {
-        const generatedTitle = generateConversationTitle(incomingMessageContent);
-        await conversationStore.updateSharing({
-          tenantId,
-          conversationId,
-          userId,
-          title: generatedTitle,
-        });
-      }
+            if (options?.executionContextManager && conversationRecord.activePathId) {
+              try {
+                const contextResult = await options.executionContextManager.getOrCreateContext({
+                  tenantId,
+                  conversationId,
+                  pathId: conversationRecord.activePathId,
+                });
 
-      const refreshedConversation = await conversationStore.getConversation({
-        tenantId,
-        conversationId,
-        userId,
-      });
+                // Cast sandbox to llm package's E2BSandbox type for compatibility
+                const sandbox = contextResult.sandbox as unknown as E2BSandbox;
 
-      if (refreshedConversation) {
-        notifyListSubscribers(tenantId, 'upsert', refreshedConversation);
-      }
+                // Create tool registry with the sandbox
+                toolRegistry = new ToolRegistry({
+                  sandbox,
+                  logger: {
+                    info: (msg: string, meta?: unknown) =>
+                      toolRegistryLogger.info(msg, meta as Record<string, unknown> | undefined),
+                    error: (msg: string, meta?: unknown) =>
+                      toolRegistryLogger.error(msg, meta as Record<string, unknown> | undefined),
+                  },
+                });
+
+                chatRouteLogger.info('Execution context ready', {
+                  pathId: conversationRecord.activePathId,
+                  sandboxId: sandbox.sandboxId,
+                  wasCreated: contextResult.wasCreated,
+                  toolsRegistered: toolRegistry.getToolNames(),
+                });
+              } catch (error) {
+                chatRouteLogger.error('Failed to setup execution context', { error });
+                // Continue without code execution tools if setup fails
+              }
+            }
+
+            const existingMessages = await conversationStore.getMessages({
+              tenantId,
+              conversationId,
+              userId,
+              limit: 50,
+            });
+
+            const activeMessages = existingMessages.filter(msg => {
+              const metadataDeleted = Boolean((msg.metadata as { deletedAt?: unknown } | undefined)?.deletedAt);
+              return !msg.deletedAt && !metadataDeleted;
+            });
+
+            // Validate replaceMessageId if provided
+            let editIndex = -1;
+            if (replaceMessageId) {
+              editIndex = activeMessages.findIndex(msg => msg.id === replaceMessageId);
+              const messageToReplace = activeMessages[editIndex];
+              if (!messageToReplace) {
+                return new Response('Message to replace not found', { status: 404 });
+              }
+              if (messageToReplace.role !== 'user') {
+                return new Response('Only user messages can be replaced', { status: 400 });
+              }
+            }
+
+            // Build message history for LLM:
+            // - If editing (replaceMessageId exists): include only messages BEFORE the edited message
+            // - If not editing: include all active messages
+            // This creates a branch effect when editing mid-conversation
+            const messagesToInclude = editIndex >= 0
+              ? activeMessages.slice(0, editIndex)
+              : activeMessages;
+
+            const sanitizedMessages = [
+              ...messagesToInclude.map(msg => ({ role: msg.role, content: msg.content } as ChatMessage)),
+              { role: 'user', content: incomingMessageContent } as ChatMessage,
+            ];
+            const { messageId: appendedMessageId } = await conversationStore.appendMessage({
+              tenantId,
+              conversationId,
+              role: 'user',
+              content: incomingMessageContent,
+              userId,
+              traceId: traceContext.traceId,
+              rootSpanId: traceContext.rootSpanId,
+              rootSpanName: traceContext.rootSpanName,
+              metadata: normalizedProfile ? { profile: normalizedProfile } : undefined,
+            });
+
+            const conversationAfterUser = await conversationStore.getConversation({
+              tenantId,
+              conversationId,
+              userId,
+            });
+
+            if (conversationAfterUser && !conversationAfterUser.title) {
+              const generatedTitle = generateConversationTitle(incomingMessageContent);
+              await conversationStore.updateSharing({
+                tenantId,
+                conversationId,
+                userId,
+                title: generatedTitle,
+              });
+            }
+
+            const refreshedConversation = await conversationStore.getConversation({
+              tenantId,
+              conversationId,
+              userId,
+            });
+
+            if (refreshedConversation) {
+              notifyListSubscribers(tenantId, 'upsert', refreshedConversation);
+            }
 
       // When editing a message, soft-delete the edited message and all subsequent messages
       // This creates a clean branch from the edit point
@@ -886,6 +908,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             })) {
               if (chunk.type === 'metadata') {
                 // Send metadata with agent info, jurisdictions, and referenced nodes
+                requestContext.set({ agentId: chunk.metadata!.agentUsed });
                 const metadata = buildMetadataChunk({
                   agentId: chunk.metadata!.agentUsed,
                   jurisdictions: chunk.metadata!.jurisdictions,
@@ -975,14 +998,17 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
         },
       });
 
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream; charset=utf-8',
-          Connection: 'keep-alive',
-          'Cache-Control': 'no-cache, no-transform',
-        },
-      });
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            Connection: 'keep-alive',
+            'Cache-Control': 'no-cache, no-transform',
+          },
+        });
+          }
+        );
     } catch (error) {
+      routeLogger.error('Chat route failed', { error });
       const message = error instanceof Error ? error.message : 'Unknown error';
       const stream = new ReadableStream({
         start(controller) {

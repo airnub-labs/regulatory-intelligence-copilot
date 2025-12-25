@@ -20,6 +20,7 @@
  * - Egress control settings
  */
 
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
 import {
@@ -648,6 +649,7 @@ export class LlmRouter implements LlmClient {
   private defaultModel: string;
   private egressClient: EgressClient;
   private egressDefaultMode: EgressMode;
+  private logger = createLogger('LlmRouter');
 
   constructor(
     providers: LlmProviderRegistry,
@@ -678,6 +680,36 @@ export class LlmRouter implements LlmClient {
       options
     );
 
+    const contextualLogger = this.logger.child({
+      task: options?.task ?? 'main-chat',
+      provider,
+      model,
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+    });
+
+    contextualLogger.info('Routing streaming chat request through LlmRouter', {
+      egressMode: {
+        requested: requestedMode ?? this.egressDefaultMode,
+        effective: effectiveMode,
+      },
+    });
+
+    const contextualLogger = this.logger.child({
+      task: options?.task ?? 'main-chat',
+      provider,
+      model,
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+    });
+
+    contextualLogger.info('Routing chat request through LlmRouter', {
+      egressMode: {
+        requested: requestedMode ?? this.egressDefaultMode,
+        effective: effectiveMode,
+      },
+    });
+
     const response = await this.egressClient.guardAndExecute(
       {
         target: 'llm',
@@ -703,6 +735,8 @@ export class LlmRouter implements LlmClient {
           throw new LlmError(`Unknown provider: ${provider}`);
         }
 
+        contextualLogger.info('Executing provider chat request');
+
         return providerClient.chat(
           payload.messages,
           payload.model,
@@ -716,6 +750,7 @@ export class LlmRouter implements LlmClient {
     if (effectiveMode !== 'off') {
       const sanitizationContext = options?.responseSanitization ?? 'chat';
       if (sanitizationContext !== 'off') {
+        contextualLogger.info('Sanitizing chat response for egress safety');
         return sanitizeTextForEgress(response, {
           context: sanitizationContext,
           ...options?.sanitizationOptions,
@@ -723,6 +758,7 @@ export class LlmRouter implements LlmClient {
       }
     }
 
+    contextualLogger.info('Returning chat response from LlmRouter');
     return response;
   }
 
@@ -768,6 +804,8 @@ export class LlmRouter implements LlmClient {
           throw new LlmError(`Provider ${provider} does not support streaming`);
         }
 
+        contextualLogger.info('Executing provider streaming chat request');
+
         return providerClient.streamChat(
           payload.messages,
           payload.model,
@@ -796,6 +834,7 @@ export class LlmRouter implements LlmClient {
         }
       }
     } catch (error) {
+      contextualLogger.error('Streaming chat failed', { error });
       yield {
         type: 'error',
         error: error instanceof Error ? error : new Error(String(error)),
@@ -902,6 +941,13 @@ export class LlmRouter implements LlmClient {
     if (options?.model) {
       model = options.model;
     }
+
+    this.logger.info('Resolved provider and model for request', {
+      provider,
+      model,
+      tenantId,
+      task,
+    });
 
     return { provider, model, taskOptions, tenantPolicy: policy };
   }

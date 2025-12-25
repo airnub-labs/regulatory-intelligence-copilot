@@ -13,6 +13,7 @@ import {
   type E2BClient,
 } from '@reg-copilot/reg-intel-conversations';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 // Import E2B Sandbox type - use dynamic import to avoid hard dependency
 type E2BSandboxType = {
@@ -29,6 +30,8 @@ type E2BSandboxConstructor = {
   create: (opts?: { apiKey?: string; timeoutMs?: number }) => Promise<E2BSandboxType>;
   reconnect: (sandboxId: string, opts?: { apiKey?: string }) => Promise<E2BSandboxType>;
 };
+
+const executionContextLogger = createLogger('ExecutionContextAdapter');
 
 /**
  * E2B client adapter that wraps the @e2b/code-interpreter Sandbox class
@@ -176,11 +179,9 @@ export function createExecutionContextManager(
   const store = resolveExecutionContextStore(config);
   const e2bClient = new E2BSandboxClient(config.e2bApiKey);
 
-  const logger = config.enableLogging ? {
-    info: (msg: string, meta?: unknown) => console.info(`[ExecutionContextManager] ${msg}`, meta),
-    warn: (msg: string, meta?: unknown) => console.warn(`[ExecutionContextManager] ${msg}`, meta),
-    error: (msg: string, meta?: unknown) => console.error(`[ExecutionContextManager] ${msg}`, meta),
-  } : undefined;
+  const logger = config.enableLogging
+    ? executionContextLogger.child({ feature: 'manager' })
+    : undefined;
 
   return new ExecutionContextManager({
     store,
@@ -214,7 +215,7 @@ let singletonManager: ExecutionContextManager | null = null;
  */
 export function initializeExecutionContextManager(config: ExecutionContextConfig): void {
   if (singletonManager) {
-    console.warn('[ExecutionContext] Manager already initialized, replacing existing instance');
+    executionContextLogger.warn('Manager already initialized, replacing existing instance');
   }
   singletonManager = createExecutionContextManager(config);
 }
