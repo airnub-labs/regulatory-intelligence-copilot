@@ -14,6 +14,7 @@ This plan focuses on end-to-end request correlation for the `/api/chat` entrypoi
 - Provide distributed traces across packages and services (Next.js API routes, core engine, graph/LLM clients, E2B MCP gateway).
 - Keep zero-PPII logging posture; redact message bodies by default and rely on existing egress guard sanitization for payload mirrors.
 - Persist trace linkage data everywhere conversation state is stored: `trace_id`, `root_span_id`, and `root_span_name` must be written to conversation rows, message rows, and conversation context rows on every write path so downstream runbooks can pivot from the database to the trace view.
+ - Persist trace linkage data everywhere conversation state is stored: `trace_id`, `root_span_id`, and `root_span_name` must be written to conversation rows, message rows, and conversation context rows on every write path so downstream runbooks can pivot from the database to the trace view. Treat this as a **hard contract**—any new persistence layer or helper that saves chat artifacts needs the same fields so new coding agents cannot regress the linkage.
 
 ## Recommended stack
 - **Tracing & metrics:** OpenTelemetry SDK for Node 24 (`@opentelemetry/sdk-node`) with the built-in **AsyncLocalStorage context manager**. Use **OTLP/HTTP exporter** into an OpenTelemetry Collector. Enable instrumentations for `http`, `fetch/undici`, `next`, and `@opentelemetry/instrumentation-graphql` only if the stack adds GraphQL later; today the focus is on REST + MCP.
@@ -46,6 +47,12 @@ Instrument the main orchestration stages in `ComplianceEngine`:
   - `compliance.concept-capture` when handling `ToolStreamChunk` outputs.
 - Emit structured logs at **info** level on span boundaries (start/finish) and **warn/error** on failures, always enriched with trace IDs and the context bindings above.
 - When saving conversations/messages/context snapshots, lift the `trace_id`, `root_span_id`, and `root_span_name` from the active **root span** (not child spans) and persist them alongside the data. Background jobs must thread the parent trace instead of generating new trace IDs to keep the linkage intact.
+
+### 3a) Persistence guardrails (do not skip)
+- **Tables in scope:** `copilot_internal.conversations`, `copilot_internal.conversation_messages`, `copilot_internal.conversation_contexts`, and any new table that stores message/conversation derived state (e.g., summaries or scenario results).
+- **Fields required:** `trace_id`, `root_span_id`, `root_span_name` columns plus the `traceId` field inside message `metadata` JSON blobs; keep the relational and JSON values consistent.
+- **Source of truth:** The IDs must come from the **root span** created at `/api/chat` (or any new entrypoint). Do not generate a fresh span before writing.
+- **Code review checklist:** refuse changes that insert/update rows without setting the trace columns; ask for explicit OTEL context plumbing for background jobs and migrations; add tests/docs using the [trace runbook](./trace_runbook.md) to verify the linkage.
 
 ### 4) Graph and external calls
 - **Memgraph/Neo4j:** Wrap `neo4j-driver` sessions in `withSpan('db.memgraph.query', {database, type:'cypher'})` and inject the OTEL context via driver’s `session.run` wrapper. Use OTEL semantic conventions for database spans.
