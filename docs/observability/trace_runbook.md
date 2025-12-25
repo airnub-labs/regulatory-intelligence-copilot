@@ -10,6 +10,13 @@ Every request to `api.chat` creates or resumes a trace whose identifiers must be
 - **Messages** – persist the same trio of fields on every `conversation_messages` row created during the request. Message metadata already carries the `traceId`; keep that behaviour so downstream tools can correlate records even if someone exports the messages table.
 - **Context saves** – when merging active node IDs into `conversation_contexts`, set `trace_id` from the saving request so you can pivot from the most recent context snapshot into the trace that produced it.
 
+### Implementation checklist for new or updated code paths
+- **Always propagate the root span:** Thread the active OTEL context from `/api/chat` (or any future entrypoint) into the conversation store and context store. Do not spawn new traces for background saves; reuse the request’s parent trace so the `trace_id`/`root_span_*` values all match.
+- **Map to the correct columns:** The Postgres schema includes `trace_id`, `root_span_id`, and `root_span_name` on **all** of `copilot_internal.conversations`, `copilot_internal.conversation_messages`, and `copilot_internal.conversation_contexts`. Any insert/update that touches these tables must populate the fields from the current root span.
+- **Do not null-out existing trace data:** Update statements should retain prior trace metadata unless the active request is the one performing the append/save. Avoid `NULL` defaults or “partial updates” that skip these columns.
+- **Cover non-HTTP writers:** If a background worker, replay job, or migration script writes to these tables, inject the trace identifiers from the orchestrating span rather than leaving them blank. The linkage is required for auditability regardless of execution context.
+- **Keep telemetry and persistence aligned:** When adding new metadata to message `metadata` JSON blobs, maintain the existing `traceId` field and keep it consistent with the relational columns so future log correlation continues to work.
+
 If you add new entry points or background jobs that write to these tables, thread the active trace context through to the persistence calls instead of leaving the columns `NULL`.
 
 ## 1. Fetch the trace metadata for a conversation

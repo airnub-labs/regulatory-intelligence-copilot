@@ -13,6 +13,7 @@ This plan focuses on end-to-end request correlation for the `/api/chat` entrypoi
 - Emit structured logs that always carry `trace_id`, `span_id`, `tenantId`, `conversationId`, `userId`, and `agentId` when available.
 - Provide distributed traces across packages and services (Next.js API routes, core engine, graph/LLM clients, E2B MCP gateway).
 - Keep zero-PPII logging posture; redact message bodies by default and rely on existing egress guard sanitization for payload mirrors.
+- Persist trace linkage data everywhere conversation state is stored: `trace_id`, `root_span_id`, and `root_span_name` must be written to conversation rows, message rows, and conversation context rows on every write path so downstream runbooks can pivot from the database to the trace view.
 
 ## Recommended stack
 - **Tracing & metrics:** OpenTelemetry SDK for Node 24 (`@opentelemetry/sdk-node`) with the built-in **AsyncLocalStorage context manager**. Use **OTLP/HTTP exporter** into an OpenTelemetry Collector. Enable instrumentations for `http`, `fetch/undici`, `next`, and `@opentelemetry/instrumentation-graphql` only if the stack adds GraphQL later; today the focus is on REST + MCP.
@@ -44,6 +45,7 @@ Instrument the main orchestration stages in `ComplianceEngine`:
   - `compliance.egress.guard` for redaction decisions (counts + types only, not raw payloads).
   - `compliance.concept-capture` when handling `ToolStreamChunk` outputs.
 - Emit structured logs at **info** level on span boundaries (start/finish) and **warn/error** on failures, always enriched with trace IDs and the context bindings above.
+- When saving conversations/messages/context snapshots, lift the `trace_id`, `root_span_id`, and `root_span_name` from the active **root span** (not child spans) and persist them alongside the data. Background jobs must thread the parent trace instead of generating new trace IDs to keep the linkage intact.
 
 ### 4) Graph and external calls
 - **Memgraph/Neo4j:** Wrap `neo4j-driver` sessions in `withSpan('db.memgraph.query', {database, type:'cypher'})` and inject the OTEL context via driver’s `session.run` wrapper. Use OTEL semantic conventions for database spans.
