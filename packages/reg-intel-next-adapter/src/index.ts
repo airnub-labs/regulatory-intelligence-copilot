@@ -548,13 +548,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   // Lazy initialization to avoid build-time errors
   let llmRouter: LlmRouter | null = null;
   let complianceEngine: ComplianceEngine | null = null;
-  const {
-    conversationStore,
-    conversationContextStore,
-    warnings: conversationStoreWarnings,
-    readinessCheck,
-  } = resolveConversationStores(options);
-  const conversationStoreReady = readinessCheck?.();
+  let conversationStoreResolution: ConversationStoreResolution | null = null;
   const eventHub = options?.eventHub ?? new ConversationEventHub();
   const conversationListHub = options?.conversationListEventHub ?? new ConversationListEventHub();
     const graphDeps = (() => {
@@ -587,8 +581,16 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
     });
   };
 
+  const getConversationStores = () => {
+    if (!conversationStoreResolution) {
+      conversationStoreResolution = resolveConversationStores(options);
+    }
+    return conversationStoreResolution;
+  };
+
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
+      const { conversationContextStore } = getConversationStores();
       llmRouter = createDefaultLlmRouter();
       const llmClient = new LlmRouterClientAdapter(llmRouter);
       complianceEngine = createComplianceEngine({
@@ -607,8 +609,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
   };
 
   return async function POST(request: Request) {
-    if (conversationStoreReady) {
-      await conversationStoreReady;
+    const { conversationStore, readinessCheck, warnings: conversationStoreWarnings } = getConversationStores();
+    if (readinessCheck) {
+      await readinessCheck();
     }
     const { complianceEngine } = getOrCreateEngine();
     try {
