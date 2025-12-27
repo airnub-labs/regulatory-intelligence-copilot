@@ -40,11 +40,14 @@ export {
 // Components
 export {
   PathSelector,
+  PathBreadcrumbs,
   BranchButton,
   BranchDialog,
   MergeDialog,
   VersionNavigator,
   type PathSelectorProps,
+  type PathBreadcrumbsProps,
+  type NavigateOptions,
   type BranchButtonProps,
   type BranchDialogProps,
   type MergeDialogProps,
