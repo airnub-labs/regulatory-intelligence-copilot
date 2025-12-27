@@ -289,6 +289,23 @@ export function Message({
               You
               <span className="h-1 w-1 rounded-full bg-muted-foreground" />
               Trusted input
+              {hasBranches && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+                  <button
+                    onClick={() => onViewBranch?.(branchedPaths[0])}
+                    className="flex items-center gap-1 transition-colors hover:text-foreground"
+                    title={`This message has ${branchedPaths.length} branch${branchedPaths.length > 1 ? 'es' : ''}`}
+                  >
+                    <GitBranch className="h-3.5 w-3.5" />
+                    {branchedPaths.length > 1 && (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[9px] font-bold">
+                        {branchedPaths.length}
+                      </Badge>
+                    )}
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>

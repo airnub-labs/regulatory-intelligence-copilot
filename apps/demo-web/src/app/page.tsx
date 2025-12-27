@@ -289,6 +289,30 @@ export default function Home() {
   const isTitleDirty = conversationTitle !== savedConversationTitle
   const pathApiClient = useMemo(() => getPathApiClient(), [])
 
+  // Read URL parameters for conversation and path
+  const getUrlParams = useCallback(() => {
+    if (typeof window === 'undefined') return { conversationId: null, pathId: null }
+    const params = new URLSearchParams(window.location.search)
+    return {
+      conversationId: params.get('conversationId'),
+      pathId: params.get('pathId'),
+    }
+  }, [])
+
+  // Update URL with current conversation and path
+  const updateUrl = useCallback((convId: string | undefined, pathId?: string | null) => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams()
+    if (convId) {
+      params.set('conversationId', convId)
+      if (pathId) {
+        params.set('pathId', pathId)
+      }
+    }
+    const newUrl = params.toString() ? `?${params.toString()}` : '/'
+    window.history.replaceState({}, '', newUrl)
+  }, [])
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const editTextareaRef = useRef<HTMLTextAreaElement>(null)
   const prevMessageCountRef = useRef(0)
@@ -399,6 +423,41 @@ export default function Home() {
   useEffect(() => {
     loadConversations(conversationListTab)
   }, [loadConversations, conversationListTab])
+
+  // Load conversation and path from URL parameters on mount
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const { conversationId: urlConvId, pathId: urlPathId } = getUrlParams()
+
+    if (urlConvId) {
+      loadConversation(urlConvId).then(async () => {
+        // If a pathId is specified in URL, set it as active
+        if (urlPathId) {
+          try {
+            await fetch(`/api/conversations/${urlConvId}/active-path`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ pathId: urlPathId }),
+            })
+            // Reload to get messages from the specified path
+            await loadConversation(urlConvId)
+            telemetry.info({ conversationId: urlConvId, pathId: urlPathId }, 'Loaded conversation with specific path from URL')
+          } catch (error) {
+            telemetry.error({ err: error, conversationId: urlConvId, pathId: urlPathId }, 'Failed to set path from URL')
+          }
+        }
+      })
+    }
+  }, [isAuthenticated, getUrlParams, loadConversation, telemetry])
+
+  // Update URL when conversation changes
+  useEffect(() => {
+    if (conversationId) {
+      updateUrl(conversationId)
+    }
+  }, [conversationId, updateUrl])
 
   // Only scroll when a new message is added
   useEffect(() => {
@@ -981,6 +1040,9 @@ export default function Home() {
           body: JSON.stringify({ pathId: newPath.id }),
         })
 
+        // Update URL with new path
+        updateUrl(conversationId, newPath.id)
+
         // Reload conversation to show messages from the new branch
         await loadConversation(conversationId)
 
@@ -1075,6 +1137,8 @@ export default function Home() {
     setEditingMessageId(null)
     setEditingContent('')
     setInput('')
+    // Clear URL when starting new conversation
+    updateUrl(undefined)
     setConversationListTab('active')
   }
 
@@ -1173,9 +1237,10 @@ export default function Home() {
                   <PathToolbar
                     compact
                     className="mr-2"
-                    onPathSwitch={() => {
-                      // Reload conversation when path is switched
+                    onPathSwitch={(path) => {
+                      // Update URL with new path and reload conversation
                       if (conversationId) {
+                        updateUrl(conversationId, path.id)
                         loadConversation(conversationId)
                       }
                     }}

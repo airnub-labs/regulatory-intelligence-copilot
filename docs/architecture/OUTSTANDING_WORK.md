@@ -283,37 +283,43 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 3.4 MEDIUM: UI Improvements Pending (Path Integration)
+### 3.4 MEDIUM: UI Improvements Pending (Path Integration) ✅ COMPLETED
 
 **Priority**: MEDIUM (UX Enhancement)
-**Effort**: 4-6 hours
+**Effort**: 4-6 hours (Actual: ~2 hours)
 **Reference**: `docs/development/UI_IMPROVEMENTS_PENDING.md`
+**Completed**: 2025-12-27
 
-**Description**: Two UI improvements require deeper integration with the path system.
+**Description**: UI improvements for better path system integration.
 
-**Current State**:
+**Completed Implementation**:
 - ✅ Path system fully wired and functional
 - ✅ Branch buttons appear on hover
-- ⚠️ Message version display uses legacy `supersededBy` pattern
-- ⚠️ Branch indicator icons could be more prominent
+- ✅ Persistent branch indicator badges in message headers
+- ✅ URL parameter tracking for paths (`?conversationId=xxx&pathId=yyy`)
+- ✅ Shareable URLs for specific paths
+- ⚠️ Message version display still uses legacy `supersededBy` pattern (deferred)
 
-**Enhancement Opportunities**:
+**Implemented Features**:
 
-1. **Message Version Display - Complete Path View**
-   - Current: Shows all versions in sequence
-   - Enhanced: Show entire conversation path as it existed at that version
-   - Requires: Replace `buildVersionedMessages()` with path-based resolution
+1. **Branch Indicator Icon Enhancement** ✅
+   - Persistent GitBranch icon in message header when `isBranchPoint = true`
+   - Always visible (not just on hover)
+   - Badge with branch count for multiple branches
+   - Clickable to open first branch
 
-2. **Branch Indicator Icon Enhancement**
-   - Current: Basic branch button on hover
-   - Enhanced: Persistent GitBranch icon on messages with `isBranchPoint = true`
-   - Show badge with branch count if multiple branches exist
+2. **URL Path Tracking** ✅
+   - Read conversationId and pathId from URL on page load
+   - Update URL when switching paths or creating branches
+   - URL format: `/?conversationId=xxx&pathId=yyy`
+   - Browser back/forward navigation support
+   - Shareable URLs that preserve path context
 
 **Tasks**:
 
-- [ ] **Task UI.1**: Enhance message version display with path context
-- [ ] **Task UI.2**: Add persistent branch indicator badges to Message component
-- [ ] **Task UI.3**: Track active path in URL with `?pathId=xxx` parameter
+- [x] **Task UI.2**: Add persistent branch indicator badges to Message component ✅
+- [x] **Task UI.3**: Track active path in URL with `?pathId=xxx` parameter ✅
+- [ ] **Task UI.1**: Enhance message version display with path context (Deferred)
 
 ---
 
@@ -497,6 +503,18 @@ Branch navigation with preview cards fully functional.
 - ✅ `PathToolbar` rendered
 - ✅ Branch buttons visible on hover
 
+### 5.15 UI Path Improvements ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ Persistent branch indicator badges in message headers
+- ✅ GitBranch icon always visible when `isBranchPoint = true`
+- ✅ Branch count badge for multiple branches
+- ✅ URL parameter tracking (`?conversationId=xxx&pathId=yyy`)
+- ✅ Shareable URLs for specific conversation paths
+- ✅ Browser back/forward navigation support
+- ✅ URL updates on path switching and branch creation
+
 ---
 
 ## 6. Implementation Priority Order
@@ -519,7 +537,7 @@ Branch navigation with preview cards fully functional.
 | 3.1 API Integration Tests | MEDIUM | 1-2 days | None |
 | 3.2 Package Test Coverage | MEDIUM | 2-3 days | None |
 | 3.3 Observability Scalability | MEDIUM | 8-16 hours | None |
-| 3.4 UI Path Improvements | MEDIUM | 4-6 hours | None |
+| ~~3.4 UI Path Improvements~~ | ~~MEDIUM~~ | ~~4-6 hours~~ | ✅ **COMPLETED** |
 
 ### Phase C: Polish (Deferred)
 
@@ -661,7 +679,7 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 2-3 weeks (Scenario Engine) |
-| MEDIUM | 4 | 4-6 days (Tests, Observability, UI) |
+| MEDIUM | 3 | 3-4 days (Tests, Observability) |
 | LOW | 4 | 2-3 weeks |
 
 ### Critical Gaps Identified
@@ -709,12 +727,18 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 3.8
+**Document Version**: 3.9
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v3.9 (2025-12-27): Mark UI Path Improvements as COMPLETED ✅
+  - **COMPLETED**: Task UI.2 - Persistent branch indicator badges in message headers
+  - **COMPLETED**: Task UI.3 - URL parameter tracking for conversation paths
+  - Added §5.15 UI Path Improvements to Completed Work Archive
+  - Updated Phase B summary (3 items remaining, ~3-4 days)
+  - Total effort reduced from 4-6 days to 3-4 days for remaining MEDIUM priority tasks
 - v3.8 (2025-12-27): Comprehensive refresh after codebase verification:
   - **CORRECTED**: Path System Page Integration is 100% COMPLETE (was incorrectly marked 98%)
     - Verified all handlers are wired in page.tsx:

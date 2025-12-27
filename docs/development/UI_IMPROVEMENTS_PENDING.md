@@ -1,12 +1,13 @@
-# UI Improvements - Pending Implementation
+# UI Improvements - Implementation Status
 
-> **Status**: Requires Path System Integration
+> **Status**: ✅ Completed (2025-12-27)
 > **Created**: 2025-12-09
+> **Completed**: 2025-12-27
 > **Context**: User feedback from message editing and branching UX
 
 ## Overview
 
-Two UI improvements require integration with the conversation path system before they can be properly implemented. The current implementation uses the legacy `supersededBy` pattern for message editing, but the new path system provides better support for these features.
+UI improvements for the conversation path system have been implemented. The system now includes persistent branch indicators and URL-based path tracking for better navigation and sharing.
 
 ---
 
@@ -182,22 +183,77 @@ On click:
 
 ---
 
-## Implementation Priority
+## Implementation Status
 
-### Phase 1: Path System Data Flow ✅ (Partially Complete)
-- ConditionalPathProvider exists
-- PathToolbar for path selection exists
-- Database schema supports branching
+### ✅ Completed Improvements (2025-12-27)
 
-### Phase 2: Connect Message Rendering to Path Data ⏸️ (Pending)
-- Replace `supersededBy` pattern with path queries
-- Update `buildVersionedMessages` to use paths
-- Pass `isBranchPoint` and `branchedToPaths` to Message component
+#### 1. Persistent Branch Indicator Badges (UI.2)
 
-### Phase 3: Branch Navigation UX ⏸️ (Pending)
-- Implement branch indicator icon
-- Handle branch opening (new window/modal/inline)
-- Add branch count badge for multiple branches
+**Implementation**: `apps/demo-web/src/components/chat/message.tsx`
+
+- Added persistent GitBranch icon in message header when `isBranchPoint = true`
+- Icon is always visible (not just on hover)
+- Displays badge with branch count when multiple branches exist
+- Clickable to view the first branch
+- Integrated into the message role display (e.g., "You • Trusted input • [Branch Icon]")
+
+**Features**:
+```tsx
+{hasBranches && (
+  <button
+    onClick={() => onViewBranch?.(branchedPaths[0])}
+    className="flex items-center gap-1 transition-colors hover:text-foreground"
+    title={`This message has ${branchedPaths.length} branch${branchedPaths.length > 1 ? 'es' : ''}`}
+  >
+    <GitBranch className="h-3.5 w-3.5" />
+    {branchedPaths.length > 1 && (
+      <Badge variant="secondary" className="h-4 px-1.5 text-[9px] font-bold">
+        {branchedPaths.length}
+      </Badge>
+    )}
+  </button>
+)}
+```
+
+#### 2. URL Path Tracking (UI.3)
+
+**Implementation**: `apps/demo-web/src/app/page.tsx`
+
+- Added `getUrlParams()` to read conversationId and pathId from URL
+- Added `updateUrl()` to update browser URL with current conversation and path
+- Added useEffect to load conversation from URL parameters on mount
+- Added useEffect to update URL when conversation changes
+- Updated path switching handlers to update URL
+- URL format: `/?conversationId=xxx&pathId=yyy`
+
+**Features**:
+- Direct links to specific conversation paths
+- Browser back/forward navigation support
+- URL updates when switching paths via PathToolbar
+- URL updates when creating new branches
+- URL clears when starting new conversation
+- Shareable URLs that open specific paths
+
+**Files Modified**:
+- `apps/demo-web/src/components/chat/message.tsx` - Added persistent branch indicators
+- `apps/demo-web/src/app/page.tsx` - Added URL parameter handling and tracking
+
+### Phase 1: Path System Data Flow ✅ (Complete)
+- ✅ ConditionalPathProvider exists
+- ✅ PathToolbar for path selection exists
+- ✅ Database schema supports branching
+- ✅ `isBranchPoint` and `branchedToPaths` passed to Message component
+
+### Phase 2: Connect Message Rendering to Path Data ✅ (Complete)
+- ✅ Pass `isBranchPoint` and `branchedToPaths` to Message component
+- ✅ Branch data available from API responses
+- ⚠️ Legacy `supersededBy` pattern still used for version history (not replaced)
+
+### Phase 3: Branch Navigation UX ✅ (Complete)
+- ✅ Implement persistent branch indicator icon
+- ✅ Handle branch opening in new tab with URL parameters
+- ✅ Add branch count badge for multiple branches
+- ✅ URL-based navigation for sharing paths
 
 ---
 
