@@ -126,6 +126,12 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.49.0
         version: 2.86.0
+      '@upstash/ratelimit':
+        specifier: ^2.0.4
+        version: 2.0.7(@upstash/redis@1.36.0)
+      '@upstash/redis':
+        specifier: ^1.34.3
+        version: 1.36.0
       ai:
         specifier: ^5.0.0
         version: 5.0.101(zod@3.25.76)
@@ -241,6 +247,9 @@ importers:
       '@reg-copilot/reg-intel-observability':
         specifier: workspace:*
         version: link:../reg-intel-observability
+      '@upstash/redis':
+        specifier: ^1.34.3
+        version: 1.36.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -408,9 +417,15 @@ importers:
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.0
+      '@opentelemetry/api-logs':
+        specifier: ^0.57.0
+        version: 0.57.2
       '@opentelemetry/context-async-hooks':
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
+      '@opentelemetry/exporter-logs-otlp-http':
+        specifier: ^0.57.0
+        version: 0.57.2(@opentelemetry/api@1.9.0)
       '@opentelemetry/exporter-metrics-otlp-http':
         specifier: ^0.57.0
         version: 0.57.2(@opentelemetry/api@1.9.0)
@@ -432,6 +447,9 @@ importers:
       '@opentelemetry/resources':
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-logs':
+        specifier: ^0.57.0
+        version: 0.57.2(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-metrics':
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
@@ -4018,6 +4036,28 @@ packages:
     dev: true
     optional: true
 
+  /@upstash/core-analytics@0.0.10:
+    resolution: {integrity: sha512-7qJHGxpQgQr9/vmeS1PktEwvNAF7TI4iJDi8Pu2CFZ9YUGHZH4fOP5TfYlZ4aVxfopnELiE4BS4FBjyK7V1/xQ==}
+    engines: {node: '>=16.0.0'}
+    dependencies:
+      '@upstash/redis': 1.36.0
+    dev: false
+
+  /@upstash/ratelimit@2.0.7(@upstash/redis@1.36.0):
+    resolution: {integrity: sha512-qNQW4uBPKVk8c4wFGj2S/vfKKQxXx1taSJoSGBN36FeiVBBKHQgsjPbKUijZ9Xu5FyVK+pfiXWKIsQGyoje8Fw==}
+    peerDependencies:
+      '@upstash/redis': ^1.34.3
+    dependencies:
+      '@upstash/core-analytics': 0.0.10
+      '@upstash/redis': 1.36.0
+    dev: false
+
+  /@upstash/redis@1.36.0:
+    resolution: {integrity: sha512-9zN2UV9QJGPnXfWU3yZBLVQaqqENDh7g+Y4J2vJuSxBCi9FQ0aUOtaXlzuFhnsiZvCqM+eS27ic+tgmkWUsfOg==}
+    dependencies:
+      uncrypto: 0.1.3
+    dev: false
+
   /@vercel/oidc@3.0.5:
     resolution: {integrity: sha512-fnYhv671l+eTTp48gB4zEsTW/YtRgRPnkI2nT7x6qw5rkI1Lq2hTmQIpHPgyThI0znLK+vX2n9XxKdXZ7BUbbw==}
     engines: {node: '>= 20'}
@@ -7601,6 +7641,10 @@ packages:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
     dev: true
+
+  /uncrypto@0.1.3:
+    resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
+    dev: false
 
   /undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}

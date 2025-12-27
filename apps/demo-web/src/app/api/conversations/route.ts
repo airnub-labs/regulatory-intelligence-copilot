@@ -20,17 +20,46 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const statusParam = url.searchParams.get('status');
   const status = statusParam === 'archived' || statusParam === 'all' ? (statusParam as 'archived' | 'all') : 'active';
+  const limitParam = url.searchParams.get('limit');
+  const limit = limitParam ? parseInt(limitParam, 10) : 50;
+  const cursor = url.searchParams.get('cursor') || null;
+
   const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
   return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
         'api.conversations.list',
-        { 'app.route': '/api/conversations', 'app.tenant.id': tenantId, 'app.user.id': userId },
+        {
+          'app.route': '/api/conversations',
+          'app.tenant.id': tenantId,
+          'app.user.id': userId,
+          'app.pagination.limit': limit,
+          'app.pagination.has_cursor': Boolean(cursor),
+        },
         async () => {
-          const conversations = await conversationStore.listConversations({ tenantId, limit: 50, userId, status });
-          logger.info({ tenantId, userId, status, count: conversations.length }, 'Fetched conversations');
-          return NextResponse.json({ conversations: conversations.map(toClientConversation) });
+          const result = await conversationStore.listConversations({
+            tenantId,
+            limit,
+            userId,
+            status,
+            cursor,
+          });
+
+          logger.info({
+            tenantId,
+            userId,
+            status,
+            count: result.conversations.length,
+            hasMore: result.hasMore,
+            hasCursor: Boolean(cursor),
+          }, 'Fetched conversations');
+
+          return NextResponse.json({
+            conversations: result.conversations.map(toClientConversation),
+            nextCursor: result.nextCursor,
+            hasMore: result.hasMore,
+          });
         },
       ),
   );
