@@ -25,6 +25,12 @@ This package provides:
 - `ConversationListEventHub` - Hub for conversation list streams
 - `SseSubscriber` - Interface for SSE subscribers
 
+### Event hub configuration (Redis → Supabase Realtime → memory)
+
+- **Redis (production default)** – Provide `REDIS_URL`/`UPSTASH_REDIS_REST_URL` and `REDIS_TOKEN`/`UPSTASH_REDIS_REST_TOKEN` to enable cross-instance SSE delivery via Redis pub/sub.
+- **Supabase Realtime (zero-config local fallback)** – If Redis credentials are absent but `SUPABASE_URL` and either `SUPABASE_ANON_KEY` or a service key are present (e.g., from `supabase/.env`), event hubs automatically use Supabase Realtime channels with the same payloads and fan-out semantics.
+- **In-memory (dev only)** – When neither Redis nor Supabase credentials are configured, hubs fall back to in-memory delivery suitable for single-instance development only.
+
 ### Type-Safe SSE Contracts ⭐
 
 **NEW in v0.6** - See [ADR D-044](../../docs/governance/decisions/decisions_v_0_6.md#d-044--type-safe-sse-event-contracts-for-real-time-streams)

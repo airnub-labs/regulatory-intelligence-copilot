@@ -4,6 +4,12 @@ import type {
   ConversationListEventType,
   SseSubscriber,
 } from './eventHub.js';
+import { ConversationEventHub, ConversationListEventHub } from './eventHub.js';
+import {
+  SupabaseRealtimeConversationEventHub,
+  SupabaseRealtimeConversationListEventHub,
+  type SupabaseRealtimeEventHubConfig,
+} from './supabaseEventHub.js';
 
 /**
  * Configuration for Redis-backed event hubs
@@ -24,6 +30,13 @@ export interface RedisEventHubConfig {
    */
   prefix?: string;
 }
+
+export type EventHubFactoryConfig =
+  | RedisEventHubConfig
+  | {
+      redis?: RedisEventHubConfig;
+      supabase?: SupabaseRealtimeEventHubConfig;
+    };
 
 /**
  * Internal message structure for Redis pub/sub
@@ -515,16 +528,36 @@ export class RedisConversationListEventHub {
  * If Redis credentials are provided, returns Redis-backed hubs.
  * Otherwise, returns in-memory hubs for development.
  */
-export function createEventHubs(config?: RedisEventHubConfig): {
-  conversationEventHub: RedisConversationEventHub;
-  conversationListEventHub: RedisConversationListEventHub;
+export function createEventHubs(config?: EventHubFactoryConfig): {
+  conversationEventHub:
+    | ConversationEventHub
+    | RedisConversationEventHub
+    | SupabaseRealtimeConversationEventHub;
+  conversationListEventHub:
+    | ConversationListEventHub
+    | RedisConversationListEventHub
+    | SupabaseRealtimeConversationListEventHub;
 } {
-  if (!config?.url || !config?.token) {
-    throw new Error('Redis configuration required for createEventHubs. Use in-memory hubs for development.');
+  const redisConfig =
+    (config && 'url' in config ? config : 'redis' in (config ?? {}) ? config?.redis : undefined) ?? undefined;
+  const supabaseConfig = (config && 'supabase' in config ? config.supabase : undefined) ?? undefined;
+
+  if (redisConfig?.url && redisConfig?.token) {
+    return {
+      conversationEventHub: new RedisConversationEventHub(redisConfig),
+      conversationListEventHub: new RedisConversationListEventHub(redisConfig),
+    };
+  }
+
+  if (supabaseConfig?.client || (supabaseConfig?.supabaseUrl && supabaseConfig?.supabaseKey)) {
+    return {
+      conversationEventHub: new SupabaseRealtimeConversationEventHub(supabaseConfig),
+      conversationListEventHub: new SupabaseRealtimeConversationListEventHub(supabaseConfig),
+    };
   }
 
   return {
-    conversationEventHub: new RedisConversationEventHub(config),
-    conversationListEventHub: new RedisConversationListEventHub(config),
+    conversationEventHub: new ConversationEventHub(),
+    conversationListEventHub: new ConversationListEventHub(),
   };
 }
