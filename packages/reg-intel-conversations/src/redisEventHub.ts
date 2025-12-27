@@ -125,7 +125,7 @@ export class RedisConversationEventHub {
    * Subscribe to Redis channel for a conversation
    * Only called when first local subscriber connects
    *
-   * Uses Redis pub/sub. Note: For Upstash Redis over HTTP, this uses a polling approach.
+   * Uses Redis pub/sub so there is no backlog when no clients are listening.
    * For production with high volume, consider using Redis Streams or native Redis protocol.
    */
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
@@ -135,54 +135,35 @@ export class RedisConversationEventHub {
 
     const subscriptionPromise = (async () => {
       try {
-        // Create a polling loop for Redis messages
-        // This is a simple implementation - for production, consider using Redis Streams
-        const pollInterval = 1000; // 1 second polling
-        const pollMessages = async () => {
+        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
+          if (messageChannel !== channel) {
+            return;
+          }
+
           if (this.isShuttingDown || !this.subscribers.has(key)) {
             return;
           }
 
           try {
-            // Use a list-based approach for reliable message delivery
-            // Note: Upstash Redis HTTP API doesn't support BLPOP, so we use LPOP with polling
-            const result = await this.subscriber.lpop(channel) as string | null;
+            const payload = typeof message === 'string' ? message : JSON.stringify(message);
+            const parsed = JSON.parse(payload) as RedisEventMessage<ConversationEventType>;
 
-            if (result) {
-              const message = result;
-              try {
-                const parsed = JSON.parse(message) as RedisEventMessage<ConversationEventType>;
-
-                // Skip messages from our own instance to avoid duplication
-                if (parsed.instanceId === this.instanceId) {
-                  // Continue polling
-                  setImmediate(pollMessages);
-                  return;
-                }
-
-                // Broadcast to local subscribers
-                const subscribers = this.subscribers.get(key);
-                if (subscribers) {
-                  for (const subscriber of subscribers) {
-                    subscriber.send(parsed.event, parsed.data);
-                  }
-                }
-              } catch (error) {
-                console.error(`[RedisEventHub] Error parsing message from ${channel}:`, error);
-              }
+            if (parsed.instanceId === this.instanceId) {
+              return;
             }
 
-            // Continue polling
-            setImmediate(pollMessages);
-          } catch (error) {
-            console.error(`[RedisEventHub] Error polling ${channel}:`, error);
-            // Retry after delay on error
-            setTimeout(pollMessages, pollInterval);
-          }
-        };
+            const subscribers = this.subscribers.get(key);
+            if (!subscribers) {
+              return;
+            }
 
-        // Start polling
-        void pollMessages();
+            for (const subscriber of subscribers) {
+              subscriber.send(parsed.event, parsed.data);
+            }
+          } catch (error) {
+            console.error(`[RedisEventHub] Error parsing message from ${channel}:`, error);
+          }
+        });
       } catch (error) {
         console.error(`[RedisEventHub] Error setting up subscription for ${channel}:`, error);
         this.activeChannels.delete(channel);
@@ -200,9 +181,13 @@ export class RedisConversationEventHub {
    */
   private async unsubscribeFromChannel(channel: string): Promise<void> {
     try {
-      // Just remove from active channels - the polling loop will stop automatically
-      // when it checks this.subscribers.has(key) and finds it empty
+      const subscription = this.activeChannels.get(channel);
       this.activeChannels.delete(channel);
+
+      if (subscription) {
+        await subscription;
+        await this.subscriber.unsubscribe(channel);
+      }
     } catch (error) {
       console.error(`[RedisEventHub] Error unsubscribing from ${channel}:`, error);
     }
@@ -290,9 +275,8 @@ export class RedisConversationEventHub {
       }
     }
 
-    // Push to Redis list for other instances (fire and forget)
-    // Using RPUSH to add to the end of the list
-    void this.redis.rpush(channel, JSON.stringify(message)).catch((error: unknown) => {
+    // Publish to Redis pub/sub for other instances (fire and forget)
+    void this.redis.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
       console.error(`[RedisEventHub] Error publishing to ${channel}:`, error);
     });
   }
@@ -379,44 +363,35 @@ export class RedisConversationListEventHub {
 
     const subscriptionPromise = (async () => {
       try {
-        const pollInterval = 1000;
-        const pollMessages = async () => {
+        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
+          if (messageChannel !== channel) {
+            return;
+          }
+
           if (this.isShuttingDown || !this.subscribers.has(key)) {
             return;
           }
 
           try {
-            const result = await this.subscriber.lpop(channel) as string | null;
+            const payload = typeof message === 'string' ? message : JSON.stringify(message);
+            const parsed = JSON.parse(payload) as RedisEventMessage<ConversationListEventType>;
 
-            if (result) {
-              const message = result;
-              try {
-                const parsed = JSON.parse(message) as RedisEventMessage<ConversationListEventType>;
-
-                if (parsed.instanceId === this.instanceId) {
-                  setImmediate(pollMessages);
-                  return;
-                }
-
-                const subscribers = this.subscribers.get(key);
-                if (subscribers) {
-                  for (const subscriber of subscribers) {
-                    subscriber.send(parsed.event, parsed.data);
-                  }
-                }
-              } catch (error) {
-                console.error(`[RedisListEventHub] Error parsing message from ${channel}:`, error);
-              }
+            if (parsed.instanceId === this.instanceId) {
+              return;
             }
 
-            setImmediate(pollMessages);
-          } catch (error) {
-            console.error(`[RedisListEventHub] Error polling ${channel}:`, error);
-            setTimeout(pollMessages, pollInterval);
-          }
-        };
+            const subscribers = this.subscribers.get(key);
+            if (!subscribers) {
+              return;
+            }
 
-        void pollMessages();
+            for (const subscriber of subscribers) {
+              subscriber.send(parsed.event, parsed.data);
+            }
+          } catch (error) {
+            console.error(`[RedisListEventHub] Error parsing message from ${channel}:`, error);
+          }
+        });
       } catch (error) {
         console.error(`[RedisListEventHub] Error setting up subscription for ${channel}:`, error);
         this.activeChannels.delete(channel);
@@ -430,7 +405,13 @@ export class RedisConversationListEventHub {
 
   private async unsubscribeFromChannel(channel: string): Promise<void> {
     try {
+      const subscription = this.activeChannels.get(channel);
       this.activeChannels.delete(channel);
+
+      if (subscription) {
+        await subscription;
+        await this.subscriber.unsubscribe(channel);
+      }
     } catch (error) {
       console.error(`[RedisListEventHub] Error unsubscribing from ${channel}:`, error);
     }
@@ -492,8 +473,8 @@ export class RedisConversationListEventHub {
       }
     }
 
-    // Push to Redis list for other instances
-    void this.redis.rpush(channel, JSON.stringify(message)).catch((error: unknown) => {
+    // Publish to Redis pub/sub for other instances
+    void this.redis.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
       console.error(`[RedisListEventHub] Error publishing to ${channel}:`, error);
     });
   }
