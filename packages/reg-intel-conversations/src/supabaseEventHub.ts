@@ -1,12 +1,11 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { ConversationEventType, ConversationListEventType, SseSubscriber } from './eventHub.js';
-
-interface SupabaseRealtimeEventMessage<TEvent> {
-  event: TEvent;
-  data: unknown;
-  timestamp: number;
-  instanceId?: string;
-}
+import {
+  ChannelLifecycleManager,
+  LocalSubscriptionManager,
+  generateInstanceId,
+  type DistributedEventMessage,
+} from './sharedEventHub.js';
 
 export interface SupabaseRealtimeEventHubConfig {
   supabaseUrl?: string;
@@ -32,15 +31,15 @@ async function subscribeToChannel(channel: RealtimeChannel): Promise<RealtimeCha
 
 export class SupabaseRealtimeConversationEventHub {
   private client: SupabaseClient;
-  private subscribers = new Map<string, Set<SseSubscriber<ConversationEventType>>>();
-  private channels = new Map<string, Promise<RealtimeChannel>>();
+  private subscribers = new LocalSubscriptionManager<ConversationEventType>();
+  private channels = new ChannelLifecycleManager<RealtimeChannel>();
   private prefix: string;
   private instanceId: string;
   private isShuttingDown = false;
 
   constructor(config: SupabaseRealtimeEventHubConfig) {
     this.prefix = config.prefix ?? 'copilot:events';
-    this.instanceId = config.instanceId ?? `instance-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    this.instanceId = config.instanceId ?? generateInstanceId();
 
     this.client =
       config.client ??
@@ -58,44 +57,29 @@ export class SupabaseRealtimeConversationEventHub {
   }
 
   private async ensureChannel(channel: string, key: string): Promise<RealtimeChannel> {
-    const existing = this.channels.get(channel);
-    if (existing) {
-      return existing;
-    }
-
-    const channelPromise = (async () => {
+    return await this.channels.getOrCreate(channel, async () => {
       const realtimeChannel = this.client.channel(channel, { config: { broadcast: { self: false } } });
 
       realtimeChannel.on('broadcast', { event: 'conversation' }, payload => {
-        if (this.isShuttingDown || !this.subscribers.has(key)) {
+        if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
           return;
         }
 
         try {
-          const parsed = payload.payload as SupabaseRealtimeEventMessage<ConversationEventType>;
+          const parsed = payload.payload as DistributedEventMessage<ConversationEventType>;
 
           if (parsed.instanceId === this.instanceId) {
             return;
           }
 
-          const subscribers = this.subscribers.get(key);
-          if (!subscribers) {
-            return;
-          }
-
-          for (const subscriber of subscribers) {
-            subscriber.send(parsed.event, parsed.data);
-          }
+          this.subscribers.localBroadcast(key, parsed.event, parsed.data);
         } catch (error) {
           console.error(`[SupabaseConversationEventHub] Error handling payload from ${channel}:`, error);
         }
       });
 
       return await subscribeToChannel(realtimeChannel);
-    })();
-
-    this.channels.set(channel, channelPromise);
-    return channelPromise;
+    });
   }
 
   subscribe(
@@ -106,12 +90,9 @@ export class SupabaseRealtimeConversationEventHub {
     const key = this.key(tenantId, conversationId);
     const channel = this.channelName(tenantId, conversationId);
 
-    if (!this.subscribers.has(key)) {
-      this.subscribers.set(key, new Set());
-    }
-    this.subscribers.get(key)!.add(subscriber);
+    const firstSubscriber = this.subscribers.add(key, subscriber);
 
-    if (this.subscribers.get(key)!.size === 1) {
+    if (firstSubscriber) {
       void this.ensureChannel(channel, key).catch(error => {
         console.error(`[SupabaseConversationEventHub] Failed to subscribe to ${channel}:`, error);
       });
@@ -128,16 +109,10 @@ export class SupabaseRealtimeConversationEventHub {
     const key = this.key(tenantId, conversationId);
     const channel = this.channelName(tenantId, conversationId);
 
-    const set = this.subscribers.get(key);
-    if (!set) return;
+    const removedLast = this.subscribers.remove(key, subscriber);
 
-    set.delete(subscriber);
-    subscriber.onClose?.();
-
-    if (set.size === 0) {
-      this.subscribers.delete(key);
-      const channelPromise = this.channels.get(channel);
-      this.channels.delete(channel);
+    if (removedLast) {
+      const channelPromise = this.channels.take(channel);
 
       if (channelPromise) {
         void channelPromise
@@ -151,7 +126,7 @@ export class SupabaseRealtimeConversationEventHub {
 
   broadcast(tenantId: string, conversationId: string, event: ConversationEventType, data: unknown): void {
     const channel = this.channelName(tenantId, conversationId);
-    const message: SupabaseRealtimeEventMessage<ConversationEventType> = {
+    const message: DistributedEventMessage<ConversationEventType> = {
       event,
       data,
       timestamp: Date.now(),
@@ -159,12 +134,7 @@ export class SupabaseRealtimeConversationEventHub {
     };
 
     const key = this.key(tenantId, conversationId);
-    const localSubscribers = this.subscribers.get(key);
-    if (localSubscribers) {
-      for (const subscriber of localSubscribers) {
-        subscriber.send(event, data);
-      }
-    }
+    this.subscribers.localBroadcast(key, event, data);
 
     void this.ensureChannel(channel, key)
       .then(realtimeChannel =>
@@ -182,7 +152,7 @@ export class SupabaseRealtimeConversationEventHub {
   async shutdown(): Promise<void> {
     this.isShuttingDown = true;
 
-    const unsubscribePromises = Array.from(this.channels.entries()).map(async ([channelName, channelPromise]) => {
+    await this.channels.shutdown(async (channelName, channelPromise) => {
       try {
         const channel = await channelPromise;
         await channel.unsubscribe();
@@ -191,14 +161,7 @@ export class SupabaseRealtimeConversationEventHub {
       }
     });
 
-    await Promise.all(unsubscribePromises);
-
-    for (const [, subscribers] of this.subscribers) {
-      for (const subscriber of subscribers) {
-        subscriber.onClose?.();
-      }
-    }
-    this.subscribers.clear();
+    this.subscribers.shutdown();
   }
 
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
@@ -219,15 +182,15 @@ export class SupabaseRealtimeConversationEventHub {
 
 export class SupabaseRealtimeConversationListEventHub {
   private client: SupabaseClient;
-  private subscribers = new Map<string, Set<SseSubscriber<ConversationListEventType>>>();
-  private channels = new Map<string, Promise<RealtimeChannel>>();
+  private subscribers = new LocalSubscriptionManager<ConversationListEventType>();
+  private channels = new ChannelLifecycleManager<RealtimeChannel>();
   private prefix: string;
   private instanceId: string;
   private isShuttingDown = false;
 
   constructor(config: SupabaseRealtimeEventHubConfig) {
     this.prefix = config.prefix ?? 'copilot:events';
-    this.instanceId = config.instanceId ?? `instance-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    this.instanceId = config.instanceId ?? generateInstanceId();
 
     this.client =
       config.client ??
@@ -241,56 +204,38 @@ export class SupabaseRealtimeConversationListEventHub {
   }
 
   private async ensureChannel(channel: string, key: string): Promise<RealtimeChannel> {
-    const existing = this.channels.get(channel);
-    if (existing) {
-      return existing;
-    }
-
-    const channelPromise = (async () => {
+    return await this.channels.getOrCreate(channel, async () => {
       const realtimeChannel = this.client.channel(channel, { config: { broadcast: { self: false } } });
 
       realtimeChannel.on('broadcast', { event: 'conversation-list' }, payload => {
-        if (this.isShuttingDown || !this.subscribers.has(key)) {
+        if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
           return;
         }
 
         try {
-          const parsed = payload.payload as SupabaseRealtimeEventMessage<ConversationListEventType>;
+          const parsed = payload.payload as DistributedEventMessage<ConversationListEventType>;
 
           if (parsed.instanceId === this.instanceId) {
             return;
           }
 
-          const subscribers = this.subscribers.get(key);
-          if (!subscribers) {
-            return;
-          }
-
-          for (const subscriber of subscribers) {
-            subscriber.send(parsed.event, parsed.data);
-          }
+          this.subscribers.localBroadcast(key, parsed.event, parsed.data);
         } catch (error) {
           console.error(`[SupabaseConversationListEventHub] Error handling payload from ${channel}:`, error);
         }
       });
 
       return await subscribeToChannel(realtimeChannel);
-    })();
-
-    this.channels.set(channel, channelPromise);
-    return channelPromise;
+    });
   }
 
   subscribe(tenantId: string, subscriber: SseSubscriber<ConversationListEventType>): () => void {
     const key = tenantId;
     const channel = this.channelName(tenantId);
 
-    if (!this.subscribers.has(key)) {
-      this.subscribers.set(key, new Set());
-    }
-    this.subscribers.get(key)!.add(subscriber);
+    const firstSubscriber = this.subscribers.add(key, subscriber);
 
-    if (this.subscribers.get(key)!.size === 1) {
+    if (firstSubscriber) {
       void this.ensureChannel(channel, key).catch(error => {
         console.error(`[SupabaseConversationListEventHub] Failed to subscribe to ${channel}:`, error);
       });
@@ -303,16 +248,10 @@ export class SupabaseRealtimeConversationListEventHub {
     const key = tenantId;
     const channel = this.channelName(tenantId);
 
-    const set = this.subscribers.get(key);
-    if (!set) return;
+    const removedLast = this.subscribers.remove(key, subscriber);
 
-    set.delete(subscriber);
-    subscriber.onClose?.();
-
-    if (set.size === 0) {
-      this.subscribers.delete(key);
-      const channelPromise = this.channels.get(channel);
-      this.channels.delete(channel);
+    if (removedLast) {
+      const channelPromise = this.channels.take(channel);
 
       if (channelPromise) {
         void channelPromise
@@ -326,19 +265,14 @@ export class SupabaseRealtimeConversationListEventHub {
 
   broadcast(tenantId: string, event: ConversationListEventType, data: unknown): void {
     const channel = this.channelName(tenantId);
-    const message: SupabaseRealtimeEventMessage<ConversationListEventType> = {
+    const message: DistributedEventMessage<ConversationListEventType> = {
       event,
       data,
       timestamp: Date.now(),
       instanceId: this.instanceId,
     };
 
-    const localSubscribers = this.subscribers.get(tenantId);
-    if (localSubscribers) {
-      for (const subscriber of localSubscribers) {
-        subscriber.send(event, data);
-      }
-    }
+    this.subscribers.localBroadcast(tenantId, event, data);
 
     void this.ensureChannel(channel, tenantId)
       .then(realtimeChannel =>
@@ -356,7 +290,7 @@ export class SupabaseRealtimeConversationListEventHub {
   async shutdown(): Promise<void> {
     this.isShuttingDown = true;
 
-    const unsubscribePromises = Array.from(this.channels.entries()).map(async ([channelName, channelPromise]) => {
+    await this.channels.shutdown(async (channelName, channelPromise) => {
       try {
         const channel = await channelPromise;
         await channel.unsubscribe();
@@ -365,14 +299,7 @@ export class SupabaseRealtimeConversationListEventHub {
       }
     });
 
-    await Promise.all(unsubscribePromises);
-
-    for (const [, subscribers] of this.subscribers) {
-      for (const subscriber of subscribers) {
-        subscriber.onClose?.();
-      }
-    }
-    this.subscribers.clear();
+    this.subscribers.shutdown();
   }
 
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
