@@ -101,6 +101,13 @@ export const bootstrapObservability = async (
         process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ??
         process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
     },
+    logsExporter: {
+      enabled: process.env.OTEL_LOGS_ENABLED === 'true',
+      url:
+        process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ??
+        process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+      useBatchProcessor: process.env.NODE_ENV === 'production',
+    },
     traceSampling: {
       parentBasedRatio: parseSamplingRatio(process.env.OTEL_TRACES_SAMPLING_RATIO),
       alwaysSampleErrors: process.env.OTEL_TRACES_ALWAYS_SAMPLE_ERRORS !== 'false',
