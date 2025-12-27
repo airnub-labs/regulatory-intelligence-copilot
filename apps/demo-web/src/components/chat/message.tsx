@@ -211,7 +211,13 @@ export function Message({
   // Render branch preview card when viewing a branch version
   if (isBranchPreview && branchPathId && onViewBranch) {
     return (
-      <div className={cn("group flex w-full gap-3", isUser ? "justify-end" : "justify-start", className)}>
+      <div
+        id={messageId ? `message-${messageId}` : undefined}
+        data-message-id={messageId}
+        data-is-branch-preview={true}
+        data-branch-path-id={branchPathId}
+        className={cn("group flex w-full gap-3", isUser ? "justify-end" : "justify-start", className)}
+      >
         {!isUser && (
           <Avatar className="h-9 w-9 shrink-0 shadow-sm">
             <AvatarFallback className="bg-primary/60 text-primary-foreground text-xs">
@@ -270,6 +276,10 @@ export function Message({
 
   return (
     <div
+      id={messageId ? `message-${messageId}` : undefined}
+      data-message-id={messageId}
+      data-is-branch-point={isBranchPoint}
+      data-branched-paths={hasBranches ? branchedPaths.join(',') : undefined}
       className={cn(
         "group flex w-full gap-3",
         isUser ? "justify-end" : "justify-start",
