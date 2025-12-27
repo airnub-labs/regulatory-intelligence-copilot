@@ -2,6 +2,7 @@
  * Tests for scroll-to-message utilities
  */
 
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   scrollToMessage,
   highlightMessage,
@@ -16,14 +17,14 @@ describe('scroll-to-message utilities', () => {
     // Create a mock message element
     mockElement = document.createElement('div');
     mockElement.id = 'message-test-123';
-    mockElement.scrollIntoView = jest.fn();
+    mockElement.scrollIntoView = vi.fn();
     document.body.appendChild(mockElement);
   });
 
   afterEach(() => {
     // Clean up
     document.body.innerHTML = '';
-    jest.clearAllTimers();
+    vi.clearAllTimers();
   });
 
   describe('scrollToMessage', () => {
@@ -39,7 +40,7 @@ describe('scroll-to-message utilities', () => {
     });
 
     it('should return false for non-existent message', () => {
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const result = scrollToMessage('non-existent');
 
@@ -66,7 +67,7 @@ describe('scroll-to-message utilities', () => {
     });
 
     it('should highlight message when highlight option is true', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       scrollToMessage('test-123', { highlight: true });
 
@@ -76,18 +77,18 @@ describe('scroll-to-message utilities', () => {
       expect(mockElement.classList.contains('ring-offset-2')).toBe(true);
 
       // Fast-forward time
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
 
       // Check that highlight classes are removed
       expect(mockElement.classList.contains('ring-2')).toBe(false);
       expect(mockElement.classList.contains('ring-primary')).toBe(false);
       expect(mockElement.classList.contains('ring-offset-2')).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should use custom highlight duration', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       scrollToMessage('test-123', {
         highlight: true,
@@ -98,14 +99,14 @@ describe('scroll-to-message utilities', () => {
       expect(mockElement.classList.contains('ring-2')).toBe(true);
 
       // Advance less than duration
-      jest.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
       expect(mockElement.classList.contains('ring-2')).toBe(true);
 
       // Advance to full duration
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
       expect(mockElement.classList.contains('ring-2')).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
@@ -121,35 +122,35 @@ describe('scroll-to-message utilities', () => {
     });
 
     it('should remove highlight classes after duration', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       highlightMessage(mockElement, 3000);
 
       expect(mockElement.classList.contains('ring-2')).toBe(true);
 
-      jest.advanceTimersByTime(3000);
+      vi.advanceTimersByTime(3000);
 
       expect(mockElement.classList.contains('ring-2')).toBe(false);
       expect(mockElement.classList.contains('ring-primary')).toBe(false);
       expect(mockElement.classList.contains('ring-offset-2')).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should store timeout ID on element', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       highlightMessage(mockElement);
 
       expect((mockElement as any).__highlightTimeoutId).toBeDefined();
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 
   describe('cancelHighlight', () => {
     it('should remove highlight classes immediately', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       highlightMessage(mockElement, 5000);
       expect(mockElement.classList.contains('ring-2')).toBe(true);
@@ -159,11 +160,11 @@ describe('scroll-to-message utilities', () => {
       expect(mockElement.classList.contains('ring-primary')).toBe(false);
       expect(mockElement.classList.contains('ring-offset-2')).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should clear the timeout', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       highlightMessage(mockElement, 5000);
       const timeoutId = (mockElement as any).__highlightTimeoutId;
@@ -173,11 +174,11 @@ describe('scroll-to-message utilities', () => {
       expect((mockElement as any).__highlightTimeoutId).toBeUndefined();
 
       // Verify timeout was cleared (classes shouldn't be removed again)
-      jest.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(5000);
       // If timeout wasn't cleared, classes would try to be removed again
       // but since they're already removed, there should be no error
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should handle elements without active highlight', () => {
@@ -198,7 +199,7 @@ describe('scroll-to-message utilities', () => {
 
   describe('multiple highlights', () => {
     it('should handle multiple highlights in sequence', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       const element1 = document.createElement('div');
       element1.id = 'message-msg1';
@@ -214,36 +215,36 @@ describe('scroll-to-message utilities', () => {
       expect(element1.classList.contains('ring-2')).toBe(true);
       expect(element2.classList.contains('ring-2')).toBe(true);
 
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
 
       expect(element1.classList.contains('ring-2')).toBe(false);
       expect(element2.classList.contains('ring-2')).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     it('should handle re-highlighting the same element', () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
 
       highlightMessage(mockElement, 2000);
       expect(mockElement.classList.contains('ring-2')).toBe(true);
 
       // Re-highlight before first timeout completes
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       highlightMessage(mockElement, 2000);
 
       // Should still be highlighted
       expect(mockElement.classList.contains('ring-2')).toBe(true);
 
       // Advance past first timeout (would have removed highlight)
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       expect(mockElement.classList.contains('ring-2')).toBe(true);
 
       // Advance past second timeout
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
       expect(mockElement.classList.contains('ring-2')).toBe(false);
 
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
   });
 });
