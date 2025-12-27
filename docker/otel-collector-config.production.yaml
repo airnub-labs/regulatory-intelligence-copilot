@@ -1,0 +1,283 @@
+# OpenTelemetry Collector Production Configuration
+#
+# This configuration is optimized for high-throughput cloud deployments
+# with multiple application instances sending telemetry concurrently.
+#
+# Key differences from development config:
+# - Higher memory limits (2GB+)
+# - Larger batch sizes for efficiency
+# - Debug exporter disabled
+# - Production exporters enabled (Loki, Elasticsearch, etc.)
+# - TLS/authentication ready
+#
+# Usage:
+# docker run -v $(pwd)/otel-collector-config.production.yaml:/etc/otel-collector-config.yaml \
+#   otel/opentelemetry-collector-contrib:latest \
+#   --config=/etc/otel-collector-config.yaml
+
+receivers:
+  # OTLP receiver - primary telemetry ingestion point
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            # Configure your production domains
+            - "https://*.yourdomain.com"
+          allowed_headers:
+            - "Content-Type"
+            - "Authorization"
+            - "X-Request-ID"
+          max_age: 7200
+        # TLS configuration (uncomment for HTTPS)
+        # tls:
+        #   cert_file: /etc/ssl/certs/collector.crt
+        #   key_file: /etc/ssl/private/collector.key
+
+      grpc:
+        endpoint: 0.0.0.0:4317
+        # TLS configuration (uncomment for secure gRPC)
+        # tls:
+        #   cert_file: /etc/ssl/certs/collector.crt
+        #   key_file: /etc/ssl/private/collector.key
+
+  # Self-monitoring metrics
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector-self'
+          scrape_interval: 30s
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Memory limiter - CRITICAL for production stability
+  # Prevents OOM by applying backpressure when memory usage is high
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 2048          # 2GB limit
+    spike_limit_mib: 512     # Allow temporary spikes
+    limit_percentage: 0      # Disable percentage-based limit
+    spike_limit_percentage: 0
+
+  # Batch processor - optimized for high throughput
+  batch:
+    timeout: 5s                    # Longer timeout for larger batches
+    send_batch_size: 1000          # Larger batches for efficiency
+    send_batch_max_size: 2000      # Cap maximum batch size
+
+  # Resource detection - adds cloud metadata automatically
+  resourcedetection:
+    detectors:
+      - env
+      - system
+      # Cloud-specific detectors (uncomment as needed)
+      # - gcp
+      # - aws
+      # - azure
+    timeout: 5s
+    override: false
+
+  # Attributes processor - normalize and enrich attributes
+  attributes:
+    actions:
+      - key: deployment.environment
+        from_attribute: deployment.environment.name
+        action: upsert
+      - key: collector.version
+        value: "1.0.0"
+        action: insert
+      - key: collector.mode
+        value: "production"
+        action: insert
+
+  # Resource processor - add service namespace
+  resource:
+    attributes:
+      - key: service.namespace
+        value: regulatory-intelligence-copilot
+        action: upsert
+
+  # Tail-based sampling (optional) - for trace volume reduction
+  # Uncomment if you need to reduce trace volume in production
+  # tail_sampling:
+  #   decision_wait: 10s
+  #   num_traces: 100000
+  #   expected_new_traces_per_sec: 1000
+  #   policies:
+  #     - name: errors
+  #       type: status_code
+  #       status_code: {status_codes: [ERROR]}
+  #     - name: slow-traces
+  #       type: latency
+  #       latency: {threshold_ms: 1000}
+  #     - name: probabilistic
+  #       type: probabilistic
+  #       probabilistic: {sampling_percentage: 10}
+
+exporters:
+  # Prometheus exporter for metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      environment: production
+      service: regulatory-intelligence-copilot
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # OTLP exporter for traces - Jaeger or other OTLP-compatible backend
+  otlp/traces:
+    endpoint: "${JAEGER_OTLP_ENDPOINT:-jaeger:4317}"
+    tls:
+      insecure: ${JAEGER_INSECURE:-true}
+
+  # Loki exporter for logs (Grafana stack)
+  # loki:
+  #   endpoint: "${LOKI_ENDPOINT:-http://loki:3100/loki/api/v1/push}"
+  #   labels:
+  #     resource:
+  #       service.name: "service_name"
+  #       service.namespace: "service_namespace"
+  #     record:
+  #       level: "level"
+
+  # Elasticsearch exporter (alternative log backend)
+  # elasticsearch:
+  #   endpoints: ["${ELASTICSEARCH_URL:-http://elasticsearch:9200}"]
+  #   logs_index: "reg-copilot-logs"
+  #   traces_index: "reg-copilot-traces"
+  #   auth:
+  #     authenticator: basicauth/es
+
+  # OTLP HTTP exporter - forward to managed observability service
+  # otlphttp:
+  #   endpoint: "${OBSERVABILITY_BACKEND_URL}"
+  #   headers:
+  #     api-key: "${OBSERVABILITY_API_KEY}"
+  #   compression: gzip
+
+  # File exporter for backup/audit (with rotation)
+  file/logs:
+    path: /var/log/otel/logs.json
+    rotation:
+      max_megabytes: 500
+      max_days: 30
+      max_backups: 10
+      localtime: true
+
+  file/traces:
+    path: /var/log/otel/traces.json
+    rotation:
+      max_megabytes: 500
+      max_days: 14
+      max_backups: 5
+      localtime: true
+
+  # Debug exporter - DISABLED in production
+  # debug:
+  #   verbosity: basic
+
+extensions:
+  # Health check endpoint - required for load balancers
+  health_check:
+    endpoint: "0.0.0.0:13133"
+    path: "/health"
+    check_collector_pipeline:
+      enabled: true
+      interval: "30s"
+      exporter_failure_threshold: 5
+
+  # Performance profiling (disable in high-security environments)
+  pprof:
+    endpoint: "0.0.0.0:1777"
+
+  # HTTP forwarder for downstream routing
+  # http_forwarder:
+  #   egress:
+  #     endpoint: "http://downstream-collector:4318"
+
+  # Basic authentication (for incoming requests)
+  # basicauth:
+  #   htpasswd:
+  #     inline: |
+  #       user1:$apr1$...
+
+service:
+  extensions: [health_check, pprof]
+
+  pipelines:
+    # Logs pipeline - high throughput optimized
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - attributes
+        - batch
+      exporters:
+        - file/logs
+        # - loki
+        # - elasticsearch
+
+    # Traces pipeline - distributed tracing
+    traces:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - attributes
+        - batch
+        # - tail_sampling  # Uncomment if using tail-based sampling
+      exporters:
+        - otlp/traces
+        - file/traces
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - prometheus
+
+  # Collector telemetry settings
+  telemetry:
+    logs:
+      level: warn                  # Less verbose in production
+      development: false
+      encoding: json
+      output_paths:
+        - stdout
+      error_output_paths:
+        - stderr
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+# Scaling considerations:
+#
+# For horizontal scaling, deploy multiple collector instances behind a load balancer:
+#
+# 1. Use stateless processing (no tail sampling across instances unless using remote storage)
+# 2. Configure health checks for load balancer
+# 3. Use consistent hashing for trace-aware load balancing
+# 4. Monitor collector performance via /metrics endpoint
+#
+# Example Kubernetes deployment:
+# - 3+ replicas for high availability
+# - Resource requests: 512Mi memory, 250m CPU
+# - Resource limits: 2Gi memory, 1 CPU
+# - Horizontal Pod Autoscaler based on memory usage
+#
+# Example Docker Swarm:
+# docker service create --replicas 3 \
+#   --name otel-collector \
+#   --publish 4318:4318 \
+#   --mount type=bind,source=./otel-collector-config.production.yaml,target=/etc/otel-collector-config.yaml \
+#   otel/opentelemetry-collector-contrib:latest

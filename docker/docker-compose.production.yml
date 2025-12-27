@@ -1,0 +1,213 @@
+# Production Docker Compose Override
+#
+# This file extends the base docker-compose.yml with production-ready settings
+# for scalable, cloud-native deployment of the observability infrastructure.
+#
+# Usage:
+# docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+#
+# Or set as default:
+# export COMPOSE_FILE=docker-compose.yml:docker-compose.production.yml
+
+name: regulatory-intelligence-copilot-production
+
+services:
+  # OTEL Collector - Production optimized
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.91.0  # Pin version in production
+    container_name: reg-copilot-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.production.yaml:/etc/otel-collector-config.yaml:ro
+      - otel_logs:/var/log/otel
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter
+      - "13133:13133" # Health check
+    environment:
+      - OTEL_LOG_LEVEL=warn
+      # Configure backend endpoints via environment variables
+      - JAEGER_OTLP_ENDPOINT=${JAEGER_OTLP_ENDPOINT:-jaeger:4317}
+      - JAEGER_INSECURE=${JAEGER_INSECURE:-true}
+      # - LOKI_ENDPOINT=${LOKI_ENDPOINT:-http://loki:3100/loki/api/v1/push}
+      # - ELASTICSEARCH_URL=${ELASTICSEARCH_URL:-http://elasticsearch:9200}
+      # - OBSERVABILITY_BACKEND_URL=${OBSERVABILITY_BACKEND_URL}
+      # - OBSERVABILITY_API_KEY=${OBSERVABILITY_API_KEY}
+    deploy:
+      resources:
+        limits:
+          memory: 2560M   # 2.5GB to accommodate 2GB limit + overhead
+          cpus: '2'
+        reservations:
+          memory: 1024M
+          cpus: '0.5'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+    networks:
+      - observability
+
+  # Jaeger - Production settings
+  jaeger:
+    image: jaegertracing/all-in-one:1.52  # Pin version
+    container_name: reg-copilot-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+    volumes:
+      - jaeger_data:/badger
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: '1'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:14269/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - observability
+
+  # Prometheus - Production settings with longer retention
+  prometheus:
+    image: prom/prometheus:v2.48.0  # Pin version
+    container_name: reg-copilot-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: '1'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - observability
+
+  # Redis - Production with persistence and auth
+  redis:
+    image: redis:7-alpine
+    container_name: reg-copilot-redis
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass "${REDIS_PASSWORD}"
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --tcp-keepalive 300
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+    networks:
+      - observability
+
+  # Optional: Grafana for visualization
+  # grafana:
+  #   image: grafana/grafana:10.2.2
+  #   container_name: reg-copilot-grafana
+  #   ports:
+  #     - "3001:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=false
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #     - ./grafana/provisioning:/etc/grafana/provisioning:ro
+  #   depends_on:
+  #     - prometheus
+  #     - jaeger
+  #   networks:
+  #     - observability
+
+  # Optional: Loki for log aggregation
+  # loki:
+  #   image: grafana/loki:2.9.2
+  #   container_name: reg-copilot-loki
+  #   ports:
+  #     - "3100:3100"
+  #   volumes:
+  #     - loki_data:/loki
+  #     - ./loki-config.yaml:/etc/loki/loki-config.yaml:ro
+  #   command: -config.file=/etc/loki/loki-config.yaml
+  #   networks:
+  #     - observability
+
+volumes:
+  otel_logs:
+  prometheus_data:
+  redis_data:
+  jaeger_data:
+  # grafana_data:
+  # loki_data:
+
+networks:
+  observability:
+    driver: bridge

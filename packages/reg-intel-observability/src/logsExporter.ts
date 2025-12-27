@@ -6,7 +6,7 @@ import {
   BatchLogRecordProcessor,
 } from '@opentelemetry/sdk-logs';
 import { Resource } from '@opentelemetry/resources';
-import type { Writable } from 'node:stream';
+import { Writable } from 'node:stream';
 
 /**
  * Maps Pino log levels to OpenTelemetry severity numbers
@@ -19,6 +19,19 @@ const PINO_LEVEL_TO_OTEL_SEVERITY: Record<string, SeverityNumber> = {
   warn: SeverityNumber.WARN,
   error: SeverityNumber.ERROR,
   fatal: SeverityNumber.FATAL,
+};
+
+/**
+ * Helper to convert Pino numeric level to level name
+ * Pino levels: trace=10, debug=20, info=30, warn=40, error=50, fatal=60
+ */
+const getLevelName = (level: number): string => {
+  if (level >= 60) return 'fatal';
+  if (level >= 50) return 'error';
+  if (level >= 40) return 'warn';
+  if (level >= 30) return 'info';
+  if (level >= 20) return 'debug';
+  return 'trace';
 };
 
 export interface LogsExporterOptions {
@@ -34,6 +47,14 @@ export interface LogsExporterOptions {
 }
 
 let loggerProvider: LoggerProvider | null = null;
+
+/**
+ * Gets the current LoggerProvider instance
+ * Returns null if logs exporter hasn't been initialized
+ */
+export const getLoggerProvider = (): LoggerProvider | null => {
+  return loggerProvider;
+};
 
 /**
  * Initializes the OpenTelemetry logs exporter
@@ -94,7 +115,7 @@ export const createPinoOtelTransport = (provider: LoggerProvider): Writable => {
         } = logRecord;
 
         // Determine severity from Pino level
-        const severityText = this.getLevelName(level);
+        const severityText = getLevelName(level);
         const severityNumber = PINO_LEVEL_TO_OTEL_SEVERITY[severityText] ?? SeverityNumber.UNSPECIFIED;
 
         // Create OTEL log record
@@ -117,17 +138,6 @@ export const createPinoOtelTransport = (provider: LoggerProvider): Writable => {
         // Don't fail on log parsing errors
         callback();
       }
-    },
-
-    // Helper to convert Pino numeric level to level name
-    getLevelName(level: number): string {
-      // Pino levels: trace=10, debug=20, info=30, warn=40, error=50, fatal=60
-      if (level >= 60) return 'fatal';
-      if (level >= 50) return 'error';
-      if (level >= 40) return 'warn';
-      if (level >= 30) return 'info';
-      if (level >= 20) return 'debug';
-      return 'trace';
     },
   });
 };

@@ -19,12 +19,11 @@ import { Resource } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 import { requestContext } from './requestContext.js';
-import { flushLoggers } from './logger.js';
+import { flushLoggers, resetOtelTransportCache } from './logger.js';
 import {
   initLogsExporter,
   shutdownLogsExporter,
   forceFlushLogs,
-  createPinoOtelTransport,
 } from './logsExporter.js';
 
 // ATTR_DEPLOYMENT_ENVIRONMENT_NAME is not yet in semantic-conventions stable, use string literal
@@ -243,6 +242,9 @@ export const shutdownObservability = async () => {
   } catch (error) {
     console.error('Error shutting down logs exporter:', error);
   }
+
+  // Reset OTEL transport cache to allow re-initialization
+  resetOtelTransportCache();
 
   sdkInstance = null;
   runtimeConfig = null;
