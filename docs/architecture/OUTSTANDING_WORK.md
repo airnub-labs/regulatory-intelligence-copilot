@@ -2,7 +2,7 @@
 
 > **Last Updated**: 2025-12-27
 > **Status**: Comprehensive codebase review and gap analysis
-> **Document Version**: 3.8
+> **Document Version**: 4.1
 
 ---
 
@@ -22,6 +22,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.6 | Distributed SSE Fan-out | ✅ Complete | N/A | ✅ Wired |
 | v0.6 | OpenFGA/ReBAC Authorization | ✅ Complete | N/A | ✅ Wired |
 | v0.6 | Path System Page Integration | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.6 | Breadcrumb Navigation | ✅ Complete | ✅ Complete | ✅ Wired (29 tests) |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | Client Telemetry | ✅ Complete | ✅ Complete | ✅ Wired |
@@ -79,7 +80,40 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Core component logging | ✅ Complete |
 | Trace propagation | ✅ Complete |
 
-### 1.4 Quality & Stability Fixes ✅
+### 1.4 Breadcrumb Navigation ✅ COMPLETED
+
+**Reference**: PR #193
+**Completed**: 2025-12-27
+
+**Description**: Hierarchical breadcrumb navigation for conversation path system is **100% complete**.
+
+**Current State**:
+- ✅ `PathBreadcrumbs` component fully implemented (215 lines)
+- ✅ Comprehensive test suite (541 LOC, 29 test cases)
+- ✅ `PathBreadcrumbNav` integration wrapper for demo-web
+- ✅ Wired into `page.tsx` with full path context support
+
+**Implemented Features**:
+- ✅ Hierarchical breadcrumb chain from root to active path
+- ✅ Click navigation to parent paths
+- ✅ Auto-scroll to branch point messages via `scrollToMessage()` utility
+- ✅ Branch point indicators with message content previews
+- ✅ Full keyboard navigation (Arrow keys, Home, End)
+- ✅ Auto-hide when only one path exists (no navigation needed)
+- ✅ Mobile-responsive with horizontal scroll
+- ✅ Smart truncation for long path names (max-width constraints)
+- ✅ WCAG-compliant accessibility (aria-labels, tabIndex, navigation role)
+- ✅ Integrated with `ConversationPathProvider` context
+
+**Test Coverage**:
+- Rendering (auto-hide, chains, separators, icons)
+- Navigation (click behavior, active state)
+- Keyboard navigation (arrow keys, focus management)
+- Tooltips (branch point previews, truncation)
+- Accessibility (navigation role, aria-current, aria-labels)
+- Edge cases (null paths, empty arrays, custom names)
+
+### 1.5 Quality & Stability Fixes ✅
 
 | Fix | PR | Status |
 |-----|-----|--------|
@@ -202,13 +236,18 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 **Description**: Two packages have zero test coverage, creating risk for future maintenance.
 
-#### 3.2.1 reg-intel-ui (0 tests - needs coverage)
+#### 3.2.1 reg-intel-ui (Partial coverage - needs expansion)
 
 **Current State**:
-- ❌ No tests for 5 React components
-- ❌ No tests for `useConversationPaths` hook
+- ✅ `PathBreadcrumbs` component fully tested (29 test cases, 541 LOC)
+- ✅ `scroll-to-message` utility tested
+- ⚠️ 5 React components still without tests
+- ⚠️ `useConversationPaths` hook without tests
 
-**Components to Test**:
+**Components WITH Tests**:
+- ✅ `PathBreadcrumbs.tsx` (6.7 KB) - 29 test cases covering rendering, navigation, keyboard a11y, tooltips
+
+**Components WITHOUT Tests**:
 - `PathSelector.tsx` (8.5 KB) - Dropdown selection logic
 - `BranchButton.tsx` (2.8 KB) - Branch creation trigger
 - `BranchDialog.tsx` (8.6 KB) - Branch creation form
@@ -220,9 +259,10 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 **Tasks**:
 
-- [ ] **Task TU.1**: Set up Vitest + React Testing Library
-- [ ] **Task TU.2**: Add hook tests for `useConversationPaths`
-- [ ] **Task TU.3**: Add component tests for dialogs and selectors
+- [x] **Task TU.1**: Set up Vitest + React Testing Library ✅
+- [x] **Task TU.2**: Add PathBreadcrumbs component tests ✅ (29 tests)
+- [ ] **Task TU.3**: Add hook tests for `useConversationPaths`
+- [ ] **Task TU.4**: Add component tests for dialogs and selectors
 
 #### 3.2.2 reg-intel-next-adapter (0 tests - needs coverage)
 
@@ -516,6 +556,30 @@ Branch navigation with preview cards fully functional.
 **Completed**: 2025-12-27
 
 **UI Enhancements**:
+
+### 5.16 Breadcrumb Navigation ✅ COMPLETED
+
+**Completed**: 2025-12-27
+**Reference**: PR #193
+
+**Description**: Hierarchical breadcrumb navigation for conversation paths is fully implemented with comprehensive test coverage.
+
+**Implementation**:
+- ✅ `PathBreadcrumbs` component (215 lines, packages/reg-intel-ui)
+- ✅ `PathBreadcrumbNav` integration wrapper (90 lines, demo-web)
+- ✅ `scrollToMessage` utility for auto-scrolling to branch points
+- ✅ Full test suite (541 LOC, 29 test cases)
+
+**Features**:
+- Hierarchical breadcrumb chain from root to active path
+- Click-to-navigate to parent paths
+- Auto-scroll to branch point messages
+- Branch point indicators with tooltips
+- Full keyboard navigation (Arrow keys, Home, End)
+- Auto-hide when only one path exists
+- WCAG-compliant accessibility
+
+**UI Enhancements (also in 5.15)**:
 - ✅ Persistent branch indicator badges in message headers
 - ✅ GitBranch icon always visible when `isBranchPoint = true`
 - ✅ Branch count badge for multiple branches
@@ -585,7 +649,7 @@ Branch navigation with preview cards fully functional.
 
 | Package | Source Files | Source LOC | Test Files | Issue |
 |---------|--------------|------------|------------|-------|
-| reg-intel-ui | 6 files | ~1,413 LOC | 0 files | ⚠️ No tests (5 React components + 1 hook) |
+| reg-intel-ui | 6 files | ~1,413 LOC | 2 files | ⚠️ Partial (PathBreadcrumbs tested, 5 components need tests) |
 | reg-intel-next-adapter | 2 files | ~1,317 LOC | 0 files | ⚠️ No tests (E2B adapter, singleton pattern) |
 
 ### Package Test Details
@@ -598,10 +662,12 @@ Branch navigation with preview cards fully functional.
 - `canonicalConceptHandler.test.ts` - 20+ tests (ID generation, normalization, duplicate detection)
 - **Status**: ✅ Comprehensive coverage for all graph write operations
 
-**reg-intel-ui** (0 test files):
-- Components: `PathSelector`, `BranchButton`, `BranchDialog`, `MergeDialog`, `VersionNavigator`
-- Hook: `useConversationPaths`
-- **Recommended**: Vitest + React Testing Library for component tests
+**reg-intel-ui** (2 test files, 30 tests - ⚠️ partial coverage):
+- ✅ `PathBreadcrumbs.test.tsx` - 29 tests (rendering, navigation, keyboard a11y, tooltips, edge cases)
+- ✅ `scroll-to-message.test.ts` - 1 test (utility function)
+- Components WITHOUT tests: `PathSelector`, `BranchButton`, `BranchDialog`, `MergeDialog`, `VersionNavigator`
+- Hook WITHOUT tests: `useConversationPaths`
+- **Recommended**: Add tests for remaining 5 components using existing Vitest + RTL setup
 
 **reg-intel-next-adapter** (0 test files):
 - `E2BSandboxClient` class - E2B wrapper
@@ -709,7 +775,7 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 5. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
 6. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
 7. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
-8. **Package Test Coverage** - 2 packages need tests (reg-intel-ui, reg-intel-next-adapter)
+8. **Package Test Coverage** - 1 package needs tests (reg-intel-next-adapter), 1 has partial coverage (reg-intel-ui)
 9. **API Integration Tests** - 16/19 endpoints without test coverage (84%)
 10. **Observability Scalability** - Pino-OTEL transport, log backends not wired
 
@@ -725,8 +791,9 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] Graph services (read/write) ✅
 - [x] Conversation branching & merging ✅
 - [x] Path system fully wired ✅
+- [x] Breadcrumb navigation ✅
 - [x] Message pinning ✅
-- [ ] Full test coverage (currently ~260 tests across 33 files)
+- [ ] Full test coverage (currently ~290 tests across 35 files)
 - [ ] Scenario Engine implementation
 - [ ] Observability cloud scalability (Pino-OTEL, log backends)
 
@@ -735,22 +802,35 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 | Metric | Count |
 |--------|-------|
 | Total packages | 8 |
-| Total test files | 33 (28 packages + 5 app) |
-| Total test LOC | ~9,700 |
-| Estimated total tests | ~260 |
+| Total test files | 35 (30 packages + 5 app) |
+| Total test LOC | ~10,240 |
+| Estimated total tests | ~290 |
 | API route files | 19 |
 | API routes with tests | 3 (16% coverage) |
-| Packages with 0 tests | 2 (reg-intel-ui, reg-intel-next-adapter) |
+| Packages with 0 tests | 1 (reg-intel-next-adapter) |
+| Packages with partial tests | 1 (reg-intel-ui - PathBreadcrumbs only) |
 | Packages with comprehensive tests | 6 (conversations, prompts, llm, core, observability, graph) |
 
 ---
 
-**Document Version**: 4.0
+**Document Version**: 4.1
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v4.1 (2025-12-27): Breadcrumb navigation completion and test coverage updates ✅
+  - **COMPLETED**: Breadcrumb navigation fully implemented (PR #193)
+    - Added `PathBreadcrumbs` component (215 lines) with 29 test cases (541 LOC)
+    - Added `PathBreadcrumbNav` integration wrapper for demo-web
+    - Implemented keyboard navigation, tooltips, accessibility features
+    - Wired into page.tsx with full path context support
+  - Updated reg-intel-ui test status from "0 tests" to "partial coverage" (2 test files, 30 tests)
+  - Added §1.4 Breadcrumb Navigation to Recently Completed Work
+  - Added §5.16 Breadcrumb Navigation to Completed Work Archive
+  - Updated Overall Status table to include breadcrumb navigation row
+  - Updated Codebase Statistics: 35 test files, ~290 tests, ~10,240 test LOC
+  - Packages with 0 tests reduced from 2 to 1 (only reg-intel-next-adapter)
 - v4.0 (2025-12-27): Complete migration to path-based versioning ✅
   - **COMPLETED**: Task UI.4 - Removed legacy `supersededBy` pattern from entire codebase
   - Removed `supersededBy` from ConversationMessage interface
