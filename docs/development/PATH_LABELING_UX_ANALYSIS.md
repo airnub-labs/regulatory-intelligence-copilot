@@ -219,10 +219,13 @@ Path: Primary > Alternative Scenario > Edit: What about...
 
 ## Recommended Implementation Plan
 
-### Phase 1: Quick Fix (1 hour)
+### Phase 1: Foundation Fix (1 hour) ⭐ PRIORITY 1
 
-**Change "Main" to "Primary"**
+**What**: Change "Main" → "Primary" (Option 1)
 
+**Why**: Immediate clarity improvement with minimal effort
+
+**Implementation**:
 ```typescript
 // File: apps/demo-web/src/components/chat/path-toolbar.tsx
 
@@ -237,25 +240,33 @@ if (path.isPrimary) {
 }
 ```
 
-Also update:
-- Merge dialog labels
-- Fallback labels in compact mode
-- Any hardcoded "Main" strings
+**Files to Update**:
+- `apps/demo-web/src/components/chat/path-toolbar.tsx` (lines 127, 156)
+- `apps/demo-web/src/lib/server/mergeSummarizer.ts` (line 125)
+- Any hardcoded "Main" strings in UI
 
-### Phase 2: Enhanced Hierarchy (2-3 hours)
+**Testing**: Run existing tests, verify labels update
 
-**Add visual tree prefixes**
+---
 
-Already partially implemented in full mode (line 129):
+### Phase 2: Visual Hierarchy (2-3 hours) ⭐ PRIORITY 2
+
+**What**: Enhanced tree prefixes showing depth (Option 2)
+
+**Why**: Users can see parent-child relationships at a glance
+
+**Current State** (Partial Implementation):
 ```typescript
+// Already in path-toolbar.tsx line 129:
 const prefix = path.parentPathId ? '  └ ' : '';
 ```
 
-Enhance to show depth:
+**Enhanced Implementation**:
 ```typescript
 const getTreePrefix = (path: ClientPath, allPaths: ClientPath[]): string => {
   if (path.isPrimary) return '';
 
+  // Calculate depth
   let depth = 0;
   let current = path;
 
@@ -266,15 +277,106 @@ const getTreePrefix = (path: ClientPath, allPaths: ClientPath[]): string => {
     current = parent;
   }
 
-  return '  '.repeat(depth - 1) + '└─ ';
+  // Generate prefix based on depth
+  if (depth === 0) return '';
+  if (depth === 1) return '  └─ ';
+  return '  '.repeat(depth) + '└─ ';
 };
 ```
 
-### Phase 3: Full Breadcrumb Navigation (Future)
+**Display Result**:
+```
+Primary
+  └─ Alternative Scenario
+     └─ Edit: What about capital...
+```
 
-- Add breadcrumb component above chat
-- Allow clicking parent paths
-- Show full path history
+**Testing**: Test with 1, 2, and 3+ level branches
+
+---
+
+### Phase 3: Additional Context (Pick ONE) 🤔 OPTIONAL
+
+Choose **one** of these alternatives based on user feedback:
+
+#### **Option 3A**: Parent Context Labels
+- **Display**: `"Edit: What about... (from Alternative Scenario)"`
+- **Effort**: 2 hours
+- **Pros**: Very explicit
+- **Cons**: Can get long with deep nesting
+
+#### **Option 3B**: Depth Badges
+- **Display**: `[Branch·2] Edit: What about...`
+- **Effort**: 1.5 hours
+- **Pros**: Compact, shows depth at a glance
+- **Cons**: Requires learning what the number means
+
+#### **Option 3C**: Hover Tooltips with Full Path
+- **Display**: Hover shows `Primary > Alternative > Edit`
+- **Effort**: 1 hour
+- **Pros**: Doesn't clutter UI
+- **Cons**: Hidden until hover
+
+**Recommendation**: Start with Phase 1+2, gather user feedback, then decide if Phase 3 is needed.
+
+---
+
+### Phase 4: Breadcrumb Navigation (Future - Major Feature) 🚀 FUTURE
+
+**What**: Full breadcrumb component with clickable navigation (Option 4)
+
+**Why**: Best UX, allows quick navigation up the hierarchy
+
+**Implementation**:
+```typescript
+// New component: PathBreadcrumbs.tsx
+function PathBreadcrumbs({ activePath, allPaths, onNavigate }) {
+  const breadcrumbs = buildBreadcrumbChain(activePath, allPaths);
+
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      {breadcrumbs.map((path, i) => (
+        <Fragment key={path.id}>
+          {i > 0 && <ChevronRight className="h-3 w-3" />}
+          <button
+            onClick={() => onNavigate(path.id)}
+            className="hover:underline"
+          >
+            {path.name || (path.isPrimary ? 'Primary' : 'Branch')}
+          </button>
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+```
+
+**Display**:
+```
+Path: Primary > Alternative Scenario > Edit: What about...
+      ↑ Click to jump to parent path
+```
+
+**Effort**: 4-6 hours (new component, integration, testing)
+
+**When**: After Phase 1+2 complete and user feedback collected
+
+**Dependencies**: Requires path switching logic enhancement
+
+---
+
+## Summary: Which Options Go in Which Phase?
+
+| Phase | Includes | Effort | Status |
+|-------|----------|--------|--------|
+| **Phase 1** | Option 1 only | 1h | ⭐ Ready |
+| **Phase 2** | Option 2 only | 2-3h | ⭐ Recommended |
+| **Phase 3** | Pick ONE: 3, or 5 | 1-2h | 🤔 Optional |
+| **Phase 4** | Option 4 only | 4-6h | 🚀 Future |
+
+**Options 3 and 5 are ALTERNATIVES to each other**, not cumulative.
+
+**Option 4 is a separate major feature** for the future.
 
 ---
 
