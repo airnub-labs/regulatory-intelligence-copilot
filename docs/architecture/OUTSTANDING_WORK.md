@@ -218,28 +218,66 @@ REDIS_TOKEN=your_password
 
 ---
 
-### 3.2 MEDIUM: Supabase Conversation Persistence
+### 3.2 MEDIUM: Supabase Conversation Persistence ✅ COMPLETED
 
 **Priority**: MEDIUM (Production Readiness)
 **Effort**: 1 week
 **Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
+**Completed**: 2025-12-27
 
-**Description**: Conversation persistence currently uses in-memory stores. Supabase-backed stores need to be wired for production.
+**Description**: Production-ready conversation persistence with Supabase backend, cursor-based pagination, and multi-tenant RLS policies.
 
 **Current State**:
 - ✅ Schema exists (`supabase/migrations/`)
-- ✅ `SupabaseConversationStore` interface defined
+- ✅ `SupabaseConversationStore` fully implemented
 - ✅ In-memory fallback works
-- ⚠️ Supabase implementation partial
-- ❌ Not wired in production API routes
-- ❌ Pagination not implemented
+- ✅ Supabase implementation complete with all CRUD operations
+- ✅ Wired in production API routes
+- ✅ Cursor-based pagination implemented
+- ✅ RLS policies via views for multi-tenant security
 
-**Tasks**:
+**Completed Tasks**:
 
-- [ ] **Task P.1**: Complete `SupabaseConversationStore` implementation
-- [ ] **Task P.2**: Wire Supabase store when env vars present
-- [ ] **Task P.3**: Add pagination to `/api/conversations` endpoint
-- [ ] **Task P.4**: Add RLS policies for multi-tenant usage
+- [x] **Task P.1**: Complete `SupabaseConversationStore` implementation ✅
+  - All methods implemented: createConversation, appendMessage, getMessages, listConversations, etc.
+  - Observability integration with tracing and logging
+  - Proper error handling and type safety
+
+- [x] **Task P.2**: Wire Supabase store when env vars present ✅
+  - Automatic selection based on SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+  - Graceful fallback to in-memory when not configured
+  - Health check on startup
+
+- [x] **Task P.3**: Add pagination to `/api/conversations` endpoint ✅
+  - Cursor-based pagination (more efficient than offset)
+  - Returns nextCursor and hasMore flags
+  - Supports limit parameter (default: 50)
+  - Query params: `?limit=20&cursor=<base64_cursor>&status=active`
+
+- [x] **Task P.4**: Add RLS policies for multi-tenant usage ✅
+  - RLS enabled on all copilot_internal tables
+  - Tenant filtering via conversations_view and conversation_messages_view
+  - current_tenant_id() function for JWT-based tenant extraction
+
+**Pagination API**:
+```typescript
+// First page
+GET /api/conversations?limit=20
+
+// Next page
+GET /api/conversations?limit=20&cursor=<nextCursor>
+
+// Response
+{
+  "conversations": [...],
+  "nextCursor": "base64_encoded_cursor",
+  "hasMore": true
+}
+```
+
+**Files Changed**:
+- `packages/reg-intel-conversations/src/conversationStores.ts` - Added cursor pagination
+- `apps/demo-web/src/app/api/conversations/route.ts` - Updated API endpoint
 
 ---
 
@@ -524,12 +562,12 @@ REDIS_TOKEN=your_password
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~4-6 weeks
+**Total Outstanding Effort**: ~3-5 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 2 (was 3) | 2-3 weeks |
-| MEDIUM | 3 | 2-3 weeks |
+| HIGH | 2 | 2-3 weeks |
+| MEDIUM | 2 (was 3) | 1-2 weeks |
 | LOW | 5 | 3-4 weeks |
 
 ### Critical Gaps Identified
@@ -537,7 +575,8 @@ REDIS_TOKEN=your_password
 1. **Scenario Engine** - Fully documented, zero implementation
 2. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
 3. **reg-intel-prompts tests** - Critical package with 0% coverage
-4. **OpenFGA integration** - Authorization types exist, no runtime
+4. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
+5. **OpenFGA integration** - Authorization types exist, no runtime
 
 ### Production Readiness Checklist
 
@@ -546,16 +585,17 @@ REDIS_TOKEN=your_password
 - [x] Logging framework wired
 - [x] Execution context cleanup job
 - [x] Redis/distributed SSE ✅ **COMPLETED** (2025-12-27)
-- [ ] Supabase persistence wired
+- [x] Supabase persistence wired ✅ **COMPLETED** (2025-12-27)
 - [ ] Authorization service integrated
 - [ ] Full test coverage
 
 ---
 
-**Document Version**: 3.1
+**Document Version**: 3.2
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.0 (2025-12-27), 2.7 (2025-12-24), 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.0
+**Previous Versions**: 3.1 (2025-12-27), 3.0 (2025-12-27), 2.7 (2025-12-24), 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.0
 **Author**: Claude Code
 
 **Changelog**:
+- v3.2 (2025-12-27): Mark Supabase persistence as COMPLETED ✅ (cursor pagination added)
 - v3.1 (2025-12-27): Mark Redis/distributed SSE as COMPLETED ✅

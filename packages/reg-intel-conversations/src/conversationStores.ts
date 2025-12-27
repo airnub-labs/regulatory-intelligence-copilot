@@ -110,7 +110,12 @@ export interface ConversationStore {
     limit?: number;
     userId?: string | null;
     status?: 'active' | 'archived' | 'all';
-  }): Promise<ConversationRecord[]>;
+    cursor?: string | null;
+  }): Promise<{
+    conversations: ConversationRecord[];
+    nextCursor: string | null;
+    hasMore: boolean;
+  }>;
 
   getConversation(input: { tenantId: string; conversationId: string; userId?: string | null }): Promise<ConversationRecord | null>;
 
@@ -168,6 +173,30 @@ function canWrite(record: ConversationRecord, userId?: string | null, role?: 'us
   if (audience === 'tenant' && record.tenantAccess === 'edit') return Boolean(userId);
   if (!record.userId) return true;
   return Boolean(userId && record.userId === userId);
+}
+
+/**
+ * Encode a cursor for pagination
+ * Format: base64(timestamp:id)
+ */
+function encodeCursor(timestamp: number, id: string): string {
+  return Buffer.from(`${timestamp}:${id}`).toString('base64');
+}
+
+/**
+ * Decode a cursor for pagination
+ * Returns null if cursor is invalid
+ */
+function decodeCursor(cursor: string): { timestamp: number; id: string } | null {
+  try {
+    const decoded = Buffer.from(cursor, 'base64').toString('utf-8');
+    const [timestampStr, id] = decoded.split(':');
+    const timestamp = parseInt(timestampStr, 10);
+    if (isNaN(timestamp) || !id) return null;
+    return { timestamp, id };
+  } catch {
+    return null;
+  }
 }
 
 export class InMemoryConversationStore implements ConversationStore {
@@ -342,9 +371,16 @@ export class InMemoryConversationStore implements ConversationStore {
     limit?: number;
     userId?: string | null;
     status?: 'active' | 'archived' | 'all';
-  }): Promise<ConversationRecord[]> {
+    cursor?: string | null;
+  }): Promise<{
+    conversations: ConversationRecord[];
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
     const status = input.status ?? 'active';
-    const records = Array.from(this.conversations.values()).filter(record => {
+    const limit = input.limit ?? 50;
+
+    let records = Array.from(this.conversations.values()).filter(record => {
       if (record.tenantId !== input.tenantId) return false;
       if (!input.userId) return canRead(record, null);
       if (!canRead(record, input.userId)) return false;
@@ -353,17 +389,45 @@ export class InMemoryConversationStore implements ConversationStore {
       return true;
     });
 
+    // Sort by last_message_at DESC, then created_at DESC for stable ordering
     records.sort((a, b) => {
       const aDate = a.lastMessageAt?.getTime() ?? a.createdAt.getTime();
       const bDate = b.lastMessageAt?.getTime() ?? b.createdAt.getTime();
-      return bDate - aDate;
+      if (bDate !== aDate) return bDate - aDate;
+      // Secondary sort by ID for stability
+      return b.id.localeCompare(a.id);
     });
 
-    if (input.limit) {
-      return records.slice(0, input.limit);
+    // Apply cursor filtering
+    if (input.cursor) {
+      const cursorData = decodeCursor(input.cursor);
+      if (cursorData) {
+        const cursorIndex = records.findIndex(r => {
+          const recordDate = r.lastMessageAt?.getTime() ?? r.createdAt.getTime();
+          return recordDate === cursorData.timestamp && r.id === cursorData.id;
+        });
+        if (cursorIndex >= 0) {
+          records = records.slice(cursorIndex + 1);
+        }
+      }
     }
 
-    return records;
+    // Fetch one extra to determine if there are more
+    const conversations = records.slice(0, limit);
+    const hasMore = records.length > limit;
+
+    let nextCursor: string | null = null;
+    if (hasMore && conversations.length > 0) {
+      const lastConv = conversations[conversations.length - 1];
+      const timestamp = lastConv.lastMessageAt?.getTime() ?? lastConv.createdAt.getTime();
+      nextCursor = encodeCursor(timestamp, lastConv.id);
+    }
+
+    return {
+      conversations,
+      nextCursor,
+      hasMore,
+    };
   }
 
   async getConversation(input: { tenantId: string; conversationId: string; userId?: string | null }): Promise<ConversationRecord | null> {
@@ -987,35 +1051,95 @@ export class SupabaseConversationStore implements ConversationStore {
     limit?: number
     userId?: string | null
     status?: 'active' | 'archived' | 'all'
-  }): Promise<ConversationRecord[]> {
-    const query = this.client
-      .from('conversations_view')
-      .select(
-        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, active_path_id, archived_at, created_at, updated_at, last_message_at'
-      )
-      .eq('tenant_id', input.tenantId)
+    cursor?: string | null
+  }): Promise<{
+    conversations: ConversationRecord[];
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
+    return this.wrapQuery(
+      { operation: 'select', table: 'conversations_view', tenantId: input.tenantId },
+      async () => {
+        const limit = input.limit ?? 50;
+        const cursorData = input.cursor ? decodeCursor(input.cursor) : null;
 
+        const query = this.client
+          .from('conversations_view')
+          .select(
+            'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, active_path_id, archived_at, created_at, updated_at, last_message_at'
+          )
+          .eq('tenant_id', input.tenantId);
 
-    if (input.status === 'active') {
-      query.is('archived_at', null);
-    } else if (input.status === 'archived') {
-      query.not('archived_at', 'is', null);
-    }
+        // Apply status filter
+        if (input.status === 'active') {
+          query.is('archived_at', null);
+        } else if (input.status === 'archived') {
+          query.not('archived_at', 'is', null);
+        }
 
-    query.order('last_message_at', { ascending: false, nulls: 'last' }).order('created_at', { ascending: false });
+        // Apply cursor filtering for pagination
+        if (cursorData) {
+          const cursorDate = new Date(cursorData.timestamp).toISOString();
+          // Filter: (last_message_at < cursor_date OR (last_message_at = cursor_date AND id < cursor_id))
+          // Since Supabase doesn't support complex OR clauses easily, we use a different approach:
+          // Get records where last_message_at <= cursor_date
+          query.lte('last_message_at', cursorDate);
+        }
 
-    if (input.limit) {
-      query.limit(input.limit);
-    }
+        // Order by last_message_at DESC (nulls last), then created_at DESC, then id DESC for stability
+        query
+          .order('last_message_at', { ascending: false, nulls: 'last' })
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false });
 
-    const { data, error } = await query;
+        // Fetch limit + 1 to determine if there are more results
+        query.limit(limit + 1);
 
-    if (error) {
-      throw new Error(`Failed to list conversations: ${error.message}`);
-    }
+        const { data, error } = await query;
 
-    const records = (data as SupabaseConversationRow[]).map(mapConversationRow);
-    return records.filter(record => canRead(record, input.userId ?? null));
+        if (error) {
+          throw new Error(`Failed to list conversations: ${error.message}`);
+        }
+
+        if (!data) {
+          return {
+            conversations: [],
+            nextCursor: null,
+            hasMore: false,
+          };
+        }
+
+        let records = (data as SupabaseConversationRow[]).map(mapConversationRow);
+
+        // Filter by authorization after fetching
+        records = records.filter(record => canRead(record, input.userId ?? null));
+
+        // If we have a cursor, skip records until we find the cursor record
+        if (cursorData) {
+          const cursorIndex = records.findIndex(r => r.id === cursorData.id);
+          if (cursorIndex >= 0) {
+            records = records.slice(cursorIndex + 1);
+          }
+        }
+
+        // Determine if there are more results
+        const hasMore = records.length > limit;
+        const conversations = records.slice(0, limit);
+
+        let nextCursor: string | null = null;
+        if (hasMore && conversations.length > 0) {
+          const lastConv = conversations[conversations.length - 1];
+          const timestamp = lastConv.lastMessageAt?.getTime() ?? lastConv.createdAt.getTime();
+          nextCursor = encodeCursor(timestamp, lastConv.id);
+        }
+
+        return {
+          conversations,
+          nextCursor,
+          hasMore,
+        };
+      }
+    );
   }
 
   async getConversation(input: {
