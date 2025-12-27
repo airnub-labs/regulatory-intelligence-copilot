@@ -59,7 +59,7 @@ export interface ConversationMessage extends ChatMessage {
   rootSpanId?: string | null;
   createdAt: Date;
   deletedAt?: Date | null;
-  supersededBy?: string | null;
+  // Note: supersededBy removed - migrated to path-based versioning (Dec 2024)
 }
 
 export interface ConversationStore {
@@ -95,7 +95,7 @@ export interface ConversationStore {
     conversationId: string;
     messageId: string;
     userId?: string | null;
-    supersededBy?: string | null;
+    // Note: supersededBy parameter removed - use path-based branching instead
   }): Promise<void>;
 
   getMessages(input: {
@@ -307,7 +307,6 @@ export class InMemoryConversationStore implements ConversationStore {
     conversationId: string;
     messageId: string;
     userId?: string | null;
-    supersededBy?: string | null;
   }): Promise<void> {
     const record = this.conversations.get(input.conversationId);
     if (!record || record.tenantId !== input.tenantId) {
@@ -328,16 +327,13 @@ export class InMemoryConversationStore implements ConversationStore {
       conversationId: input.conversationId,
       tenantId: input.tenantId,
       messageId: input.messageId,
-      supersededBy: input.supersededBy,
     }, 'Soft deleting message in-memory');
     existing[targetIndex] = {
       ...target,
       deletedAt: new Date(),
-      supersededBy: input.supersededBy ?? target.supersededBy ?? null,
       metadata: {
         ...(target.metadata ?? {}),
         deletedAt: new Date().toISOString(),
-        supersededBy: input.supersededBy ?? target.supersededBy,
       },
     };
 
@@ -613,9 +609,7 @@ function mapConversationRow(row: SupabaseConversationRow): ConversationRecord {
 function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage {
   const metadata = row.metadata ?? undefined;
   const deletedAtValue = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).deletedAt : undefined;
-  const supersededByValue = metadata && typeof metadata === 'object'
-    ? (metadata as Record<string, unknown>).supersededBy
-    : undefined;
+  // Note: supersededBy extraction removed - migrated to path-based versioning
 
   return {
     id: row.id,
@@ -628,7 +622,6 @@ function mapMessageRow(row: SupabaseConversationMessageRow): ConversationMessage
     rootSpanId: row.root_span_id,
     createdAt: new Date(row.created_at),
     deletedAt: typeof deletedAtValue === 'string' ? new Date(deletedAtValue) : undefined,
-    supersededBy: typeof supersededByValue === 'string' ? supersededByValue : undefined,
   };
 }
 
@@ -948,7 +941,6 @@ export class SupabaseConversationStore implements ConversationStore {
     conversationId: string;
     messageId: string;
     userId?: string | null;
-    supersededBy?: string | null;
   }): Promise<void> {
     return this.wrapMutation(
       {
@@ -970,7 +962,6 @@ export class SupabaseConversationStore implements ConversationStore {
           conversationId: input.conversationId,
           tenantId: input.tenantId,
           messageId: input.messageId,
-          supersededBy: input.supersededBy,
         }, 'Soft deleting Supabase conversation message');
 
         const messageLookup = (await this.client
@@ -994,7 +985,7 @@ export class SupabaseConversationStore implements ConversationStore {
         const nextMetadata = {
           ...existingMetadata,
           deletedAt,
-          supersededBy: input.supersededBy ?? (existingMetadata as { supersededBy?: string }).supersededBy ?? null,
+          // Note: supersededBy removed - use path-based branching instead
         } satisfies Record<string, unknown>;
 
         const { error: updateError } = await this.internalClient

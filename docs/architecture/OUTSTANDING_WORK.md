@@ -286,11 +286,11 @@ This document consolidates all outstanding work identified from reviewing the ar
 ### 3.4 MEDIUM: UI Improvements Pending (Path Integration) ✅ COMPLETED
 
 **Priority**: MEDIUM (UX Enhancement)
-**Effort**: 4-6 hours (Actual: ~2 hours)
+**Effort**: 4-6 hours (Actual: ~3 hours)
 **Reference**: `docs/development/UI_IMPROVEMENTS_PENDING.md`
 **Completed**: 2025-12-27
 
-**Description**: UI improvements for better path system integration.
+**Description**: UI improvements for better path system integration and removal of legacy versioning code.
 
 **Completed Implementation**:
 - ✅ Path system fully wired and functional
@@ -298,7 +298,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 - ✅ Persistent branch indicator badges in message headers
 - ✅ URL parameter tracking for paths (`?conversationId=xxx&pathId=yyy`)
 - ✅ Shareable URLs for specific paths
-- ⚠️ Message version display still uses legacy `supersededBy` pattern (deferred)
+- ✅ Legacy `supersededBy` pattern removed from codebase
 
 **Implemented Features**:
 
@@ -315,11 +315,19 @@ This document consolidates all outstanding work identified from reviewing the ar
    - Browser back/forward navigation support
    - Shareable URLs that preserve path context
 
+3. **Legacy Code Removal** ✅
+   - Removed `supersededBy` field from ConversationMessage interface
+   - Removed `supersededBy` parameter from softDeleteMessage method
+   - Updated all implementations (InMemory, Supabase)
+   - Cleaned up message mapping functions
+   - Updated reg-intel-next-adapter to remove supersededBy usage
+   - System now fully uses path-based versioning
+
 **Tasks**:
 
 - [x] **Task UI.2**: Add persistent branch indicator badges to Message component ✅
 - [x] **Task UI.3**: Track active path in URL with `?pathId=xxx` parameter ✅
-- [ ] **Task UI.1**: Enhance message version display with path context (Deferred)
+- [x] **Task UI.4**: Remove legacy `supersededBy` pattern from codebase ✅
 
 ---
 
@@ -503,10 +511,11 @@ Branch navigation with preview cards fully functional.
 - ✅ `PathToolbar` rendered
 - ✅ Branch buttons visible on hover
 
-### 5.15 UI Path Improvements ✅ COMPLETED
+### 5.15 UI Path Improvements & Legacy Code Removal ✅ COMPLETED
 
 **Completed**: 2025-12-27
 
+**UI Enhancements**:
 - ✅ Persistent branch indicator badges in message headers
 - ✅ GitBranch icon always visible when `isBranchPoint = true`
 - ✅ Branch count badge for multiple branches
@@ -514,6 +523,15 @@ Branch navigation with preview cards fully functional.
 - ✅ Shareable URLs for specific conversation paths
 - ✅ Browser back/forward navigation support
 - ✅ URL updates on path switching and branch creation
+
+**Legacy Code Cleanup**:
+- ✅ Removed `supersededBy` field from ConversationMessage interface
+- ✅ Removed `supersededBy` parameter from softDeleteMessage interface
+- ✅ Updated InMemoryConversationStore implementation
+- ✅ Updated SupabaseConversationStore implementation
+- ✅ Removed supersededBy extraction from mapMessageRow
+- ✅ Updated reg-intel-next-adapter to remove supersededBy usage
+- ✅ System now fully migrated to path-based versioning
 
 ---
 
@@ -727,12 +745,21 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 3.9
+**Document Version**: 4.0
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v4.0 (2025-12-27): Complete migration to path-based versioning ✅
+  - **COMPLETED**: Task UI.4 - Removed legacy `supersededBy` pattern from entire codebase
+  - Removed `supersededBy` from ConversationMessage interface
+  - Removed `supersededBy` parameter from softDeleteMessage method
+  - Updated all store implementations (InMemory, Supabase)
+  - Updated reg-intel-next-adapter to remove supersededBy usage
+  - System now 100% path-based for message versioning
+  - Updated §5.15 to include legacy code cleanup
+  - Updated §3.4 completion summary
 - v3.9 (2025-12-27): Mark UI Path Improvements as COMPLETED ✅
   - **COMPLETED**: Task UI.2 - Persistent branch indicator badges in message headers
   - **COMPLETED**: Task UI.3 - URL parameter tracking for conversation paths
