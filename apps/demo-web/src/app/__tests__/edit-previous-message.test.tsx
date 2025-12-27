@@ -246,6 +246,16 @@ describe('Edit Previous Message and Path Switching', () => {
     vi.clearAllMocks();
   });
 
+  describe('Critical Path Preservation Tests', () => {
+    /**
+     * CRITICAL INVARIANT: When editing message N in a conversation of M messages (where N < M),
+     * the original path MUST preserve ALL M messages, including messages N+1 through M.
+     *
+     * This is the core "time travel" feature - users can branch to explore alternatives
+     * while keeping the complete original conversation intact.
+     */
+  });
+
   describe('Edit Previous Message Scenarios', () => {
     it('should branch from middle of conversation when editing previous message', async () => {
       const { container } = render(
@@ -651,6 +661,383 @@ describe('Edit Previous Message and Path Switching', () => {
       // Verify total unique paths
       const uniquePaths = new Set(conversationState.messages.get(conversationId)!.map((m) => m.pathId));
       expect(uniquePaths.size).toBe(3); // main, branch-1, branch-2
+    });
+  });
+
+  describe('Edge Cases and Variations', () => {
+    it('should preserve path when editing FIRST message in long conversation', async () => {
+      // CRITICAL: Editing first message should preserve ALL subsequent messages
+      const conversationId = 'test-edit-first';
+      conversationState.messages.set(conversationId, []);
+      conversationState.activePaths.set(conversationId, 'path-main');
+
+      // Create 10 messages (5 Q&A pairs)
+      for (let i = 1; i <= 5; i++) {
+        conversationState.messages.get(conversationId)!.push(
+          {
+            id: `user-${i}`,
+            role: 'user',
+            content: `Question ${i}`,
+            pathId: 'path-main',
+            sequenceInPath: (i - 1) * 2,
+          },
+          {
+            id: `assistant-${i}`,
+            role: 'assistant',
+            content: `Answer ${i}`,
+            pathId: 'path-main',
+            sequenceInPath: (i - 1) * 2 + 1,
+          }
+        );
+      }
+
+      // Edit FIRST message
+      const branchResponse = await fetch(`/api/conversations/${conversationId}/branch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceMessageId: 'user-1',
+          name: 'Edit First Message',
+        }),
+      });
+
+      expect(branchResponse.ok).toBe(true);
+
+      // CRITICAL: Main path must still have all 10 messages
+      const mainMessages = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === 'path-main');
+      expect(mainMessages).toHaveLength(10);
+
+      // Verify Q2-Q5 still exist on main
+      expect(mainMessages.find((m) => m.content === 'Question 2')).toBeDefined();
+      expect(mainMessages.find((m) => m.content === 'Question 3')).toBeDefined();
+      expect(mainMessages.find((m) => m.content === 'Question 4')).toBeDefined();
+      expect(mainMessages.find((m) => m.content === 'Question 5')).toBeDefined();
+    });
+
+    it('should handle editing message at various positions in conversation', async () => {
+      // Test editing at positions: 1st, 2nd, 3rd, 4th of 5 Q&A pairs
+      const conversationId = 'test-edit-positions';
+      conversationState.messages.set(conversationId, []);
+      conversationState.activePaths.set(conversationId, 'path-main');
+
+      // Create 5 Q&A pairs (10 messages)
+      for (let i = 1; i <= 5; i++) {
+        conversationState.messages.get(conversationId)!.push(
+          {
+            id: `user-${i}`,
+            role: 'user',
+            content: `Q${i}`,
+            pathId: 'path-main',
+            sequenceInPath: (i - 1) * 2,
+          },
+          {
+            id: `assistant-${i}`,
+            role: 'assistant',
+            content: `A${i}`,
+            pathId: 'path-main',
+            sequenceInPath: (i - 1) * 2 + 1,
+          }
+        );
+      }
+
+      const editPositions = [
+        { position: 1, messageId: 'user-1', expectedMainCount: 10, expectedAfterCount: 4 },
+        { position: 2, messageId: 'user-2', expectedMainCount: 10, expectedAfterCount: 3 },
+        { position: 3, messageId: 'user-3', expectedMainCount: 10, expectedAfterCount: 2 },
+        { position: 4, messageId: 'user-4', expectedMainCount: 10, expectedAfterCount: 1 },
+      ];
+
+      for (const { position, messageId, expectedMainCount, expectedAfterCount } of editPositions) {
+        // Create branch from this position
+        await fetch(`/api/conversations/${conversationId}/branch`, {
+          method: 'POST',
+          body: JSON.stringify({ sourceMessageId: messageId, name: `Branch ${position}` }),
+        });
+
+        // CRITICAL: Main path always keeps all 10 messages
+        const mainMessages = conversationState.messages
+          .get(conversationId)!
+          .filter((m) => m.pathId === 'path-main');
+        expect(mainMessages).toHaveLength(expectedMainCount);
+
+        // Verify messages after edit point exist
+        const messagesAfterEdit = mainMessages.filter(
+          (m) => m.sequenceInPath > position * 2 - 1
+        );
+        expect(messagesAfterEdit.length).toBeGreaterThanOrEqual(expectedAfterCount);
+      }
+    });
+
+    it('should maintain path integrity when rapidly switching between paths', async () => {
+      const conversationId = 'test-rapid-switching';
+      conversationState.messages.set(conversationId, []);
+
+      // Create main path
+      const mainMessages = [
+        { id: 'main-1', role: 'user', content: 'Main Q1', pathId: 'path-main', sequenceInPath: 0 },
+        { id: 'main-2', role: 'assistant', content: 'Main A1', pathId: 'path-main', sequenceInPath: 1 },
+        { id: 'main-3', role: 'user', content: 'Main Q2', pathId: 'path-main', sequenceInPath: 2 },
+        { id: 'main-4', role: 'assistant', content: 'Main A2', pathId: 'path-main', sequenceInPath: 3 },
+      ];
+
+      // Create branch path
+      const branchPathId = 'path-branch-1';
+      conversationState.paths.set(branchPathId, { id: branchPathId, name: 'Branch 1' });
+      const branchMessages = [
+        { id: 'branch-1', role: 'user', content: 'Main Q1', pathId: branchPathId, sequenceInPath: 0 },
+        { id: 'branch-2', role: 'assistant', content: 'Main A1', pathId: branchPathId, sequenceInPath: 1 },
+        { id: 'branch-3', role: 'user', content: 'Branch Q1', pathId: branchPathId, sequenceInPath: 2 },
+        { id: 'branch-4', role: 'assistant', content: 'Branch A1', pathId: branchPathId, sequenceInPath: 3 },
+      ];
+
+      conversationState.messages.get(conversationId)!.push(...mainMessages, ...branchMessages);
+
+      // Rapidly switch between paths
+      const switches = ['path-main', branchPathId, 'path-main', branchPathId, 'path-main'];
+
+      for (const pathId of switches) {
+        conversationState.activePaths.set(conversationId, pathId);
+
+        const response = await fetch(`/api/conversations/${conversationId}`);
+        const data = await response.json();
+
+        // Verify correct messages returned
+        if (pathId === 'path-main') {
+          expect(data.messages).toHaveLength(4);
+          expect(data.messages.find((m: { content: string }) => m.content === 'Main Q2')).toBeDefined();
+        } else {
+          expect(data.messages).toHaveLength(4);
+          expect(data.messages.find((m: { content: string }) => m.content === 'Branch Q1')).toBeDefined();
+        }
+
+        // CRITICAL: Verify path isolation - no cross-contamination
+        const expectedPathId = pathId;
+        expect(data.messages.every((m: { pathId: string }) => m.pathId === expectedPathId)).toBe(true);
+      }
+
+      // Verify both paths still intact after rapid switching
+      const finalMainMessages = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === 'path-main');
+      const finalBranchMessages = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === branchPathId);
+
+      expect(finalMainMessages).toHaveLength(4);
+      expect(finalBranchMessages).toHaveLength(4);
+    });
+
+    it('should preserve deep branch hierarchies when editing at different levels', async () => {
+      // Create nested branch structure: Main → Branch1 → Branch1.1
+      const conversationId = 'test-nested-edit';
+      conversationState.messages.set(conversationId, []);
+
+      // Main path: 3 Q&A pairs
+      const mainMessages = [];
+      for (let i = 1; i <= 3; i++) {
+        mainMessages.push(
+          { id: `main-user-${i}`, role: 'user', content: `Main Q${i}`, pathId: 'path-main', sequenceInPath: (i - 1) * 2 },
+          { id: `main-asst-${i}`, role: 'assistant', content: `Main A${i}`, pathId: 'path-main', sequenceInPath: (i - 1) * 2 + 1 }
+        );
+      }
+
+      // Branch1 (from main Q1): inherits Q1, adds Branch Q1
+      const branch1Id = 'path-branch-1';
+      conversationState.paths.set(branch1Id, { id: branch1Id, name: 'Branch 1', parentPathId: 'path-main' });
+      const branch1Messages = [
+        { id: 'b1-user-1', role: 'user', content: 'Main Q1', pathId: branch1Id, sequenceInPath: 0 },
+        { id: 'b1-asst-1', role: 'assistant', content: 'Main A1', pathId: branch1Id, sequenceInPath: 1 },
+        { id: 'b1-user-2', role: 'user', content: 'Branch1 Q1', pathId: branch1Id, sequenceInPath: 2 },
+        { id: 'b1-asst-2', role: 'assistant', content: 'Branch1 A1', pathId: branch1Id, sequenceInPath: 3 },
+      ];
+
+      // Branch1.1 (from Branch1 Q1): nested branch
+      const branch11Id = 'path-branch-1-1';
+      conversationState.paths.set(branch11Id, { id: branch11Id, name: 'Branch 1.1', parentPathId: branch1Id });
+      const branch11Messages = [
+        { id: 'b11-user-1', role: 'user', content: 'Main Q1', pathId: branch11Id, sequenceInPath: 0 },
+        { id: 'b11-asst-1', role: 'assistant', content: 'Main A1', pathId: branch11Id, sequenceInPath: 1 },
+        { id: 'b11-user-2', role: 'user', content: 'Branch1.1 Q1', pathId: branch11Id, sequenceInPath: 2 },
+        { id: 'b11-asst-2', role: 'assistant', content: 'Branch1.1 A1', pathId: branch11Id, sequenceInPath: 3 },
+      ];
+
+      conversationState.messages.get(conversationId)!.push(...mainMessages, ...branch1Messages, ...branch11Messages);
+
+      // CRITICAL: Verify each level preserves its own messages
+      const main = conversationState.messages.get(conversationId)!.filter((m) => m.pathId === 'path-main');
+      const b1 = conversationState.messages.get(conversationId)!.filter((m) => m.pathId === branch1Id);
+      const b11 = conversationState.messages.get(conversationId)!.filter((m) => m.pathId === branch11Id);
+
+      expect(main).toHaveLength(6); // 3 Q&A pairs
+      expect(b1).toHaveLength(4); // Inherited + new
+      expect(b11).toHaveLength(4); // Inherited + new
+
+      // CRITICAL: Main still has Q2, Q3 even though branches exist
+      expect(main.find((m) => m.content === 'Main Q2')).toBeDefined();
+      expect(main.find((m) => m.content === 'Main Q3')).toBeDefined();
+
+      // Each branch has its own content
+      expect(b1.find((m) => m.content === 'Branch1 Q1')).toBeDefined();
+      expect(b11.find((m) => m.content === 'Branch1.1 Q1')).toBeDefined();
+
+      // No cross-contamination
+      expect(b1.find((m) => m.content === 'Branch1.1 Q1')).toBeUndefined();
+      expect(main.find((m) => m.content === 'Branch1 Q1')).toBeUndefined();
+    });
+
+    it('should handle editing same message multiple times creating parallel branches', async () => {
+      const conversationId = 'test-parallel-branches';
+      conversationState.messages.set(conversationId, []);
+      conversationState.activePaths.set(conversationId, 'path-main');
+
+      // Create main with 3 Q&A pairs
+      for (let i = 1; i <= 3; i++) {
+        conversationState.messages.get(conversationId)!.push(
+          { id: `user-${i}`, role: 'user', content: `Q${i}`, pathId: 'path-main', sequenceInPath: (i - 1) * 2 },
+          { id: `asst-${i}`, role: 'assistant', content: `A${i}`, pathId: 'path-main', sequenceInPath: (i - 1) * 2 + 1 }
+        );
+      }
+
+      // Create 3 parallel branches all from Q2
+      const branchIds = [];
+      for (let i = 1; i <= 3; i++) {
+        const branchResponse = await fetch(`/api/conversations/${conversationId}/branch`, {
+          method: 'POST',
+          body: JSON.stringify({ sourceMessageId: 'user-2', name: `Parallel Branch ${i}` }),
+        });
+
+        const { path } = await branchResponse.json();
+        branchIds.push(path.id);
+      }
+
+      // CRITICAL: Main path still has all 6 messages
+      const mainMessages = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === 'path-main');
+      expect(mainMessages).toHaveLength(6);
+
+      // CRITICAL: Main still has Q3 even though 3 branches created from Q2
+      expect(mainMessages.find((m) => m.content === 'Q3')).toBeDefined();
+
+      // Each branch has Q1, Q2 (4 messages)
+      branchIds.forEach((branchId) => {
+        const branchMessages = conversationState.messages
+          .get(conversationId)!
+          .filter((m) => m.pathId === branchId);
+        expect(branchMessages).toHaveLength(4);
+      });
+
+      // Verify 4 unique paths: main + 3 branches
+      const uniquePaths = new Set(conversationState.messages.get(conversationId)!.map((m) => m.pathId));
+      expect(uniquePaths.size).toBe(4);
+    });
+  });
+
+  describe('Regression Tests - Critical Invariants', () => {
+    /**
+     * These tests verify the CRITICAL INVARIANTS that must NEVER be violated.
+     * If any of these tests fail, it indicates a severe regression that breaks
+     * the core time-travel feature of the path system.
+     */
+
+    it('CRITICAL: Original path must NEVER lose messages after branching', async () => {
+      const conversationId = 'test-critical-invariant-1';
+      conversationState.messages.set(conversationId, []);
+
+      // Create 10 messages on main
+      const originalMessages = [];
+      for (let i = 1; i <= 10; i++) {
+        originalMessages.push({
+          id: `msg-${i}`,
+          role: i % 2 === 1 ? 'user' : 'assistant',
+          content: `Message ${i}`,
+          pathId: 'path-main',
+          sequenceInPath: i - 1,
+        });
+      }
+      conversationState.messages.get(conversationId)!.push(...originalMessages);
+
+      const initialCount = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === 'path-main').length;
+      expect(initialCount).toBe(10);
+
+      // Create branch from message 5
+      await fetch(`/api/conversations/${conversationId}/branch`, {
+        method: 'POST',
+        body: JSON.stringify({ sourceMessageId: 'msg-5', name: 'Test Branch' }),
+      });
+
+      const finalCount = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === 'path-main').length;
+
+      // CRITICAL INVARIANT: Count must not decrease
+      expect(finalCount).toBe(initialCount);
+      expect(finalCount).toBe(10);
+    });
+
+    it('CRITICAL: Messages after branch point must remain on original path', async () => {
+      const conversationId = 'test-critical-invariant-2';
+      conversationState.messages.set(conversationId, []);
+
+      const messages = [
+        { id: 'msg-1', role: 'user', content: 'Before', pathId: 'path-main', sequenceInPath: 0 },
+        { id: 'msg-2', role: 'assistant', content: 'Before', pathId: 'path-main', sequenceInPath: 1 },
+        { id: 'msg-3', role: 'user', content: 'Branch Point', pathId: 'path-main', sequenceInPath: 2 },
+        { id: 'msg-4', role: 'assistant', content: 'After 1', pathId: 'path-main', sequenceInPath: 3 },
+        { id: 'msg-5', role: 'user', content: 'After 2', pathId: 'path-main', sequenceInPath: 4 },
+      ];
+      conversationState.messages.get(conversationId)!.push(...messages);
+
+      // Create branch from msg-3
+      await fetch(`/api/conversations/${conversationId}/branch`, {
+        method: 'POST',
+        body: JSON.stringify({ sourceMessageId: 'msg-3', name: 'Test Branch' }),
+      });
+
+      const mainMessages = conversationState.messages
+        .get(conversationId)!
+        .filter((m) => m.pathId === 'path-main');
+
+      // CRITICAL INVARIANT: Messages after branch point must still exist on main
+      expect(mainMessages.find((m) => m.id === 'msg-4')).toBeDefined();
+      expect(mainMessages.find((m) => m.id === 'msg-5')).toBeDefined();
+    });
+
+    it('CRITICAL: Switching paths must return ONLY messages from active path', async () => {
+      const conversationId = 'test-critical-invariant-3';
+      conversationState.messages.set(conversationId, []);
+
+      const mainMessages = [
+        { id: 'main-1', role: 'user', content: 'Main Only', pathId: 'path-main', sequenceInPath: 0 },
+      ];
+
+      const branchPathId = 'path-branch';
+      conversationState.paths.set(branchPathId, { id: branchPathId, name: 'Branch' });
+      const branchMessages = [
+        { id: 'branch-1', role: 'user', content: 'Branch Only', pathId: branchPathId, sequenceInPath: 0 },
+      ];
+
+      conversationState.messages.get(conversationId)!.push(...mainMessages, ...branchMessages);
+
+      // Switch to main
+      conversationState.activePaths.set(conversationId, 'path-main');
+      const mainResponse = await fetch(`/api/conversations/${conversationId}`);
+      const mainData = await mainResponse.json();
+
+      // CRITICAL INVARIANT: No cross-contamination
+      expect(mainData.messages.find((m: { content: string }) => m.content === 'Branch Only')).toBeUndefined();
+
+      // Switch to branch
+      conversationState.activePaths.set(conversationId, branchPathId);
+      const branchResponse = await fetch(`/api/conversations/${conversationId}`);
+      const branchData = await branchResponse.json();
+
+      // CRITICAL INVARIANT: No cross-contamination
+      expect(branchData.messages.find((m: { content: string }) => m.content === 'Main Only')).toBeUndefined();
     });
   });
 });

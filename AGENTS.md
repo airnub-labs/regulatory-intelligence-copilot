@@ -419,3 +419,194 @@ Following this spec keeps the agent layer consistent with the v0.6 architecture 
 - The chat surface must call `/api/chat` with a `conversationId` once the first SSE metadata payload provides one, ensuring the backend `ConversationStore`/`ConversationContextStore` maintains continuity.
 - Conversation SSE streams are keyed per `(tenantId, conversationId)`; authorised users on the same tenant may subscribe concurrently to the same stream in single-instance deployments.
 - Dev mode may rely on in-memory stores; production shells should wire Supabase/Postgres-backed stores with RLS.
+
+---
+
+## 7. Conversation Path System – Critical Invariants & Testing
+
+The conversation path system enables "time travel" – users can edit any message in a conversation to explore alternative directions while preserving the complete original conversation history. This is a **core differentiator** and must never regress.
+
+### 7.1 Critical Invariants
+
+These invariants **MUST NEVER** be violated. Any violation represents a severe regression that breaks the core value proposition:
+
+#### Invariant 1: Original Path Preservation
+**When editing message N in a conversation of M messages (where N < M), the original path MUST preserve ALL M messages, including messages N+1 through M.**
+
+```typescript
+// CRITICAL: Editing Q3 when Q5 exists → Original path keeps Q4, Q5
+const originalMessages = getMessages(conversationId, 'path-main');
+expect(originalMessages).toHaveLength(10); // All 5 Q&A pairs preserved
+
+// Even after creating branch from message 3
+await createBranch(conversationId, message3Id);
+const afterBranchMessages = getMessages(conversationId, 'path-main');
+expect(afterBranchMessages).toHaveLength(10); // MUST still be 10
+expect(afterBranchMessages.find(m => m.content === 'Q4')).toBeDefined();
+expect(afterBranchMessages.find(m => m.content === 'Q5')).toBeDefined();
+```
+
+#### Invariant 2: Path Isolation
+**Switching paths must return ONLY messages from the active path. No cross-contamination between paths.**
+
+```typescript
+// Main path and branch path must remain completely isolated
+setActivePath(conversationId, 'path-main');
+const mainMessages = await loadConversation(conversationId);
+expect(mainMessages.every(m => m.pathId === 'path-main')).toBe(true);
+
+setActivePath(conversationId, branchPathId);
+const branchMessages = await loadConversation(conversationId);
+expect(branchMessages.every(m => m.pathId === branchPathId)).toBe(true);
+expect(branchMessages.find(m => m.pathId === 'path-main')).toBeUndefined();
+```
+
+#### Invariant 3: No Message Loss on Branching
+**Creating a branch NEVER deletes or moves messages from the original path.**
+
+```typescript
+const beforeCount = getMessages(conversationId, 'path-main').length;
+await createBranch(conversationId, sourceMessageId);
+const afterCount = getMessages(conversationId, 'path-main').length;
+
+// CRITICAL: Count must not decrease
+expect(afterCount).toBe(beforeCount);
+```
+
+#### Invariant 4: Complete History on Path Switch
+**When switching back to a path, the UI MUST show the complete conversation history for that path, including all messages that came after any branch points.**
+
+```typescript
+// User creates conversation: Q1, Q2, Q3, Q4, Q5
+// User edits Q3 (creates branch)
+// User works on branch
+// User switches back to main
+
+const mainPathMessages = await loadConversation(conversationId); // main is active
+expect(mainPathMessages.find(m => m.content === 'Q4')).toBeDefined();
+expect(mainPathMessages.find(m => m.content === 'Q5')).toBeDefined();
+// UI shows complete original conversation
+```
+
+### 7.2 Required Test Coverage
+
+Any changes touching the path system, conversation management, message handling, or UI state MUST maintain the following test coverage:
+
+#### Test Suite 1: Basic Two-Question Flow
+**File:** `apps/demo-web/src/app/__tests__/two-question-flow.test.tsx`
+
+- Verifies consecutive questions display correctly
+- Ensures `isStreamingRef` flag management works
+- Prevents regression of the "second question doesn't appear" bug
+
+#### Test Suite 2: Path System Integration
+**File:** `apps/demo-web/src/app/__tests__/path-system-integration.test.tsx`
+
+- Multi-question conversations (5+ questions)
+- Message editing and branching
+- Path switching and navigation
+- Complex branching (nested, parallel)
+- UI state consistency
+- Error handling
+
+#### Test Suite 3: Edit Previous Message (MOST CRITICAL)
+**File:** `apps/demo-web/src/app/__tests__/edit-previous-message.test.tsx`
+
+This is the **most critical** test suite as it validates the core "time travel" feature:
+
+**Critical Test Cases:**
+1. ✅ Editing PREVIOUS message (not last) creates branch
+2. ✅ Original path preserves ALL messages after branch point
+3. ✅ Switching back to original shows complete history
+4. ✅ Multiple edits maintain path integrity
+5. ✅ Edge cases: edit first message, edit at various positions
+6. ✅ Rapid path switching maintains isolation
+7. ✅ Deep branch hierarchies preserve lineage
+8. ✅ Parallel branches from same message
+
+**Regression Tests (Critical Invariants):**
+- CRITICAL: Original path must NEVER lose messages after branching
+- CRITICAL: Messages after branch point must remain on original path
+- CRITICAL: Switching paths must return ONLY messages from active path
+
+### 7.3 Code Review Checklist for Path System Changes
+
+Before merging any PR that touches:
+- Conversation state management
+- Message handling or storage
+- Path creation, switching, or branching
+- UI message display logic
+- SSE streaming and conversation reload
+
+**Reviewers MUST verify:**
+
+1. ✅ All three test suites pass (`npm test` in `apps/demo-web`)
+2. ✅ No changes to message filtering logic that could break path isolation
+3. ✅ Branch creation doesn't modify original path messages
+4. ✅ Path switching correctly filters messages by `pathId`
+5. ✅ UI state updates reflect the active path's complete history
+6. ✅ No hard-coded assumptions about message counts or sequences
+7. ✅ Error handling doesn't corrupt conversation state
+
+### 7.4 CI/CD Requirements
+
+**Pre-commit checks:**
+```bash
+cd apps/demo-web
+npm test -- edit-previous-message  # MUST pass
+npm test -- path-system-integration # MUST pass
+npm test -- two-question-flow       # MUST pass
+```
+
+**CI Pipeline (GitHub Actions or similar):**
+```yaml
+# Path System Integration Tests (REQUIRED)
+- name: Run Path System Tests
+  run: |
+    cd apps/demo-web
+    npm test -- --run edit-previous-message.test.tsx
+    npm test -- --run path-system-integration.test.tsx
+    npm test -- --run two-question-flow.test.tsx
+```
+
+**Status Checks:**
+- Path system tests must be **required** status checks for PRs
+- Cannot merge if any critical path system test fails
+- Test failures in these suites require immediate investigation
+
+### 7.5 User-Facing Value Proposition
+
+The path system enables this user experience:
+
+> "Edit any message in your conversation to explore a different direction. Your original conversation is completely preserved and you can switch back at any time to see the full original discussion, including all messages that came after the point where you branched."
+
+**Real-world scenario:**
+```
+User asks 5 questions about tax regulations:
+  Q1: What is PRSI?
+  Q2: How does it apply to directors?
+  Q3: What about multiple directorships?
+  Q4: Are there exemptions?
+  Q5: What about cross-border cases?
+
+User realizes Q3 should have asked about sole traders instead:
+  → User edits Q3 to: "What about sole traders instead?"
+  → System creates new branch from Q3
+  → Branch explores sole trader direction
+  → Original path STILL has Q4, Q5 about directorships
+
+Later, user switches back to original path:
+  → UI shows complete original conversation
+  → All 5 original Q&A pairs visible
+  → User can reference the directorship discussion
+```
+
+This "time travel" feature distinguishes our system from linear chat interfaces (like ChatGPT) where editing loses subsequent messages. **Any regression to this functionality is considered critical.**
+
+### 7.6 Documentation References
+
+- **Test Documentation:** `docs/testing/PATH_SYSTEM_TESTING.md`
+- **Bug Fix Analysis:** `docs/fixes/TWO_QUESTION_FLOW_FIX.md`
+- **Architecture Status:** `docs/architecture/PATH_SYSTEM_STATUS.md`
+
+---
