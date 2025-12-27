@@ -207,7 +207,9 @@ export const piiBlockingAspect: GraphIngressAspect = async (ctx, next) => {
       }
 
       // Check for phone-like patterns (very basic)
-      if (/^\+?[\d\s\-()]{10,}$/.test(value)) {
+      // Exclude ISO dates (YYYY-MM-DD) and ISO timestamps (YYYY-MM-DDTHH:MM:SS)
+      const isISODate = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?/.test(value);
+      if (!isISODate && /^\+?[\d\s\-()]{10,}$/.test(value)) {
         throw new Error(
           `Graph Ingress Guard: Property "${key}" appears to contain a phone number. ` +
             `No PII allowed in the global graph.`,
