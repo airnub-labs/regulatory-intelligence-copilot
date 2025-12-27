@@ -1,7 +1,6 @@
 import { sanitizeObjectForEgress } from './egressGuard.js';
 import { LlmError } from './errors.js';
 import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
-import { SEMATTRS_HTTP_TARGET } from '@opentelemetry/semantic-conventions';
 
 const logger = createLogger('EgressClient');
 

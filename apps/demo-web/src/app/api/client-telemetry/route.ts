@@ -119,17 +119,34 @@ const getClientIp = (request: Request): string => {
 /**
  * Validate telemetry event
  */
-const isValidEvent = (event: any): event is ClientTelemetryEvent => {
+const isValidTimestamp = (timestamp: unknown): timestamp is string => {
+  return typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp));
+};
+
+const isValidEvent = (event: unknown): event is ClientTelemetryEvent => {
+  if (!event || typeof event !== 'object') {
+    return false;
+  }
+
+  const candidate = event as Partial<ClientTelemetryEvent> & { timestamp?: unknown };
+
   return (
-    event &&
-    typeof event === 'object' &&
-    typeof event.level === 'string' &&
-    (event.level === 'info' || event.level === 'warn' || event.level === 'error') &&
-    typeof event.message === 'string' &&
-    typeof event.scope === 'string' &&
-    typeof event.sessionId === 'string' &&
-    typeof event.timestamp === 'string'
+    typeof candidate.level === 'string' &&
+    (candidate.level === 'info' || candidate.level === 'warn' || candidate.level === 'error') &&
+    typeof candidate.message === 'string' &&
+    typeof candidate.scope === 'string' &&
+    typeof candidate.sessionId === 'string' &&
+    isValidTimestamp(candidate.timestamp)
   );
+};
+
+const getTimestampInNanoSeconds = (timestamp: string): number => {
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('Invalid timestamp provided');
+  }
+
+  return parsed * 1_000_000;
 };
 
 /**
@@ -164,7 +181,7 @@ const forwardToOTELCollector = async (events: ClientTelemetryEvent[]): Promise<v
               },
               logRecords: [
                 {
-                  timeUnixNano: new Date(event.timestamp).getTime() * 1_000_000,
+                  timeUnixNano: getTimestampInNanoSeconds(event.timestamp),
                   severityText:
                     event.level === 'error' ? 'ERROR' : event.level === 'warn' ? 'WARN' : 'INFO',
                   body: { stringValue: event.message },
@@ -274,6 +291,19 @@ export async function POST(request: Request) {
 
       if (events.length === 0) {
         return Response.json({ error: 'No valid events in batch' }, { status: 400 });
+      }
+
+      const droppedEvents = payload.events.length - events.length;
+
+      if (droppedEvents > 0) {
+        logger.warn(
+          {
+            clientIp,
+            batchSize: payload.events.length,
+            droppedEvents,
+          },
+          'Dropped invalid telemetry events from batch'
+        );
       }
 
       logger.debug(
