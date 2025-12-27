@@ -41,10 +41,12 @@ This tracker summarises what is implemented versus still pending for the v0.6 ar
 - ✅ Logging framework wired (PR #178)
 - ✅ Client telemetry validation (PR #179)
 - ✅ reg-intel-prompts test coverage (67 tests)
+- ✅ reg-intel-graph test coverage (85 tests)
+- ✅ Path system page integration (100% wired)
 
 ## Follow-on tasks
 
-- [ ] Implement Scenario Engine (see `docs/architecture/engines/scenario-engine/spec_v_0_1.md`)
+- [ ] Implement Scenario Engine (see `docs/architecture/engines/scenario-engine/spec_v_0_1.md`) - **PRIMARY GAP**
 - [ ] Expand UI to surface context summaries and referenced graph nodes visually
-- [ ] Add test coverage for `reg-intel-graph`, `reg-intel-ui`, `reg-intel-next-adapter`
-- [ ] Add API integration tests for pin, branch, merge, cleanup endpoints
+- [ ] Add test coverage for `reg-intel-ui`, `reg-intel-next-adapter` (reg-intel-graph now has 85 tests ✅)
+- [ ] Add API integration tests for pin, branch, merge, cleanup endpoints (84% of routes untested)
