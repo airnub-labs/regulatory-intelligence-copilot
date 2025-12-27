@@ -1,6 +1,8 @@
 import { createLogger, requestContext } from '@reg-copilot/reg-intel-observability';
+import { getRateLimiter } from '@/lib/rateLimiter';
 
 const logger = createLogger('ClientTelemetryRoute');
+const rateLimiter = getRateLimiter();
 
 type ClientTelemetryLevel = 'info' | 'warn' | 'error';
 
@@ -37,67 +39,11 @@ type ClientTelemetryPayload =
     };
 
 /**
- * Rate limiting configuration
- */
-const RATE_LIMIT_WINDOW_MS =
-  parseInt(process.env.CLIENT_TELEMETRY_RATE_LIMIT_WINDOW_MS || '60000', 10) || 60000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS =
-  parseInt(process.env.CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS || '100', 10) || 100; // 100 requests per minute
-
-/**
  * OTEL collector configuration
  */
 const OTEL_COLLECTOR_ENDPOINT = process.env.OTEL_COLLECTOR_ENDPOINT || null;
 const OTEL_COLLECTOR_TIMEOUT_MS =
   parseInt(process.env.OTEL_COLLECTOR_TIMEOUT_MS || '5000', 10) || 5000;
-
-/**
- * In-memory rate limiting store
- * In production, use Redis or a similar distributed cache
- */
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
-
-/**
- * Clean up expired rate limit entries periodically
- */
-setInterval(
-  () => {
-    const now = Date.now();
-    for (const [key, value] of rateLimitStore.entries()) {
-      if (value.resetAt < now) {
-        rateLimitStore.delete(key);
-      }
-    }
-  },
-  RATE_LIMIT_WINDOW_MS * 2
-); // Clean up every 2 windows
-
-/**
- * Check rate limit for a client IP
- */
-const checkRateLimit = (clientIp: string): boolean => {
-  const now = Date.now();
-  const key = `ratelimit:${clientIp}`;
-  const entry = rateLimitStore.get(key);
-
-  if (!entry || entry.resetAt < now) {
-    // First request or window expired
-    rateLimitStore.set(key, {
-      count: 1,
-      resetAt: now + RATE_LIMIT_WINDOW_MS,
-    });
-    return true;
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
-    // Rate limit exceeded
-    return false;
-  }
-
-  // Increment count
-  entry.count++;
-  return true;
-};
 
 /**
  * Extract client IP from request
@@ -263,14 +209,15 @@ const processEvent = (event: ClientTelemetryEvent): void => {
  */
 export async function POST(request: Request) {
   try {
-    // Check rate limit
+    // Check rate limit using distributed rate limiter (Redis or in-memory fallback)
     const clientIp = getClientIp(request);
-    if (!checkRateLimit(clientIp)) {
+    const isAllowed = await rateLimiter.check(clientIp);
+
+    if (!isAllowed) {
       logger.warn(
         {
           clientIp,
-          rateLimitWindow: RATE_LIMIT_WINDOW_MS,
-          rateLimitMax: RATE_LIMIT_MAX_REQUESTS,
+          rateLimiterType: rateLimiter.getType(),
         },
         'Client telemetry rate limit exceeded'
       );
