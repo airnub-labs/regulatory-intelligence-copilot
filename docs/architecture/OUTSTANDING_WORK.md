@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
 > **Last Updated**: 2025-12-27
-> **Status**: Consolidated review of all architecture documents
-> **Previous Update**: 2025-12-24
+> **Status**: Comprehensive codebase review and gap analysis
+> **Previous Update**: 2025-12-27
 
 ---
 
@@ -18,7 +18,9 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Message Pinning | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Concept Capture & Graph | ⚠️ 40% | N/A | ⚠️ Partial |
-| v0.6 | Conversation Persistence | ⚠️ 75% | ⚠️ 70% | ⚠️ In-memory only |
+| v0.6 | Conversation Persistence | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.6 | Distributed SSE Fan-out | ✅ Complete | N/A | ✅ Wired |
+| v0.6 | OpenFGA/ReBAC Authorization | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | Observability & Cleanup | ✅ Complete | N/A | ✅ Wired |
@@ -372,9 +374,9 @@ GET /api/conversations?limit=20&cursor=<nextCursor>
 ### 3.3 MEDIUM: Missing API Integration Tests
 
 **Priority**: MEDIUM (Quality)
-**Effort**: 4-6 hours
+**Effort**: 1-2 days
 
-**Description**: Several API endpoints lack integration tests.
+**Description**: Several API endpoints lack integration tests. The demo-web app has 22 API route files but only 5 have tests.
 
 **Missing Tests**:
 
@@ -382,13 +384,23 @@ GET /api/conversations?limit=20&cursor=<nextCursor>
 |----------|-----------------|--------|
 | `/api/conversations/[id]/messages/[messageId]/pin` | `pin/route.test.ts` | ❌ Missing |
 | `/api/cron/cleanup-contexts` | `cleanupExecutionContexts.test.ts` | ❌ Missing |
+| `/api/conversations/[id]/branch` | `branch/route.test.ts` | ❌ Missing |
+| `/api/conversations/[id]/paths/[pathId]/merge` | `merge/route.test.ts` | ❌ Missing |
+| `/api/conversations/[id]/stream` | `stream/route.test.ts` | ❌ Missing |
 | Version Navigator E2E | `version-navigator.e2e.ts` | ❌ Missing |
+
+**Current Coverage** (5 test files exist):
+- `apps/demo-web/src/app/api/chat/route.test.ts` ✅
+- `apps/demo-web/src/app/api/client-telemetry/route.test.ts` ✅
+- `apps/demo-web/src/app/api/graph/route.logging.test.ts` ✅
 
 **Tasks**:
 
 - [ ] **Task IT.1**: Create message pinning API tests
 - [ ] **Task IT.2**: Create cleanup job integration tests
-- [ ] **Task IT.3**: Create version navigator E2E tests
+- [ ] **Task IT.3**: Create branch/merge API tests
+- [ ] **Task IT.4**: Create SSE stream tests
+- [ ] **Task IT.5**: Create version navigator E2E tests
 
 ---
 
@@ -467,6 +479,76 @@ GET /api/conversations?limit=20&cursor=<nextCursor>
 
 ---
 
+### 3.4 MEDIUM: Package Test Coverage Gaps
+
+**Priority**: MEDIUM (Quality)
+**Effort**: 2-3 days
+
+**Description**: Three packages have minimal or no test coverage, creating risk for future maintenance.
+
+#### 3.4.1 reg-intel-graph (4 tests - needs expansion)
+
+**Current State**:
+- ✅ 3 test files exist but with minimal coverage
+- ⚠️ `graphIngressGuard.ts` - 0 tests (aspect pipeline, schema validation)
+- ⚠️ `canonicalConceptHandler.ts` - 0 tests (concept normalization)
+
+**Tasks**:
+
+- [ ] **Task TG.1**: Add `graphIngressGuard.test.ts`
+  - Test schema validation aspect
+  - Test PII blocking aspect
+  - Test property whitelist filtering
+  - Test aspect composition order
+
+- [ ] **Task TG.2**: Add `canonicalConceptHandler.test.ts`
+  - Test concept normalization
+  - Test ID generation
+  - Test duplicate detection
+
+- [ ] **Task TG.3**: Expand `graphWriteService.test.ts`
+  - Test all concept types (BENEFIT, RELIEF, RULE, etc.)
+  - Test relationship types
+  - Test error handling
+
+#### 3.4.2 reg-intel-ui (0 tests - needs coverage)
+
+**Current State**:
+- ❌ No tests for 5 React components
+- ❌ No tests for `useConversationPaths` hook
+
+**Components to Test**:
+- `PathSelector.tsx` - Dropdown selection logic
+- `BranchButton.tsx` - Branch creation trigger
+- `BranchDialog.tsx` - Branch creation form
+- `MergeDialog.tsx` - Merge workflow + AI summarization
+- `VersionNavigator.tsx` - Branch tree visualization
+
+**Tasks**:
+
+- [ ] **Task TU.1**: Set up Vitest + React Testing Library
+- [ ] **Task TU.2**: Add hook tests for `useConversationPaths`
+- [ ] **Task TU.3**: Add component tests for dialogs and selectors
+
+#### 3.4.3 reg-intel-next-adapter (0 tests - needs coverage)
+
+**Current State**:
+- ❌ No tests for `E2BSandboxClient` class
+- ❌ No tests for singleton manager pattern
+
+**Files to Test**:
+- `executionContext.ts` - 262 lines, 0 tests
+
+**Tasks**:
+
+- [ ] **Task TN.1**: Add `executionContext.test.ts`
+  - Test `E2BSandboxClient.create()` with mocked E2B
+  - Test `E2BSandboxClient.reconnect()` with mocked E2B
+  - Test singleton initialization/shutdown
+  - Test error handling for missing config
+
+---
+
 ### 4.4 LOW: Concept Capture Expansion
 
 **Priority**: LOW
@@ -483,7 +565,7 @@ GET /api/conversations?limit=20&cursor=<nextCursor>
 
 **Tasks**:
 
-- [ ] **Task CC.1**: Expand graph write service coverage
+- [ ] **Task CC.1**: Expand graph write service coverage (see 3.4.1)
 - [ ] **Task CC.2**: Add tests for all concept types
 - [ ] **Task CC.3**: Wire comprehensive ingestion scenarios
 
@@ -553,12 +635,13 @@ Branch navigation with preview cards fully functional.
 | ~~3.2 Supabase Persistence~~ | MEDIUM | 1 week | ✅ COMPLETED |
 | ~~3.1 OpenFGA Integration~~ | MEDIUM | 1-2 weeks | ✅ COMPLETED |
 
-### Phase B: Feature Completion
+### Phase B: Feature Completion & Quality
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
 | 2.1 Scenario Engine | HIGH | 2-3 weeks | None |
-| 3.3 API Integration Tests | MEDIUM | 4-6h | None |
+| 3.3 API Integration Tests | MEDIUM | 1-2 days | None |
+| 3.4 Package Test Coverage | MEDIUM | 2-3 days | None |
 
 ### Phase C: Polish (Deferred)
 
@@ -575,26 +658,50 @@ Branch navigation with preview cards fully functional.
 
 ### Packages with Good Coverage
 
-| Package | Test Files | Status |
-|---------|------------|--------|
-| reg-intel-conversations | 5 tests | ✅ Good |
-| reg-intel-prompts | 3 tests (67 total tests) | ✅ Excellent ✅ **NEW** |
-| reg-intel-llm | 6 tests | ✅ Good |
-| reg-intel-core | 8 tests | ✅ Good |
-| reg-intel-observability | 3 tests | ✅ Adequate |
+| Package | Test Files | Total Tests | Status |
+|---------|------------|-------------|--------|
+| reg-intel-conversations | 5 files | ~30 tests | ✅ Good |
+| reg-intel-prompts | 3 files | 67 tests | ✅ Excellent |
+| reg-intel-llm | 6 files | ~25 tests | ✅ Good |
+| reg-intel-core | 7 files | ~35 tests | ✅ Good |
+| reg-intel-observability | 3 files | ~15 tests | ✅ Adequate |
 
 ### Packages Needing Coverage
 
-| Package | Lines | Tests | Issue |
-|---------|-------|-------|-------|
-| reg-intel-graph | ~200 | 2 | ⚠️ Minimal coverage |
-| reg-intel-next-adapter | ~7,600 | 0 | ⚠️ No tests |
+| Package | Source Files | Test Files | Tests | Issue |
+|---------|--------------|------------|-------|-------|
+| reg-intel-graph | 8 files (~500 LOC) | 3 files | 4 tests | ⚠️ Minimal (needs ingress guard, concept handler tests) |
+| reg-intel-ui | 7 files (~800 LOC) | 0 files | 0 tests | ⚠️ No tests (React components + hooks) |
+| reg-intel-next-adapter | 2 files (~260 LOC) | 0 files | 0 tests | ⚠️ No tests (E2B adapter, singleton pattern) |
 
-### Missing Integration Tests
+### Package Test Details
 
-- ❌ Message pinning API (`/api/.../pin/route.test.ts`)
-- ❌ Cleanup job (`cleanupExecutionContexts.test.ts`)
-- ❌ Version navigator E2E
+**reg-intel-graph** (3 test files, 4 tests - minimal):
+- `boltGraphClient.test.ts` - 1 test (connection)
+- `graphWriteService.test.ts` - 2 tests (property stripping)
+- `graphChangeDetector.test.ts` - 1 test (patch detection)
+- **Missing**: `graphIngressGuard.test.ts`, `canonicalConceptHandler.test.ts`
+
+**reg-intel-ui** (0 test files):
+- Components: `PathSelector`, `BranchButton`, `BranchDialog`, `MergeDialog`, `VersionNavigator`
+- Hook: `useConversationPaths`
+- **Recommended**: Vitest + React Testing Library for component tests
+
+**reg-intel-next-adapter** (0 test files):
+- `E2BSandboxClient` class - E2B wrapper
+- Singleton manager pattern (init, get, shutdown)
+- **Recommended**: Mock-based unit tests for adapter logic
+
+### Missing Integration Tests (demo-web)
+
+| Endpoint | Priority | Notes |
+|----------|----------|-------|
+| `/api/conversations/[id]/messages/[messageId]/pin` | HIGH | Core feature, no coverage |
+| `/api/cron/cleanup-contexts` | HIGH | Critical for production |
+| `/api/conversations/[id]/branch` | MEDIUM | Branching workflow |
+| `/api/conversations/[id]/paths/[pathId]/merge` | MEDIUM | Merge workflow |
+| `/api/conversations/[id]/stream` | LOW | SSE testing complex |
+| Version navigator E2E | LOW | Requires Playwright/Cypress |
 
 ---
 
@@ -655,21 +762,23 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~2-3 weeks
+**Total Outstanding Effort**: ~4-5 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 1 (was 2) | 2-3 weeks |
-| MEDIUM | 1 (was 3) | 4-6h |
+| HIGH | 1 | 2-3 weeks (Scenario Engine) |
+| MEDIUM | 2 | 3-5 days (API Tests + Package Tests) |
 | LOW | 5 | 3-4 weeks |
 
 ### Critical Gaps Identified
 
-1. **Scenario Engine** - Fully documented, zero implementation
+1. **Scenario Engine** - Fully documented (spec_v_0_1.md), zero implementation - **PRIMARY GAP**
 2. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
 3. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
 4. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
 5. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
+6. **Package Test Coverage** - 3 packages need tests (reg-intel-graph, reg-intel-ui, reg-intel-next-adapter)
+7. **API Integration Tests** - 6+ endpoints without test coverage
 
 ### Production Readiness Checklist
 
@@ -677,19 +786,35 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] Client telemetry with batching
 - [x] Logging framework wired
 - [x] Execution context cleanup job
-- [x] Redis/distributed SSE ✅ **COMPLETED** (2025-12-27)
-- [x] Supabase persistence wired ✅ **COMPLETED** (2025-12-27)
-- [x] Authorization service integrated ✅ **COMPLETED** (2025-12-27)
-- [ ] Full test coverage
+- [x] Redis/distributed SSE ✅
+- [x] Supabase persistence wired ✅
+- [x] Authorization service integrated ✅
+- [x] Graph services (read/write) ✅
+- [x] Conversation branching & merging ✅
+- [x] Message pinning ✅
+- [ ] Full test coverage (currently ~170 tests across 26 files)
+- [ ] Scenario Engine implementation
+
+### Codebase Statistics
+
+| Metric | Count |
+|--------|-------|
+| Total packages | 8 |
+| Total test files | 31 (26 packages + 5 app) |
+| Estimated total tests | ~170 |
+| API route files | 22 |
+| API routes with tests | 3 |
+| Packages with 0 tests | 2 (reg-intel-ui, reg-intel-next-adapter) |
 
 ---
 
-**Document Version**: 3.4
+**Document Version**: 3.5
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.3 (2025-12-27), 3.2 (2025-12-27), 3.1 (2025-12-27), 3.0 (2025-12-27), 2.7 (2025-12-24), 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.0
+**Previous Versions**: 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v3.5 (2025-12-27): Comprehensive codebase review - updated test coverage details, added package statistics, identified 3 packages needing tests, expanded API integration test tracking
 - v3.4 (2025-12-27): Mark reg-intel-prompts test coverage as COMPLETED ✅ (67 comprehensive tests, 100% coverage)
 - v3.3 (2025-12-27): Mark OpenFGA authorization service as COMPLETED ✅ (3 implementations with comprehensive tests)
 - v3.2 (2025-12-27): Mark Supabase persistence as COMPLETED ✅ (cursor pagination added)
