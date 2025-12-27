@@ -4,7 +4,6 @@ import type {
   ConversationListEventType,
   SseSubscriber,
 } from './eventHub.js';
-import { ConversationEventHub, ConversationListEventHub } from './eventHub.js';
 import {
   SupabaseRealtimeConversationEventHub,
   SupabaseRealtimeConversationListEventHub,
@@ -523,20 +522,15 @@ export class RedisConversationListEventHub {
 }
 
 /**
- * Create event hub instances with automatic fallback
+ * Create event hub instances with automatic transport selection
  *
  * If Redis credentials are provided, returns Redis-backed hubs.
- * Otherwise, returns in-memory hubs for development.
+ * Otherwise, uses Supabase Realtime when credentials are present.
+ * Throws when neither transport is configured to avoid silent single-instance drift.
  */
 export function createEventHubs(config?: EventHubFactoryConfig): {
-  conversationEventHub:
-    | ConversationEventHub
-    | RedisConversationEventHub
-    | SupabaseRealtimeConversationEventHub;
-  conversationListEventHub:
-    | ConversationListEventHub
-    | RedisConversationListEventHub
-    | SupabaseRealtimeConversationListEventHub;
+  conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
+  conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 } {
   const redisConfig =
     (config && 'url' in config ? config : 'redis' in (config ?? {}) ? config?.redis : undefined) ?? undefined;
@@ -556,8 +550,7 @@ export function createEventHubs(config?: EventHubFactoryConfig): {
     };
   }
 
-  return {
-    conversationEventHub: new ConversationEventHub(),
-    conversationListEventHub: new ConversationListEventHub(),
-  };
+  throw new Error(
+    'Event hubs require Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.',
+  );
 }

@@ -1,8 +1,6 @@
 import 'server-only';
 
 import {
-  ConversationEventHub,
-  ConversationListEventHub,
   RedisConversationEventHub,
   RedisConversationListEventHub,
   SupabaseRealtimeConversationEventHub,
@@ -131,14 +129,8 @@ export const conversationPathStore = supabaseClient
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
 
-let conversationEventHub:
-  | ConversationEventHub
-  | RedisConversationEventHub
-  | SupabaseRealtimeConversationEventHub;
-let conversationListEventHub:
-  | ConversationListEventHub
-  | RedisConversationListEventHub
-  | SupabaseRealtimeConversationListEventHub;
+let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
+let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 
 if (redisUrl && redisToken) {
   logger.info(
@@ -190,13 +182,10 @@ if (redisUrl && redisToken) {
     }
   });
 } else {
-  logger.info(
-    { mode: normalizeConversationStoreMode },
-    'Using in-memory event hubs (not suitable for multi-instance deployments)'
-  );
-
-  conversationEventHub = new ConversationEventHub();
-  conversationListEventHub = new ConversationListEventHub();
+  const message =
+    'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.';
+  logger.error({ mode: normalizeConversationStoreMode }, message);
+  throw new Error(message);
 }
 
 export { conversationEventHub, conversationListEventHub };
