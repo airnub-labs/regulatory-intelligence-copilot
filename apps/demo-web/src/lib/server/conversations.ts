@@ -159,6 +159,34 @@ if (redisUrl && redisToken) {
 
 export { conversationEventHub, conversationListEventHub };
 
+// Configure OpenFGA for fine-grained authorization (optional)
+// If not configured, conversations will use Supabase RLS-based authorization
+const openfgaApiUrl = process.env.OPENFGA_API_URL;
+const openfgaStoreId = process.env.OPENFGA_STORE_ID;
+const openfgaAuthorizationModelId = process.env.OPENFGA_AUTHORIZATION_MODEL_ID;
+
+export const openfgaConfig =
+  openfgaApiUrl && openfgaStoreId
+    ? {
+        apiUrl: openfgaApiUrl,
+        storeId: openfgaStoreId,
+        authorizationModelId: openfgaAuthorizationModelId,
+      }
+    : undefined;
+
+if (openfgaConfig) {
+  logger.info(
+    {
+      apiUrl: openfgaConfig.apiUrl,
+      storeId: openfgaConfig.storeId,
+      hasModelId: Boolean(openfgaConfig.authorizationModelId),
+    },
+    'OpenFGA authorization configured'
+  );
+} else {
+  logger.info('OpenFGA not configured; using Supabase RLS-based authorization');
+}
+
 // Create ExecutionContextManager if E2B is configured
 // This enables code execution tools in the chat
 const e2bApiKey = process.env.E2B_API_KEY;
