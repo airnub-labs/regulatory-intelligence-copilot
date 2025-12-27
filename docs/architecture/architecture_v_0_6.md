@@ -778,8 +778,12 @@ To keep scope sane, v0.6 explicitly does **not** attempt to:
 
 ### Deprecated / Removed
 
-- ❌ `supersededBy` field for message versioning (replaced by path-based versioning).
-- ❌ `softDeleteMessage()` method (replaced by path versioning via new messages).
+- ❌ **`supersededBy` field for message versioning** - FULLY REMOVED Dec 2024 (replaced by path-based versioning).
+  - Removed from ConversationMessage interface
+  - Removed from all store implementations
+  - Removed from softDeleteMessage method signature
+  - System now uses 100% path-based versioning
+- ❌ `softDeleteMessage()` supersededBy parameter - REMOVED Dec 2024 (no longer needed with path-based branching).
 - ❌ `PathEventPayloads` interface (replaced by `PathEventPayloadMap` in sseTypes.ts).
 - ❌ `AuditorError` and `isAuditorError` aliases (use `ComplianceError` and `isComplianceError`).
 
