@@ -69,8 +69,24 @@ export class BoltGraphClient implements GraphClient {
       async () => {
         const session = this.driver.session({ database: this.database });
 
+        // Debug logging for query execution
+        this.logger.debug({
+          queryHash,
+          database: this.database,
+          query: query.substring(0, 200), // Log first 200 chars of query
+          hasParams: !!params && Object.keys(params).length > 0,
+          paramKeys: params ? Object.keys(params) : [],
+        }, `${LOG_PREFIX.graph} Executing Cypher query`);
+
         try {
           const result = await session.run(query, params || {});
+          const recordCount = result.records.length;
+
+          this.logger.debug({
+            queryHash,
+            recordCount,
+          }, `${LOG_PREFIX.graph} Cypher query completed`);
+
           return result.records.map(record => record.toObject());
         } catch (error) {
           this.logger.error({
