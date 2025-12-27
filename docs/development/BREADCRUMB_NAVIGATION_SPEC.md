@@ -443,25 +443,51 @@ setTimeout(() => {
 
 ---
 
-## Future Enhancements
+## Implementation Context
 
-### Phase 1: Basic Breadcrumb (4-6 hours)
-- Path switching only
-- No branch point integration
+**This breadcrumb navigation feature is Phase 4** of the overall UX improvement strategy.
 
-### Phase 2: Jump to Message (2-3 hours)
-- Auto-scroll to branch point
-- Message highlighting
+**See**: [PHASE_3_OPTIMAL_STRATEGY.md](./PHASE_3_OPTIMAL_STRATEGY.md) for complete phased approach.
 
-### Phase 3: Rich Context (2-3 hours)
-- Inline message previews
-- Advanced tooltips
-- Message type icons
+### Prerequisites (Phase 3 - Must Be Done First)
 
-### Phase 4: Interactive Timeline (Future)
+Before implementing breadcrumb navigation, Phase 3 must complete:
+
+1. **Message DOM IDs**: All messages must have `id="message-{messageId}"` attribute
+2. **Scroll Utility**: `scrollToMessage()` function implemented and tested
+3. **Highlight Utility**: `highlightMessage()` function implemented and tested
+4. **Data Attributes**: Branch point messages have proper data attributes
+5. **Test Coverage**: Utilities have ≥90% test coverage
+
+**Effort**: Phase 3 = 2-3 hours | Phase 4 = 6-9 hours | **Total**: 8-12 hours
+
+### Phase 4 Implementation Plan
+
+#### Sub-Phase 4.1: Basic Breadcrumb (3-4 hours)
+- Create PathBreadcrumbs component
+- Implement path chain building logic
+- Add horizontal navigation UI
+- Path switching on click
+- Mobile-responsive horizontal scroll
+
+#### Sub-Phase 4.2: Jump to Message Integration (2-3 hours)
+- Integrate with Phase 3 scroll utilities
+- Pass branch point message IDs to breadcrumb
+- Implement auto-scroll on parent path click
+- Add message highlight animation
+- Test scroll behavior across browsers
+
+#### Sub-Phase 4.3: Context Enhancements (1-2 hours)
+- Add tooltips showing branch point message preview
+- Branch point icon indicators
+- Hover states and accessibility
+- Keyboard navigation
+
+### Future Enhancements (Beyond Phase 4)
 - Click to see full conversation state at branch point
 - Diff view showing what changed in branch
 - Merge conflict resolution UI
+- Inline message previews in breadcrumb tooltips
 
 ---
 
@@ -513,14 +539,34 @@ Already implemented ✅
 
 ## Summary
 
-**Enhanced breadcrumb navigation provides**:
-1. ✅ Path switching (like current proposal)
-2. ✅ Jump to exact branch point message (new!)
-3. ✅ Visual context of branch origins (new!)
-4. ✅ Improved user understanding of path hierarchy
+**This is Phase 4** of the complete UX improvement strategy.
 
-**Effort**: 4-6 hours (base) + 2-3 hours (jump-to-message)
+**See**: [PHASE_3_OPTIMAL_STRATEGY.md](./PHASE_3_OPTIMAL_STRATEGY.md) for the complete phased approach.
 
-**Recommendation**: Implement in Phase 4 after user feedback on Phase 1+2
+### What This Feature Provides
+
+1. ✅ **Path switching** via horizontal breadcrumb navigation
+2. ✅ **Jump to exact branch point message** with auto-scroll and highlight
+3. ✅ **Visual context** of branch origins via tooltips
+4. ✅ **Improved user understanding** of path hierarchy
+
+### Implementation Effort
+
+| Component | Effort |
+|-----------|--------|
+| Phase 3: Technical foundation (prerequisites) | 2-3 hours |
+| Phase 4.1: Basic breadcrumb UI | 3-4 hours |
+| Phase 4.2: Jump-to-message integration | 2-3 hours |
+| Phase 4.3: Context enhancements | 1-2 hours |
+| **Total** | **8-12 hours** |
+
+### Implementation Sequence
+
+1. **Phase 1**: Change "Main" → "Primary" (1h) ✅ Ready
+2. **Phase 2**: Add tree prefixes showing depth (2-3h) ✅ Ready
+3. **Phase 3**: Implement scroll utilities and DOM IDs (2-3h) ⭐ **Required**
+4. **Phase 4**: Implement breadcrumb navigation ← **This spec** (6-9h)
+
+**Prerequisites**: Phase 3 must be complete before starting Phase 4.
 
 **User Benefit**: "I can see exactly where each branch came from and jump straight to that point in the conversation!"

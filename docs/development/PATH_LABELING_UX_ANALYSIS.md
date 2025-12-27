@@ -295,29 +295,34 @@ Primary
 
 ---
 
-### Phase 3: Additional Context (Pick ONE) 🤔 OPTIONAL
+### Phase 3: Technical Foundation for Breadcrumbs ⭐ RECOMMENDED
 
-Choose **one** of these alternatives based on user feedback:
+**IMPORTANT**: See [PHASE_3_OPTIMAL_STRATEGY.md](./PHASE_3_OPTIMAL_STRATEGY.md) for detailed implementation plan.
 
-#### **Option 3A**: Parent Context Labels
-- **Display**: `"Edit: What about... (from Alternative Scenario)"`
-- **Effort**: 2 hours
-- **Pros**: Very explicit
-- **Cons**: Can get long with deep nesting
+Given that **Phase 4 will implement breadcrumbs with jump-to-message**, Phase 3 should focus on **technical preparation** rather than UX enhancements:
 
-#### **Option 3B**: Depth Badges
-- **Display**: `[Branch·2] Edit: What about...`
-- **Effort**: 1.5 hours
-- **Pros**: Compact, shows depth at a glance
-- **Cons**: Requires learning what the number means
+#### **Recommended: Technical Foundation (Option A)**
+- **Effort**: 2-3 hours
+- **Focus**: Prepare infrastructure for Phase 4 breadcrumbs
+- **Deliverables**:
+  1. Message DOM IDs (`id="message-{messageId}"`)
+  2. `scrollToMessage()` utility function
+  3. `highlightMessage()` utility function
+  4. Data attributes for branch points
+  5. Test coverage for utilities
 
-#### **Option 3C**: Hover Tooltips with Full Path
-- **Display**: Hover shows `Primary > Alternative > Edit`
-- **Effort**: 1 hour
-- **Pros**: Doesn't clutter UI
-- **Cons**: Hidden until hover
+**Why**:
+- Phase 2 already provides visual hierarchy (tree prefixes)
+- Phase 4 will provide comprehensive navigation UX
+- Better to invest in solid foundation than temporary features
+- Faster path to Phase 4 = better overall UX sooner
 
-**Recommendation**: Start with Phase 1+2, gather user feedback, then decide if Phase 3 is needed.
+#### **Alternative: Foundation + Tooltips (Option B)**
+- **Effort**: 3-4 hours
+- **Includes**: All of Option A + hover tooltips showing full path chain
+- **When to use**: If Phase 4 is delayed or tooltips will remain post-breadcrumbs
+
+**Recommendation**: Choose **Option A** (foundation only) for fastest path to Phase 4 breadcrumbs.
 
 ---
 
@@ -365,18 +370,20 @@ Path: Primary > Alternative Scenario > Edit: What about...
 
 ---
 
-## Summary: Which Options Go in Which Phase?
+## Summary: Complete Phased Implementation Strategy
 
-| Phase | Includes | Effort | Status |
-|-------|----------|--------|--------|
-| **Phase 1** | Option 1 only | 1h | ⭐ Ready |
-| **Phase 2** | Option 2 only | 2-3h | ⭐ Recommended |
-| **Phase 3** | Pick ONE: 3, or 5 | 1-2h | 🤔 Optional |
-| **Phase 4** | Option 4 only | 4-6h | 🚀 Future |
+**See [PHASE_3_OPTIMAL_STRATEGY.md](./PHASE_3_OPTIMAL_STRATEGY.md) for comprehensive implementation guide.**
 
-**Options 3 and 5 are ALTERNATIVES to each other**, not cumulative.
+| Phase | Focus | Effort | Status |
+|-------|-------|--------|--------|
+| **Phase 1** | Label Clarity: "Main" → "Primary" | 1h | ⭐ Ready |
+| **Phase 2** | Visual Hierarchy: Tree prefixes with depth | 2-3h | ⭐ Recommended |
+| **Phase 3** | Technical Foundation: Scroll utilities & DOM IDs | 2-3h | ⭐ Recommended |
+| **Phase 4** | Breadcrumb Navigation: Jump-to-message feature | 6-9h | 🚀 Future |
 
-**Option 4 is a separate major feature** for the future.
+**Total Effort**: 11-16 hours for complete implementation
+
+**Key Insight**: Phase 3 is now a **technical preparation phase** for Phase 4 breadcrumbs, not a UX enhancement phase.
 
 ---
 
