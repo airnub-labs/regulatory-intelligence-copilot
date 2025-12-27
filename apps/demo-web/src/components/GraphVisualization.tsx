@@ -135,6 +135,7 @@ export function GraphVisualization({
   const pendingPatchesRef = useRef<GraphPatch[]>([]);
   const fgRef = useRef<ForceGraphRef>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const telemetry = telemetryRef.current;
 
   // Memoized node color mapping - prevents recreation on every render
@@ -416,6 +417,11 @@ export function GraphVisualization({
 
   // Connect to SSE stream
   const connectToStream = useCallback(() => {
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
     }
@@ -457,7 +463,11 @@ export function GraphVisualization({
       eventSource.close();
 
       // Reconnect after 5 seconds
-      setTimeout(() => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+
+      reconnectTimeoutRef.current = setTimeout(() => {
         streamLogger.warn({ streamRequestId: requestId }, 'Reconnecting to stream...');
         connectToStream();
       }, 5000);
@@ -475,6 +485,11 @@ export function GraphVisualization({
     connectToStream();
 
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
       }

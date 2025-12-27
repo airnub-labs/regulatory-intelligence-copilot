@@ -110,6 +110,7 @@ export interface ExecutionContextLogger {
   info(message: string, meta?: Record<string, unknown>): void;
   error(message: string, meta?: Record<string, unknown>): void;
   warn(message: string, meta?: Record<string, unknown>): void;
+  debug(meta: Record<string, unknown>, message?: string): void;
 }
 
 /**

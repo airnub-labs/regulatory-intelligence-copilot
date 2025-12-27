@@ -255,7 +255,7 @@ export class GraphWriteService {
         [SEMATTRS_DB_NAME]: 'memgraph',
         [SEMATTRS_DB_OPERATION]: operation || 'write',
         'db.node.label': nodeLabel,
-        'db.node.id': properties.id,
+        'db.node.id': typeof properties.id === 'string' ? properties.id : undefined,
         ...(this.tenantId ? { 'app.tenant.id': this.tenantId } : {}),
       },
       async () => {
