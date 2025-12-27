@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
-> **Last Updated**: 2025-12-23
+> **Last Updated**: 2025-12-27
 > **Status**: Consolidated review of all architecture documents
-> **Previous Update**: 2025-12-12
+> **Previous Update**: 2025-12-24
 
 ---
 
@@ -17,179 +17,235 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Message Pinning | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.6 | Concept Capture & Graph | ⚠️ 40% | N/A | ⚠️ Partial |
+| v0.6 | Conversation Persistence | ⚠️ 75% | ⚠️ 70% | ⚠️ In-memory only |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
-| v0.7 | EgressGuard (Outbound) | ✅ Complete | N/A | ✅ Wired |
-| v0.7 | EgressGuard (Response/Sandbox) | ✅ Complete | N/A | ❌ NOT Wired |
+| v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | Observability & Cleanup | ✅ Complete | N/A | ✅ Wired |
+| v0.7 | Client Telemetry | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.7 | Logging Framework | ✅ Complete | N/A | ✅ Wired |
 
 ---
 
-## 1. Completed Work
+## 1. Recently Completed Work (Since 2025-12-24)
 
-### 1.1 Conversation Branching & Merging (v0.6)
+### 1.1 Client Telemetry Architecture ✅
 
-**Reference**: `docs/architecture/IMPLEMENTATION-PLAN.md`, `docs/architecture/conversation-branching-and-merging.md`
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | Database Schema (`conversation_paths`, path-aware messages) | ✅ Complete |
-| Phase 2 | Backend Stores (`ConversationPathStore`, Supabase impl) | ✅ Complete |
-| Phase 3 | API Routes (paths CRUD, branching, merging, SSE) | ✅ Complete |
-| Phase 4 | Reusable UI Components (`@reg-copilot/reg-intel-ui`) | ✅ Complete |
-| Phase 5 | Demo App Integration (PathToolbar, BranchDialog, MergeDialog) | ✅ Complete |
-
-**Files Created/Modified**:
-- `supabase/migrations/20241207000001_add_conversation_paths.sql`
-- `packages/reg-intel-conversations/src/pathStores.ts`
-- `packages/reg-intel-ui/` (full package)
-- `apps/demo-web/src/components/chat/path-toolbar.tsx`
-- `apps/demo-web/src/components/chat/conditional-path-provider.tsx`
-- All path API routes under `apps/demo-web/src/app/api/conversations/[id]/`
-
-### 1.2 E2B Execution Contexts (v0.7)
-
-**Reference**: `docs/architecture/execution-context/IMPLEMENTATION_PLAN.md`, `docs/architecture/E2B_ARCHITECTURE.md`
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | Foundation (ExecutionContextStore, Manager) | ✅ Complete |
-| Phase 2 | Tool Integration (`run_code`, `run_analysis` tools) | ✅ Complete |
-| Phase 3 | Path Integration (wiring through chat handler) | ✅ Complete |
-| Phase 4 | Observability | ✅ Complete (spans added, cleanup job implemented) |
-
-**Files Created/Modified**:
-- `supabase/migrations/20251210000000_execution_contexts.sql`
-- `packages/reg-intel-conversations/src/executionContextStores.ts`
-- `packages/reg-intel-conversations/src/executionContextManager.ts`
-- `packages/reg-intel-llm/src/tools/codeExecutionTools.ts`
-- `packages/reg-intel-llm/src/tools/toolRegistry.ts`
-- `apps/demo-web/src/components/chat/prompt-input.tsx` (Run Code/Run Analysis buttons)
-
-### 1.3 AI Merge Summarization (v0.6 Phase 6) ✅
-
-**Reference**: `docs/architecture/IMPLEMENTATION-PLAN.md` Phase 6, `docs/architecture/conversation-branching-and-merging.md` Part 9
+**Reference**: `docs/architecture/client-telemetry-architecture-v1.md`
 
 | Component | Status |
 |-----------|--------|
-| `MergeSummarizer` service | ✅ Complete |
-| Summarization prompts (regulatory-focused) | ✅ Complete |
-| Integration with merge API endpoint | ✅ Complete |
-| MergeDialog UI with summary mode | ✅ Complete |
-| Custom prompt input | ✅ Complete |
-| Fallback when LLM unavailable | ✅ Complete |
+| Client-side batching (TelemetryBatchQueue) | ✅ Complete |
+| Server-side rate limiting (per IP) | ✅ Complete |
+| OTEL Collector forwarding | ✅ Complete |
+| Page unload handlers | ✅ Complete |
+| Timestamp validation | ✅ Complete |
 
-**Files Implemented**:
-- `apps/demo-web/src/lib/server/mergeSummarizer.ts` - Full AI summarization with regulatory prompts
-- `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/merge/route.ts` - Integrated summarizer
-- `packages/reg-intel-ui/src/components/MergeDialog.tsx` - Complete merge UI with all modes
+**PRs**: #179 (timestamp validation), #178 (logging wiring)
 
-**Features**:
-- AI-powered summary generation with temperature 0.3, max 600 tokens
-- Custom user-provided summarization instructions
-- Fallback summary when LLM unavailable
-- Preview of merge before execution
-- Support for `summary`, `full`, and `selective` merge modes
-- Archive source option
+### 1.2 Logging Framework Wiring ✅
 
-### 1.4 Message Pinning (Backend Only)
-
-**Reference**: `docs/architecture/MESSAGE_PINNING.md`
+**Reference**: PR #178
 
 | Component | Status |
 |-----------|--------|
-| Database schema (`is_pinned`, `pinned_at`, `pinned_by`) | ✅ Complete |
-| Store operations (`pinMessage`, `unpinMessage`, `getPinnedMessages`) | ✅ Complete |
-| RLS policies and indexes | ✅ Complete |
-| TypeScript types | ✅ Complete |
+| Pino structured logging | ✅ Wired |
+| Demo server endpoint logging | ✅ Complete |
+| Core component logging | ✅ Complete |
+| Trace propagation | ✅ Complete |
 
-### 1.5 Message Pinning UI ✅
+### 1.3 Quality & Stability Fixes ✅
 
-**Reference**: `docs/architecture/MESSAGE_PINNING.md`
+**PRs**: #175, #174, #172, #171
 
-| Component | Status |
-|-----------|--------|
-| Pin/Unpin API endpoints | ✅ Complete |
-| Message component pin button | ✅ Complete |
-| Visual indicator for pinned messages | ✅ Complete |
-| SSE events (`message:pinned`, `message:unpinned`) | ✅ Complete |
-| Main page integration | ✅ Complete |
-
-**Files Implemented**:
-- `apps/demo-web/src/app/api/conversations/[id]/messages/[messageId]/pin/route.ts` - POST/DELETE endpoints
-- `apps/demo-web/src/components/chat/message.tsx` - Pin button and visual indicator
-- `apps/demo-web/src/app/page.tsx` - `handleTogglePin` handler and wiring
-- `packages/reg-intel-conversations/src/eventHub.ts` - Added `message:pinned` and `message:unpinned` event types
-
-**Features**:
-- Pin/unpin toggle button on all messages (user and assistant)
-- Amber-colored visual indicator badge when message is pinned
-- Ring highlight on pinned message cards
-- Real-time state updates via SSE broadcasting
-- Backend already complete (database schema, store methods)
-
-### 1.6 EgressGuard Implementation ✅ Complete
-
-**Reference**: `docs/architecture/architecture_v_0_7.md` Section 7
-
-| Component | Status |
-|-----------|--------|
-| Core EgressGuard implementation | ✅ Complete |
-| PII detection patterns (email, phone, SSN, PPSN, IBAN, etc.) | ✅ Complete |
-| ML-based detection via @redactpii/node | ✅ Complete |
-| Unit tests (enforce, report-only, off modes) | ✅ Complete |
-| Outbound LLM request protection | ✅ Wired |
-| User input sanitization | ✅ Complete (user messages sanitized) |
-| **LLM response sanitization** | ✅ WIRED |
-| **Sandbox egress protection** | ✅ WIRED |
-| **Agent-level BasicEgressGuard** | ✅ Wired (defense-in-depth) |
-
-**Files**:
-- `packages/reg-intel-llm/src/egressGuard.ts`
-- `packages/reg-intel-llm/src/egressClient.ts`
-- `packages/reg-intel-llm/src/egressClient.test.ts`
-- `packages/reg-intel-llm/src/egressClient.spec.ts`
-- `packages/reg-intel-llm/src/egressModeResolver.test.ts`
-
-**Wiring Status**:
-- ✅ `LlmRouter.chat()` and `streamChat()` use `egressClient.guardAndExecute()` for OUTBOUND requests
-- ✅ LLM responses sanitized via `sanitizeTextForEgress()` before reaching client
-- ✅ Sandbox execution results sanitized in `executeCode()` and `executeAnalysis()`
-- ✅ `BasicEgressGuard.redactText()` invoked on agent outputs in `ComplianceEngine`
+| Fix | PR | Status |
+|-----|-----|--------|
+| Chat UI race condition on second message | #175 | ✅ Fixed |
+| OpenTelemetry package resolution | #174 | ✅ Fixed |
+| ESLint warnings & TypeScript build errors | #172 | ✅ Fixed |
+| Non-existent @opentelemetry/instrumentation-next | #171 | ✅ Fixed |
 
 ---
 
-## 2. Outstanding Work
+## 2. Outstanding Work - HIGH Priority
 
-### 2.1 ~~MEDIUM: Cleanup Cron Job (v0.7 Phase 4)~~ ✅ COMPLETE
+### 2.1 HIGH: Scenario Engine Implementation
 
-**Priority**: MEDIUM (COMPLETED)
-**Effort**: 2-4 hours
-**Reference**: `docs/architecture/execution-context/IMPLEMENTATION_PLAN.md` Tasks 4.3.1-4.3.3
+**Priority**: HIGH (Feature Gap)
+**Effort**: 2-3 weeks
+**Reference**: `docs/architecture/engines/scenario-engine/spec_v_0_1.md`
 
-**Description**: Automated cleanup of expired execution contexts is now implemented.
+**Description**: The Scenario Engine is fully documented in architecture but has **zero implementation**. This is a core feature for regulatory "what-if" analysis.
 
-**Implementation**:
-- Created cleanup job function at `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts`
-- Created cron API endpoint at `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts`
-- Secured with `CRON_SECRET` authorization header (Bearer token)
-- Configured Vercel Cron in `vercel.json` to run hourly
+**Current State**:
+- ✅ Architecture spec complete (`spec_v_0_1.md`)
+- ❌ No runtime code exists
+- ❌ No integration hooks exercised
+- ❌ No tests
 
-**Files Created**:
-- `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts` - Job function with observability span
-- `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts` - POST endpoint for cron, GET for health check
-- `vercel.json` - Cron configuration (hourly at minute 0)
+**Tasks**:
 
-**Tasks** (all completed):
+- [ ] **Task S.1**: Implement `ScenarioEngine` service
+  - Core evaluation logic for hypothetical scenarios
+  - Rule matching against regulatory graph
+  - Impact assessment calculations
 
-- [x] **Task C.1**: Create cleanup job function
-- [x] **Task C.2**: Create cron API endpoint with CRON_SECRET auth
-- [x] **Task C.3**: Configure Vercel Cron in vercel.json
+- [ ] **Task S.2**: Create scenario tools for LLM agents
+  - `create_scenario` tool
+  - `evaluate_scenario` tool
+  - `compare_scenarios` tool
+
+- [ ] **Task S.3**: Wire into ComplianceEngine orchestration
+  - Add scenario-aware agent flows
+  - Connect to conversation context
+
+- [ ] **Task S.4**: Add unit and integration tests
 
 ---
 
-### 2.2 LOW: Metrics Dashboard (v0.7 Phase 4)
+### 2.2 HIGH: Redis/Distributed SSE Fan-out
 
-**Priority**: LOW (DEFERRED)
+**Priority**: HIGH (Production Blocker)
+**Effort**: 1-2 weeks
+**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
+
+**Description**: Current SSE implementation uses single-instance in-memory event hub. **Will not scale horizontally** in production.
+
+**Current State**:
+- ✅ Single-instance EventHub works (`packages/reg-intel-conversations/src/eventHub.ts`)
+- ❌ No Redis/pub-sub integration
+- ❌ Rate limiting is in-memory only
+- ❌ No distributed session handling
+
+**Tasks**:
+
+- [ ] **Task R.1**: Add Redis pub/sub for SSE events
+  ```typescript
+  // packages/reg-intel-conversations/src/redisEventHub.ts
+  export class RedisEventHub implements EventHub {
+    private redis: Redis;
+    private subscriber: Redis;
+    // ...
+  }
+  ```
+
+- [ ] **Task R.2**: Implement distributed rate limiting
+  - Redis-backed rate limiter for client telemetry
+  - Feature flag to switch between in-memory and Redis
+
+- [ ] **Task R.3**: Add health checks for Redis connectivity
+
+- [ ] **Task R.4**: Update deployment documentation
+
+---
+
+### 2.3 HIGH: Test Coverage for reg-intel-prompts
+
+**Priority**: HIGH (Quality Gap)
+**Effort**: 4-6 hours
+**Reference**: `packages/reg-intel-prompts/`
+
+**Description**: The `reg-intel-prompts` package has **zero test coverage** despite being 409 lines of critical prompt composition logic.
+
+**Untested Files**:
+- `promptAspects.ts` (243 lines) - Prompt aspect middleware
+- `applyAspects.ts` (106 lines) - Aspect pipeline executor
+- `constants.ts` (20 lines) - Shared constants
+
+**Tasks**:
+
+- [ ] **Task T.1**: Create `promptAspects.test.ts`
+  - Test jurisdiction aspect injection
+  - Test agent context aspect
+  - Test disclaimer aspect
+  - Test conversation context aspect
+  - Test aspect composition order
+
+- [ ] **Task T.2**: Create `applyAspects.test.ts`
+  - Test aspect pipeline execution
+  - Test error handling in aspects
+  - Test async aspect support
+
+---
+
+## 3. Outstanding Work - MEDIUM Priority
+
+### 3.1 MEDIUM: OpenFGA/ReBAC Authorization Integration
+
+**Priority**: MEDIUM (Security Feature)
+**Effort**: 1-2 weeks
+**Reference**: `packages/reg-intel-conversations/src/conversationStores.ts` (lines 23-30)
+
+**Description**: Authorization types are defined but no actual integration with OpenFGA, SpiceDB, or Permify exists.
+
+**Current State**:
+- ✅ Types defined (`AuthorizationModel`, `AuthorizationSpec`)
+- ✅ Supports 'openfga', 'spicedb', 'permify' in types
+- ❌ No service integration
+- ❌ No permission checking at runtime
+
+**Tasks**:
+
+- [ ] **Task A.1**: Implement OpenFGA client wrapper
+- [ ] **Task A.2**: Add permission checks to conversation stores
+- [ ] **Task A.3**: Wire authorization into API routes
+- [ ] **Task A.4**: Add tests for authorization flows
+
+---
+
+### 3.2 MEDIUM: Supabase Conversation Persistence
+
+**Priority**: MEDIUM (Production Readiness)
+**Effort**: 1 week
+**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
+
+**Description**: Conversation persistence currently uses in-memory stores. Supabase-backed stores need to be wired for production.
+
+**Current State**:
+- ✅ Schema exists (`supabase/migrations/`)
+- ✅ `SupabaseConversationStore` interface defined
+- ✅ In-memory fallback works
+- ⚠️ Supabase implementation partial
+- ❌ Not wired in production API routes
+- ❌ Pagination not implemented
+
+**Tasks**:
+
+- [ ] **Task P.1**: Complete `SupabaseConversationStore` implementation
+- [ ] **Task P.2**: Wire Supabase store when env vars present
+- [ ] **Task P.3**: Add pagination to `/api/conversations` endpoint
+- [ ] **Task P.4**: Add RLS policies for multi-tenant usage
+
+---
+
+### 3.3 MEDIUM: Missing API Integration Tests
+
+**Priority**: MEDIUM (Quality)
+**Effort**: 4-6 hours
+
+**Description**: Several API endpoints lack integration tests.
+
+**Missing Tests**:
+
+| Endpoint | Test File Needed | Status |
+|----------|-----------------|--------|
+| `/api/conversations/[id]/messages/[messageId]/pin` | `pin/route.test.ts` | ❌ Missing |
+| `/api/cron/cleanup-contexts` | `cleanupExecutionContexts.test.ts` | ❌ Missing |
+| Version Navigator E2E | `version-navigator.e2e.ts` | ❌ Missing |
+
+**Tasks**:
+
+- [ ] **Task IT.1**: Create message pinning API tests
+- [ ] **Task IT.2**: Create cleanup job integration tests
+- [ ] **Task IT.3**: Create version navigator E2E tests
+
+---
+
+## 4. Outstanding Work - LOW Priority
+
+### 4.1 LOW: Metrics Dashboard (Deferred)
+
+**Priority**: LOW
 **Effort**: 4-6 hours
 **Reference**: `docs/architecture/E2B_ARCHITECTURE.md` Future Enhancements
 
@@ -214,154 +270,184 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.3 ~~LOW: Version Navigator Component~~ ✅ COMPLETE
+### 4.2 LOW: Graph View & Context Ribbon Enhancement
 
-**Priority**: LOW (COMPLETED)
-**Effort**: 2-4 hours
-**Reference**: `docs/architecture/conversation-branching-and-merging.md` Part 8
+**Priority**: LOW
+**Effort**: 1 week
+**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
 
-**Description**: Component now fully wired into the main page with branch navigation support.
+**Description**: Basic ribbon present but deeper integration needed.
 
-**Implementation**:
-- `MessageVersionNav` imported into `message.tsx`
-- Integrated with path-based branching system
-- When a message is a branch point, shows version navigator to cycle through branches
-- Branch preview cards show when navigating to branch versions
-- Click "View Branch" to navigate to the branch path
+**Current State**:
+- ✅ Basic ribbon exists (`apps/demo-web/src/components/chat/path-toolbar.tsx`)
+- ✅ Graph visualization works (767 lines in `GraphVisualization.tsx`)
+- ⚠️ Context node highlighting incomplete
+- ⚠️ Timeline visualization missing
+- ⚠️ Scenario state display missing
 
-**Files Modified**:
-- `apps/demo-web/src/components/chat/message.tsx` - Added version navigation props and branch preview rendering
-- `apps/demo-web/src/components/chat/path-aware-message-list.tsx` - Version navigation now handled here
+**Tasks**:
 
-**Tasks** (all completed):
-
-- [x] **Task V.1**: Import `MessageVersionNav` into `message.tsx`
-- [x] **Task V.2**: Wire component to display for messages with multiple versions/branches
-- [x] **Task V.3**: Navigation shows branch previews with quick access to view branches
+- [ ] **Task G.1**: Add graph context node highlighting
+- [ ] **Task G.2**: Implement timeline visualization
+- [ ] **Task G.3**: Add scenario state display
+- [ ] **Task G.4**: Improve ribbon metadata rendering
 
 ---
 
-### 2.4 ~~LOW: PathAwareMessageList Component~~ ✅ COMPLETE
+### 4.3 LOW: Timeline Engine Expansion
 
-**Priority**: LOW (COMPLETED)
-**Effort**: 2-4 hours
-**Reference**: `docs/architecture/IMPLEMENTATION-PLAN.md` Phase 5
+**Priority**: LOW
+**Effort**: 3-4 days
+**Reference**: `docs/architecture/engines/timeline-engine/`
 
-**Description**: Component now fully wired into the main page, replacing inline message rendering.
+**Description**: Baseline engine exists but needs more scenarios and integration.
 
-**Implementation**:
-- Enhanced `PathAwareMessageList` with full feature support:
-  - Version navigation (prev/next through branches)
-  - Message editing with inline editor
-  - Pin toggle support
-  - Progress indicator integration
-  - Branch preview cards
-- Replaced inline message rendering in `page.tsx` with `PathAwareMessageList`
-- Removed ~100 lines of redundant inline rendering code
-- Component works in both path context and fallback modes
+**Current State**:
+- ✅ Engine implemented (`packages/reg-intel-core/src/timeline/`)
+- ✅ Good test coverage (370 lines)
+- ⚠️ Limited scenario variety
+- ⚠️ Not deeply integrated with conversation context
 
-**Files Modified**:
-- `apps/demo-web/src/components/chat/path-aware-message-list.tsx` - Enhanced with all features
-- `apps/demo-web/src/app/page.tsx` - Replaced inline rendering with component
+**Tasks**:
 
-**Tasks** (all completed):
-
-- [x] **Task L.1**: Replace inline message rendering in `page.tsx` with `PathAwareMessageList`
-- [x] **Task L.2**: Verify branch indicators and path navigation work correctly
-- [x] **Task L.3**: Ensure editing and branching behaviors are preserved
+- [ ] **Task TL.1**: Add more timeline scenarios
+- [ ] **Task TL.2**: Connect to persisted conversation context
+- [ ] **Task TL.3**: Add UI visualization component
 
 ---
 
-### 2.5 ~~LOW: Add isPinned to PathMessage Type~~ ✅ COMPLETE
+### 4.4 LOW: Concept Capture Expansion
 
-**Priority**: LOW (COMPLETED)
-**Effort**: 1-2 hours
-**Reference**: `packages/reg-intel-ui/src/types.ts`
+**Priority**: LOW
+**Effort**: 1 week
+**Reference**: `docs/architecture/conversation-context/concept_capture_v_0_1.md`
 
-**Description**: PathMessage type now includes isPinned field. Pinning works in both fallback and path context modes.
+**Description**: Capture tool wiring exists but needs fuller coverage.
 
-**Implementation**:
-- Added `isPinned`, `pinnedAt`, `pinnedBy` fields to `PathMessage` type
-- Updated path messages API to include pinning data in response
-- Updated `PathContextMessageList` to use actual `isPinned` value from message
+**Current State**:
+- ✅ Capture tool wired
+- ✅ Basic ingestion paths
+- ⚠️ Graph write service minimal tests (2 tests only)
+- ⚠️ Not all concept types covered
 
-**Files Modified**:
-- `packages/reg-intel-ui/src/types.ts` - Added pinning fields to PathMessage
-- `apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/messages/route.ts` - Include pinning in response
-- `apps/demo-web/src/components/chat/path-aware-message-list.tsx` - Use actual isPinned value
+**Tasks**:
 
-**Tasks** (all completed):
-
-- [x] **Task P.1**: Add pinning fields to `PathMessage` type
-- [x] **Task P.2**: Update path API to include pinning data
-- [x] **Task P.3**: Update PathContextMessageList to use actual isPinned value
+- [ ] **Task CC.1**: Expand graph write service coverage
+- [ ] **Task CC.2**: Add tests for all concept types
+- [ ] **Task CC.3**: Wire comprehensive ingestion scenarios
 
 ---
 
-### 2.6 ~~MEDIUM: Complete EgressGuard End-to-End Wiring~~ ✅ COMPLETE
+### 4.5 LOW: UI Enhancements
 
-**Priority**: MEDIUM (COMPLETED)
-**Effort**: 4-6 hours
-**Reference**: `docs/architecture/architecture_v_0_7.md` Section 7, `docs/architecture/execution-context/spec_v_0_1.md` Section 7
+**Priority**: LOW
+**Effort**: Various
 
-**Description**: EgressGuard now protects all egress points including LLM responses, sandbox output, and agent-level processing.
-
-**Implementation**:
-- Added response sanitization to `LlmRouter.chat()` and `streamChat()` methods
-- Added sandbox egress protection in `executeCode()` and `executeAnalysis()`
-- Wired `BasicEgressGuard.redactText()` in `ComplianceEngine` for agent outputs
-- Added comprehensive integration tests for the full flow
-
-**Files Modified**:
-- `packages/reg-intel-llm/src/llmRouter.ts` - Response sanitization for both streaming and non-streaming
-- `packages/reg-intel-llm/src/tools/codeExecutionTools.ts` - Sanitize stdout, stderr, results, and errors
-- `packages/reg-intel-core/src/orchestrator/complianceEngine.ts` - Agent output sanitization
-
-**Files Created**:
-- `packages/reg-intel-llm/src/__tests__/egressGuardIntegration.test.ts` - 22 integration tests
-
-**Tasks** (all completed):
-
-- [x] **Task E.1**: Add response sanitization to LLM streaming
-  - Applied `sanitizeTextForEgress()` to response chunks before yielding
-  - Sanitization enabled when egress mode is 'enforce' or 'report-only'
-
-- [x] **Task E.2**: Add sandbox egress protection
-  - Sanitize `stdout`, `stderr`, `result`, and error messages before returning
-  - Sanitize parsed JSON output and results arrays in `executeAnalysis()`
-
-- [x] **Task E.3**: Wire BasicEgressGuard in agents
-  - `instrumentedEgressGuard.redactText()` invoked on agent outputs in `ComplianceEngine`
-  - Applied to both streaming and non-streaming responses
-  - Provides defense-in-depth layer on top of LLM-level sanitization
-
-- [x] **Task E.4**: Add integration tests for full flow
-  - Tests for LLM response sanitization (email, phone, SSN, PPSN, credit cards, API keys, JWT)
-  - Tests for sandbox output sanitization (stdout, stderr, errors, JSON results)
-  - Edge case tests (IP addresses, database URLs, AWS keys)
+**Missing UI Features**:
+- Conversation export functionality
+- Advanced search
+- Batch operations
+- Dark mode theme switcher (partial)
 
 ---
 
-## 3. Implementation Priority Order
+## 5. Completed Work Archive
 
-### Phase A: Production Readiness ✅ Complete
+### 5.1 Conversation Branching & Merging (v0.6) ✅
+
+All phases complete - see `docs/architecture/IMPLEMENTATION-PLAN.md`
+
+### 5.2 E2B Execution Contexts (v0.7) ✅
+
+All phases complete - see `docs/architecture/execution-context/IMPLEMENTATION_PLAN.md`
+
+### 5.3 AI Merge Summarization ✅
+
+Fully implemented with regulatory-focused prompts.
+
+### 5.4 Message Pinning ✅
+
+Backend and UI complete with SSE real-time updates.
+
+### 5.5 EgressGuard End-to-End ✅
+
+All egress points protected:
+- ✅ Outbound LLM requests sanitized
+- ✅ LLM responses sanitized before client
+- ✅ Sandbox output sanitized
+- ✅ Agent outputs sanitized (defense-in-depth)
+
+### 5.6 Cleanup Cron Job ✅
+
+Hourly cleanup of expired execution contexts via Vercel Cron.
+
+### 5.7 PathAwareMessageList Integration ✅
+
+Component fully wired with version navigation, editing, and pinning.
+
+### 5.8 Version Navigator ✅
+
+Branch navigation with preview cards fully functional.
+
+---
+
+## 6. Implementation Priority Order
+
+### Phase A: Production Blockers (Must Fix)
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| ~~2.1 Cleanup Cron Job~~ | ~~MEDIUM~~ | ~~2-4h~~ | ✅ Complete |
-| ~~2.6 EgressGuard End-to-End~~ | ~~MEDIUM~~ | ~~4-6h~~ | ✅ Complete |
+| 2.2 Redis SSE Fan-out | HIGH | 1-2 weeks | None |
+| 2.3 Test Coverage (prompts) | HIGH | 4-6h | None |
+| 3.2 Supabase Persistence | MEDIUM | 1 week | None |
 
-### Phase B: Polish (Deferred)
+### Phase B: Feature Completion
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.2 Metrics Dashboard | LOW | 4-6h | All dependencies complete |
+| 2.1 Scenario Engine | HIGH | 2-3 weeks | None |
+| 3.1 OpenFGA Integration | MEDIUM | 1-2 weeks | None |
+| 3.3 API Integration Tests | MEDIUM | 4-6h | None |
 
-**Note**: Production readiness phase is now complete. EgressGuard protects all egress points.
+### Phase C: Polish (Deferred)
+
+| Task | Priority | Effort | Dependencies |
+|------|----------|--------|--------------|
+| 4.1 Metrics Dashboard | LOW | 4-6h | Production usage data |
+| 4.2 Graph/Ribbon Enhancement | LOW | 1 week | None |
+| 4.3 Timeline Expansion | LOW | 3-4 days | None |
+| 4.4 Concept Capture | LOW | 1 week | None |
 
 ---
 
-## 4. Document Cross-References
+## 7. Test Coverage Summary
+
+### Packages with Good Coverage
+
+| Package | Test Files | Status |
+|---------|------------|--------|
+| reg-intel-conversations | 5 tests | ✅ Good |
+| reg-intel-llm | 6 tests | ✅ Good |
+| reg-intel-core | 8 tests | ✅ Good |
+| reg-intel-observability | 3 tests | ✅ Adequate |
+
+### Packages Needing Coverage
+
+| Package | Lines | Tests | Issue |
+|---------|-------|-------|-------|
+| reg-intel-prompts | 409 | 0 | ❌ CRITICAL: Zero tests |
+| reg-intel-graph | ~200 | 2 | ⚠️ Minimal coverage |
+| reg-intel-next-adapter | ~7,600 | 0 | ⚠️ No tests |
+
+### Missing Integration Tests
+
+- ❌ Message pinning API (`/api/.../pin/route.test.ts`)
+- ❌ Cleanup job (`cleanupExecutionContexts.test.ts`)
+- ❌ Version navigator E2E
+
+---
+
+## 8. Document Cross-References
 
 | Document | Purpose | Location |
 |----------|---------|----------|
@@ -370,34 +456,14 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Branching & Merging | Detailed branching UX and data model | `docs/architecture/conversation-branching-and-merging.md` |
 | E2B Architecture | Sandbox lifecycle and integration | `docs/architecture/E2B_ARCHITECTURE.md` |
 | Execution Context Spec | Formal spec for per-path contexts | `docs/architecture/execution-context/spec_v_0_1.md` |
-| Execution Context Plan | Implementation tasks and status | `docs/architecture/execution-context/IMPLEMENTATION_PLAN.md` |
 | Message Pinning | Pinning for compaction control | `docs/architecture/MESSAGE_PINNING.md` |
-| Response Flow | How chat messages flow through system | `docs/architecture/conversation-response-flow.md` |
-| Implementation Plan | Branching implementation tracking | `docs/architecture/IMPLEMENTATION-PLAN.md` |
+| Client Telemetry | Batching, rate limiting, OTEL | `docs/architecture/client-telemetry-architecture-v1.md` |
+| V0.6 Implementation Status | Subsystem status tracker | `docs/development/V0_6_IMPLEMENTATION_STATUS.md` |
+| Scenario Engine Spec | What-if analysis engine | `docs/architecture/engines/scenario-engine/spec_v_0_1.md` |
 
 ---
 
-## 5. Test Coverage Requirements
-
-### Existing Tests (Pass)
-
-- ✅ `ExecutionContextStore` unit tests (19 tests)
-- ✅ Code execution tools unit tests (22 tests)
-- ✅ Tool registry unit tests (23 tests)
-- ✅ Path store unit tests
-- ✅ EgressGuard unit tests (comprehensive)
-- ✅ EgressClient integration tests
-- ✅ EgressModeResolver tests
-
-### Missing Tests
-
-- ❌ Message pinning API tests
-- ❌ Cleanup job integration tests
-- ❌ Version navigator E2E tests
-
----
-
-## 6. Environment Variables Required
+## 9. Environment Variables Required
 
 ```env
 # Existing (Required)
@@ -405,103 +471,58 @@ E2B_API_KEY=ek_***
 SUPABASE_URL=https://xxx.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=***
 
-# New (For Cleanup Job)
+# Cleanup Job
 CRON_SECRET=***  # For securing cron endpoint
 
-# Optional (Observability)
+# Client Telemetry
+NEXT_PUBLIC_CLIENT_TELEMETRY_ENDPOINT=/api/client-telemetry
+NEXT_PUBLIC_CLIENT_TELEMETRY_BATCH_SIZE=20
+NEXT_PUBLIC_CLIENT_TELEMETRY_FLUSH_INTERVAL_MS=2000
+CLIENT_TELEMETRY_RATE_LIMIT_WINDOW_MS=60000
+CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS=100
+
+# OTEL (Optional)
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+OTEL_COLLECTOR_ENDPOINT=http://localhost:4318/v1/logs
+OTEL_COLLECTOR_TIMEOUT_MS=5000
+
+# Future (Redis)
+REDIS_URL=redis://localhost:6379  # For distributed SSE
 ```
 
 ---
 
-## 7. Summary
+## 10. Summary
 
-**Total Outstanding Effort**: ~4-6 hours
+**Total Outstanding Effort**: ~6-8 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| LOW | 1 | 4-6h |
+| HIGH | 3 | 3-4 weeks |
+| MEDIUM | 3 | 2-3 weeks |
+| LOW | 5 | 3-4 weeks |
 
-### Recently Completed (Since 2025-12-12)
+### Critical Gaps Identified
 
-1. **EgressGuard End-to-End** - Fully implemented:
-   - Added response sanitization to `LlmRouter.chat()` and `streamChat()`
-   - Added sandbox egress protection in `executeCode()` and `executeAnalysis()`
-   - Wired `BasicEgressGuard.redactText()` in `ComplianceEngine` for agent outputs
-   - Added 22 integration tests covering all egress points
-   - ✅ Verified: All tests pass
+1. **Scenario Engine** - Fully documented, zero implementation
+2. **Redis SSE** - Production scaling blocker
+3. **reg-intel-prompts tests** - Critical package with 0% coverage
+4. **OpenFGA integration** - Authorization types exist, no runtime
 
-2. **Cleanup Cron Job** - Fully implemented:
-   - Created cleanup job function at `apps/demo-web/src/lib/jobs/cleanupExecutionContexts.ts`
-   - Created cron API endpoint at `apps/demo-web/src/app/api/cron/cleanup-contexts/route.ts`
-   - Secured with `CRON_SECRET` Bearer token authorization
-   - Configured Vercel Cron in `vercel.json` to run hourly (0 * * * *)
-   - ✅ Verified: All files created correctly
+### Production Readiness Checklist
 
-3. **PathMessage isPinned Support** - Fully implemented:
-   - Added `isPinned`, `pinnedAt`, `pinnedBy` fields to `PathMessage` type
-   - Updated path messages API to return pinning data
-   - Message pinning now works in path context mode
-   - ✅ Verified: Dev server starts without errors
-
-4. **PathAwareMessageList Integration** - Fully implemented end-to-end:
-   - Enhanced `PathAwareMessageList` with version navigation, editing, pinning, and progress indicator
-   - Replaced ~100 lines of inline message rendering in `page.tsx`
-   - Works with both path context and fallback modes
-   - ✅ Verified: Dev server starts without errors
-
-5. **Version Navigator** - Fully implemented end-to-end:
-   - `MessageVersionNav` component wired into message rendering
-   - Branch points display version navigation to cycle through branches
-   - Branch preview cards shown when viewing branch versions
-   - Quick access to view branches via "View Branch" button
-   - ✅ Verified: Dev server starts without errors
-
-6. **AI Merge Summarization** - Fully implemented end-to-end:
-   - AI-powered summary generation in `mergeSummarizer.ts`
-   - Integration with merge API endpoint
-   - MergeDialog UI with summary mode, custom prompts, and preview
-   - Fallback handling when LLM unavailable
-   - ✅ Verified: Complete flow from UI to LLM and back
-
-7. **EgressGuard Core** - Now fully wired end-to-end:
-   - ✅ OUTBOUND LLM requests are protected
-   - ✅ LLM responses sanitized before reaching client
-   - ✅ Sandbox output sanitized
-   - ✅ Agent-level redaction is active (defense-in-depth)
-
-8. **Message Pinning UI** - Fully implemented end-to-end:
-   - Pin/Unpin API endpoints at `/api/conversations/:id/messages/:messageId/pin`
-   - Pin button on all messages (user and assistant)
-   - Visual indicator (amber badge and ring) for pinned messages
-   - SSE events (`message:pinned`, `message:unpinned`) for real-time updates
-   - ✅ Verified: Complete flow from UI click to database update
-
-### Recommended Next Steps
-
-1. **Add Observability Metrics** (LOW priority) - OpenTelemetry metrics collection
-
-### Security Note
-
-✅ **EgressGuard is now fully wired end-to-end**:
-- Outbound LLM requests are sanitized
-- LLM responses are sanitized before reaching client
-- Sandbox output (stdout, stderr, results) is sanitized
-- Agent outputs are sanitized as defense-in-depth
-
-The system is production-ready from a PII protection standpoint.
-
-### PR #159 Review
-
-PR #159 made the following changes (verified non-breaking):
-- Added execution context cleanup on merge (additive)
-- Added "Run Code" / "Run Analysis" buttons to PromptInput (backwards compatible)
-- Extended ComplianceEngine with ExecutionTool support (additive)
-- Created OUTSTANDING_WORK.md documentation
+- [x] EgressGuard fully wired
+- [x] Client telemetry with batching
+- [x] Logging framework wired
+- [x] Execution context cleanup job
+- [ ] Redis/distributed SSE (BLOCKER)
+- [ ] Supabase persistence wired
+- [ ] Authorization service integrated
+- [ ] Full test coverage
 
 ---
 
-**Document Version**: 2.7
-**Last Updated**: 2025-12-24
-**Previous Version**: 2.6 (2025-12-24), 2.5 (2025-12-24), 2.4 (2025-12-23), 2.3 (2025-12-23), 2.2 (2025-12-23), 2.1 (2025-12-23), 2.0 (2025-12-23), 1.0 (2025-12-12)
+**Document Version**: 3.0
+**Last Updated**: 2025-12-27
+**Previous Versions**: 2.7 (2025-12-24), 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.0
 **Author**: Claude Code
