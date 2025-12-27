@@ -103,39 +103,64 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 2.2 HIGH: Redis/Distributed SSE Fan-out
+### 2.2 HIGH: Redis/Distributed SSE Fan-out ✅ COMPLETED
 
 **Priority**: HIGH (Production Blocker)
 **Effort**: 1-2 weeks
 **Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
+**Completed**: 2025-12-27
 
-**Description**: Current SSE implementation uses single-instance in-memory event hub. **Will not scale horizontally** in production.
+**Description**: SSE implementation now supports distributed Redis-backed event broadcasting for horizontal scaling.
 
 **Current State**:
 - ✅ Single-instance EventHub works (`packages/reg-intel-conversations/src/eventHub.ts`)
-- ❌ No Redis/pub-sub integration
-- ❌ Rate limiting is in-memory only
-- ❌ No distributed session handling
+- ✅ Redis/list-based event distribution (`packages/reg-intel-conversations/src/redisEventHub.ts`)
+- ✅ Rate limiting is Redis-backed (`apps/demo-web/src/lib/rateLimiter.ts`)
+- ✅ Automatic fallback to in-memory when Redis not configured
+- ✅ Health checks for Redis connectivity
+- ✅ Feature flags via environment variables
 
-**Tasks**:
+**Completed Tasks**:
 
-- [ ] **Task R.1**: Add Redis pub/sub for SSE events
-  ```typescript
-  // packages/reg-intel-conversations/src/redisEventHub.ts
-  export class RedisEventHub implements EventHub {
-    private redis: Redis;
-    private subscriber: Redis;
-    // ...
-  }
-  ```
+- [x] **Task R.1**: Add Redis pub/sub for SSE events ✅
+  - Implemented `RedisConversationEventHub` class
+  - Implemented `RedisConversationListEventHub` class
+  - Uses Redis lists with LPOP polling (compatible with Upstash HTTP API)
+  - Broadcasts to local subscribers immediately for low latency
+  - Publishes to Redis for cross-instance distribution
 
-- [ ] **Task R.2**: Implement distributed rate limiting
-  - Redis-backed rate limiter for client telemetry
+- [x] **Task R.2**: Implement distributed rate limiting ✅
+  - Redis-backed rate limiter already implemented
   - Feature flag to switch between in-memory and Redis
+  - Uses Upstash Ratelimit with sliding window algorithm
 
-- [ ] **Task R.3**: Add health checks for Redis connectivity
+- [x] **Task R.3**: Add health checks for Redis connectivity ✅
+  - `healthCheck()` method on both event hub classes
+  - Automatic health check on startup with logging
 
-- [ ] **Task R.4**: Update deployment documentation
+- [x] **Task R.4**: Update deployment documentation ✅
+  - Environment variables documented in `docker/REDIS.md`
+  - Configuration wired in `apps/demo-web/src/lib/server/conversations.ts`
+
+**Environment Variables**:
+```bash
+# Use Redis for distributed SSE (recommended for production with multiple instances)
+UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token_here
+
+# Or use standard Redis
+REDIS_URL=redis://localhost:6379
+REDIS_TOKEN=your_password
+
+# If not set, falls back to in-memory (single instance only)
+```
+
+**Files Changed**:
+- `packages/reg-intel-conversations/src/redisEventHub.ts` - New Redis-backed event hubs
+- `packages/reg-intel-conversations/src/redisEventHub.test.ts` - Unit tests
+- `packages/reg-intel-conversations/src/index.ts` - Export new classes
+- `packages/reg-intel-conversations/package.json` - Add @upstash/redis dependency
+- `apps/demo-web/src/lib/server/conversations.ts` - Wire up Redis event hubs with fallback
 
 ---
 
@@ -486,26 +511,31 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 OTEL_COLLECTOR_ENDPOINT=http://localhost:4318/v1/logs
 OTEL_COLLECTOR_TIMEOUT_MS=5000
 
-# Future (Redis)
-REDIS_URL=redis://localhost:6379  # For distributed SSE
+# Redis for Distributed SSE (Production Multi-Instance Deployments)
+UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
+UPSTASH_REDIS_REST_TOKEN=your_token_here
+
+# Or standard Redis
+REDIS_URL=redis://localhost:6379
+REDIS_TOKEN=your_password
 ```
 
 ---
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~6-8 weeks
+**Total Outstanding Effort**: ~4-6 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 3 | 3-4 weeks |
+| HIGH | 2 (was 3) | 2-3 weeks |
 | MEDIUM | 3 | 2-3 weeks |
 | LOW | 5 | 3-4 weeks |
 
 ### Critical Gaps Identified
 
 1. **Scenario Engine** - Fully documented, zero implementation
-2. **Redis SSE** - Production scaling blocker
+2. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
 3. **reg-intel-prompts tests** - Critical package with 0% coverage
 4. **OpenFGA integration** - Authorization types exist, no runtime
 
@@ -515,14 +545,17 @@ REDIS_URL=redis://localhost:6379  # For distributed SSE
 - [x] Client telemetry with batching
 - [x] Logging framework wired
 - [x] Execution context cleanup job
-- [ ] Redis/distributed SSE (BLOCKER)
+- [x] Redis/distributed SSE ✅ **COMPLETED** (2025-12-27)
 - [ ] Supabase persistence wired
 - [ ] Authorization service integrated
 - [ ] Full test coverage
 
 ---
 
-**Document Version**: 3.0
+**Document Version**: 3.1
 **Last Updated**: 2025-12-27
-**Previous Versions**: 2.7 (2025-12-24), 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.0
+**Previous Versions**: 3.0 (2025-12-27), 2.7 (2025-12-24), 2.6, 2.5, 2.4, 2.3, 2.2, 2.1, 2.0, 1.0
 **Author**: Claude Code
+
+**Changelog**:
+- v3.1 (2025-12-27): Mark Redis/distributed SSE as COMPLETED ✅

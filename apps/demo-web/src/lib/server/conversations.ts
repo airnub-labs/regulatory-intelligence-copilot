@@ -3,6 +3,8 @@ import 'server-only';
 import {
   ConversationEventHub,
   ConversationListEventHub,
+  RedisConversationEventHub,
+  RedisConversationListEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   InMemoryConversationPathStore,
@@ -112,8 +114,50 @@ export const conversationPathStore = supabaseClient
   ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationPathStore();
 
-export const conversationEventHub = new ConversationEventHub();
-export const conversationListEventHub = new ConversationListEventHub();
+// Configure event hubs with Redis support for distributed SSE
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
+
+let conversationEventHub: ConversationEventHub | RedisConversationEventHub;
+let conversationListEventHub: ConversationListEventHub | RedisConversationListEventHub;
+
+if (redisUrl && redisToken) {
+  logger.info(
+    { redisUrl, mode: normalizeConversationStoreMode },
+    'Using Redis-backed event hubs for distributed SSE'
+  );
+
+  conversationEventHub = new RedisConversationEventHub({
+    url: redisUrl,
+    token: redisToken,
+    prefix: 'copilot:events',
+  });
+
+  conversationListEventHub = new RedisConversationListEventHub({
+    url: redisUrl,
+    token: redisToken,
+    prefix: 'copilot:events',
+  });
+
+  // Verify Redis connectivity
+  void conversationEventHub.healthCheck().then(result => {
+    if (result.healthy) {
+      logger.info('Redis event hub health check passed');
+    } else {
+      logger.error({ error: result.error }, 'Redis event hub health check failed');
+    }
+  });
+} else {
+  logger.info(
+    { mode: normalizeConversationStoreMode },
+    'Using in-memory event hubs (not suitable for multi-instance deployments)'
+  );
+
+  conversationEventHub = new ConversationEventHub();
+  conversationListEventHub = new ConversationListEventHub();
+}
+
+export { conversationEventHub, conversationListEventHub };
 
 // Create ExecutionContextManager if E2B is configured
 // This enables code execution tools in the chat
