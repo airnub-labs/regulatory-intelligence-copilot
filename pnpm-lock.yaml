@@ -247,6 +247,9 @@ importers:
       '@reg-copilot/reg-intel-observability':
         specifier: workspace:*
         version: link:../reg-intel-observability
+      '@supabase/supabase-js':
+        specifier: ^2.48.0
+        version: 2.86.0
       '@upstash/redis':
         specifier: ^1.34.3
         version: 1.36.0

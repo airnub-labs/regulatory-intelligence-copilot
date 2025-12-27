@@ -8,8 +8,8 @@ This tracker summarises what is implemented versus still pending for the v0.6 ar
 
 - **ComplianceEngine + agent orchestration** — **Done** ✅
   - Global agent wiring, prompt aspects, egress guard hooks in place.
-- **Concept capture & self-populating graph** — **In progress** ⚠️
-  - Capture tool wiring exists; ingestion + graph write paths need fuller coverage and tests.
+- **Concept capture & self-populating graph** — **Done** ✅
+  - Capture tool wiring complete; comprehensive test coverage for graph write service, ingress guard, and canonical concept handler (85 tests).
 - **Conversation context (active nodes + summaries)** — **Done** ✅
   - Supabase-backed context store ships alongside the in-memory default; production wiring uses Supabase schemas/RLS when configured.
 - **Timeline engine integration** — **Done** ✅
