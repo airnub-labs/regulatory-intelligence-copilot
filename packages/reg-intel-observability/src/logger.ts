@@ -9,6 +9,9 @@ export type LoggerBindings = {
   destination?: DestinationStream;
 } & Record<string, unknown>;
 
+// Track all logger instances for graceful shutdown
+const loggerInstances = new Set<pino.Logger>();
+
 const shouldLogSafePayloads = () => process.env.LOG_SAFE_PAYLOADS === 'true';
 
 const buildCorrelationFields = () => {
@@ -90,5 +93,36 @@ export const createLogger = (scope: string, bindings: LoggerBindings = {}) => {
     },
   };
 
-  return pino(options, destination ?? pino.destination({ sync: true }));
+  // Use async destination for better performance in production
+  // Async logging prevents blocking the event loop on log writes
+  const logger = pino(options, destination ?? pino.destination({ sync: false }));
+
+  // Track logger instance for graceful shutdown
+  loggerInstances.add(logger);
+
+  return logger;
+};
+
+/**
+ * Flushes all logger instances to ensure buffered logs are written.
+ * This should be called during graceful shutdown to prevent log loss.
+ * Returns a promise that resolves when all loggers have been flushed.
+ */
+export const flushLoggers = async (): Promise<void> => {
+  const flushPromises = Array.from(loggerInstances).map(
+    (logger) =>
+      new Promise<void>((resolve, reject) => {
+        logger.flush((err) => {
+          if (err) {
+            // Log the error but don't fail the shutdown process
+            console.error('Failed to flush logger:', err);
+            resolve(); // Resolve anyway to not block shutdown
+          } else {
+            resolve();
+          }
+        });
+      })
+  );
+
+  await Promise.all(flushPromises);
 };

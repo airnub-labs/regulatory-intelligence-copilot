@@ -19,6 +19,7 @@ import { Resource } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 import { requestContext } from './requestContext.js';
+import { flushLoggers } from './logger.js';
 
 // ATTR_DEPLOYMENT_ENVIRONMENT_NAME is not yet in semantic-conventions stable, use string literal
 const ATTR_DEPLOYMENT_ENVIRONMENT = 'deployment.environment.name';
@@ -176,6 +177,16 @@ export const initObservability = async (options: ObservabilityOptions) => {
 
 export const shutdownObservability = async () => {
   if (!sdkInstance) return;
+
+  // Flush all pending logs before shutting down the SDK
+  // This ensures buffered async logs are written before process exit
+  try {
+    await flushLoggers();
+  } catch (error) {
+    // Log error but continue with shutdown
+    console.error('Error flushing loggers during shutdown:', error);
+  }
+
   await sdkInstance.shutdown();
   sdkInstance = null;
   runtimeConfig = null;

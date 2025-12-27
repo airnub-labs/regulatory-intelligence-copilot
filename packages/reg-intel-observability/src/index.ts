@@ -1,4 +1,4 @@
-export { createLogger, formatPayloadForLog } from './logger.js';
+export { createLogger, flushLoggers, formatPayloadForLog } from './logger.js';
 export { dumpObservabilityDiagnostics, formatObservabilityDiagnostics, getObservabilityDiagnostics } from './diagnostics.js';
 export { initObservability, shutdownObservability, withSpan } from './tracing.js';
 export { requestContext, type RequestContextValues } from './requestContext.js';
