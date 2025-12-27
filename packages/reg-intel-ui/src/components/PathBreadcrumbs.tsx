@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, useRef, useCallback, KeyboardEvent } from 'react';
 import { ChevronRight, MessageCircle } from 'lucide-react';
 import { cn } from '../utils.js';
 import type { ClientPath, PathMessage } from '../types.js';
@@ -71,7 +71,10 @@ function getBranchPointPreview(
  * - Click parent paths to navigate back
  * - Auto-scroll to branch point messages
  * - Branch point indicators and tooltips
+ * - Keyboard navigation (arrow keys + Enter)
+ * - Auto-hides when only one path (no navigation needed)
  * - Mobile-responsive with horizontal scroll
+ * - Smart truncation for long path names
  *
  * @example
  * ```tsx
@@ -92,8 +95,10 @@ export function PathBreadcrumbs({
   className,
 }: PathBreadcrumbsProps) {
   const breadcrumbs = buildBreadcrumbChain(activePath, paths);
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  if (breadcrumbs.length === 0) return null;
+  // Auto-hide if only one path (nothing to navigate to)
+  if (breadcrumbs.length <= 1) return null;
 
   const handlePathClick = (path: ClientPath, index: number) => {
     // If clicking a non-active path, navigate to it
@@ -111,10 +116,52 @@ export function PathBreadcrumbs({
     }
   };
 
+  /**
+   * Keyboard navigation handler
+   * Only works when breadcrumb buttons have focus
+   * Doesn't interfere with text input/textarea/contenteditable
+   */
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLElement>, index: number) => {
+    // Only handle if the event target is a button (not input/textarea)
+    const target = event.target as HTMLElement;
+    if (target.tagName !== 'BUTTON') return;
+
+    switch (event.key) {
+      case 'ArrowLeft':
+        event.preventDefault();
+        // Move focus to previous breadcrumb
+        if (index > 0) {
+          buttonRefs.current[index - 1]?.focus();
+        }
+        break;
+
+      case 'ArrowRight':
+        event.preventDefault();
+        // Move focus to next breadcrumb
+        if (index < breadcrumbs.length - 1) {
+          buttonRefs.current[index + 1]?.focus();
+        }
+        break;
+
+      case 'Home':
+        event.preventDefault();
+        // Jump to first breadcrumb
+        buttonRefs.current[0]?.focus();
+        break;
+
+      case 'End':
+        event.preventDefault();
+        // Jump to last breadcrumb
+        buttonRefs.current[breadcrumbs.length - 1]?.focus();
+        break;
+    }
+  }, [breadcrumbs.length]);
+
   return (
     <nav
       className={cn('flex items-center gap-1 text-xs overflow-x-auto', className)}
       aria-label="Path breadcrumb navigation"
+      role="navigation"
     >
       {breadcrumbs.map((path, index) => {
         const isActive = path.id === activePath?.id;
@@ -127,17 +174,20 @@ export function PathBreadcrumbs({
         return (
           <Fragment key={path.id}>
             {index > 0 && (
-              <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+              <ChevronRight className="h-3 w-3 text-muted-foreground flex-shrink-0" aria-hidden="true" />
             )}
 
             <button
+              ref={(el) => (buttonRefs.current[index] = el)}
               onClick={() => handlePathClick(path, index)}
+              onKeyDown={(e) => handleKeyDown(e, index)}
               disabled={isActive}
               className={cn(
                 'transition-colors whitespace-nowrap flex items-center',
+                'max-w-[200px] overflow-hidden text-ellipsis', // Smart truncation
                 isActive
                   ? 'font-semibold text-foreground cursor-default'
-                  : 'hover:underline text-muted-foreground hover:text-foreground'
+                  : 'hover:underline text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 rounded-sm px-1'
               )}
               title={
                 branchPointPreview
@@ -145,12 +195,15 @@ export function PathBreadcrumbs({
                   : path.name || (path.isPrimary ? 'Primary path' : 'Branch')
               }
               aria-current={isActive ? 'page' : undefined}
-              aria-label={`Navigate to ${path.name || (path.isPrimary ? 'Primary path' : 'Branch')}`}
+              aria-label={`Navigate to ${path.name || (path.isPrimary ? 'Primary path' : 'Branch')}. Use arrow keys to navigate between breadcrumbs.`}
+              tabIndex={isActive ? -1 : 0}
             >
-              {path.name || (path.isPrimary ? 'Primary' : `Branch ${path.id.slice(0, 6)}`)}
+              <span className="truncate">
+                {path.name || (path.isPrimary ? 'Primary' : `Branch ${path.id.slice(0, 6)}`)}
+              </span>
 
               {nextPath?.branchPointMessageId && (
-                <MessageCircle className="ml-1 h-2.5 w-2.5 inline opacity-50" />
+                <MessageCircle className="ml-1 h-2.5 w-2.5 flex-shrink-0 inline opacity-50" aria-hidden="true" />
               )}
             </button>
           </Fragment>
