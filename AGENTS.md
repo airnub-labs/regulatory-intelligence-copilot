@@ -37,6 +37,16 @@ v0.6 updates the v0.4 agent design by:
 - When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
 - Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
 
+**Required quality checks before pushing commits:**
+
+After making any code changes, you MUST run the following commands and fix all issues before pushing:
+
+1. **`pnpm lint`** – Run the linter to identify and fix all linting errors and warnings.
+2. **`pnpm build`** – Run the build to catch TypeScript errors, type mismatches, and build failures.
+3. **`pnpm dev`** – Start the development server to verify the application runs correctly without runtime errors.
+
+All issues identified by these commands must be resolved before committing and pushing changes. Do not push code that fails any of these checks. If errors are found, fix them iteratively and re-run the checks until all pass successfully.
+
 **Environment configuration:**
 
 - This repository uses **separate `.env` files** for different purposes:
