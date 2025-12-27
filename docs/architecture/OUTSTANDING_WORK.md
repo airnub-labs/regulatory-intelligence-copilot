@@ -14,7 +14,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 | Architecture Version | Feature Set | Backend | UI | Integration |
 |---------------------|-------------|---------|-----|-------------|
-| v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ⚠️ 98% (page wiring) |
+| v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ✅ Complete (100%, tested) |
 | v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Message Pinning | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Concept Capture & Graph | ✅ Complete | N/A | ✅ Wired |
