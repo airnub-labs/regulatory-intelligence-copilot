@@ -19,6 +19,13 @@ import { Resource } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 import { requestContext } from './requestContext.js';
+import { flushLoggers } from './logger.js';
+import {
+  initLogsExporter,
+  shutdownLogsExporter,
+  forceFlushLogs,
+  createPinoOtelTransport,
+} from './logsExporter.js';
 
 // ATTR_DEPLOYMENT_ENVIRONMENT_NAME is not yet in semantic-conventions stable, use string literal
 const ATTR_DEPLOYMENT_ENVIRONMENT = 'deployment.environment.name';
@@ -39,6 +46,20 @@ export interface ObservabilityOptions {
   environment?: string;
   traceExporter?: ExporterEndpointOptions;
   metricsExporter?: ExporterEndpointOptions;
+  logsExporter?: ExporterEndpointOptions & {
+    /**
+     * Enable OTLP log exporter to send Pino logs to OTEL collector
+     * When enabled, logs will be sent alongside traces and metrics
+     * Default: false
+     */
+    enabled?: boolean;
+    /**
+     * Use batch processor (recommended for production) or simple processor (for development)
+     * Batch processor buffers logs and sends them in batches for better performance
+     * Default: true (batch processor)
+     */
+    useBatchProcessor?: boolean;
+  };
   enableFsInstrumentation?: boolean;
   instrumentations?: Instrumentation[];
   traceSampling?: TraceSamplingOptions;
@@ -101,6 +122,7 @@ type ObservabilityRuntimeConfig = {
   environment?: string;
   traceExporter?: ExporterEndpointOptions;
   metricsExporter?: ExporterEndpointOptions;
+  logsExporter?: ExporterEndpointOptions & { enabled?: boolean };
   sampling: TraceSamplingOptions;
   instrumentations: string[];
   startedAt?: string;
@@ -113,6 +135,14 @@ export const initObservability = async (options: ObservabilityOptions) => {
     return sdkInstance;
   }
 
+  const resource = new Resource({
+    [ATTR_SERVICE_NAME]: options.serviceName,
+    [ATTR_SERVICE_VERSION]:
+      options.serviceVersion ?? process.env.npm_package_version ?? '0.0.0',
+    [ATTR_DEPLOYMENT_ENVIRONMENT]:
+      options.environment ?? process.env.NODE_ENV ?? 'development',
+  });
+
   const traceExporter = new OTLPTraceExporter({
     url: options.traceExporter?.url,
     headers: options.traceExporter?.headers,
@@ -123,6 +153,16 @@ export const initObservability = async (options: ObservabilityOptions) => {
       headers: options.metricsExporter?.headers,
     }),
   });
+
+  // Initialize logs exporter if enabled
+  if (options.logsExporter?.enabled) {
+    initLogsExporter({
+      url: options.logsExporter.url,
+      headers: options.logsExporter.headers,
+      resource,
+      useBatchProcessor: options.logsExporter.useBatchProcessor ?? true,
+    });
+  }
 
   const instrumentations: Instrumentation[] = [
     new HttpInstrumentation(),
@@ -138,13 +178,7 @@ export const initObservability = async (options: ObservabilityOptions) => {
   }
 
   sdkInstance = new NodeSDK({
-    resource: new Resource({
-      [ATTR_SERVICE_NAME]: options.serviceName,
-      [ATTR_SERVICE_VERSION]:
-        options.serviceVersion ?? process.env.npm_package_version ?? '0.0.0',
-      [ATTR_DEPLOYMENT_ENVIRONMENT]:
-        options.environment ?? process.env.NODE_ENV ?? 'development',
-    }),
+    resource,
     traceExporter,
     metricReader,
     instrumentations,
@@ -160,6 +194,13 @@ export const initObservability = async (options: ObservabilityOptions) => {
     environment: options.environment ?? process.env.NODE_ENV ?? 'development',
     traceExporter: options.traceExporter,
     metricsExporter: options.metricsExporter,
+    logsExporter: options.logsExporter?.enabled
+      ? {
+          url: options.logsExporter.url,
+          headers: options.logsExporter.headers,
+          enabled: true,
+        }
+      : undefined,
     sampling: {
       parentBasedRatio: clampRatio(
         sanitizeRatio(options.traceSampling?.parentBasedRatio)
@@ -176,7 +217,33 @@ export const initObservability = async (options: ObservabilityOptions) => {
 
 export const shutdownObservability = async () => {
   if (!sdkInstance) return;
+
+  // Flush all pending logs before shutting down
+  // This ensures buffered async logs are written before process exit
+  try {
+    await flushLoggers();
+  } catch (error) {
+    // Log error but continue with shutdown
+    console.error('Error flushing Pino loggers during shutdown:', error);
+  }
+
+  // Force flush OTEL logs if exporter is enabled
+  try {
+    await forceFlushLogs();
+  } catch (error) {
+    console.error('Error flushing OTEL logs during shutdown:', error);
+  }
+
+  // Shutdown OTEL SDK (traces and metrics)
   await sdkInstance.shutdown();
+
+  // Shutdown logs exporter
+  try {
+    await shutdownLogsExporter();
+  } catch (error) {
+    console.error('Error shutting down logs exporter:', error);
+  }
+
   sdkInstance = null;
   runtimeConfig = null;
 };

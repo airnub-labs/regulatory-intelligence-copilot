@@ -1,6 +1,86 @@
 name: regulatory-intelligence-copilot
 
 services:
+  # OpenTelemetry Collector for observability (logs, traces, metrics)
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: reg-copilot-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - otel_logs:/var/log/otel
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver (used by Next.js and scripts)
+      - "8888:8888"   # Prometheus metrics (collector self-monitoring)
+      - "8889:8889"   # Prometheus exporter (application metrics)
+      - "13133:13133" # Health check
+      - "55679:55679" # zPages (debugging)
+    environment:
+      - OTEL_LOG_LEVEL=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - observability
+
+  # Jaeger for trace visualization
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: reg-copilot-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+    networks:
+      - observability
+
+  # Prometheus for metrics storage and querying
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: reg-copilot-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+    networks:
+      - observability
+
+  # Redis for distributed rate limiting and caching
+  redis:
+    image: redis:7-alpine
+    container_name: reg-copilot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD:-devpassword}"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - observability
+
   # Memgraph database with Lab UI and MAGE, schema info enabled (required for MCP)
   memgraph:
     image: memgraph/memgraph-platform:latest
@@ -42,3 +122,10 @@ services:
 volumes:
   memgraph_data:
   memgraph_log:
+  otel_logs:
+  prometheus_data:
+  redis_data:
+
+networks:
+  observability:
+    driver: bridge

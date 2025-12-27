@@ -1,0 +1,236 @@
+# OpenTelemetry Collector Configuration for Regulatory Intelligence Copilot
+#
+# This configuration receives telemetry (logs, traces, metrics) from the application
+# via OTLP/HTTP and OTLP/gRPC protocols, processes them, and exports to various backends.
+#
+# Architecture:
+# Application → OTLP → OTEL Collector → Exporters (Jaeger, Prometheus, Console, etc.)
+#
+
+receivers:
+  # OTLP receiver for application telemetry (logs, traces, metrics)
+  otlp:
+    protocols:
+      # HTTP endpoint (preferred for Node.js applications)
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+            # Add your production domains here
+            # - "https://yourdomain.com"
+          allowed_headers:
+            - "*"
+          max_age: 7200
+
+      # gRPC endpoint (alternative protocol)
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+  # Prometheus metrics scraping (for collector self-monitoring)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Batch processor - groups telemetry for efficient processing
+  batch:
+    timeout: 1s
+    send_batch_size: 100
+    send_batch_max_size: 1000
+
+  # Memory limiter - prevents OOM by applying backpressure when memory is high
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource detection - adds environment metadata automatically
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 2s
+    override: false
+
+  # Attributes processor - add custom attributes to all telemetry
+  attributes:
+    actions:
+      - key: deployment.environment
+        from_attribute: deployment.environment.name
+        action: upsert
+      - key: collector.version
+        value: "0.1.0"
+        action: insert
+
+  # Resource processor - modify resource attributes
+  resource:
+    attributes:
+      - key: service.namespace
+        value: regulatory-intelligence-copilot
+        action: upsert
+
+exporters:
+  # Debug exporter - outputs to console (useful for development)
+  debug:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # Logging exporter - structured JSON output
+  logging:
+    loglevel: info
+
+  # Prometheus exporter - exposes metrics endpoint for Prometheus scraping
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      environment: development
+      service: regulatory-intelligence-copilot
+
+  # OTLP exporter to Jaeger (for trace visualization)
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  # File exporter - write telemetry to files (useful for backup/debugging)
+  file/logs:
+    path: /var/log/otel/logs.json
+    rotation:
+      max_megabytes: 100
+      max_days: 7
+      max_backups: 3
+
+  file/traces:
+    path: /var/log/otel/traces.json
+    rotation:
+      max_megabytes: 100
+      max_days: 3
+      max_backups: 3
+
+  # Additional exporters (uncomment as needed):
+
+  # OTLP HTTP exporter - forward to another collector or backend
+  # otlphttp:
+  #   endpoint: "https://api.yourdomain.com/v1/traces"
+  #   headers:
+  #     api-key: "${env:OTEL_API_KEY}"
+  #   compression: gzip
+
+  # Datadog exporter
+  # datadog:
+  #   api:
+  #     site: datadoghq.com
+  #     key: "${env:DD_API_KEY}"
+
+  # Elasticsearch exporter
+  # elasticsearch:
+  #   endpoints: ["http://elasticsearch:9200"]
+  #   logs_index: "reg-copilot-logs"
+  #   traces_index: "reg-copilot-traces"
+
+  # Loki exporter (for Grafana Loki)
+  # loki:
+  #   endpoint: "http://loki:3100/loki/api/v1/push"
+
+# Extensions for monitoring and health checks
+extensions:
+  # Health check endpoint
+  health_check:
+    endpoint: "0.0.0.0:13133"
+    path: "/health"
+
+  # Performance profiler (pprof)
+  pprof:
+    endpoint: "0.0.0.0:1777"
+
+  # zPages for debugging
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+# Service pipelines - define how data flows through the collector
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    # Logs pipeline
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - attributes
+        - batch
+      exporters:
+        - debug          # Console output for development
+        - file/logs      # Backup to file
+        # - otlphttp     # Forward to backend (uncomment if needed)
+        # - elasticsearch # Send to Elasticsearch (uncomment if needed)
+        # - loki         # Send to Loki (uncomment if needed)
+
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - attributes
+        - batch
+      exporters:
+        - debug          # Console output for development
+        - otlp/jaeger    # Send to Jaeger for visualization
+        - file/traces    # Backup to file
+        # - otlphttp     # Forward to backend (uncomment if needed)
+        # - datadog      # Send to Datadog (uncomment if needed)
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - resource
+        - batch
+      exporters:
+        - prometheus     # Expose for Prometheus scraping
+        - debug          # Console output for development
+        # - datadog      # Send to Datadog (uncomment if needed)
+
+  # Telemetry settings for the collector itself
+  telemetry:
+    logs:
+      level: info
+      development: false
+      encoding: json
+      output_paths:
+        - stdout
+      error_output_paths:
+        - stderr
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+# Performance tuning notes:
+#
+# For low traffic (development):
+# - memory_limiter: 512MB
+# - batch: send_batch_size=100
+# - Simple processor for logs (immediate delivery)
+#
+# For medium traffic (staging):
+# - memory_limiter: 1GB
+# - batch: send_batch_size=500
+# - Batch processor for logs
+#
+# For high traffic (production):
+# - memory_limiter: 2GB+
+# - batch: send_batch_size=1000
+# - Batch processor for logs
+# - Consider running multiple collector instances
+# - Use load balancer in front of collector
