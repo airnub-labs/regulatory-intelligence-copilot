@@ -14,18 +14,19 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 | Architecture Version | Feature Set | Backend | UI | Integration |
 |---------------------|-------------|---------|-----|-------------|
-| v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ✅ Wired |
+| v0.6 | Conversation Branching & Merging | ✅ Complete | ✅ Complete | ⚠️ 98% (page wiring) |
 | v0.6 | AI Merge Summarization | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Message Pinning | ✅ Complete | ✅ Complete | ✅ Wired |
-| v0.6 | Concept Capture & Graph | ⚠️ 40% | N/A | ⚠️ Partial |
+| v0.6 | Concept Capture & Graph | ✅ Complete | N/A | ✅ Wired |
 | v0.6 | Conversation Persistence | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Distributed SSE Fan-out | ✅ Complete | N/A | ✅ Wired |
 | v0.6 | OpenFGA/ReBAC Authorization | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
-| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ✅ Wired |
+| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ⚠️ Scalability gaps |
 | v0.7 | Client Telemetry | ✅ Complete | ✅ Complete | ✅ Wired |
-| v0.7 | Logging Framework | ✅ Complete | N/A | ✅ Wired |
+| v0.7 | Logging Framework | ✅ Complete | N/A | ⚠️ OTEL transport gap |
+| v0.7 | Scenario Engine | ❌ Not Started | ❌ Not Started | ❌ Not Started |
 
 ---
 
@@ -221,6 +222,40 @@ REDIS_TOKEN=your_password
 - `packages/reg-intel-prompts/src/promptAspects.test.ts` - 42 comprehensive tests
 - `packages/reg-intel-prompts/src/applyAspects.test.ts` - 15 pipeline tests
 - `packages/reg-intel-prompts/src/constants.test.ts` - 10 constant tests
+
+---
+
+### 2.4 HIGH: Path System Page Integration
+
+**Priority**: HIGH (Quick Win)
+**Effort**: 30-60 minutes
+**Reference**: `docs/development/PATH_SYSTEM_STATUS.md`
+
+**Description**: The conversation path branching system is 98% complete. The remaining 2% is wiring handlers in the main page component to enable branch/edit buttons.
+
+**Current State**:
+- ✅ Backend infrastructure 100% complete
+- ✅ UI component library complete (`@reg-copilot/reg-intel-ui`)
+- ✅ API endpoints complete
+- ⚠️ Page handlers not wired (2% remaining)
+
+**What's Missing**:
+- `handleBranch()` handler in `apps/demo-web/src/app/page.tsx`
+- `handleEdit()` handler wiring
+- Pass `messageId`, `onEdit`, `onBranch` props to Message components
+- Render `BranchDialog` component
+
+**Tasks**:
+
+- [ ] **Task PS.1**: Wire up handlers in page.tsx
+  - Add state for branch dialog
+  - Create handleBranch handler
+  - Pass props to Message components
+  - Render BranchDialog
+
+- [ ] **Task PS.2**: Test branching and merging flow
+  - Verify branch creation via UI
+  - Verify merge with AI summary
 
 ---
 
@@ -558,6 +593,89 @@ GET /api/conversations?limit=20&cursor=<nextCursor>
 
 ---
 
+### 3.5 MEDIUM: Observability Scalability Enhancements
+
+**Priority**: MEDIUM (Production Readiness)
+**Effort**: 8-16 hours
+**Reference**: `docs/observability/SCALABILITY_REVIEW.md`
+
+**Description**: The logging and telemetry framework is fully implemented but needs enhancements for cloud-scale deployments. The OTEL Collector is configured but Pino logs are not automatically forwarded.
+
+**Current State**:
+- ✅ Pino structured logging implemented
+- ✅ OTEL traces and metrics export working
+- ✅ OTEL Collector configured (Docker)
+- ⚠️ Pino-to-OTEL transport not wired
+- ⚠️ OTEL_LOGS_ENABLED defaults to false
+- ⚠️ No production log backend configured (Loki/Elasticsearch)
+- ⚠️ No custom business metrics
+
+**Tasks**:
+
+- [ ] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH)
+  - Modify `createLogger()` to use `pino.multistream()`
+  - Add OTEL transport stream conditional on `OTEL_LOGS_ENABLED`
+  - Test dual-write to stdout + OTEL Collector
+
+- [ ] **Task OBS.2**: Configure production log backend (HIGH)
+  - Add Loki exporter to `docker/otel-collector-config.yaml`
+  - Add Loki and Grafana to docker-compose
+  - Or: Configure cloud-native backend (Datadog, CloudWatch)
+
+- [ ] **Task OBS.3**: Add custom business metrics (MEDIUM)
+  - Agent selection rates
+  - Graph query performance histograms
+  - LLM token usage counters
+  - Egress guard block rates
+
+- [ ] **Task OBS.4**: Default OTEL_LOGS_ENABLED for production (MEDIUM)
+  - Change default in `initObservability()` for NODE_ENV=production
+
+---
+
+### 3.6 MEDIUM: UI Improvements Pending (Path Integration)
+
+**Priority**: MEDIUM (UX Enhancement)
+**Effort**: 4-6 hours
+**Reference**: `docs/development/UI_IMPROVEMENTS_PENDING.md`
+
+**Description**: Two UI improvements require deeper integration with the path system.
+
+**Current State**:
+- ✅ Path system database schema complete
+- ✅ PathToolbar demonstrates basic path switching
+- ⚠️ Message version display uses legacy `supersededBy` pattern
+- ⚠️ No branch indicator icons on messages
+
+**Missing Features**:
+
+1. **Message Version Display - Complete Path View**
+   - Current: Shows all versions in sequence
+   - Expected: Show entire conversation path as it existed at that version
+   - Requires: Replace `buildVersionedMessages()` with path-based resolution
+
+2. **Branch Indicator Icon**
+   - Current: No visual indication when a message has branches
+   - Expected: GitBranch icon on messages with `isBranchPoint = true`
+   - Requires: Pass `isBranchPoint`, `branchedToPaths` props to Message component
+
+**Tasks**:
+
+- [ ] **Task UI.1**: Replace buildVersionedMessages with path-based resolution
+  - Use `ConversationPathStore.resolvePathMessages()`
+  - Returns `PathAwareMessage[]` with path context
+
+- [ ] **Task UI.2**: Add branch indicator to Message component
+  - Render GitBranch icon for `isBranchPoint = true`
+  - Show badge with branch count if multiple branches
+  - Handle branch navigation (new window or modal)
+
+- [ ] **Task UI.3**: Track active path for version navigation
+  - Add `activePathId` state management
+  - Update URL with `?pathId=xxx` parameter
+
+---
+
 ### 4.4 LOW: Concept Capture Expansion ✅ COMPLETED
 
 **Priority**: LOW
@@ -681,13 +799,16 @@ Branch navigation with preview cards fully functional.
 | ~~3.2 Supabase Persistence~~ | MEDIUM | 1 week | ✅ COMPLETED |
 | ~~3.1 OpenFGA Integration~~ | MEDIUM | 1-2 weeks | ✅ COMPLETED |
 
-### Phase B: Feature Completion & Quality
+### Phase B: Quick Wins & Feature Completion
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
+| 2.4 Path System Page Integration | HIGH | 30-60 min | None (quick win) |
 | 2.1 Scenario Engine | HIGH | 2-3 weeks | None |
 | 3.3 API Integration Tests | MEDIUM | 1-2 days | None |
 | 3.4 Package Test Coverage | MEDIUM | 2-3 days | None |
+| 3.5 Observability Scalability | MEDIUM | 8-16 hours | None |
+| 3.6 UI Path Improvements | MEDIUM | 4-6 hours | 2.4 (path wiring) |
 
 ### Phase C: Polish (Deferred)
 
@@ -696,7 +817,7 @@ Branch navigation with preview cards fully functional.
 | 4.1 Metrics Dashboard | LOW | 4-6h | Production usage data |
 | 4.2 Graph/Ribbon Enhancement | LOW | 1 week | None |
 | 4.3 Timeline Expansion | LOW | 3-4 days | None |
-| 4.4 Concept Capture | LOW | 1 week | None |
+| ~~4.4 Concept Capture~~ | LOW | 1 week | ✅ COMPLETED |
 
 ---
 
@@ -704,21 +825,21 @@ Branch navigation with preview cards fully functional.
 
 ### Packages with Good Coverage
 
-| Package | Test Files | Total Tests | Status |
-|---------|------------|-------------|--------|
-| reg-intel-conversations | 5 files | ~30 tests | ✅ Good |
-| reg-intel-prompts | 3 files | 67 tests | ✅ Excellent |
-| reg-intel-llm | 6 files | ~25 tests | ✅ Good |
-| reg-intel-core | 7 files | ~35 tests | ✅ Good |
-| reg-intel-observability | 3 files | ~15 tests | ✅ Adequate |
+| Package | Test Files | Test LOC | Total Tests | Status |
+|---------|------------|----------|-------------|--------|
+| reg-intel-conversations | 4 files | ~1,428 LOC | ~30 tests | ✅ Good |
+| reg-intel-prompts | 3 files | ~1,076 LOC | 67 tests | ✅ Excellent |
+| reg-intel-llm | 6 files | ~2,233 LOC | ~25 tests | ✅ Good |
+| reg-intel-core | 7 files | ~751 LOC | ~35 tests | ✅ Good |
+| reg-intel-observability | 3 files | ~359 LOC | ~15 tests | ✅ Adequate |
+| reg-intel-graph | 6 files | ~2,687 LOC | 85 tests | ✅ Excellent |
 
 ### Packages Needing Coverage
 
-| Package | Source Files | Test Files | Tests | Issue |
-|---------|--------------|------------|-------|-------|
-| reg-intel-graph | 8 files (~500 LOC) | 6 files | 85 tests | ✅ Complete (comprehensive coverage for all operations) |
-| reg-intel-ui | 7 files (~800 LOC) | 0 files | 0 tests | ⚠️ No tests (React components + hooks) |
-| reg-intel-next-adapter | 2 files (~260 LOC) | 0 files | 0 tests | ⚠️ No tests (E2B adapter, singleton pattern) |
+| Package | Source Files | Source LOC | Test Files | Issue |
+|---------|--------------|------------|------------|-------|
+| reg-intel-ui | 6 files | ~1,413 LOC | 0 files | ⚠️ No tests (5 React components + 1 hook) |
+| reg-intel-next-adapter | 2 files | ~1,317 LOC | 0 files | ⚠️ No tests (E2B adapter, singleton pattern) |
 
 ### Package Test Details
 
@@ -742,14 +863,25 @@ Branch navigation with preview cards fully functional.
 
 ### Missing Integration Tests (demo-web)
 
+**Total API Routes**: 19 files | **Routes with tests**: 3 | **Coverage**: ~16%
+
 | Endpoint | Priority | Notes |
 |----------|----------|-------|
 | `/api/conversations/[id]/messages/[messageId]/pin` | HIGH | Core feature, no coverage |
 | `/api/cron/cleanup-contexts` | HIGH | Critical for production |
 | `/api/conversations/[id]/branch` | MEDIUM | Branching workflow |
-| `/api/conversations/[id]/paths/[pathId]/merge` | MEDIUM | Merge workflow |
+| `/api/conversations/[id]/paths/[pathId]/merge` | MEDIUM | Merge workflow + AI summary |
+| `/api/conversations/[id]/paths/[pathId]/merge/preview` | MEDIUM | Merge preview |
+| `/api/conversations/[id]/active-path` | MEDIUM | Active path management |
+| `/api/conversations/[id]/paths/route` | MEDIUM | Path CRUD |
 | `/api/conversations/[id]/stream` | LOW | SSE testing complex |
+| `/api/graph/stream` | LOW | Graph change subscription |
 | Version navigator E2E | LOW | Requires Playwright/Cypress |
+
+**Tested Routes** (3/19):
+- `/api/chat/route.ts` - 231 LOC tests ✅
+- `/api/client-telemetry/route.ts` - 142 LOC tests ✅
+- `/api/graph/route.ts` - 93 LOC tests (logging) ✅
 
 ---
 
@@ -766,6 +898,9 @@ Branch navigation with preview cards fully functional.
 | Client Telemetry | Batching, rate limiting, OTEL | `docs/architecture/client-telemetry-architecture-v1.md` |
 | V0.6 Implementation Status | Subsystem status tracker | `docs/development/V0_6_IMPLEMENTATION_STATUS.md` |
 | Scenario Engine Spec | What-if analysis engine | `docs/architecture/engines/scenario-engine/spec_v_0_1.md` |
+| Path System Status | Branching implementation tracker | `docs/development/PATH_SYSTEM_STATUS.md` |
+| UI Improvements Pending | Path integration UX improvements | `docs/development/UI_IMPROVEMENTS_PENDING.md` |
+| Observability Scalability | Cloud-scale logging/telemetry | `docs/observability/SCALABILITY_REVIEW.md` |
 
 ---
 
@@ -810,24 +945,27 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~4-5 weeks
+**Total Outstanding Effort**: ~4-6 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 1 | 2-3 weeks (Scenario Engine) |
-| MEDIUM | 1 | 1-2 days (API Tests) |
-| LOW | 4 | 2-3 weeks |
+| HIGH | 2 | 2-3 weeks (Scenario Engine) + 1 hour (Path wiring) |
+| MEDIUM | 4 | 3-5 days (Tests, Observability, UI) |
+| LOW | 3 | 2-3 weeks |
 
 ### Critical Gaps Identified
 
 1. **Scenario Engine** - Fully documented (spec_v_0_1.md), zero implementation - **PRIMARY GAP**
-2. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
-3. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
-4. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
-5. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
-6. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
-7. **Package Test Coverage** - 2 packages need tests (reg-intel-ui, reg-intel-next-adapter)
-8. **API Integration Tests** - 6+ endpoints without test coverage
+2. **Path System Page Wiring** - 98% complete, just needs handlers wired - **QUICK WIN**
+3. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
+4. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
+5. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
+6. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
+7. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
+8. **Package Test Coverage** - 2 packages need tests (reg-intel-ui, reg-intel-next-adapter)
+9. **API Integration Tests** - 16/19 endpoints without test coverage (84%)
+10. **Observability Scalability** - Pino-OTEL transport, log backends not wired
+11. **UI Path Integration** - Message version display, branch indicators pending
 
 ### Production Readiness Checklist
 
@@ -839,31 +977,44 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] Supabase persistence wired ✅
 - [x] Authorization service integrated ✅
 - [x] Graph services (read/write) ✅
-- [x] Conversation branching & merging ✅
+- [x] Conversation branching & merging ✅ (98% - needs page wiring)
 - [x] Message pinning ✅
-- [ ] Full test coverage (currently ~170 tests across 26 files)
+- [ ] Path system fully wired (30-60 min remaining)
+- [ ] Full test coverage (currently ~260 tests across 33 files)
 - [ ] Scenario Engine implementation
+- [ ] Observability cloud scalability (Pino-OTEL, log backends)
 
 ### Codebase Statistics
 
 | Metric | Count |
 |--------|-------|
 | Total packages | 8 |
-| Total test files | 34 (29 packages + 5 app) |
-| Estimated total tests | ~250 |
-| API route files | 22 |
-| API routes with tests | 3 |
+| Total test files | 33 (28 packages + 5 app) |
+| Total test LOC | ~9,700 |
+| Estimated total tests | ~260 |
+| API route files | 19 |
+| API routes with tests | 3 (16% coverage) |
 | Packages with 0 tests | 2 (reg-intel-ui, reg-intel-next-adapter) |
 | Packages with comprehensive tests | 6 (conversations, prompts, llm, core, observability, graph) |
 
 ---
 
-**Document Version**: 3.6
+**Document Version**: 3.7
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v3.7 (2025-12-27): Comprehensive refresh with newly identified gaps:
+  - Added §2.4 Path System Page Integration (HIGH priority, 30-60 min quick win)
+  - Added §3.5 Observability Scalability Enhancements (Pino-OTEL transport, log backends)
+  - Added §3.6 UI Improvements Pending (message version display, branch indicators)
+  - Updated Concept Capture status to COMPLETE (was incorrectly marked 40%)
+  - Updated API route coverage stats (3/19 = 16% coverage)
+  - Updated test file counts (33 total: 28 packages + 5 app)
+  - Added test LOC metrics (~9,700 LOC of tests)
+  - Expanded missing API test list with path system endpoints
+  - Added Scenario Engine to overall status table as NOT STARTED
 - v3.6 (2025-12-27): Mark concept capture expansion as COMPLETED ✅ (85 comprehensive tests for graph operations: graphIngressGuard, canonicalConceptHandler, graphWriteService)
 - v3.5 (2025-12-27): Comprehensive codebase review - updated test coverage details, added package statistics, identified 3 packages needing tests, expanded API integration test tracking
 - v3.4 (2025-12-27): Mark reg-intel-prompts test coverage as COMPLETED ✅ (67 comprehensive tests, 100% coverage)
