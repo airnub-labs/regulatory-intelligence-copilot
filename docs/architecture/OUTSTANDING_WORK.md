@@ -2,7 +2,7 @@
 
 > **Last Updated**: 2025-12-27
 > **Status**: Comprehensive codebase review and gap analysis
-> **Previous Update**: 2025-12-27
+> **Document Version**: 3.8
 
 ---
 
@@ -21,18 +21,42 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.6 | Conversation Persistence | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.6 | Distributed SSE Fan-out | ✅ Complete | N/A | ✅ Wired |
 | v0.6 | OpenFGA/ReBAC Authorization | ✅ Complete | N/A | ✅ Wired |
+| v0.6 | Path System Page Integration | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
-| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ⚠️ Scalability gaps |
 | v0.7 | Client Telemetry | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | Logging Framework | ✅ Complete | N/A | ⚠️ OTEL transport gap |
+| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ⚠️ Scalability gaps |
 | v0.7 | Scenario Engine | ❌ Not Started | ❌ Not Started | ❌ Not Started |
 
 ---
 
 ## 1. Recently Completed Work (Since 2025-12-24)
 
-### 1.1 Client Telemetry Architecture ✅
+### 1.1 Path System Page Integration ✅ COMPLETED
+
+**Reference**: `docs/development/PATH_SYSTEM_STATUS.md`
+**Completed**: 2025-12-27
+
+**Description**: The conversation path branching system is **100% complete and fully functional**.
+
+**Current State**:
+- ✅ Backend infrastructure 100% complete
+- ✅ UI component library complete (`@reg-copilot/reg-intel-ui`)
+- ✅ API endpoints complete
+- ✅ Page handlers fully wired in `page.tsx`
+
+**Wired Components in page.tsx**:
+- ✅ `handleBranch()` handler (line 963) - Opens BranchDialog
+- ✅ `handleBranchCreated()` handler (line 968) - Switches to new branch
+- ✅ `handleViewBranch()` handler (line 994) - Opens branch in new tab
+- ✅ `PathAwareMessageList` with all props (lines 1275-1301)
+- ✅ `BranchDialog` rendered (lines 1342-1350)
+- ✅ `PathToolbar` rendered (lines 1172-1183)
+- ✅ `onBranchRequest={handleBranch}` wired to PathAwareMessageList
+- ✅ `showBranchButtons={true}` enabled
+
+### 1.2 Client Telemetry Architecture ✅
 
 **Reference**: `docs/architecture/client-telemetry-architecture-v1.md`
 
@@ -44,9 +68,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Page unload handlers | ✅ Complete |
 | Timestamp validation | ✅ Complete |
 
-**PRs**: #179 (timestamp validation), #178 (logging wiring)
-
-### 1.2 Logging Framework Wiring ✅
+### 1.3 Logging Framework Wiring ✅
 
 **Reference**: PR #178
 
@@ -57,9 +79,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | Core component logging | ✅ Complete |
 | Trace propagation | ✅ Complete |
 
-### 1.3 Quality & Stability Fixes ✅
-
-**PRs**: #175, #174, #172, #171
+### 1.4 Quality & Stability Fixes ✅
 
 | Fix | PR | Status |
 |-----|-----|--------|
@@ -78,364 +98,222 @@ This document consolidates all outstanding work identified from reviewing the ar
 **Effort**: 2-3 weeks
 **Reference**: `docs/architecture/engines/scenario-engine/spec_v_0_1.md`
 
-**Description**: The Scenario Engine is fully documented in architecture but has **zero implementation**. This is a core feature for regulatory "what-if" analysis.
+**Description**: The Scenario Engine is fully documented in architecture (503 lines of spec) but has **zero implementation**. This is a core feature for regulatory "what-if" analysis.
 
 **Current State**:
 - ✅ Architecture spec complete (`spec_v_0_1.md`)
-- ❌ No runtime code exists
+- ❌ No runtime code exists in `packages/reg-intel-core/src/`
+- ❌ No `ScenarioEngine` class or interface implemented
 - ❌ No integration hooks exercised
 - ❌ No tests
 
+**Architecture Spec Highlights**:
+- Core types: `Scenario`, `ScenarioSnapshot`, `ScenarioSnapshotFacts`, `ScenarioEvaluationResult`
+- Public API: `ScenarioEngine.evaluateScenarios(scenarios, options)`
+- Composes: `GraphClient` (read-only) + `TimelineEngine` (temporal logic)
+- Privacy: Read-only Memgraph access, no PII writes
+- Agent integration: `TaskType.WHAT_IF_SCENARIO_EVALUATION`, `IE_WhatIfScenario_Agent`
+
 **Tasks**:
 
-- [ ] **Task S.1**: Implement `ScenarioEngine` service
-  - Core evaluation logic for hypothetical scenarios
-  - Rule matching against regulatory graph
-  - Impact assessment calculations
+- [ ] **Task S.1**: Create `packages/reg-intel-core/src/scenario/` directory structure
+  - `types.ts` - Scenario, ScenarioSnapshot, ScenarioEvaluationResult
+  - `ScenarioEngine.ts` - Interface definition
+  - `DefaultScenarioEngine.ts` - Core implementation
+  - `index.ts` - Module exports
 
-- [ ] **Task S.2**: Create scenario tools for LLM agents
+- [ ] **Task S.2**: Implement `DefaultScenarioEngine` class
+  - Core evaluation logic for hypothetical scenarios
+  - Rule matching against regulatory graph via GraphClient
+  - Timeline Engine integration for temporal constraints
+  - Impact assessment calculations (eligible/ineligible/locked-out)
+
+- [ ] **Task S.3**: Create scenario tools for LLM agents
   - `create_scenario` tool
   - `evaluate_scenario` tool
   - `compare_scenarios` tool
 
-- [ ] **Task S.3**: Wire into ComplianceEngine orchestration
-  - Add scenario-aware agent flows
+- [ ] **Task S.4**: Wire into ComplianceEngine orchestration
+  - Add `TaskType.WHAT_IF_SCENARIO_EVALUATION` task type
+  - Create `IE_WhatIfScenario_Agent` agent config
   - Connect to conversation context
 
-- [ ] **Task S.4**: Add unit and integration tests
-
----
-
-### 2.2 HIGH: Redis/Distributed SSE Fan-out ✅ COMPLETED
-
-**Priority**: HIGH (Production Blocker)
-**Effort**: 1-2 weeks
-**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
-**Completed**: 2025-12-27
-
-**Description**: SSE implementation now supports distributed Redis-backed event broadcasting for horizontal scaling.
-
-**Current State**:
-- ✅ Single-instance EventHub works (`packages/reg-intel-conversations/src/eventHub.ts`)
-- ✅ Redis/list-based event distribution (`packages/reg-intel-conversations/src/redisEventHub.ts`)
-- ✅ Rate limiting is Redis-backed (`apps/demo-web/src/lib/rateLimiter.ts`)
-- ✅ Automatic fallback to in-memory when Redis not configured
-- ✅ Health checks for Redis connectivity
-- ✅ Feature flags via environment variables
-
-**Completed Tasks**:
-
-- [x] **Task R.1**: Add Redis pub/sub for SSE events ✅
-  - Implemented `RedisConversationEventHub` class
-  - Implemented `RedisConversationListEventHub` class
-  - Uses Redis lists with LPOP polling (compatible with Upstash HTTP API)
-  - Broadcasts to local subscribers immediately for low latency
-  - Publishes to Redis for cross-instance distribution
-
-- [x] **Task R.2**: Implement distributed rate limiting ✅
-  - Redis-backed rate limiter already implemented
-  - Feature flag to switch between in-memory and Redis
-  - Uses Upstash Ratelimit with sliding window algorithm
-
-- [x] **Task R.3**: Add health checks for Redis connectivity ✅
-  - `healthCheck()` method on both event hub classes
-  - Automatic health check on startup with logging
-
-- [x] **Task R.4**: Update deployment documentation ✅
-  - Environment variables documented in `docker/REDIS.md`
-  - Configuration wired in `apps/demo-web/src/lib/server/conversations.ts`
-
-**Environment Variables**:
-```bash
-# Use Redis for distributed SSE (recommended for production with multiple instances)
-UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_token_here
-
-# Or use standard Redis
-REDIS_URL=redis://localhost:6379
-REDIS_TOKEN=your_password
-
-# If not set, falls back to in-memory (single instance only)
-```
-
-**Files Changed**:
-- `packages/reg-intel-conversations/src/redisEventHub.ts` - New Redis-backed event hubs
-- `packages/reg-intel-conversations/src/redisEventHub.test.ts` - Unit tests
-- `packages/reg-intel-conversations/src/index.ts` - Export new classes
-- `packages/reg-intel-conversations/package.json` - Add @upstash/redis dependency
-- `apps/demo-web/src/lib/server/conversations.ts` - Wire up Redis event hubs with fallback
-
----
-
-### 2.3 HIGH: Test Coverage for reg-intel-prompts ✅ COMPLETED
-
-**Priority**: HIGH (Quality Gap)
-**Effort**: 4-6 hours
-**Reference**: `packages/reg-intel-prompts/`
-**Completed**: 2025-12-27
-
-**Description**: Comprehensive test coverage for the `reg-intel-prompts` package covering all prompt composition logic.
-
-**Current State**:
-- ✅ `promptAspects.test.ts` (42 tests) - All aspects tested
-- ✅ `applyAspects.test.ts` (15 tests) - Pipeline and patterns tested
-- ✅ `constants.test.ts` (10 tests) - Constants validated
-- ✅ 67 total tests, all passing
-
-**Completed Tasks**:
-
-- [x] **Task T.1**: Create `promptAspects.test.ts` ✅
-  - ✅ Jurisdiction aspect injection (single, multiple, profile fallback)
-  - ✅ Agent context aspect (agentId, agentDescription)
-  - ✅ Profile context aspect (all persona types)
-  - ✅ Disclaimer aspect (with duplication prevention)
-  - ✅ Additional context aspect (multiple strings)
-  - ✅ Conversation context aspect (summary, nodes, both)
-  - ✅ Aspect composition order verification
-  - ✅ Builder creation and customization
-  - ✅ defaultPromptBuilder and buildPromptWithAspects
-
-- [x] **Task T.2**: Create `applyAspects.test.ts` ✅
-  - ✅ Aspect pipeline execution (single, multiple)
-  - ✅ Request/response modification
-  - ✅ Error handling and propagation
-  - ✅ Error transformation in aspects
-  - ✅ Async aspect support
-  - ✅ Common patterns: logging, caching, validation, sanitization
-  - ✅ Aspect composition with spies
-
-- [x] **Task T.3**: Create `constants.test.ts` ✅
-  - ✅ NON_ADVICE_DISCLAIMER validation
-  - ✅ UNCERTAINTY_DESCRIPTIONS structure
-  - ✅ Content verification for all levels
-  - ✅ Formatting checks
-
-**Test Coverage Details**:
-```typescript
-// 67 total tests across 3 test files
-- promptAspects.test.ts: 42 tests
-- applyAspects.test.ts: 15 tests
-- constants.test.ts: 10 tests
-```
-
-**Files Changed**:
-- `packages/reg-intel-prompts/src/promptAspects.test.ts` - 42 comprehensive tests
-- `packages/reg-intel-prompts/src/applyAspects.test.ts` - 15 pipeline tests
-- `packages/reg-intel-prompts/src/constants.test.ts` - 10 constant tests
-
----
-
-### 2.4 HIGH: Path System Page Integration
-
-**Priority**: HIGH (Quick Win)
-**Effort**: 30-60 minutes
-**Reference**: `docs/development/PATH_SYSTEM_STATUS.md`
-
-**Description**: The conversation path branching system is 98% complete. The remaining 2% is wiring handlers in the main page component to enable branch/edit buttons.
-
-**Current State**:
-- ✅ Backend infrastructure 100% complete
-- ✅ UI component library complete (`@reg-copilot/reg-intel-ui`)
-- ✅ API endpoints complete
-- ⚠️ Page handlers not wired (2% remaining)
-
-**What's Missing**:
-- `handleBranch()` handler in `apps/demo-web/src/app/page.tsx`
-- `handleEdit()` handler wiring
-- Pass `messageId`, `onEdit`, `onBranch` props to Message components
-- Render `BranchDialog` component
-
-**Tasks**:
-
-- [ ] **Task PS.1**: Wire up handlers in page.tsx
-  - Add state for branch dialog
-  - Create handleBranch handler
-  - Pass props to Message components
-  - Render BranchDialog
-
-- [ ] **Task PS.2**: Test branching and merging flow
-  - Verify branch creation via UI
-  - Verify merge with AI summary
+- [ ] **Task S.5**: Add unit and integration tests
+  - Type validation tests
+  - Engine evaluation tests
+  - Agent integration tests
 
 ---
 
 ## 3. Outstanding Work - MEDIUM Priority
 
-### 3.1 MEDIUM: OpenFGA/ReBAC Authorization Integration ✅ COMPLETED
-
-**Priority**: MEDIUM (Security Feature)
-**Effort**: 1-2 weeks
-**Reference**: `packages/reg-intel-conversations/src/authorizationService.ts`
-**Completed**: 2025-12-27
-
-**Description**: Unified authorization service with optional OpenFGA support and automatic fallback to Supabase RLS.
-
-**Current State**:
-- ✅ Types defined (`AuthorizationModel`, `AuthorizationSpec`)
-- ✅ `SupabaseRLSAuthorizationService` - RLS-based authorization (default)
-- ✅ `OpenFGAAuthorizationService` - OpenFGA Check API integration
-- ✅ `HybridAuthorizationService` - Automatic fallback pattern
-- ✅ Per-conversation authorization model configuration
-- ✅ Fail-closed security (deny on error)
-- ✅ Comprehensive test coverage (27 tests)
-
-**Completed Tasks**:
-
-- [x] **Task A.1**: Implement OpenFGA client wrapper ✅
-  - Direct integration with OpenFGA Check API
-  - Support for `can_view` and `can_edit` relations
-  - Health check endpoint for connectivity monitoring
-  - Configurable store ID and authorization model ID
-
-- [x] **Task A.2**: Add authorization service abstraction ✅
-  - `AuthorizationService` interface with `canRead` and `canWrite` methods
-  - Three implementations: SupabaseRLS, OpenFGA, Hybrid
-  - Factory function `createAuthorizationService()` for easy instantiation
-  - Support for system roles (assistant, system) always allowed
-
-- [x] **Task A.3**: Wire authorization into server configuration ✅
-  - Environment variable configuration (OPENFGA_API_URL, OPENFGA_STORE_ID, OPENFGA_AUTHORIZATION_MODEL_ID)
-  - Automatic initialization with logging
-  - Exported `openfgaConfig` for use in API routes
-  - Documentation in `.env.local.example`
-
-- [x] **Task A.4**: Add tests for authorization flows ✅
-  - 27 comprehensive unit tests covering all three services
-  - Tests for public, tenant, and private conversations
-  - Tests for RLS policies (owner, audience, tenant access)
-  - Tests for OpenFGA Check API integration
-  - Tests for hybrid fallback behavior
-  - Tests for error handling and fail-closed security
-
-**Authorization Models**:
-
-1. **Supabase RLS** (default):
-   - Uses `shareAudience` (public, tenant, private)
-   - Uses `tenantAccess` (read, edit) for tenant-shared conversations
-   - Owner-based access for private conversations
-
-2. **OpenFGA** (optional):
-   - Fine-grained relationship-based access control (ReBAC)
-   - Checks `user:userId` → `can_view` → `conversation:conversationId`
-   - Checks `user:userId` → `can_edit` → `conversation:conversationId`
-
-3. **Hybrid** (production):
-   - Uses OpenFGA if configured and conversation has `authorizationModel: 'openfga'`
-   - Falls back to RLS on OpenFGA errors (using `fallbackShareAudience`)
-   - Graceful degradation for resilience
-
-**Environment Variables**:
-```bash
-# OpenFGA Authorization (optional)
-OPENFGA_API_URL=http://localhost:8080
-OPENFGA_STORE_ID=your_store_id
-OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
-
-# If not set, uses Supabase RLS-based authorization
-```
-
-**Files Changed**:
-- `packages/reg-intel-conversations/src/authorizationService.ts` - New authorization services
-- `packages/reg-intel-conversations/src/authorizationService.test.ts` - Comprehensive tests
-- `packages/reg-intel-conversations/src/index.ts` - Export authorization services
-- `apps/demo-web/src/lib/server/conversations.ts` - Wire OpenFGA configuration
-- `apps/demo-web/.env.local.example` - Document OpenFGA configuration
-
----
-
-### 3.2 MEDIUM: Supabase Conversation Persistence ✅ COMPLETED
-
-**Priority**: MEDIUM (Production Readiness)
-**Effort**: 1 week
-**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
-**Completed**: 2025-12-27
-
-**Description**: Production-ready conversation persistence with Supabase backend, cursor-based pagination, and multi-tenant RLS policies.
-
-**Current State**:
-- ✅ Schema exists (`supabase/migrations/`)
-- ✅ `SupabaseConversationStore` fully implemented
-- ✅ In-memory fallback works
-- ✅ Supabase implementation complete with all CRUD operations
-- ✅ Wired in production API routes
-- ✅ Cursor-based pagination implemented
-- ✅ RLS policies via views for multi-tenant security
-
-**Completed Tasks**:
-
-- [x] **Task P.1**: Complete `SupabaseConversationStore` implementation ✅
-  - All methods implemented: createConversation, appendMessage, getMessages, listConversations, etc.
-  - Observability integration with tracing and logging
-  - Proper error handling and type safety
-
-- [x] **Task P.2**: Wire Supabase store when env vars present ✅
-  - Automatic selection based on SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
-  - Graceful fallback to in-memory when not configured
-  - Health check on startup
-
-- [x] **Task P.3**: Add pagination to `/api/conversations` endpoint ✅
-  - Cursor-based pagination (more efficient than offset)
-  - Returns nextCursor and hasMore flags
-  - Supports limit parameter (default: 50)
-  - Query params: `?limit=20&cursor=<base64_cursor>&status=active`
-
-- [x] **Task P.4**: Add RLS policies for multi-tenant usage ✅
-  - RLS enabled on all copilot_internal tables
-  - Tenant filtering via conversations_view and conversation_messages_view
-  - current_tenant_id() function for JWT-based tenant extraction
-
-**Pagination API**:
-```typescript
-// First page
-GET /api/conversations?limit=20
-
-// Next page
-GET /api/conversations?limit=20&cursor=<nextCursor>
-
-// Response
-{
-  "conversations": [...],
-  "nextCursor": "base64_encoded_cursor",
-  "hasMore": true
-}
-```
-
-**Files Changed**:
-- `packages/reg-intel-conversations/src/conversationStores.ts` - Added cursor pagination
-- `apps/demo-web/src/app/api/conversations/route.ts` - Updated API endpoint
-
----
-
-### 3.3 MEDIUM: Missing API Integration Tests
+### 3.1 MEDIUM: Missing API Integration Tests
 
 **Priority**: MEDIUM (Quality)
 **Effort**: 1-2 days
 
-**Description**: Several API endpoints lack integration tests. The demo-web app has 22 API route files but only 5 have tests.
+**Description**: Several API endpoints lack integration tests. The demo-web app has 19 API route files but only 3 have tests.
 
-**Missing Tests**:
+**API Test Coverage Summary**:
+- **Total API Routes**: 19 files
+- **Routes with tests**: 3 (16%)
+- **Routes without tests**: 16 (84%)
 
-| Endpoint | Test File Needed | Status |
-|----------|-----------------|--------|
-| `/api/conversations/[id]/messages/[messageId]/pin` | `pin/route.test.ts` | ❌ Missing |
-| `/api/cron/cleanup-contexts` | `cleanupExecutionContexts.test.ts` | ❌ Missing |
-| `/api/conversations/[id]/branch` | `branch/route.test.ts` | ❌ Missing |
-| `/api/conversations/[id]/paths/[pathId]/merge` | `merge/route.test.ts` | ❌ Missing |
-| `/api/conversations/[id]/stream` | `stream/route.test.ts` | ❌ Missing |
-| Version Navigator E2E | `version-navigator.e2e.ts` | ❌ Missing |
+**Missing Tests (HIGH Priority)**:
 
-**Current Coverage** (5 test files exist):
-- `apps/demo-web/src/app/api/chat/route.test.ts` ✅
-- `apps/demo-web/src/app/api/client-telemetry/route.test.ts` ✅
-- `apps/demo-web/src/app/api/graph/route.logging.test.ts` ✅
+| Endpoint | Test File Needed | Notes |
+|----------|-----------------|-------|
+| `/api/conversations/[id]/messages/[messageId]/pin` | `pin/route.test.ts` | Core feature, no coverage |
+| `/api/cron/cleanup-contexts` | `cleanupExecutionContexts.test.ts` | Critical for production |
+| `/api/conversations/[id]/branch` | `branch/route.test.ts` | Branching workflow |
+| `/api/conversations/[id]/paths/[pathId]/merge` | `merge/route.test.ts` | Merge workflow + AI summary |
+| `/api/conversations/[id]/paths/[pathId]/merge/preview` | `preview/route.test.ts` | Merge preview |
+
+**Missing Tests (MEDIUM Priority)**:
+
+| Endpoint | Test File Needed | Notes |
+|----------|-----------------|-------|
+| `/api/conversations/[id]/active-path` | `active-path/route.test.ts` | Active path management |
+| `/api/conversations/[id]/paths` | `paths/route.test.ts` | Path CRUD |
+| `/api/conversations/[id]/paths/[pathId]` | `[pathId]/route.test.ts` | Path detail operations |
+| `/api/conversations/[id]/paths/[pathId]/messages` | `messages/route.test.ts` | Path-specific messages |
+| `/api/conversations` | `conversations/route.test.ts` | List/create conversations |
+| `/api/conversations/[id]` | `[id]/route.test.ts` | Get/update/delete conversation |
+
+**Current Coverage** (3 test files exist):
+- `apps/demo-web/src/app/api/chat/route.test.ts` ✅ (231 LOC)
+- `apps/demo-web/src/app/api/client-telemetry/route.test.ts` ✅ (142 LOC)
+- `apps/demo-web/src/app/api/graph/route.logging.test.ts` ✅ (93 LOC)
 
 **Tasks**:
 
 - [ ] **Task IT.1**: Create message pinning API tests
 - [ ] **Task IT.2**: Create cleanup job integration tests
 - [ ] **Task IT.3**: Create branch/merge API tests
-- [ ] **Task IT.4**: Create SSE stream tests
-- [ ] **Task IT.5**: Create version navigator E2E tests
+- [ ] **Task IT.4**: Create path management API tests
+- [ ] **Task IT.5**: Create conversation CRUD API tests
+
+---
+
+### 3.2 MEDIUM: Package Test Coverage Gaps
+
+**Priority**: MEDIUM (Quality)
+**Effort**: 2-3 days
+
+**Description**: Two packages have zero test coverage, creating risk for future maintenance.
+
+#### 3.2.1 reg-intel-ui (0 tests - needs coverage)
+
+**Current State**:
+- ❌ No tests for 5 React components
+- ❌ No tests for `useConversationPaths` hook
+
+**Components to Test**:
+- `PathSelector.tsx` (8.5 KB) - Dropdown selection logic
+- `BranchButton.tsx` (2.8 KB) - Branch creation trigger
+- `BranchDialog.tsx` (8.6 KB) - Branch creation form
+- `MergeDialog.tsx` (13.4 KB) - Merge workflow + AI summarization
+- `VersionNavigator.tsx` (4.5 KB) - Branch tree visualization
+
+**Hook to Test**:
+- `useConversationPaths` - Path operations (switchPath, branchFromMessage, mergePath)
+
+**Tasks**:
+
+- [ ] **Task TU.1**: Set up Vitest + React Testing Library
+- [ ] **Task TU.2**: Add hook tests for `useConversationPaths`
+- [ ] **Task TU.3**: Add component tests for dialogs and selectors
+
+#### 3.2.2 reg-intel-next-adapter (0 tests - needs coverage)
+
+**Current State**:
+- ❌ No tests for `E2BSandboxClient` class
+- ❌ No tests for singleton manager pattern
+
+**Files to Test**:
+- `executionContext.ts` (262 lines, 0 tests)
+
+**Tasks**:
+
+- [ ] **Task TN.1**: Add `executionContext.test.ts`
+  - Test `E2BSandboxClient.create()` with mocked E2B
+  - Test `E2BSandboxClient.reconnect()` with mocked E2B
+  - Test singleton initialization/shutdown
+  - Test error handling for missing config
+
+---
+
+### 3.3 MEDIUM: Observability Scalability Enhancements
+
+**Priority**: MEDIUM (Production Readiness)
+**Effort**: 8-16 hours
+**Reference**: `docs/observability/SCALABILITY_REVIEW.md`
+
+**Description**: The logging and telemetry framework is fully implemented but needs enhancements for cloud-scale deployments. The OTEL Collector is configured but Pino logs are not automatically forwarded.
+
+**Current State**:
+- ✅ Pino structured logging implemented
+- ✅ OTEL traces and metrics export working
+- ✅ OTEL Collector configured (Docker)
+- ⚠️ Pino-to-OTEL transport not wired
+- ⚠️ OTEL_LOGS_ENABLED defaults to false
+- ⚠️ No production log backend configured (Loki/Elasticsearch)
+- ⚠️ No custom business metrics
+
+**Tasks**:
+
+- [ ] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH)
+  - Modify `createLogger()` to use `pino.multistream()`
+  - Add OTEL transport stream conditional on `OTEL_LOGS_ENABLED`
+  - Test dual-write to stdout + OTEL Collector
+
+- [ ] **Task OBS.2**: Configure production log backend (HIGH)
+  - Add Loki exporter to `docker/otel-collector-config.yaml`
+  - Add Loki and Grafana to docker-compose
+  - Or: Configure cloud-native backend (Datadog, CloudWatch)
+
+- [ ] **Task OBS.3**: Add custom business metrics (MEDIUM)
+  - Agent selection rates
+  - Graph query performance histograms
+  - LLM token usage counters
+  - Egress guard block rates
+
+- [ ] **Task OBS.4**: Default OTEL_LOGS_ENABLED for production (MEDIUM)
+  - Change default in `initObservability()` for NODE_ENV=production
+
+---
+
+### 3.4 MEDIUM: UI Improvements Pending (Path Integration)
+
+**Priority**: MEDIUM (UX Enhancement)
+**Effort**: 4-6 hours
+**Reference**: `docs/development/UI_IMPROVEMENTS_PENDING.md`
+
+**Description**: Two UI improvements require deeper integration with the path system.
+
+**Current State**:
+- ✅ Path system fully wired and functional
+- ✅ Branch buttons appear on hover
+- ⚠️ Message version display uses legacy `supersededBy` pattern
+- ⚠️ Branch indicator icons could be more prominent
+
+**Enhancement Opportunities**:
+
+1. **Message Version Display - Complete Path View**
+   - Current: Shows all versions in sequence
+   - Enhanced: Show entire conversation path as it existed at that version
+   - Requires: Replace `buildVersionedMessages()` with path-based resolution
+
+2. **Branch Indicator Icon Enhancement**
+   - Current: Basic branch button on hover
+   - Enhanced: Persistent GitBranch icon on messages with `isBranchPoint = true`
+   - Show badge with branch count if multiple branches exist
+
+**Tasks**:
+
+- [ ] **Task UI.1**: Enhance message version display with path context
+- [ ] **Task UI.2**: Add persistent branch indicator badges to Message component
+- [ ] **Task UI.3**: Track active path in URL with `?pathId=xxx` parameter
 
 ---
 
@@ -514,228 +392,7 @@ GET /api/conversations?limit=20&cursor=<nextCursor>
 
 ---
 
-### 3.4 MEDIUM: Package Test Coverage Gaps
-
-**Priority**: MEDIUM (Quality)
-**Effort**: 2-3 days
-
-**Description**: Three packages have minimal or no test coverage, creating risk for future maintenance.
-
-#### 3.4.1 reg-intel-graph ✅ COMPLETED
-
-**Current State**:
-- ✅ 6 test files with comprehensive coverage
-- ✅ `graphIngressGuard.test.ts` - 60+ tests (aspect pipeline, schema validation, PII blocking, property whitelist)
-- ✅ `canonicalConceptHandler.test.ts` - 20+ tests (concept normalization, ID generation, duplicate detection)
-- ✅ `graphWriteService.test.ts` - 50+ tests (all concept types, relationships, error handling)
-
-**Completed Tasks**:
-
-- [x] **Task TG.1**: Add `graphIngressGuard.test.ts` ✅
-  - ✅ Test schema validation aspect (all node labels and relationship types)
-  - ✅ Test PII blocking aspect (disallowed keys, email patterns, phone patterns)
-  - ✅ Test property whitelist filtering (for all node types)
-  - ✅ Test aspect composition order and pipeline execution
-
-- [x] **Task TG.2**: Add `canonicalConceptHandler.test.ts` ✅
-  - ✅ Test concept normalization (slugification, complex strings)
-  - ✅ Test ID generation (canonical, fallback, defaults)
-  - ✅ Test duplicate detection (direct ID match, domain/kind/jurisdiction fallback)
-  - ✅ Test batch processing and session management
-
-- [x] **Task TG.3**: Expand `graphWriteService.test.ts` ✅
-  - ✅ Test all concept types (Concept, Label, Jurisdiction, Region, Statute, Section, Benefit, Relief, Timeline, Agreement, Regime)
-  - ✅ Test relationship types (with and without properties)
-  - ✅ Test error handling and session cleanup
-  - ✅ Test custom aspects integration
-  - ✅ Test tenant and source tracking
-
-**Test Statistics**:
-- Total tests: 85 (up from 4)
-- Test files: 6 (up from 3)
-- Coverage: All graph write operations, ingress guards, and concept handling
-
-#### 3.4.2 reg-intel-ui (0 tests - needs coverage)
-
-**Current State**:
-- ❌ No tests for 5 React components
-- ❌ No tests for `useConversationPaths` hook
-
-**Components to Test**:
-- `PathSelector.tsx` - Dropdown selection logic
-- `BranchButton.tsx` - Branch creation trigger
-- `BranchDialog.tsx` - Branch creation form
-- `MergeDialog.tsx` - Merge workflow + AI summarization
-- `VersionNavigator.tsx` - Branch tree visualization
-
-**Tasks**:
-
-- [ ] **Task TU.1**: Set up Vitest + React Testing Library
-- [ ] **Task TU.2**: Add hook tests for `useConversationPaths`
-- [ ] **Task TU.3**: Add component tests for dialogs and selectors
-
-#### 3.4.3 reg-intel-next-adapter (0 tests - needs coverage)
-
-**Current State**:
-- ❌ No tests for `E2BSandboxClient` class
-- ❌ No tests for singleton manager pattern
-
-**Files to Test**:
-- `executionContext.ts` - 262 lines, 0 tests
-
-**Tasks**:
-
-- [ ] **Task TN.1**: Add `executionContext.test.ts`
-  - Test `E2BSandboxClient.create()` with mocked E2B
-  - Test `E2BSandboxClient.reconnect()` with mocked E2B
-  - Test singleton initialization/shutdown
-  - Test error handling for missing config
-
----
-
-### 3.5 MEDIUM: Observability Scalability Enhancements
-
-**Priority**: MEDIUM (Production Readiness)
-**Effort**: 8-16 hours
-**Reference**: `docs/observability/SCALABILITY_REVIEW.md`
-
-**Description**: The logging and telemetry framework is fully implemented but needs enhancements for cloud-scale deployments. The OTEL Collector is configured but Pino logs are not automatically forwarded.
-
-**Current State**:
-- ✅ Pino structured logging implemented
-- ✅ OTEL traces and metrics export working
-- ✅ OTEL Collector configured (Docker)
-- ⚠️ Pino-to-OTEL transport not wired
-- ⚠️ OTEL_LOGS_ENABLED defaults to false
-- ⚠️ No production log backend configured (Loki/Elasticsearch)
-- ⚠️ No custom business metrics
-
-**Tasks**:
-
-- [ ] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH)
-  - Modify `createLogger()` to use `pino.multistream()`
-  - Add OTEL transport stream conditional on `OTEL_LOGS_ENABLED`
-  - Test dual-write to stdout + OTEL Collector
-
-- [ ] **Task OBS.2**: Configure production log backend (HIGH)
-  - Add Loki exporter to `docker/otel-collector-config.yaml`
-  - Add Loki and Grafana to docker-compose
-  - Or: Configure cloud-native backend (Datadog, CloudWatch)
-
-- [ ] **Task OBS.3**: Add custom business metrics (MEDIUM)
-  - Agent selection rates
-  - Graph query performance histograms
-  - LLM token usage counters
-  - Egress guard block rates
-
-- [ ] **Task OBS.4**: Default OTEL_LOGS_ENABLED for production (MEDIUM)
-  - Change default in `initObservability()` for NODE_ENV=production
-
----
-
-### 3.6 MEDIUM: UI Improvements Pending (Path Integration)
-
-**Priority**: MEDIUM (UX Enhancement)
-**Effort**: 4-6 hours
-**Reference**: `docs/development/UI_IMPROVEMENTS_PENDING.md`
-
-**Description**: Two UI improvements require deeper integration with the path system.
-
-**Current State**:
-- ✅ Path system database schema complete
-- ✅ PathToolbar demonstrates basic path switching
-- ⚠️ Message version display uses legacy `supersededBy` pattern
-- ⚠️ No branch indicator icons on messages
-
-**Missing Features**:
-
-1. **Message Version Display - Complete Path View**
-   - Current: Shows all versions in sequence
-   - Expected: Show entire conversation path as it existed at that version
-   - Requires: Replace `buildVersionedMessages()` with path-based resolution
-
-2. **Branch Indicator Icon**
-   - Current: No visual indication when a message has branches
-   - Expected: GitBranch icon on messages with `isBranchPoint = true`
-   - Requires: Pass `isBranchPoint`, `branchedToPaths` props to Message component
-
-**Tasks**:
-
-- [ ] **Task UI.1**: Replace buildVersionedMessages with path-based resolution
-  - Use `ConversationPathStore.resolvePathMessages()`
-  - Returns `PathAwareMessage[]` with path context
-
-- [ ] **Task UI.2**: Add branch indicator to Message component
-  - Render GitBranch icon for `isBranchPoint = true`
-  - Show badge with branch count if multiple branches
-  - Handle branch navigation (new window or modal)
-
-- [ ] **Task UI.3**: Track active path for version navigation
-  - Add `activePathId` state management
-  - Update URL with `?pathId=xxx` parameter
-
----
-
-### 4.4 LOW: Concept Capture Expansion ✅ COMPLETED
-
-**Priority**: LOW
-**Effort**: 1 week
-**Reference**: `docs/architecture/conversation-context/concept_capture_v_0_1.md`
-**Completed**: 2025-12-27
-
-**Description**: Comprehensive test coverage for concept capture graph operations.
-
-**Current State**:
-- ✅ Capture tool wired
-- ✅ Basic ingestion paths
-- ✅ Graph write service comprehensive tests (50+ tests covering all concept types)
-- ✅ All concept types covered (Concept, Label, Jurisdiction, Region, Statute, Section, Benefit, Relief, Timeline, Agreement, Regime)
-- ✅ Graph ingress guard comprehensive tests (aspect pipeline, schema validation, PII blocking, property whitelist)
-- ✅ Canonical concept handler comprehensive tests (ID generation, normalization, duplicate detection)
-
-**Completed Tasks**:
-
-- [x] **Task CC.1**: Expand graph write service coverage ✅
-  - Added comprehensive tests for all upsert methods
-  - Tests for all concept types and relationships
-  - Custom aspects integration tests
-  - Error handling and session management tests
-
-- [x] **Task CC.2**: Add tests for all concept types ✅
-  - Concept, Label, Jurisdiction, Region, Statute, Section, Benefit, Relief, Timeline, Agreement, Regime
-  - Relationship creation with and without properties
-  - Tenant and source tracking tests
-
-- [x] **Task CC.3**: Add comprehensive graph ingress guard tests ✅
-  - Schema validation aspect (node labels and relationship types)
-  - PII blocking aspect (disallowed keys and patterns, with ISO date exclusions)
-  - Property whitelist aspect (for all node types)
-  - Aspect composition and pipeline execution
-
-- [x] **Task CC.4**: Add canonical concept handler tests ✅
-  - ID generation and slugification (complex strings, defaults)
-  - Duplicate detection (direct ID match, fallback match)
-  - Concept upsert and label creation
-  - Batch processing and session management
-
-**Files Changed**:
-- `packages/reg-intel-graph/src/graphIngressGuard.test.ts` - 60+ tests for ingress guard aspects
-- `packages/reg-intel-graph/src/canonicalConceptHandler.test.ts` - 20+ tests for concept handling
-- `packages/reg-intel-graph/src/graphWriteService.test.ts` - Expanded from 2 to 50+ tests
-- `packages/reg-intel-graph/src/graphIngressGuard.ts` - Fixed PII blocking to exclude ISO dates/timestamps
-
-**Test Coverage Summary**:
-```
-reg-intel-graph package:
-- graphIngressGuard.test.ts: ~60 tests
-- canonicalConceptHandler.test.ts: ~20 tests
-- graphWriteService.test.ts: ~50 tests (expanded from 2)
-- Total: 85 tests passing (up from 4)
-```
-
----
-
-### 4.5 LOW: UI Enhancements
+### 4.4 LOW: UI Enhancements
 
 **Priority**: LOW
 **Effort**: Various
@@ -786,6 +443,60 @@ Component fully wired with version navigation, editing, and pinning.
 
 Branch navigation with preview cards fully functional.
 
+### 5.9 Redis/Distributed SSE Fan-out ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ `RedisConversationEventHub` and `RedisConversationListEventHub` implemented
+- ✅ Uses Redis lists with LPOP polling (compatible with Upstash HTTP API)
+- ✅ Automatic fallback to in-memory when Redis not configured
+- ✅ Health checks for Redis connectivity
+
+### 5.10 OpenFGA/ReBAC Authorization ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ Three implementations: `SupabaseRLSAuthorizationService`, `OpenFGAAuthorizationService`, `HybridAuthorizationService`
+- ✅ Per-conversation authorization model configuration
+- ✅ 27 unit tests covering all authorization flows
+- ✅ Fail-closed security (deny on error)
+
+### 5.11 Supabase Conversation Persistence ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ `SupabaseConversationStore` fully implemented
+- ✅ Cursor-based pagination implemented
+- ✅ RLS policies via views for multi-tenant security
+
+### 5.12 Test Coverage (reg-intel-prompts) ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ 67 comprehensive tests across 3 test files
+- ✅ `promptAspects.test.ts` (42 tests)
+- ✅ `applyAspects.test.ts` (15 tests)
+- ✅ `constants.test.ts` (10 tests)
+
+### 5.13 Test Coverage (reg-intel-graph) ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ 85 comprehensive tests across 6 test files
+- ✅ `graphIngressGuard.test.ts` - Schema validation, PII blocking, property whitelist
+- ✅ `canonicalConceptHandler.test.ts` - ID generation, normalization, duplicate detection
+- ✅ `graphWriteService.test.ts` - All concept types, relationships, error handling
+
+### 5.14 Path System Page Integration ✅ COMPLETED
+
+**Completed**: 2025-12-27
+
+- ✅ All handlers wired in `page.tsx`
+- ✅ `PathAwareMessageList` with full props
+- ✅ `BranchDialog` rendered
+- ✅ `PathToolbar` rendered
+- ✅ Branch buttons visible on hover
+
 ---
 
 ## 6. Implementation Priority Order
@@ -794,21 +505,21 @@ Branch navigation with preview cards fully functional.
 
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
-| ~~2.2 Redis SSE Fan-out~~ | HIGH | 1-2 weeks | ✅ COMPLETED |
-| ~~2.3 Test Coverage (prompts)~~ | HIGH | 4-6h | ✅ COMPLETED |
-| ~~3.2 Supabase Persistence~~ | MEDIUM | 1 week | ✅ COMPLETED |
-| ~~3.1 OpenFGA Integration~~ | MEDIUM | 1-2 weeks | ✅ COMPLETED |
+| ~~Redis SSE Fan-out~~ | HIGH | 1-2 weeks | ✅ COMPLETED |
+| ~~Test Coverage (prompts)~~ | HIGH | 4-6h | ✅ COMPLETED |
+| ~~Supabase Persistence~~ | MEDIUM | 1 week | ✅ COMPLETED |
+| ~~OpenFGA Integration~~ | MEDIUM | 1-2 weeks | ✅ COMPLETED |
+| ~~Path System Page Integration~~ | HIGH | 30-60 min | ✅ COMPLETED |
 
-### Phase B: Quick Wins & Feature Completion
+### Phase B: Feature Completion & Quality
 
 | Task | Priority | Effort | Dependencies |
 |------|----------|--------|--------------|
-| 2.4 Path System Page Integration | HIGH | 30-60 min | None (quick win) |
 | 2.1 Scenario Engine | HIGH | 2-3 weeks | None |
-| 3.3 API Integration Tests | MEDIUM | 1-2 days | None |
-| 3.4 Package Test Coverage | MEDIUM | 2-3 days | None |
-| 3.5 Observability Scalability | MEDIUM | 8-16 hours | None |
-| 3.6 UI Path Improvements | MEDIUM | 4-6 hours | 2.4 (path wiring) |
+| 3.1 API Integration Tests | MEDIUM | 1-2 days | None |
+| 3.2 Package Test Coverage | MEDIUM | 2-3 days | None |
+| 3.3 Observability Scalability | MEDIUM | 8-16 hours | None |
+| 3.4 UI Path Improvements | MEDIUM | 4-6 hours | None |
 
 ### Phase C: Polish (Deferred)
 
@@ -817,7 +528,7 @@ Branch navigation with preview cards fully functional.
 | 4.1 Metrics Dashboard | LOW | 4-6h | Production usage data |
 | 4.2 Graph/Ribbon Enhancement | LOW | 1 week | None |
 | 4.3 Timeline Expansion | LOW | 3-4 days | None |
-| ~~4.4 Concept Capture~~ | LOW | 1 week | ✅ COMPLETED |
+| 4.4 UI Enhancements | LOW | Various | None |
 
 ---
 
@@ -847,8 +558,8 @@ Branch navigation with preview cards fully functional.
 - `boltGraphClient.test.ts` - 1 test (connection)
 - `graphWriteService.test.ts` - 50+ tests (all concept types, relationships, error handling)
 - `graphChangeDetector.test.ts` - 19 tests (patch detection, batching, subscriptions)
-- `graphIngressGuard.test.ts` - 60+ tests (schema validation, PII blocking, property whitelist, aspect composition) ✅ NEW
-- `canonicalConceptHandler.test.ts` - 20+ tests (ID generation, normalization, duplicate detection) ✅ NEW
+- `graphIngressGuard.test.ts` - 60+ tests (schema validation, PII blocking, property whitelist, aspect composition)
+- `canonicalConceptHandler.test.ts` - 20+ tests (ID generation, normalization, duplicate detection)
 - **Status**: ✅ Comprehensive coverage for all graph write operations
 
 **reg-intel-ui** (0 test files):
@@ -861,7 +572,7 @@ Branch navigation with preview cards fully functional.
 - Singleton manager pattern (init, get, shutdown)
 - **Recommended**: Mock-based unit tests for adapter logic
 
-### Missing Integration Tests (demo-web)
+### API Route Test Coverage
 
 **Total API Routes**: 19 files | **Routes with tests**: 3 | **Coverage**: ~16%
 
@@ -945,18 +656,18 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~4-6 weeks
+**Total Outstanding Effort**: ~3-4 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 2 | 2-3 weeks (Scenario Engine) + 1 hour (Path wiring) |
-| MEDIUM | 4 | 3-5 days (Tests, Observability, UI) |
-| LOW | 3 | 2-3 weeks |
+| HIGH | 1 | 2-3 weeks (Scenario Engine) |
+| MEDIUM | 4 | 4-6 days (Tests, Observability, UI) |
+| LOW | 4 | 2-3 weeks |
 
 ### Critical Gaps Identified
 
-1. **Scenario Engine** - Fully documented (spec_v_0_1.md), zero implementation - **PRIMARY GAP**
-2. **Path System Page Wiring** - 98% complete, just needs handlers wired - **QUICK WIN**
+1. **Scenario Engine** - Fully documented (503 lines spec), zero implementation - **PRIMARY GAP**
+2. ~~**Path System Page Wiring**~~ - ✅ **COMPLETED** (2025-12-27, 100% wired)
 3. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
 4. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
 5. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
@@ -965,7 +676,6 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 8. **Package Test Coverage** - 2 packages need tests (reg-intel-ui, reg-intel-next-adapter)
 9. **API Integration Tests** - 16/19 endpoints without test coverage (84%)
 10. **Observability Scalability** - Pino-OTEL transport, log backends not wired
-11. **UI Path Integration** - Message version display, branch indicators pending
 
 ### Production Readiness Checklist
 
@@ -977,9 +687,9 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] Supabase persistence wired ✅
 - [x] Authorization service integrated ✅
 - [x] Graph services (read/write) ✅
-- [x] Conversation branching & merging ✅ (98% - needs page wiring)
+- [x] Conversation branching & merging ✅
+- [x] Path system fully wired ✅
 - [x] Message pinning ✅
-- [ ] Path system fully wired (30-60 min remaining)
 - [ ] Full test coverage (currently ~260 tests across 33 files)
 - [ ] Scenario Engine implementation
 - [ ] Observability cloud scalability (Pino-OTEL, log backends)
@@ -999,25 +709,32 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 3.7
+**Document Version**: 3.8
 **Last Updated**: 2025-12-27
-**Previous Versions**: 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
-- v3.7 (2025-12-27): Comprehensive refresh with newly identified gaps:
-  - Added §2.4 Path System Page Integration (HIGH priority, 30-60 min quick win)
-  - Added §3.5 Observability Scalability Enhancements (Pino-OTEL transport, log backends)
-  - Added §3.6 UI Improvements Pending (message version display, branch indicators)
-  - Updated Concept Capture status to COMPLETE (was incorrectly marked 40%)
-  - Updated API route coverage stats (3/19 = 16% coverage)
-  - Updated test file counts (33 total: 28 packages + 5 app)
-  - Added test LOC metrics (~9,700 LOC of tests)
-  - Expanded missing API test list with path system endpoints
-  - Added Scenario Engine to overall status table as NOT STARTED
-- v3.6 (2025-12-27): Mark concept capture expansion as COMPLETED ✅ (85 comprehensive tests for graph operations: graphIngressGuard, canonicalConceptHandler, graphWriteService)
-- v3.5 (2025-12-27): Comprehensive codebase review - updated test coverage details, added package statistics, identified 3 packages needing tests, expanded API integration test tracking
-- v3.4 (2025-12-27): Mark reg-intel-prompts test coverage as COMPLETED ✅ (67 comprehensive tests, 100% coverage)
-- v3.3 (2025-12-27): Mark OpenFGA authorization service as COMPLETED ✅ (3 implementations with comprehensive tests)
-- v3.2 (2025-12-27): Mark Supabase persistence as COMPLETED ✅ (cursor pagination added)
+- v3.8 (2025-12-27): Comprehensive refresh after codebase verification:
+  - **CORRECTED**: Path System Page Integration is 100% COMPLETE (was incorrectly marked 98%)
+    - Verified all handlers are wired in page.tsx:
+      - `handleBranch()` (line 963)
+      - `handleBranchCreated()` (line 968)
+      - `handleViewBranch()` (line 994)
+      - `PathAwareMessageList` with `onBranchRequest={handleBranch}` (line 1294)
+      - `BranchDialog` rendered (lines 1342-1350)
+      - `PathToolbar` rendered (lines 1172-1183)
+  - Moved Path System from "Outstanding Work" to "Completed Work Archive" (§5.14)
+  - Updated Overall Status table to show Path System as fully complete
+  - Verified Scenario Engine has zero implementation (grep found no code)
+  - Confirmed scenario engine spec is 503 lines of detailed architecture
+  - Updated effort estimates (now ~3-4 weeks total remaining)
+  - Added detailed task breakdown for Scenario Engine implementation
+  - Reorganized document structure for clarity
+- v3.7 (2025-12-27): Comprehensive refresh with newly identified gaps
+- v3.6 (2025-12-27): Mark concept capture expansion as COMPLETED ✅
+- v3.5 (2025-12-27): Comprehensive codebase review - updated test coverage details
+- v3.4 (2025-12-27): Mark reg-intel-prompts test coverage as COMPLETED ✅
+- v3.3 (2025-12-27): Mark OpenFGA authorization service as COMPLETED ✅
+- v3.2 (2025-12-27): Mark Supabase persistence as COMPLETED ✅
 - v3.1 (2025-12-27): Mark Redis/distributed SSE as COMPLETED ✅
