@@ -81,6 +81,29 @@ The system consists of:
      - Timeline reasoning.
    - Designed to be reused by other Next.js/Supabase SaaS apps via a thin adapter.
 
+   **Package Organization for Open-Source:**
+
+   All reusable code is organized in packages for eventual open-source release:
+
+   - `packages/reg-intel-ui` - Reusable UI components and utilities:
+     - `src/components/` - React components (PathBreadcrumbs, PathSelector, BranchDialog, etc.)
+     - `src/utils/` - Client-side utilities (scroll-to-message, date formatting, etc.)
+     - `src/hooks/` - React hooks (useConversationPaths, etc.)
+     - All exports include TypeScript types and JSDoc documentation
+
+   - `packages/reg-intel-core` - Domain logic and business rules
+   - `packages/reg-intel-graph` - Graph operations and queries
+   - `packages/reg-intel-llm` - LLM integrations and routing
+   - `packages/reg-intel-conversations` - Conversation path management
+   - `packages/reg-intel-prompts` - LLM prompt templates
+   - `packages/reg-intel-observability` - Logging and telemetry
+
+   **Critical:** `apps/demo-web/` contains ONLY application-specific code:
+   - Demo app pages, layouts, and configuration
+   - App-specific API routes and wiring
+   - Never place reusable utilities or components in `apps/demo-web/src/lib/`
+   - See `AGENTS.md` for detailed package placement guidelines
+
 3. **Shared Rules Graph (Memgraph)**
    - Memgraph Community + MAGE as a **single global regulatory knowledge graph**.
    - Stores public rules, relationships, timelines, jurisdictions, case law, guidance, and their interactions.

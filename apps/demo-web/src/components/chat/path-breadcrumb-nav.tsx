@@ -4,9 +4,9 @@ import {
   useConversationPaths,
   useHasPathProvider,
   PathBreadcrumbs,
+  scrollToMessage,
   type NavigateOptions,
 } from '@reg-copilot/reg-intel-ui';
-import { scrollToMessage } from '@/lib/utils';
 
 interface PathBreadcrumbNavProps {
   /** Called when user navigates to a different path */
