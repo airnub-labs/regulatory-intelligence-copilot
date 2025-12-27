@@ -515,13 +515,15 @@ export class InMemoryConversationContextStore implements ConversationContextStor
     this.contexts.set(this.key(identity), {
       activeNodeIds: ctx.activeNodeIds ?? [],
       traceId: ctx.traceId,
+      rootSpanName: ctx.rootSpanName,
+      rootSpanId: ctx.rootSpanId,
     });
   }
 
   async mergeActiveNodeIds(
     identity: ConversationIdentity,
     nodeIds: string[],
-    options?: { traceId?: string | null }
+    options?: { traceId?: string | null; rootSpanName?: string | null; rootSpanId?: string | null }
   ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
@@ -531,7 +533,12 @@ export class InMemoryConversationContextStore implements ConversationContextStor
       added: nodeIds.length,
       total: merged.length,
     }, 'Merging active node ids');
-    await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
+    await this.save(identity, {
+      activeNodeIds: merged,
+      traceId: options?.traceId ?? current.traceId,
+      rootSpanName: options?.rootSpanName ?? current.rootSpanName,
+      rootSpanId: options?.rootSpanId ?? current.rootSpanId,
+    });
   }
 }
 
@@ -575,6 +582,8 @@ type SupabaseConversationContextRow = {
   tenant_id: string;
   active_node_ids: string[];
   trace_id?: string | null;
+  root_span_name?: string | null;
+  root_span_id?: string | null;
   updated_at: string;
 };
 
@@ -1253,7 +1262,9 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   async load(identity: ConversationIdentity): Promise<ConversationContext | null> {
     const { data, error } = await this.client
       .from('conversation_contexts_view')
-      .select('conversation_id, tenant_id, active_node_ids, trace_id, updated_at')
+      .select(
+        'conversation_id, tenant_id, active_node_ids, trace_id, root_span_name, root_span_id, updated_at'
+      )
       .eq('conversation_id', identity.conversationId)
       .eq('tenant_id', identity.tenantId)
       .maybeSingle();
@@ -1267,6 +1278,8 @@ export class SupabaseConversationContextStore implements ConversationContextStor
     return {
       activeNodeIds: row.active_node_ids ?? [],
       traceId: row.trace_id,
+      rootSpanName: row.root_span_name,
+      rootSpanId: row.root_span_id,
     } satisfies ConversationContext;
   }
 
@@ -1294,6 +1307,8 @@ export class SupabaseConversationContextStore implements ConversationContextStor
             tenant_id: identity.tenantId,
             active_node_ids: ctx.activeNodeIds ?? [],
             trace_id: ctx.traceId ?? null,
+            root_span_name: ctx.rootSpanName ?? null,
+            root_span_id: ctx.rootSpanId ?? null,
             updated_at: new Date().toISOString(),
           });
 
@@ -1307,7 +1322,7 @@ export class SupabaseConversationContextStore implements ConversationContextStor
   async mergeActiveNodeIds(
     identity: ConversationIdentity,
     nodeIds: string[],
-    options?: { traceId?: string | null }
+    options?: { traceId?: string | null; rootSpanName?: string | null; rootSpanId?: string | null }
   ): Promise<void> {
     const current = (await this.load(identity)) ?? { activeNodeIds: [] };
     const merged = Array.from(new Set([...(current.activeNodeIds ?? []), ...nodeIds]));
@@ -1317,6 +1332,11 @@ export class SupabaseConversationContextStore implements ConversationContextStor
       added: nodeIds.length,
       total: merged.length,
     }, 'Merging Supabase active node ids');
-    await this.save(identity, { activeNodeIds: merged, traceId: options?.traceId ?? current.traceId });
+    await this.save(identity, {
+      activeNodeIds: merged,
+      traceId: options?.traceId ?? current.traceId,
+      rootSpanName: options?.rootSpanName ?? current.rootSpanName,
+      rootSpanId: options?.rootSpanId ?? current.rootSpanId,
+    });
   }
 }

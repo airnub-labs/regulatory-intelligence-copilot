@@ -86,6 +86,7 @@ export interface ComplianceRequest {
   profile?: UserProfile;
   tenantId?: string;
   conversationId?: string;
+  traceContext?: TraceContextPayload;
   /** Optional execution tools (run_code, run_analysis) to make available to the LLM */
   executionTools?: ExecutionTool[];
   /** Force a specific tool to be called (for UI-triggered execution) */
@@ -205,9 +206,16 @@ export interface ConversationIdentity {
 export interface ConversationContext {
   activeNodeIds: string[];
   traceId?: string | null;
+  rootSpanName?: string | null;
+  rootSpanId?: string | null;
 }
 
-export const EMPTY_CONVERSATION_CONTEXT: ConversationContext = { activeNodeIds: [] };
+export const EMPTY_CONVERSATION_CONTEXT: ConversationContext = {
+  activeNodeIds: [],
+  traceId: undefined,
+  rootSpanId: undefined,
+  rootSpanName: undefined,
+};
 
 export interface ConversationContextStore {
   load(identity: ConversationIdentity): Promise<ConversationContext | null>;
@@ -215,9 +223,15 @@ export interface ConversationContextStore {
   mergeActiveNodeIds?(
     identity: ConversationIdentity,
     nodeIds: string[],
-    options?: { traceId?: string | null }
+    options?: { traceId?: string | null; rootSpanName?: string | null; rootSpanId?: string | null }
   ): Promise<void>;
 }
+
+type TraceContextPayload = {
+  traceId?: string | null;
+  rootSpanId?: string | null;
+  rootSpanName?: string | null;
+};
 
 /**
  * LLM tool stream chunk (from router providers)
@@ -316,9 +330,24 @@ export class ComplianceEngine {
     );
   }
 
-  private getActiveTraceId() {
-    const spanContext = trace.getActiveSpan()?.spanContext();
-    return spanContext?.traceId ?? 'no-active-span';
+  private getActiveTraceContext(requestTraceContext?: TraceContextPayload): Required<TraceContextPayload> {
+    const span = trace.getActiveSpan();
+    const spanContext = span?.spanContext();
+    const activeSpanName = 'name' in (span ?? {}) ? (span as { name?: string }).name : undefined;
+    const activeTraceContext: TraceContextPayload =
+      spanContext && trace.isSpanContextValid(spanContext)
+        ? {
+            traceId: spanContext.traceId,
+            rootSpanId: spanContext.spanId,
+            rootSpanName: activeSpanName,
+          }
+        : {};
+
+    return {
+      traceId: requestTraceContext?.traceId ?? activeTraceContext.traceId ?? 'no-active-span',
+      rootSpanId: requestTraceContext?.rootSpanId ?? activeTraceContext.rootSpanId ?? null,
+      rootSpanName: requestTraceContext?.rootSpanName ?? activeTraceContext.rootSpanName ?? null,
+    };
   }
 
   private instrumentAsyncWithSpan<T extends object>(
@@ -848,13 +877,14 @@ export class ComplianceEngine {
 
   private async updateConversationContext(
     identity: ConversationIdentity | undefined,
-    nodeIds: string[]
+    nodeIds: string[],
+    traceContext?: TraceContextPayload
   ) {
     if (!identity || !this.deps.conversationContextStore) {
       return;
     }
 
-    const activeTraceId = this.getActiveTraceId();
+    const activeTraceContext = this.getActiveTraceContext(traceContext);
 
     try {
       await this.runWithTracing(
@@ -865,7 +895,11 @@ export class ComplianceEngine {
             await this.deps.conversationContextStore!.mergeActiveNodeIds(
               identity,
               nodeIds,
-              { traceId: activeTraceId }
+              {
+                traceId: activeTraceContext.traceId,
+                rootSpanName: activeTraceContext.rootSpanName,
+                rootSpanId: activeTraceContext.rootSpanId,
+              }
             );
             return;
           }
@@ -879,7 +913,10 @@ export class ComplianceEngine {
 
           await this.deps.conversationContextStore!.save(identity, {
             activeNodeIds: mergedIds,
-            traceId: activeTraceId ?? existingContext.traceId,
+            traceId: activeTraceContext.traceId ?? existingContext.traceId,
+            rootSpanName:
+              activeTraceContext.rootSpanName ?? existingContext.rootSpanName,
+            rootSpanId: activeTraceContext.rootSpanId ?? existingContext.rootSpanId,
           });
         }
       );
@@ -965,7 +1002,8 @@ export class ComplianceEngine {
             );
             await this.updateConversationContext(
               conversationIdentity,
-              referencedNodes.map(node => node.id)
+              referencedNodes.map(node => node.id),
+              request.traceContext
             );
 
             // Apply EgressGuard sanitization to agent output as defense-in-depth
@@ -1180,7 +1218,8 @@ export class ComplianceEngine {
 
       await this.updateConversationContext(
         conversationIdentity,
-        finalReferencedNodes.map(node => node.id)
+        finalReferencedNodes.map(node => node.id),
+        request.traceContext
       );
 
       yield {

@@ -63,6 +63,12 @@ describe('ComplianceEngine streaming', () => {
     mergeActiveNodeIds: vi.fn(),
   };
 
+  const traceContext = {
+    traceId: 'trace-id-123',
+    rootSpanId: 'root-span-id-123',
+    rootSpanName: 'root-span-name',
+  };
+
     const canonicalConceptHandler: CanonicalConceptHandler = {
       resolveAndUpsert: vi
         .fn()
@@ -164,6 +170,7 @@ describe('ComplianceEngine streaming', () => {
       profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
       tenantId: 'tenant-1',
       conversationId: 'conversation-1',
+      traceContext,
     };
 
     const chunks = [] as any[];
@@ -195,7 +202,11 @@ describe('ComplianceEngine streaming', () => {
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-1', conversationId: 'conversation-1' },
       expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1']),
-      expect.objectContaining({ traceId: expect.any(String) })
+      expect.objectContaining({
+        traceId: traceContext.traceId,
+        rootSpanId: traceContext.rootSpanId,
+        rootSpanName: traceContext.rootSpanName,
+      })
     );
   });
 
@@ -268,6 +279,7 @@ describe('ComplianceEngine streaming', () => {
       profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
       tenantId: 'tenant-2',
       conversationId: 'conversation-2',
+      traceContext,
     };
 
     const chunks = [] as any[];
@@ -285,7 +297,11 @@ describe('ComplianceEngine streaming', () => {
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-2', conversationId: 'conversation-2' },
       expect.arrayContaining(['concept-node-1', 'concept-node-2']),
-      expect.objectContaining({ traceId: expect.any(String) })
+      expect.objectContaining({
+        traceId: traceContext.traceId,
+        rootSpanId: traceContext.rootSpanId,
+        rootSpanName: traceContext.rootSpanName,
+      })
     );
   });
 
@@ -348,6 +364,7 @@ describe('ComplianceEngine streaming', () => {
       profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
       tenantId: 'tenant-1',
       conversationId: 'conversation-1',
+      traceContext,
     });
 
     expect(canonicalConceptHandler.resolveAndUpsert).toHaveBeenCalledWith(
@@ -364,7 +381,11 @@ describe('ComplianceEngine streaming', () => {
     expect(conversationContextStore.mergeActiveNodeIds).toHaveBeenCalledWith(
       { tenantId: 'tenant-1', conversationId: 'conversation-1' },
       expect.arrayContaining(['concept-node-1', 'concept-node-2', 'rule-1']),
-      expect.objectContaining({ traceId: expect.any(String) })
+      expect.objectContaining({
+        traceId: traceContext.traceId,
+        rootSpanId: traceContext.rootSpanId,
+        rootSpanName: traceContext.rootSpanName,
+      })
     );
   });
 
