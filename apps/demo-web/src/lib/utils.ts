@@ -5,11 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Export scroll utilities for Phase 4 breadcrumb navigation
+// Re-export scroll utilities from reg-intel-ui package for backwards compatibility
+// Note: Prefer importing directly from '@reg-copilot/reg-intel-ui' in new code
 export {
   scrollToMessage,
   highlightMessage,
   cancelHighlight,
   messageExists,
   type ScrollToMessageOptions,
-} from './utils/scroll-to-message';
+} from '@reg-copilot/reg-intel-ui';

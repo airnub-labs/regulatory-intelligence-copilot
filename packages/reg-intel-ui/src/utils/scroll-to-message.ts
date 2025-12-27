@@ -3,6 +3,9 @@
  *
  * Provides utilities for scrolling to specific messages and highlighting them.
  * Used by breadcrumb navigation (Phase 4) to jump to branch point messages.
+ *
+ * @module @reg-copilot/reg-intel-ui/utils/scroll-to-message
+ * @packageDocumentation
  */
 
 export interface ScrollToMessageOptions {
@@ -27,6 +30,8 @@ export interface ScrollToMessageOptions {
  *
  * @example
  * ```typescript
+ * import { scrollToMessage } from '@reg-copilot/reg-intel-ui';
+ *
  * // Scroll to message with smooth animation
  * scrollToMessage('msg-123');
  *
@@ -79,6 +84,8 @@ export function scrollToMessage(
  *
  * @example
  * ```typescript
+ * import { highlightMessage } from '@reg-copilot/reg-intel-ui';
+ *
  * const messageEl = document.getElementById('message-123');
  * if (messageEl) {
  *   highlightMessage(messageEl, 3000);
@@ -118,6 +125,8 @@ export function highlightMessage(
  *
  * @example
  * ```typescript
+ * import { cancelHighlight } from '@reg-copilot/reg-intel-ui';
+ *
  * const messageEl = document.getElementById('message-123');
  * if (messageEl) {
  *   cancelHighlight(messageEl);
@@ -147,6 +156,8 @@ export function cancelHighlight(element: HTMLElement): void {
  *
  * @example
  * ```typescript
+ * import { messageExists } from '@reg-copilot/reg-intel-ui';
+ *
  * if (messageExists('msg-123')) {
  *   scrollToMessage('msg-123');
  * }

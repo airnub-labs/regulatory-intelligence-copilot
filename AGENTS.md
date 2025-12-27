@@ -37,6 +37,49 @@ v0.6 updates the v0.4 agent design by:
 - When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
 - Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
 
+**Package organization and open-source readiness:**
+
+This repository is designed for eventual open-source release. All reusable code MUST be placed in appropriate packages, not in application-specific directories:
+
+- **Reusable UI components** → `packages/reg-intel-ui/src/components/`
+- **Reusable utilities and helpers** → `packages/reg-intel-ui/src/utils/`
+- **Domain logic and business rules** → `packages/reg-intel-core/`
+- **Graph operations** → `packages/reg-intel-graph/`
+- **LLM integrations** → `packages/reg-intel-llm/`
+- **Conversation path management** → `packages/reg-intel-conversations/`
+
+**Guidelines for package placement:**
+
+1. **Demo-web is NOT reusable** - `apps/demo-web/` should contain ONLY application-specific code:
+   - Page components and layouts specific to the demo app
+   - Demo-specific configuration and wiring
+   - App-specific API routes that aren't generalizable
+
+2. **Move utilities to packages** - When creating utilities that could be used by other applications:
+   - ✅ **CORRECT**: Place in `packages/reg-intel-ui/src/utils/` and export from package
+   - ❌ **INCORRECT**: Place in `apps/demo-web/src/lib/utils/`
+   - Example: `scrollToMessage()` utilities are in `packages/reg-intel-ui/src/utils/scroll-to-message.ts`
+
+3. **Package exports** - All reusable code must be properly exported:
+   - Add exports to package `index.ts` with proper TypeScript types
+   - Include JSDoc documentation with `@module` and `@packageDocumentation` tags
+   - Provide usage examples in documentation
+
+4. **Import from packages** - Applications should import from packages, not local utilities:
+   - ✅ **CORRECT**: `import { scrollToMessage } from '@reg-copilot/reg-intel-ui'`
+   - ❌ **INCORRECT**: `import { scrollToMessage } from '@/lib/utils'`
+
+5. **Testing in packages** - Tests for package code must be in the package:
+   - ✅ **CORRECT**: `packages/reg-intel-ui/src/utils/__tests__/scroll-to-message.test.ts`
+   - ❌ **INCORRECT**: `apps/demo-web/src/lib/utils/__tests__/scroll-to-message.test.ts`
+
+**Enforcement:**
+
+- **CRITICAL:** Never regress by moving package code back into `apps/demo-web/`
+- During code reviews, verify utilities are in appropriate packages
+- When creating new utilities, always consider: "Could another app use this?"
+- If yes → Package. If no → Verify it's truly app-specific before placing in `apps/`
+
 **Required quality checks before pushing commits:**
 
 After making any code changes, you MUST run the following commands and fix all issues before pushing:

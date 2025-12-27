@@ -40,11 +40,14 @@ export {
 // Components
 export {
   PathSelector,
+  PathBreadcrumbs,
   BranchButton,
   BranchDialog,
   MergeDialog,
   VersionNavigator,
   type PathSelectorProps,
+  type PathBreadcrumbsProps,
+  type NavigateOptions,
   type BranchButtonProps,
   type BranchDialogProps,
   type MergeDialogProps,
@@ -76,3 +79,12 @@ export type {
 
 // Utilities
 export { cn, formatRelativeDate, truncate, stringToColor, buildPathTree, flattenPathTree } from './utils.js';
+
+// Scroll to Message Utilities (Phase 3)
+export {
+  scrollToMessage,
+  highlightMessage,
+  cancelHighlight,
+  messageExists,
+  type ScrollToMessageOptions,
+} from './utils/scroll-to-message.js';
