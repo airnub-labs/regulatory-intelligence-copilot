@@ -1,6 +1,7 @@
 import { sanitizeObjectForEgress } from './egressGuard.js';
 import { LlmError } from './errors.js';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import { SEMATTRS_HTTP_TARGET } from '@opentelemetry/semantic-conventions';
 
 const logger = createLogger('EgressClient');
 
@@ -107,10 +108,23 @@ function providerAllowlistAspect(
 ): EgressAspect {
   return async (ctx, next) => {
     if (!allowed || allowed.length === 0) {
+      logger.debug({
+        providerId: ctx.providerId,
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+      }, 'No provider allowlist configured, skipping check');
       return next(ctx);
     }
 
     const isAllowed = allowed.includes(ctx.providerId);
+
+    logger.debug({
+      providerId: ctx.providerId,
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+      allowedProviders: allowed,
+      isAllowed,
+    }, 'Checking provider against allowlist');
 
     if (!isAllowed) {
       logger.warn(
@@ -123,6 +137,10 @@ function providerAllowlistAspect(
       );
     }
 
+    logger.debug({
+      providerId: ctx.providerId,
+    }, 'Provider allowed by allowlist');
+
     return next(ctx);
   };
 }
@@ -134,13 +152,33 @@ function sanitizeRequestAspect(
   return async (ctx, next) => {
     const mode = ctx.effectiveMode ?? defaultMode;
 
+    logger.debug({
+      target: ctx.target,
+      providerId: ctx.providerId,
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+      mode,
+      defaultMode,
+    }, 'Applying request sanitization');
+
     if (mode === 'off') {
+      logger.debug({
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+      }, 'Sanitization mode is OFF, skipping');
       return next({ ...ctx, effectiveMode: mode });
     }
 
     const originalRequest = ctx.request;
     const sanitizedRequest = sanitizeObjectForEgress(originalRequest);
     const redactionApplied = !areRequestsEqual(originalRequest, sanitizedRequest);
+
+    logger.debug({
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+      mode,
+      redactionApplied,
+    }, 'Sanitized egress request');
 
     const metadata = {
       ...ctx.metadata,
@@ -156,11 +194,23 @@ function sanitizeRequestAspect(
     };
 
     if (mode === 'enforce') {
+      logger.debug({
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+        redactionApplied,
+      }, 'Egress mode ENFORCE: using sanitized request');
+
       baseCtx.request = sanitizedRequest;
       if (options.preserveOriginalRequest) {
         baseCtx.originalRequest = originalRequest;
       }
     } else {
+      logger.debug({
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+        redactionApplied,
+      }, 'Egress mode REPORT-ONLY: using original request');
+
       baseCtx.request = originalRequest;
       if (options.preserveOriginalRequest) {
         baseCtx.originalRequest = originalRequest;
@@ -209,13 +259,40 @@ export class EgressClient {
     const effectiveMode = ctx.effectiveMode ?? this.defaultMode;
     const mode = ctx.mode ?? effectiveMode;
 
-    return this.pipeline({ ...ctx, effectiveMode, mode });
+    logger.debug({
+      target: ctx.target,
+      providerId: ctx.providerId,
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+      mode,
+      effectiveMode,
+    }, 'Guarding egress request');
+
+    const result = await this.pipeline({ ...ctx, effectiveMode, mode });
+
+    logger.debug({
+      target: ctx.target,
+      providerId: ctx.providerId,
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+      redactionApplied: result.metadata?.redactionApplied,
+    }, 'Egress request guarded');
+
+    return result;
   }
 
   async guardAndExecute<T>(
     ctx: EgressGuardContext,
     execute: (ctx: EgressGuardContext) => Promise<T>
   ): Promise<T> {
+    logger.debug({
+      target: ctx.target,
+      providerId: ctx.providerId,
+      endpointId: ctx.endpointId,
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+    }, 'Starting guardAndExecute');
+
     const guarded = await this.guard(ctx);
     const effectiveMode = guarded.effectiveMode ?? this.defaultMode;
 
@@ -223,10 +300,27 @@ export class EgressClient {
 
     if (effectiveMode === 'enforce') {
       executionCtx.request = guarded.sanitizedRequest ?? guarded.request;
+      logger.debug({
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+      }, 'Executing with sanitized request');
     } else {
       executionCtx.request = guarded.request;
+      logger.debug({
+        tenantId: ctx.tenantId,
+        task: ctx.task,
+      }, 'Executing with original request');
     }
 
-    return execute(executionCtx);
+    const result = await execute(executionCtx);
+
+    logger.debug({
+      target: ctx.target,
+      providerId: ctx.providerId,
+      tenantId: ctx.tenantId,
+      task: ctx.task,
+    }, 'guardAndExecute completed');
+
+    return result;
   }
 }

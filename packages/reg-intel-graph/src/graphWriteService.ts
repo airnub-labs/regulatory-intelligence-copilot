@@ -8,6 +8,13 @@
  */
 
 import type { Driver, Session } from 'neo4j-driver';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import {
+  SEMATTRS_DB_SYSTEM,
+  SEMATTRS_DB_NAME,
+  SEMATTRS_DB_OPERATION,
+  SEMATTRS_DB_STATEMENT,
+} from '@opentelemetry/semantic-conventions';
 import {
   type GraphWriteContext,
   type GraphIngressAspect,
@@ -182,6 +189,7 @@ export class GraphWriteService {
   private customAspects: GraphIngressAspect[];
   private tenantId?: string;
   private defaultSource: 'ingestion' | 'agent' | 'background_job' | 'script';
+  private logger = createLogger('GraphWriteService', { component: 'GraphWrite' });
 
   constructor(config: GraphWriteServiceConfig) {
     this.driver = config.driver;
@@ -240,31 +248,61 @@ export class GraphWriteService {
     const { nodeLabel, properties, operation } = ctx;
     const sanitizedProperties = this.sanitizeProperties(properties);
 
-    if (operation === 'merge' || operation === 'create') {
-      // Build property string for Cypher
-      const propEntries = Object.entries(sanitizedProperties).filter(
-        ([_, value]) => value !== null,
-      );
-      const propString = propEntries.map(([key]) => `${key}: $${key}`).join(', ');
+    return withSpan(
+      'db.memgraph.node_write',
+      {
+        [SEMATTRS_DB_SYSTEM]: 'memgraph',
+        [SEMATTRS_DB_NAME]: 'memgraph',
+        [SEMATTRS_DB_OPERATION]: operation || 'write',
+        'db.node.label': nodeLabel,
+        'db.node.id': properties.id,
+        ...(this.tenantId ? { 'app.tenant.id': this.tenantId } : {}),
+      },
+      async () => {
+        let cypher: string;
 
-      const cypher =
-        operation === 'merge'
-          ? `MERGE (n:${nodeLabel} {id: $id}) SET n += {${propString}}`
-          : `CREATE (n:${nodeLabel} {${propString}})`;
+        if (operation === 'merge' || operation === 'create') {
+          // Build property string for Cypher
+          const propEntries = Object.entries(sanitizedProperties).filter(
+            ([_, value]) => value !== null,
+          );
+          const propString = propEntries.map(([key]) => `${key}: $${key}`).join(', ');
 
-      await session.run(cypher, sanitizedProperties);
-    } else if (operation === 'update') {
-      const propString = Object.entries(sanitizedProperties)
-        .filter(([key]) => key !== 'id')
-        .map(([key]) => `n.${key} = $${key}`)
-        .join(', ');
+          cypher =
+            operation === 'merge'
+              ? `MERGE (n:${nodeLabel} {id: $id}) SET n += {${propString}}`
+              : `CREATE (n:${nodeLabel} {${propString}})`;
+        } else if (operation === 'update') {
+          const propString = Object.entries(sanitizedProperties)
+            .filter(([key]) => key !== 'id')
+            .map(([key]) => `n.${key} = $${key}`)
+            .join(', ');
 
-      const cypher = `MATCH (n:${nodeLabel} {id: $id}) SET ${propString}`;
-      await session.run(cypher, sanitizedProperties);
-    } else if (operation === 'delete') {
-      const cypher = `MATCH (n:${nodeLabel} {id: $id}) DETACH DELETE n`;
-      await session.run(cypher, sanitizedProperties);
-    }
+          cypher = `MATCH (n:${nodeLabel} {id: $id}) SET ${propString}`;
+        } else if (operation === 'delete') {
+          cypher = `MATCH (n:${nodeLabel} {id: $id}) DETACH DELETE n`;
+        } else {
+          throw new Error(`Unknown operation: ${operation}`);
+        }
+
+        this.logger.debug({
+          operation,
+          nodeLabel,
+          nodeId: properties.id,
+          tenantId: this.tenantId,
+          source: ctx.source,
+          cypher: cypher.substring(0, 150),
+        }, `Executing Cypher node ${operation}`);
+
+        await session.run(cypher, sanitizedProperties);
+
+        this.logger.debug({
+          operation,
+          nodeLabel,
+          nodeId: properties.id,
+        }, `Cypher node ${operation} completed`);
+      }
+    );
   }
 
   /**
@@ -277,36 +315,67 @@ export class GraphWriteService {
     const { relType, properties, operation, metadata } = ctx;
     const sanitizedProperties = this.sanitizeProperties(properties);
 
-    if (operation === 'merge' || operation === 'create') {
-      const fromLabel = metadata?.fromLabel as string;
-      const toLabel = metadata?.toLabel as string;
-      const fromId = metadata?.fromId as string;
-      const toId = metadata?.toId as string;
+    return withSpan(
+      'db.memgraph.relationship_write',
+      {
+        [SEMATTRS_DB_SYSTEM]: 'memgraph',
+        [SEMATTRS_DB_NAME]: 'memgraph',
+        [SEMATTRS_DB_OPERATION]: operation || 'write',
+        'db.relationship.type': relType,
+        ...(this.tenantId ? { 'app.tenant.id': this.tenantId } : {}),
+      },
+      async () => {
+        if (operation === 'merge' || operation === 'create') {
+          const fromLabel = metadata?.fromLabel as string;
+          const toLabel = metadata?.toLabel as string;
+          const fromId = metadata?.fromId as string;
+          const toId = metadata?.toId as string;
 
-      if (!fromLabel || !toLabel || !fromId || !toId) {
-        throw new Error(
-          'Relationship operations require fromLabel, toLabel, fromId, toId in metadata',
-        );
+          if (!fromLabel || !toLabel || !fromId || !toId) {
+            throw new Error(
+              'Relationship operations require fromLabel, toLabel, fromId, toId in metadata',
+            );
+          }
+
+          const propEntries = Object.entries(sanitizedProperties).filter(
+            ([_, value]) => value !== null,
+          );
+          const propString =
+            propEntries.length > 0
+              ? `{${propEntries.map(([key]) => `${key}: $${key}`).join(', ')}}`
+              : '';
+
+          const cypher =
+            operation === 'merge'
+              ? `MATCH (a:${fromLabel} {id: $fromId}), (b:${toLabel} {id: $toId}) ` +
+                `MERGE (a)-[r:${relType}]->(b) ` +
+                (propString ? `SET r += ${propString}` : '')
+              : `MATCH (a:${fromLabel} {id: $fromId}), (b:${toLabel} {id: $toId}) ` +
+                `CREATE (a)-[r:${relType} ${propString}]->(b)`;
+
+          this.logger.debug({
+            operation,
+            relType,
+            fromLabel,
+            fromId,
+            toLabel,
+            toId,
+            tenantId: this.tenantId,
+            source: ctx.source,
+            cypher: cypher.substring(0, 150),
+          }, `Executing Cypher relationship ${operation}`);
+
+          await session.run(cypher, { ...sanitizedProperties, fromId, toId });
+
+          this.logger.debug({
+            operation,
+            relType,
+            fromLabel,
+            toLabel,
+          }, `Cypher relationship ${operation} completed`);
+        }
       }
-
-      const propEntries = Object.entries(sanitizedProperties).filter(
-        ([_, value]) => value !== null,
-      );
-      const propString =
-        propEntries.length > 0
-          ? `{${propEntries.map(([key]) => `${key}: $${key}`).join(', ')}}`
-          : '';
-
-      const cypher =
-        operation === 'merge'
-          ? `MATCH (a:${fromLabel} {id: $fromId}), (b:${toLabel} {id: $toId}) ` +
-            `MERGE (a)-[r:${relType}]->(b) ` +
-            (propString ? `SET r += ${propString}` : '')
-          : `MATCH (a:${fromLabel} {id: $fromId}), (b:${toLabel} {id: $toId}) ` +
-            `CREATE (a)-[r:${relType} ${propString}]->(b)`;
-
-      await session.run(cypher, { ...sanitizedProperties, fromId, toId });
-    }
+    );
   }
 
   async upsertConcept(dto: UpsertConceptDto): Promise<void> {

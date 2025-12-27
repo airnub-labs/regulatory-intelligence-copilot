@@ -57,6 +57,7 @@ Relevant specs include:
 - `../architecture/engines/timeline-engine/spec_v_0_2.md` – timeline engine modelling and tool interface.
 - `../architecture/engines/scenario-engine/spec_v_0_1.md` – conceptual Scenario Engine and integration.
 - `../architecture/graph/change_detection_v_0_6.md` – graph change detection and patch streaming.
+- `../architecture/client-telemetry-architecture-v1.md` – client telemetry batching, rate limiting, and OTEL integration architecture.
 
 For decisions about **why** the architecture looks this way, see:
 

@@ -4,47 +4,325 @@ const logger = createLogger('ClientTelemetryRoute');
 
 type ClientTelemetryLevel = 'info' | 'warn' | 'error';
 
-type ClientTelemetryPayload = {
-  level?: ClientTelemetryLevel;
-  message?: string;
-  scope?: string;
-  sessionId?: string;
+/**
+ * Single telemetry event structure
+ */
+type ClientTelemetryEvent = {
+  level: ClientTelemetryLevel;
+  message: string;
+  scope: string;
+  sessionId: string;
   requestId?: string;
   context?: Record<string, unknown>;
-  timestamp?: string;
+  timestamp: string;
 };
 
-const isLevel = (value: string): value is ClientTelemetryLevel =>
-  value === 'info' || value === 'warn' || value === 'error';
+/**
+ * Payload can be either a single event (legacy) or a batch of events
+ */
+type ClientTelemetryPayload =
+  | {
+      // Batch format
+      events: ClientTelemetryEvent[];
+    }
+  | {
+      // Legacy single event format
+      level?: ClientTelemetryLevel;
+      message?: string;
+      scope?: string;
+      sessionId?: string;
+      requestId?: string;
+      context?: Record<string, unknown>;
+      timestamp?: string;
+    };
 
+/**
+ * Rate limiting configuration
+ */
+const RATE_LIMIT_WINDOW_MS =
+  parseInt(process.env.CLIENT_TELEMETRY_RATE_LIMIT_WINDOW_MS || '60000', 10) || 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS =
+  parseInt(process.env.CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS || '100', 10) || 100; // 100 requests per minute
+
+/**
+ * OTEL collector configuration
+ */
+const OTEL_COLLECTOR_ENDPOINT = process.env.OTEL_COLLECTOR_ENDPOINT || null;
+const OTEL_COLLECTOR_TIMEOUT_MS =
+  parseInt(process.env.OTEL_COLLECTOR_TIMEOUT_MS || '5000', 10) || 5000;
+
+/**
+ * In-memory rate limiting store
+ * In production, use Redis or a similar distributed cache
+ */
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+/**
+ * Clean up expired rate limit entries periodically
+ */
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, value] of rateLimitStore.entries()) {
+      if (value.resetAt < now) {
+        rateLimitStore.delete(key);
+      }
+    }
+  },
+  RATE_LIMIT_WINDOW_MS * 2
+); // Clean up every 2 windows
+
+/**
+ * Check rate limit for a client IP
+ */
+const checkRateLimit = (clientIp: string): boolean => {
+  const now = Date.now();
+  const key = `ratelimit:${clientIp}`;
+  const entry = rateLimitStore.get(key);
+
+  if (!entry || entry.resetAt < now) {
+    // First request or window expired
+    rateLimitStore.set(key, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    // Rate limit exceeded
+    return false;
+  }
+
+  // Increment count
+  entry.count++;
+  return true;
+};
+
+/**
+ * Extract client IP from request
+ */
+const getClientIp = (request: Request): string => {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0].trim();
+  }
+
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp;
+  }
+
+  return 'unknown';
+};
+
+/**
+ * Validate telemetry event
+ */
+const isValidEvent = (event: any): event is ClientTelemetryEvent => {
+  return (
+    event &&
+    typeof event === 'object' &&
+    typeof event.level === 'string' &&
+    (event.level === 'info' || event.level === 'warn' || event.level === 'error') &&
+    typeof event.message === 'string' &&
+    typeof event.scope === 'string' &&
+    typeof event.sessionId === 'string' &&
+    typeof event.timestamp === 'string'
+  );
+};
+
+/**
+ * Forward events to OTEL collector
+ */
+const forwardToOTELCollector = async (events: ClientTelemetryEvent[]): Promise<void> => {
+  if (!OTEL_COLLECTOR_ENDPOINT) {
+    return;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OTEL_COLLECTOR_TIMEOUT_MS);
+
+    const response = await fetch(OTEL_COLLECTOR_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        resourceLogs: [
+          {
+            resource: {
+              attributes: [
+                { key: 'service.name', value: { stringValue: 'demo-web-client' } },
+                { key: 'telemetry.sdk.name', value: { stringValue: 'client-telemetry' } },
+              ],
+            },
+            scopeLogs: events.map(event => ({
+              scope: {
+                name: event.scope,
+              },
+              logRecords: [
+                {
+                  timeUnixNano: new Date(event.timestamp).getTime() * 1_000_000,
+                  severityText:
+                    event.level === 'error' ? 'ERROR' : event.level === 'warn' ? 'WARN' : 'INFO',
+                  body: { stringValue: event.message },
+                  attributes: [
+                    { key: 'session.id', value: { stringValue: event.sessionId } },
+                    ...(event.requestId
+                      ? [{ key: 'request.id', value: { stringValue: event.requestId } }]
+                      : []),
+                    ...(event.context
+                      ? Object.entries(event.context).map(([key, value]) => ({
+                          key,
+                          value: { stringValue: String(value) },
+                        }))
+                      : []),
+                  ],
+                },
+              ],
+            })),
+          },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      logger.warn(
+        {
+          status: response.status,
+          endpoint: OTEL_COLLECTOR_ENDPOINT,
+          eventCount: events.length,
+        },
+        'Failed to forward events to OTEL collector'
+      );
+    } else {
+      logger.debug(
+        {
+          endpoint: OTEL_COLLECTOR_ENDPOINT,
+          eventCount: events.length,
+        },
+        'Successfully forwarded events to OTEL collector'
+      );
+    }
+  } catch (error) {
+    // Don't let OTEL forwarding errors break the telemetry endpoint
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        endpoint: OTEL_COLLECTOR_ENDPOINT,
+        eventCount: events.length,
+      },
+      'Error forwarding events to OTEL collector'
+    );
+  }
+};
+
+/**
+ * Process a single telemetry event
+ */
+const processEvent = (event: ClientTelemetryEvent): void => {
+  const { level, scope = 'client', sessionId, requestId, timestamp, context, message } = event;
+
+  const boundLogger = logger.child({ scope, sessionId, requestId, timestamp });
+  const logObject = { ...context };
+
+  if (level === 'error') {
+    boundLogger.error(logObject, message);
+  } else if (level === 'warn') {
+    boundLogger.warn(logObject, message);
+  } else {
+    boundLogger.info(logObject, message);
+  }
+};
+
+/**
+ * POST handler for client telemetry
+ * Supports both single events (legacy) and batched events
+ */
 export async function POST(request: Request) {
   try {
-    const payload = (await request.json()) as ClientTelemetryPayload;
-
-    if (!payload.level || !payload.message || !isLevel(payload.level)) {
-      return Response.json({ error: 'Invalid telemetry payload' }, { status: 400 });
+    // Check rate limit
+    const clientIp = getClientIp(request);
+    if (!checkRateLimit(clientIp)) {
+      logger.warn(
+        {
+          clientIp,
+          rateLimitWindow: RATE_LIMIT_WINDOW_MS,
+          rateLimitMax: RATE_LIMIT_MAX_REQUESTS,
+        },
+        'Client telemetry rate limit exceeded'
+      );
+      return Response.json(
+        { error: 'Rate limit exceeded. Please slow down your requests.' },
+        { status: 429 }
+      );
     }
 
-    const level = payload.level;
-    const { scope = 'client', sessionId, requestId, timestamp, context } = payload;
+    const payload = (await request.json()) as ClientTelemetryPayload;
 
-    const boundLogger = logger.child({ scope, sessionId, requestId, timestamp });
-    const logObject = { ...context };
+    let events: ClientTelemetryEvent[] = [];
 
-    if (level === 'error') {
-      boundLogger.error(logObject, payload.message);
-    } else if (level === 'warn') {
-      boundLogger.warn(logObject, payload.message);
+    // Check if payload is batch format
+    if ('events' in payload && Array.isArray(payload.events)) {
+      // Batch format
+      events = payload.events.filter(isValidEvent);
+
+      if (events.length === 0) {
+        return Response.json({ error: 'No valid events in batch' }, { status: 400 });
+      }
+
+      logger.debug(
+        {
+          batchSize: payload.events.length,
+          validEvents: events.length,
+          clientIp,
+        },
+        'Processing batched telemetry events'
+      );
     } else {
-      boundLogger.info(logObject, payload.message);
+      // Legacy single event format
+      const event = payload as any;
+
+      if (!event.level || !event.message || !isValidEvent(event)) {
+        return Response.json({ error: 'Invalid telemetry payload' }, { status: 400 });
+      }
+
+      events = [event as ClientTelemetryEvent];
+
+      logger.debug(
+        {
+          clientIp,
+        },
+        'Processing single telemetry event'
+      );
+    }
+
+    // Process events locally (log to Pino)
+    for (const event of events) {
+      processEvent(event);
+    }
+
+    // Forward to OTEL collector (async, non-blocking)
+    if (OTEL_COLLECTOR_ENDPOINT) {
+      // Don't await - fire and forget
+      void forwardToOTELCollector(events);
     }
 
     return new Response(null, { status: 204 });
   } catch (error) {
-    const errObject = error instanceof Error ? { err: error } : { err: new Error('Unknown telemetry error') };
+    const errObject =
+      error instanceof Error ? { err: error } : { err: new Error('Unknown telemetry error') };
     const activeContext = requestContext.get();
 
-    logger.error({ ...activeContext, ...errObject }, 'Failed to process client telemetry');
+    logger.error(
+      { ...activeContext, ...errObject },
+      'Failed to process client telemetry'
+    );
     return Response.json({ error: 'Invalid telemetry payload' }, { status: 400 });
   }
 }

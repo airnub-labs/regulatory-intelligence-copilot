@@ -6,13 +6,15 @@
  */
 
 import { randomUUID } from 'crypto';
-import { withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import {
   SEMATTRS_DB_SYSTEM,
   SEMATTRS_DB_NAME,
   SEMATTRS_DB_OPERATION,
   SEMATTRS_DB_SQL_TABLE,
 } from '@opentelemetry/semantic-conventions';
+
+const logger = createLogger('ConversationPathStore');
 
 import type { SupabaseLikeClient } from './conversationStores.js';
 import type {
@@ -827,7 +829,15 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
         'app.tenant.id': input.tenantId,
         ...(input.pathId ? { 'app.path.id': input.pathId } : {}),
       },
-      fn
+      async () => {
+        logger.debug({
+          operation: input.operation,
+          table: input.table,
+          tenantId: input.tenantId,
+          pathId: input.pathId,
+        }, `DB ${input.operation.toUpperCase()} on ${input.table}`);
+        return fn();
+      }
     );
   }
 

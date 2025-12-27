@@ -18,6 +18,15 @@
 
 // Import SupabaseLikeClient from conversationStores to avoid duplication
 import type { SupabaseLikeClient } from './conversationStores.js';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import {
+  SEMATTRS_DB_SYSTEM,
+  SEMATTRS_DB_NAME,
+  SEMATTRS_DB_OPERATION,
+  SEMATTRS_DB_SQL_TABLE,
+} from '@opentelemetry/semantic-conventions';
+
+const logger = createLogger('ExecutionContextStore');
 
 /**
  * Execution context represents a running E2B sandbox for a specific conversation path
@@ -315,6 +324,38 @@ export class SupabaseExecutionContextStore implements ExecutionContextStore {
     private logger?: ExecutionContextLogger
   ) {}
 
+  /**
+   * Wrap database operations with OpenTelemetry instrumentation and debug logging
+   */
+  private wrapOperation<T>(
+    input: { operation: string; table: string; tenantId: string; contextId?: string },
+    fn: () => Promise<T>
+  ): Promise<T> {
+    return withSpan(
+      'db.supabase.execution_context_operation',
+      {
+        [SEMATTRS_DB_SYSTEM]: 'postgresql',
+        [SEMATTRS_DB_NAME]: 'supabase',
+        [SEMATTRS_DB_OPERATION]: input.operation,
+        [SEMATTRS_DB_SQL_TABLE]: input.table,
+        'app.tenant.id': input.tenantId,
+        ...(input.contextId ? { 'app.execution_context.id': input.contextId } : {}),
+      },
+      async () => {
+        logger.debug(
+          {
+            operation: input.operation,
+            table: input.table,
+            tenantId: input.tenantId,
+            contextId: input.contextId,
+          },
+          `DB ${input.operation.toUpperCase()} on ${input.table}`
+        );
+        return fn();
+      }
+    );
+  }
+
   private mapRow(row: any): ExecutionContext {
     return {
       id: row.id,
@@ -337,63 +378,81 @@ export class SupabaseExecutionContextStore implements ExecutionContextStore {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + ttl * 60 * 1000);
 
-    const { data, error } = await this.supabase
-      .from('execution_contexts')
-      .insert({
-        tenant_id: input.tenantId,
-        conversation_id: input.conversationId,
-        path_id: input.pathId,
-        sandbox_id: input.sandboxId,
-        sandbox_status: 'creating',
-        expires_at: expiresAt.toISOString(),
-      })
-      .select()
-      .single();
+    return this.wrapOperation(
+      {
+        operation: 'insert',
+        table: 'execution_contexts',
+        tenantId: input.tenantId,
+      },
+      async () => {
+        const { data, error } = await this.supabase
+          .from('execution_contexts')
+          .insert({
+            tenant_id: input.tenantId,
+            conversation_id: input.conversationId,
+            path_id: input.pathId,
+            sandbox_id: input.sandboxId,
+            sandbox_status: 'creating',
+            expires_at: expiresAt.toISOString(),
+          })
+          .select()
+          .single();
 
-    if (error) {
-      this.logger?.error('[SupabaseExecutionContextStore] Failed to create context', {
-        error: error.message,
-        pathId: input.pathId,
-      });
-      throw new Error(`Failed to create execution context: ${error.message}`);
-    }
+        if (error) {
+          this.logger?.error('[SupabaseExecutionContextStore] Failed to create context', {
+            error: error.message,
+            pathId: input.pathId,
+          });
+          throw new Error(`Failed to create execution context: ${error.message}`);
+        }
 
-    const context = this.mapRow(data);
+        const context = this.mapRow(data);
 
-    this.logger?.info('[SupabaseExecutionContextStore] Created context', {
-      contextId: context.id,
-      pathId: input.pathId,
-      sandboxId: input.sandboxId,
-      ttlMinutes: ttl,
-    });
+        this.logger?.info('[SupabaseExecutionContextStore] Created context', {
+          contextId: context.id,
+          pathId: input.pathId,
+          sandboxId: input.sandboxId,
+          ttlMinutes: ttl,
+        });
 
-    return context;
+        return context;
+      }
+    );
   }
 
   async getContextByPath(input: GetExecutionContextByPathInput): Promise<ExecutionContext | null> {
-    const { data, error } = await this.supabase
-      .from('execution_contexts')
-      .select('*')
-      .eq('tenant_id', input.tenantId)
-      .eq('conversation_id', input.conversationId)
-      .eq('path_id', input.pathId)
-      .is('terminated_at', null) // Only get non-terminated contexts
-      .single();
+    return this.wrapOperation(
+      {
+        operation: 'select',
+        table: 'execution_contexts',
+        tenantId: input.tenantId,
+      },
+      async () => {
+        const { data, error } = await this.supabase
+          .from('execution_contexts')
+          .select('*')
+          .eq('tenant_id', input.tenantId)
+          .eq('conversation_id', input.conversationId)
+          .eq('path_id', input.pathId)
+          .is('terminated_at', null) // Only get non-terminated contexts
+          .single();
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No rows returned - this is expected
-        return null;
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // No rows returned - this is expected
+            return null;
+          }
+
+          this.logger?.error('[SupabaseExecutionContextStore] Failed to get context by path', {
+            error: error.message,
+            pathId: input.pathId,
+          });
+          throw new Error(`Failed to get execution context: ${error.message}`);
+        }
+
+        return data ? this.mapRow(data) : null;
       }
-
-      this.logger?.error('[SupabaseExecutionContextStore] Failed to get context by path', {
-        error: error.message,
-        pathId: input.pathId,
-      });
-      throw new Error(`Failed to get execution context: ${error.message}`);
-    }
-
-    return data ? this.mapRow(data) : null;
+    );
   }
 
   async touchContext(contextId: string, ttlMinutes: number = 30): Promise<void> {
@@ -425,52 +484,73 @@ export class SupabaseExecutionContextStore implements ExecutionContextStore {
     status: ExecutionContext['sandboxStatus'],
     errorMessage?: string
   ): Promise<void> {
-    const updateData: any = { sandbox_status: status };
-    if (errorMessage !== undefined) {
-      updateData.error_message = errorMessage;
-    }
-
-    const { error } = await this.supabase
-      .from('execution_contexts')
-      .update(updateData)
-      .eq('id', contextId);
-
-    if (error) {
-      this.logger?.error('[SupabaseExecutionContextStore] Failed to update status', {
-        error: error.message,
+    // Note: We don't have tenantId here, so we'll use a placeholder for the wrapper
+    return this.wrapOperation(
+      {
+        operation: 'update',
+        table: 'execution_contexts',
+        tenantId: 'unknown', // contextId-based operations don't have tenantId available
         contextId,
-        status,
-      });
-      throw new Error(`Failed to update execution context status: ${error.message}`);
-    }
+      },
+      async () => {
+        const updateData: any = { sandbox_status: status };
+        if (errorMessage !== undefined) {
+          updateData.error_message = errorMessage;
+        }
 
-    this.logger?.info('[SupabaseExecutionContextStore] Updated status', {
-      contextId,
-      status,
-      errorMessage,
-    });
+        const { error } = await this.supabase
+          .from('execution_contexts')
+          .update(updateData)
+          .eq('id', contextId);
+
+        if (error) {
+          this.logger?.error('[SupabaseExecutionContextStore] Failed to update status', {
+            error: error.message,
+            contextId,
+            status,
+          });
+          throw new Error(`Failed to update execution context status: ${error.message}`);
+        }
+
+        this.logger?.info('[SupabaseExecutionContextStore] Updated status', {
+          contextId,
+          status,
+          errorMessage,
+        });
+      }
+    );
   }
 
   async terminateContext(contextId: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('execution_contexts')
-      .update({
-        terminated_at: new Date().toISOString(),
-        sandbox_status: 'terminated',
-      })
-      .eq('id', contextId);
-
-    if (error) {
-      this.logger?.error('[SupabaseExecutionContextStore] Failed to terminate context', {
-        error: error.message,
+    return this.wrapOperation(
+      {
+        operation: 'update',
+        table: 'execution_contexts',
+        tenantId: 'unknown', // contextId-based operations don't have tenantId available
         contextId,
-      });
-      throw new Error(`Failed to terminate execution context: ${error.message}`);
-    }
+      },
+      async () => {
+        const { error } = await this.supabase
+          .from('execution_contexts')
+          .update({
+            terminated_at: new Date().toISOString(),
+            sandbox_status: 'terminated',
+          })
+          .eq('id', contextId);
 
-    this.logger?.info('[SupabaseExecutionContextStore] Terminated context', {
-      contextId,
-    });
+        if (error) {
+          this.logger?.error('[SupabaseExecutionContextStore] Failed to terminate context', {
+            error: error.message,
+            contextId,
+          });
+          throw new Error(`Failed to terminate execution context: ${error.message}`);
+        }
+
+        this.logger?.info('[SupabaseExecutionContextStore] Terminated context', {
+          contextId,
+        });
+      }
+    );
   }
 
   async getExpiredContexts(limit: number = 50): Promise<ExecutionContext[]> {

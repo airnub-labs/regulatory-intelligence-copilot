@@ -158,6 +158,13 @@ export class ExecutionContextManager {
           pathId: input.pathId,
         });
 
+        this.logger.debug({
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          pathId: input.pathId,
+          activeSandboxCount: this.activeSandboxes.size,
+        }, 'Checking for existing execution context');
+
         // Try to get existing context
         let context = await this.config.store.getContextByPath(input);
 
@@ -171,8 +178,20 @@ export class ExecutionContextManager {
     }
 
     if (context) {
+      this.logger.debug({
+        contextId: context.id,
+        sandboxId: context.sandboxId,
+        sandboxStatus: context.sandboxStatus,
+        expiresAt: context.expiresAt,
+      }, 'Found existing execution context');
+
       // Extend TTL by touching
       await this.config.store.touchContext(context.id, this.defaultTtl);
+
+      this.logger.debug({
+        contextId: context.id,
+        ttlMinutes: this.defaultTtl,
+      }, 'Extended execution context TTL');
 
       // Get or reconnect to sandbox
       let sandbox = this.activeSandboxes.get(context.id);
@@ -183,6 +202,11 @@ export class ExecutionContextManager {
           contextId: context.id,
           sandboxId: context.sandboxId,
         });
+
+        this.logger.debug({
+          contextId: context.id,
+          sandboxId: context.sandboxId,
+        }, 'Sandbox not in cache, attempting reconnect');
 
         try {
           sandbox = await this.config.e2bClient.reconnect(context.sandboxId, {
@@ -195,6 +219,11 @@ export class ExecutionContextManager {
             contextId: context.id,
             sandboxId: context.sandboxId,
           });
+
+          this.logger.debug({
+            contextId: context.id,
+            sandboxId: context.sandboxId,
+          }, 'Successfully reconnected to sandbox');
         } catch (error) {
           // Reconnection failed - sandbox might have been killed
           this.logger.error('Failed to reconnect to sandbox', {
@@ -203,13 +232,30 @@ export class ExecutionContextManager {
             error,
           });
 
+          this.logger.debug({
+            contextId: context.id,
+            sandboxId: context.sandboxId,
+            error: error instanceof Error ? error.message : String(error),
+          }, 'Reconnection failed, marking context as terminated');
+
           // Mark context as terminated and create new one
           await this.config.store.terminateContext(context.id);
           context = null;
         }
+      } else {
+        this.logger.debug({
+          contextId: context.id,
+          sandboxId: context.sandboxId,
+        }, 'Sandbox found in cache, reusing');
       }
 
       if (context && sandbox) {
+        this.logger.debug({
+          contextId: context.id,
+          sandboxId: context.sandboxId,
+          wasCreated: false,
+        }, 'Returning existing execution context');
+
         return {
           context,
           sandbox,
@@ -225,10 +271,22 @@ export class ExecutionContextManager {
       conversationId: input.conversationId,
     });
 
+    this.logger.debug({
+      pathId: input.pathId,
+      tenantId: input.tenantId,
+      conversationId: input.conversationId,
+      timeout: this.sandboxTimeout,
+      ttl: this.defaultTtl,
+    }, 'Initiating E2B sandbox creation');
+
     const sandbox = await this.config.e2bClient.create({
       apiKey: this.config.e2bApiKey,
       timeout: this.sandboxTimeout,
     });
+
+    this.logger.debug({
+      sandboxId: sandbox.sandboxId,
+    }, 'E2B sandbox created, creating execution context record');
 
     // Create execution context record
     const newContext = await this.config.store.createContext({
@@ -239,6 +297,11 @@ export class ExecutionContextManager {
       ttlMinutes: this.defaultTtl,
     });
 
+    this.logger.debug({
+      contextId: newContext.id,
+      sandboxId: sandbox.sandboxId,
+    }, 'Execution context record created, marking as ready');
+
     // Mark as ready
     await this.config.store.updateStatus(newContext.id, 'ready');
     newContext.sandboxStatus = 'ready';
@@ -246,12 +309,24 @@ export class ExecutionContextManager {
     // Cache sandbox
     this.activeSandboxes.set(newContext.id, sandbox);
 
+    this.logger.debug({
+      contextId: newContext.id,
+      sandboxId: sandbox.sandboxId,
+      cachedSandboxCount: this.activeSandboxes.size,
+    }, 'Sandbox cached in memory');
+
         this.logger.info('Created new context', {
           contextId: newContext.id,
           pathId: input.pathId,
           sandboxId: sandbox.sandboxId,
           ttlMinutes: this.defaultTtl,
         });
+
+        this.logger.debug({
+          contextId: newContext.id,
+          sandboxId: sandbox.sandboxId,
+          wasCreated: true,
+        }, 'Returning new execution context');
 
         return {
           context: newContext,
@@ -287,10 +362,21 @@ export class ExecutionContextManager {
       contextId,
     });
 
+    this.logger.debug({
+      contextId,
+      cachedSandboxCount: this.activeSandboxes.size,
+      isInCache: this.activeSandboxes.has(contextId),
+    }, 'Starting context termination');
+
     // Get sandbox from cache
     const sandbox = this.activeSandboxes.get(contextId);
 
     if (sandbox) {
+      this.logger.debug({
+        contextId,
+        sandboxId: sandbox.sandboxId,
+      }, 'Sandbox found in cache, killing');
+
       try {
         // Kill the sandbox
         await sandbox.kill();
@@ -299,16 +385,35 @@ export class ExecutionContextManager {
           contextId,
           sandboxId: sandbox.sandboxId,
         });
+
+        this.logger.debug({
+          contextId,
+          sandboxId: sandbox.sandboxId,
+        }, 'Sandbox killed successfully');
       } catch (error) {
         this.logger.error('Failed to kill sandbox', {
           contextId,
           error,
         });
+
+        this.logger.debug({
+          contextId,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Sandbox kill failed, continuing with termination');
         // Continue with context termination even if sandbox kill fails
       }
 
       // Remove from cache
       this.activeSandboxes.delete(contextId);
+
+      this.logger.debug({
+        contextId,
+        cachedSandboxCount: this.activeSandboxes.size,
+      }, 'Sandbox removed from cache');
+    } else {
+      this.logger.debug({
+        contextId,
+      }, 'Sandbox not in cache, only marking as terminated in database');
     }
 
     // Mark context as terminated in database
@@ -317,6 +422,10 @@ export class ExecutionContextManager {
     this.logger.info('Context terminated', {
       contextId,
     });
+
+    this.logger.debug({
+      contextId,
+    }, 'Context termination complete');
   }
 
   /**

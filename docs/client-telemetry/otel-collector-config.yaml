@@ -1,0 +1,195 @@
+# OpenTelemetry Collector Configuration for Client Telemetry
+#
+# This configuration receives client telemetry events via OTLP/HTTP,
+# processes them in batches, and exports them to various backends.
+#
+# Supported exporters (uncomment as needed):
+# - logging: Console output for debugging
+# - prometheus: Metrics endpoint
+# - jaeger: Distributed tracing
+# - datadog: Datadog APM and logs
+# - otlphttp: Forward to another OTEL collector
+# - file: Write to files
+
+receivers:
+  # OTLP receiver for client telemetry
+  otlp:
+    protocols:
+      # HTTP endpoint (used by client telemetry)
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - "http://localhost:3000"
+            - "http://localhost:3001"
+            # Add your production domains here
+            # - "https://yourdomain.com"
+          allowed_headers:
+            - "*"
+          max_age: 7200
+
+      # gRPC endpoint (not used by client telemetry, but available)
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+  # Prometheus metrics receiver (for collector self-monitoring)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 10s
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Batch processor - groups events for efficient processing
+  batch:
+    timeout: 1s
+    send_batch_size: 100
+    send_batch_max_size: 1000
+
+  # Memory limiter - prevents OOM by dropping data when memory is high
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource detection - adds environment metadata
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 2s
+
+  # Attributes processor - add custom attributes
+  attributes:
+    actions:
+      - key: environment
+        value: development  # Change to production in prod
+        action: insert
+      - key: service.namespace
+        value: client-telemetry
+        action: insert
+
+  # Filter processor - filter out noise (optional)
+  # filter:
+  #   logs:
+  #     exclude:
+  #       match_type: regexp
+  #       record_attributes:
+  #         - key: message
+  #           value: ".*healthcheck.*"
+
+exporters:
+  # Logging exporter - outputs to console (useful for debugging)
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # Prometheus exporter - exposes metrics endpoint
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      service: client-telemetry
+
+  # File exporter - write logs to files (useful for backup/audit)
+  file:
+    path: /var/log/otel/client-telemetry.json
+    rotation:
+      max_megabytes: 100
+      max_days: 7
+      max_backups: 3
+
+  # OTLP HTTP exporter - forward to another collector or backend
+  # otlphttp:
+  #   endpoint: "https://api.yourdomain.com/v1/logs"
+  #   headers:
+  #     api-key: "${env:API_KEY}"
+  #   compression: gzip
+
+  # Datadog exporter - send to Datadog
+  # datadog:
+  #   api:
+  #     site: datadoghq.com  # or datadoghq.eu for EU
+  #     key: "${env:DD_API_KEY}"
+  #   host_metadata:
+  #     enabled: true
+  #     hostname_source: config_or_system
+  #   logs:
+  #     endpoint: "https://http-intake.logs.datadoghq.com"
+
+  # Jaeger exporter - send to Jaeger for trace visualization
+  # jaeger:
+  #   endpoint: "jaeger:14250"
+  #   tls:
+  #     insecure: true
+
+  # Elasticsearch exporter - send to Elasticsearch
+  # elasticsearch:
+  #   endpoints: ["http://elasticsearch:9200"]
+  #   logs_index: "client-telemetry"
+
+  # Loki exporter - send to Grafana Loki
+  # loki:
+  #   endpoint: "http://loki:3100/loki/api/v1/push"
+
+# Extensions for monitoring and health checks
+extensions:
+  # Health check endpoint
+  health_check:
+    endpoint: "0.0.0.0:13133"
+    path: "/health"
+
+  # Performance profiler
+  pprof:
+    endpoint: "0.0.0.0:1777"
+
+  # zPages for debugging
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+# Service pipelines - define how data flows through the collector
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    # Logs pipeline (client telemetry events)
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter
+        - resourcedetection
+        - attributes
+        - batch
+      exporters:
+        - logging     # Always log for debugging
+        - file        # Backup to file
+        # - datadog   # Uncomment to send to Datadog
+        # - otlphttp  # Uncomment to forward to another collector
+        # - elasticsearch  # Uncomment to send to Elasticsearch
+        # - loki      # Uncomment to send to Loki
+
+    # Metrics pipeline (collector self-monitoring)
+    metrics:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters:
+        - prometheus
+        # - datadog   # Uncomment to send to Datadog
+
+  # Telemetry settings for the collector itself
+  telemetry:
+    logs:
+      level: info
+      development: false
+      encoding: json
+      output_paths:
+        - stdout
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+# Resource configuration
+# Configure based on your expected load:
+# - Low traffic: 1 CPU, 512MB RAM
+# - Medium traffic: 2 CPU, 1GB RAM
+# - High traffic: 4+ CPU, 2GB+ RAM

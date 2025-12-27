@@ -53,6 +53,9 @@
  */
 
 import { Redactor } from '@redactpii/node';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('EgressGuard');
 
 // Create a redactor instance for PII detection
 const redactor = new Redactor();
@@ -417,8 +420,16 @@ export function sanitizeTextWithAudit(
   const context = options?.context ?? 'chat';
   const redactionTypes: string[] = [];
 
+  logger.debug({
+    context,
+    textLength: text.length,
+    useMLDetection: shouldUseMLDetection(context, options),
+    patternCount: getPatternsForContext(context, options).length,
+  }, 'Starting PII sanitization');
+
   // If off, return unchanged
   if (context === 'off') {
+    logger.debug('Sanitization context is OFF, skipping');
     return {
       text,
       redacted: false,
@@ -437,30 +448,55 @@ export function sanitizeTextWithAudit(
       if (mlSanitized !== sanitized) {
         redactionTypes.push('[ML_REDACTION]');
         sanitized = mlSanitized;
+        logger.debug({
+          context,
+          originalLength: text.length,
+          sanitizedLength: sanitized.length,
+        }, 'ML-based PII redaction applied');
       }
-    } catch {
+    } catch (error) {
+      logger.debug({
+        context,
+        error: error instanceof Error ? error.message : String(error),
+      }, 'ML-based PII redaction failed, continuing with pattern-based');
       // Continue with pattern-based redaction
     }
   }
 
   // Apply pattern-based redaction and track what was redacted
   const patterns = getPatternsForContext(context, options);
-  for (const { pattern, replacement } of patterns) {
+  for (const { pattern, replacement, description } of patterns) {
     pattern.lastIndex = 0;
     const beforePattern = sanitized;
     sanitized = sanitized.replace(pattern, replacement);
     if (sanitized !== beforePattern && !redactionTypes.includes(replacement)) {
       redactionTypes.push(replacement);
+      logger.debug({
+        context,
+        replacement,
+        description,
+      }, 'Pattern-based redaction applied');
     }
   }
 
-  return {
+  const result = {
     text: sanitized,
     redacted: redactionTypes.length > 0,
     redactionTypes,
     originalLength: text.length,
     sanitizedLength: sanitized.length,
   };
+
+  logger.debug({
+    context,
+    redacted: result.redacted,
+    redactionTypes,
+    originalLength: result.originalLength,
+    sanitizedLength: result.sanitizedLength,
+    reductionBytes: result.originalLength - result.sanitizedLength,
+  }, 'PII sanitization completed');
+
+  return result;
 }
 
 /**
