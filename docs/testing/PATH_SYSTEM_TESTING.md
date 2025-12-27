@@ -38,9 +38,94 @@ This document describes the comprehensive test suite for the conversation path s
 - ✅ UI state consistency
 - ✅ Error handling
 
+### 3. Edit Previous Message Test
+**File**: `apps/demo-web/src/app/__tests__/edit-previous-message.test.tsx`
+**Purpose**: Critical edit-from-middle-of-conversation workflow
+**Coverage**:
+- ✅ Editing previous (non-last) messages
+- ✅ Branching from middle of conversation
+- ✅ Preserving original path with ALL messages
+- ✅ Switching back to original path
+- ✅ UI showing complete history after branch point
+- ✅ Multiple edits to same conversation
+
 ---
 
 ## Test Scenarios
+
+### Scenario 0: Edit Previous Message and Switch Back (CRITICAL)
+**Test**: `should preserve full original path when editing and show all messages when switching back`
+
+This is the **most critical test** for the path system as it validates the core branching behavior.
+
+```
+Step 1: Create conversation on Main Path
+  Main Q1 → Response
+  Main Q2 → Response
+  Main Q3 → Response  ← Edit this one
+  Main Q4 → Response  ← These must be preserved!
+  Main Q5 → Response  ← These must be preserved!
+
+Step 2: Edit Main Q3 (not the last message!)
+  → Creates new branch from Q3
+  → Branch inherits Q1, Q2, Q3
+  → Main path keeps ALL messages (including Q4, Q5)
+
+Step 3: Continue on Branch
+  Edited Q3 → Response (different from main)
+  Branch Q1 → Response
+  Branch Q2 → Response
+
+Step 4: Switch back to Main Path
+  → UI shows ALL 10 messages
+  → Including Q4 and Q5 after branch point!
+  → Original Q3 (not edited version)
+```
+
+**Critical Assertions:**
+```typescript
+// Main path preserved completely
+const mainMessages = conversationState.messages
+  .get(conversationId)!
+  .filter(m => m.pathId === 'path-main');
+expect(mainMessages).toHaveLength(10);
+
+// Messages AFTER branch point still exist
+expect(mainMessages.find(m => m.content === 'Main Q4')).toBeDefined();
+expect(mainMessages.find(m => m.content === 'Main Q5')).toBeDefined();
+
+// When switching back, UI shows complete history
+const loadData = await fetch(`/api/conversations/${conversationId}`);
+expect(loadData.messages).toHaveLength(10);
+expect(loadData.messages.find(m => m.content === 'Main Q4')).toBeDefined();
+```
+
+**Why This Is Critical:**
+- ✅ Proves original conversation is never lost
+- ✅ Validates branching doesn't delete subsequent messages
+- ✅ Ensures users can return to see full original context
+- ✅ Tests the "time travel" aspect of branching
+- ✅ Verifies message filtering works correctly
+
+**Real-World Scenario:**
+```
+User has long conversation about tax regulations:
+  Q1: What is PRSI?
+  Q2: How does it apply to directors?
+  Q3: What about multiple directorships?
+  Q4: Are there exemptions?
+  Q5: What about cross-border cases?
+
+User realizes Q3 was wrong, wants to rephrase:
+  → Edits Q3 to: "What about sole traders instead?"
+  → System creates branch from Q3
+  → Original conversation preserved with Q4, Q5 about directorships
+  → Branch explores new direction about sole traders
+
+User can switch back to see original discussion about directorships!
+```
+
+---
 
 ### Scenario 1: Multi-Question Conversation Flow
 **Test**: `should handle 5 consecutive questions with correct UI updates`
@@ -365,10 +450,10 @@ expect(mainMessages).toHaveLength(4);
 ## Coverage Metrics
 
 ### Current Coverage
-- **Test Files**: 2
-- **Test Cases**: 15+
-- **Scenarios Covered**: 6 major workflows
-- **Lines of Test Code**: ~1,200+
+- **Test Files**: 3
+- **Test Cases**: 20+
+- **Scenarios Covered**: 7 major workflows
+- **Lines of Test Code**: ~1,800+
 
 ### Component Coverage
 - ✅ Message submission and streaming
