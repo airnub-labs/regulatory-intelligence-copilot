@@ -21,6 +21,7 @@ import { ChatContainer, ChatWelcome } from '@/components/chat/chat-container'
 import { createClientTelemetry, type ClientTelemetrySink } from '@/lib/clientTelemetry'
 import { PathAwareMessageList } from '@/components/chat/path-aware-message-list'
 import { PathToolbar } from '@/components/chat/path-toolbar'
+import { PathBreadcrumbs } from '@/components/chat/path-breadcrumbs'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
@@ -1296,6 +1297,20 @@ export default function Home() {
                     {chatMetadata.uncertaintyLevel} confidence
                   </Badge>
                 )}
+              </div>
+            )}
+
+            {conversationId && (
+              <div className="border-b bg-muted/10 px-6 py-2">
+                <PathBreadcrumbs
+                  onPathSwitch={(path) => {
+                    // Update URL with new path and reload conversation
+                    if (conversationId) {
+                      updateUrl(conversationId, path.id)
+                      loadConversation(conversationId)
+                    }
+                  }}
+                />
               </div>
             )}
 
