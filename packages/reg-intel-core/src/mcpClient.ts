@@ -109,6 +109,15 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
         id: Date.now(),
       };
 
+      // Debug logging for MCP request
+      logger.debug({
+        toolName: params.toolName,
+        sandboxId,
+        gatewayUrl: mcpGatewayUrl,
+        paramKeys: Object.keys(params.params || {}),
+        hasToken: Boolean(mcpGatewayToken),
+      }, 'Executing MCP call');
+
       const response = await fetch(mcpGatewayUrl, {
         method: 'POST',
         headers,
@@ -117,6 +126,12 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
 
       if (!response.ok) {
         const errorText = await response.text();
+        logger.debug({
+          toolName: params.toolName,
+          sandboxId,
+          status: response.status,
+          errorText: errorText.substring(0, 200),
+        }, 'MCP call failed with HTTP error');
         return {
           result: null,
           error: `MCP call failed: ${response.status} - ${errorText}`,
@@ -152,6 +167,13 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
 
         parser.feed(text);
 
+        logger.debug({
+          toolName: params.toolName,
+          sandboxId,
+          responseType: 'sse',
+          hasResult: result !== null,
+        }, 'MCP call completed (SSE response)');
+
         return { result };
       }
 
@@ -162,11 +184,24 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
       };
 
       if (jsonRpcResponse.error) {
+        logger.debug({
+          toolName: params.toolName,
+          sandboxId,
+          errorCode: jsonRpcResponse.error.code,
+          errorMessage: jsonRpcResponse.error.message,
+        }, 'MCP call completed with RPC error');
         return {
           result: null,
           error: `MCP error: ${jsonRpcResponse.error.message || JSON.stringify(jsonRpcResponse.error)}`,
         };
       }
+
+      logger.debug({
+        toolName: params.toolName,
+        sandboxId,
+        responseType: 'json',
+        hasResult: jsonRpcResponse.result !== undefined,
+      }, 'MCP call completed successfully');
 
       return { result: jsonRpcResponse.result };
     }

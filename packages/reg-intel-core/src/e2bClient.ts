@@ -6,7 +6,8 @@
 import { Sandbox } from '@e2b/code-interpreter';
 import { DEFAULT_SANDBOX_TIMEOUT_MS } from './constants.js';
 import { SandboxError } from './errors.js';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import { SEMATTRS_CODE_FUNCTION } from '@opentelemetry/semantic-conventions';
 
 const logger = createLogger('E2BSandboxClient', { component: 'Sandbox' });
 
@@ -63,53 +64,76 @@ async function getMcpCredentials(sandbox: Sandbox): Promise<{ mcpUrl: string; mc
 export async function createSandbox(options?: {
   timeoutMs?: number;
 }): Promise<SandboxHandle> {
-  const mcpConfig: MCPConfig = {};
-
-  // Configure Perplexity MCP using Docker Hub MCP server
-  if (process.env.PERPLEXITY_API_KEY) {
-    mcpConfig['perplexity-ask'] = {
-      apiKey: process.env.PERPLEXITY_API_KEY,
-    };
-  }
-
-  // Configure Memgraph MCP using custom server pattern from GitHub
-  if (process.env.MEMGRAPH_HOST) {
-    mcpConfig['github/memgraph/ai-toolkit'] = {
-      installCmd: 'cd integrations/mcp-memgraph && pip install .',
-      runCmd: 'MCP_TRANSPORT=stdio mcp-memgraph',
-    };
-  }
-
-  // Create sandbox with MCP configuration
-  const sandbox = await Sandbox.create({
-    timeoutMs: options?.timeoutMs || DEFAULT_SANDBOX_TIMEOUT_MS,
-    envs: {
-      PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY || '',
-      MEMGRAPH_URL: process.env.MEMGRAPH_HOST
-        ? `bolt://${process.env.MEMGRAPH_HOST}:${process.env.MEMGRAPH_PORT || '7687'}`
-        : '',
-      MEMGRAPH_USER:
-        process.env.MEMGRAPH_USERNAME || process.env.MEMGRAPH_USER || 'memgraph',
-      MEMGRAPH_USERNAME:
-        process.env.MEMGRAPH_USERNAME || process.env.MEMGRAPH_USER || 'memgraph',
-      MEMGRAPH_PASSWORD: process.env.MEMGRAPH_PASSWORD || '',
-      MCP_READ_ONLY: process.env.MCP_READ_ONLY || 'false',
+  return withSpan(
+    'e2b.sandbox.create',
+    {
+      'app.sandbox.timeout_ms': options?.timeoutMs || DEFAULT_SANDBOX_TIMEOUT_MS,
+      'app.sandbox.mcp_enabled': true,
     },
-    ...(Object.keys(mcpConfig).length > 0 && { mcp: mcpConfig }),
-  });
+    async () => {
+      const mcpConfig: MCPConfig = {};
 
-  const { mcpUrl, mcpToken } = await getMcpCredentials(sandbox);
+      // Configure Perplexity MCP using Docker Hub MCP server
+      if (process.env.PERPLEXITY_API_KEY) {
+        mcpConfig['perplexity-ask'] = {
+          apiKey: process.env.PERPLEXITY_API_KEY,
+        };
+      }
 
-  logger.info({ event: 'sandbox.created', sandboxId: sandbox.sandboxId });
-  logger.info({ event: 'sandbox.mcp.gateway', mcpUrl });
-  logger.info({ event: 'sandbox.mcp.token.available', available: Boolean(mcpToken) });
+      // Configure Memgraph MCP using custom server pattern from GitHub
+      if (process.env.MEMGRAPH_HOST) {
+        mcpConfig['github/memgraph/ai-toolkit'] = {
+          installCmd: 'cd integrations/mcp-memgraph && pip install .',
+          runCmd: 'MCP_TRANSPORT=stdio mcp-memgraph',
+        };
+      }
 
-  return {
-    sandbox,
-    id: sandbox.sandboxId,
-    mcpUrl,
-    mcpToken,
-  };
+      logger.debug({
+        timeoutMs: options?.timeoutMs || DEFAULT_SANDBOX_TIMEOUT_MS,
+        mcpServers: Object.keys(mcpConfig),
+        hasPerplexityKey: Boolean(process.env.PERPLEXITY_API_KEY),
+        hasMemgraphHost: Boolean(process.env.MEMGRAPH_HOST),
+      }, 'Creating E2B sandbox');
+
+      // Create sandbox with MCP configuration
+      const sandbox = await Sandbox.create({
+        timeoutMs: options?.timeoutMs || DEFAULT_SANDBOX_TIMEOUT_MS,
+        envs: {
+          PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY || '',
+          MEMGRAPH_URL: process.env.MEMGRAPH_HOST
+            ? `bolt://${process.env.MEMGRAPH_HOST}:${process.env.MEMGRAPH_PORT || '7687'}`
+            : '',
+          MEMGRAPH_USER:
+            process.env.MEMGRAPH_USERNAME || process.env.MEMGRAPH_USER || 'memgraph',
+          MEMGRAPH_USERNAME:
+            process.env.MEMGRAPH_USERNAME || process.env.MEMGRAPH_USER || 'memgraph',
+          MEMGRAPH_PASSWORD: process.env.MEMGRAPH_PASSWORD || '',
+          MCP_READ_ONLY: process.env.MCP_READ_ONLY || 'false',
+        },
+        ...(Object.keys(mcpConfig).length > 0 && { mcp: mcpConfig }),
+      });
+
+      const { mcpUrl, mcpToken } = await getMcpCredentials(sandbox);
+
+      logger.info({ event: 'sandbox.created', sandboxId: sandbox.sandboxId });
+      logger.info({ event: 'sandbox.mcp.gateway', mcpUrl });
+      logger.info({ event: 'sandbox.mcp.token.available', available: Boolean(mcpToken) });
+
+      logger.debug({
+        sandboxId: sandbox.sandboxId,
+        mcpUrl,
+        hasToken: Boolean(mcpToken),
+        mcpServers: Object.keys(mcpConfig),
+      }, 'E2B sandbox created successfully');
+
+      return {
+        sandbox,
+        id: sandbox.sandboxId,
+        mcpUrl,
+        mcpToken,
+      };
+    }
+  );
 }
 
 /**
@@ -119,9 +143,17 @@ export async function runInSandbox<T>(
   handle: SandboxHandle,
   code: string
 ): Promise<T> {
-  const { sandbox } = handle;
+  return withSpan(
+    'e2b.sandbox.run',
+    {
+      'app.sandbox.id': handle.id,
+      'code.code_snippet_length': code.length,
+      [SEMATTRS_CODE_FUNCTION]: 'runInSandbox',
+    },
+    async () => {
+      const { sandbox } = handle;
 
-  const wrappedCode = `
+      const wrappedCode = `
     (async () => {
       ${code}
     })().then(result => {
@@ -134,41 +166,98 @@ export async function runInSandbox<T>(
     });
   `;
 
-  const scriptPath = `/tmp/script-${Date.now()}.js`;
-  await sandbox.files.write(scriptPath, wrappedCode);
+      const scriptPath = `/tmp/script-${Date.now()}.js`;
 
-  const result = await sandbox.commands.run(`node ${scriptPath}`);
+      logger.debug({
+        sandboxId: handle.id,
+        codeLength: code.length,
+        scriptPath,
+        codePreview: code.substring(0, 100),
+      }, 'Writing code to sandbox');
 
-  logger.info(
-    {
-      event: 'sandbox.command.result',
-      sandboxId: handle.id,
-      exitCode: result.exitCode,
-      stdoutBytes: result.stdout?.length ?? 0,
-      stderrBytes: result.stderr?.length ?? 0,
-    },
-    'Sandbox command completed'
-  );
+      await sandbox.files.write(scriptPath, wrappedCode);
 
-  if (result.exitCode !== 0) {
-    throw new Error(`Sandbox execution error: ${result.stderr || 'Unknown error'}`);
-  }
+      logger.debug({
+        sandboxId: handle.id,
+        scriptPath,
+        command: `node ${scriptPath}`,
+      }, 'Executing code in sandbox');
 
-  const output = result.stdout.trim();
-  if (output) {
-    try {
-      return JSON.parse(output) as T;
-    } catch {
-      return output as T;
+      const result = await sandbox.commands.run(`node ${scriptPath}`);
+
+      logger.info(
+        {
+          event: 'sandbox.command.result',
+          sandboxId: handle.id,
+          exitCode: result.exitCode,
+          stdoutBytes: result.stdout?.length ?? 0,
+          stderrBytes: result.stderr?.length ?? 0,
+        },
+        'Sandbox command completed'
+      );
+
+      logger.debug({
+        sandboxId: handle.id,
+        exitCode: result.exitCode,
+        hasStdout: Boolean(result.stdout),
+        hasStderr: Boolean(result.stderr),
+      }, 'Sandbox execution completed');
+
+      if (result.exitCode !== 0) {
+        logger.debug({
+          sandboxId: handle.id,
+          stderr: result.stderr,
+        }, 'Sandbox execution failed');
+        throw new Error(`Sandbox execution error: ${result.stderr || 'Unknown error'}`);
+      }
+
+      const output = result.stdout.trim();
+      if (output) {
+        try {
+          const parsed = JSON.parse(output) as T;
+          logger.debug({
+            sandboxId: handle.id,
+            outputType: 'json',
+          }, 'Parsed sandbox output as JSON');
+          return parsed;
+        } catch {
+          logger.debug({
+            sandboxId: handle.id,
+            outputType: 'text',
+          }, 'Returning sandbox output as text');
+          return output as T;
+        }
+      }
+
+      logger.debug({
+        sandboxId: handle.id,
+        outputType: 'undefined',
+      }, 'Sandbox returned no output');
+
+      return undefined as T;
     }
-  }
-
-  return undefined as T;
+  );
 }
 
 /**
  * Cleanup sandbox
  */
 export async function closeSandbox(handle: SandboxHandle): Promise<void> {
-  await handle.sandbox.kill();
+  return withSpan(
+    'e2b.sandbox.close',
+    {
+      'app.sandbox.id': handle.id,
+    },
+    async () => {
+      logger.debug({
+        sandboxId: handle.id,
+      }, 'Closing E2B sandbox');
+
+      await handle.sandbox.kill();
+
+      logger.debug({
+        sandboxId: handle.id,
+      }, 'E2B sandbox closed successfully');
+    }
+  );
 }
