@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
@@ -38,88 +38,115 @@ export async function POST(
 
   const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
 
-  // Verify conversation exists and user has access
-  const conversation = await conversationStore.getConversation({
-    tenantId,
-    conversationId,
-    userId,
-  });
+  return requestContext.run(
+    { tenantId, userId },
+    () =>
+      withSpan(
+        'api.conversations.merge.preview',
+        {
+          'app.route': '/api/conversations/[id]/paths/[pathId]/merge/preview',
+          'app.tenant.id': tenantId,
+          'app.user.id': userId,
+          'app.conversation.id': conversationId,
+          'app.path.id': sourcePathId,
+        },
+        async () => {
 
-  if (!conversation) {
-    return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
-  }
+          // Verify conversation exists and user has access
+          const conversation = await conversationStore.getConversation({
+            tenantId,
+            conversationId,
+            userId,
+          });
 
-  const body = await request.json().catch(() => null);
-  if (!body) {
-    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
-  }
+          if (!conversation) {
+            logger.warn({ tenantId, userId, conversationId }, 'Conversation not found');
+            return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+          }
 
-  const { targetPathId, mergeMode, selectedMessageIds, summaryPrompt } = body;
+          const body = await request.json().catch(() => null);
+          if (!body) {
+            logger.warn({ tenantId, conversationId, sourcePathId }, 'Invalid request body');
+            return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+          }
 
-  // Validate targetPathId
-  if (!targetPathId || typeof targetPathId !== 'string') {
-    return NextResponse.json({ error: 'targetPathId is required' }, { status: 400 });
-  }
+          const { targetPathId, mergeMode, selectedMessageIds, summaryPrompt } = body;
 
-  // Validate mergeMode
-  if (!mergeMode || !VALID_MERGE_MODES.includes(mergeMode)) {
-    return NextResponse.json(
-      { error: `mergeMode must be one of: ${VALID_MERGE_MODES.join(', ')}` },
-      { status: 400 }
-    );
-  }
+          // Validate targetPathId
+          if (!targetPathId || typeof targetPathId !== 'string') {
+            logger.warn({ tenantId, conversationId, sourcePathId }, 'targetPathId is required');
+            return NextResponse.json({ error: 'targetPathId is required' }, { status: 400 });
+          }
 
-  try {
-    const preview = await conversationPathStore.previewMerge({
-      tenantId,
-      sourcePathId,
-      targetPathId,
-      mergeMode,
-      selectedMessageIds,
-      summaryPrompt,
-    });
+          // Validate mergeMode
+          if (!mergeMode || !VALID_MERGE_MODES.includes(mergeMode)) {
+            logger.warn({ tenantId, conversationId, sourcePathId, mergeMode }, 'Invalid mergeMode');
+            return NextResponse.json(
+              { error: `mergeMode must be one of: ${VALID_MERGE_MODES.join(', ')}` },
+              { status: 400 },
+            );
+          }
 
-    // Generate AI summary for summary mode
-    let generatedSummary = preview.generatedSummary;
-    let aiGenerated = false;
+          try {
+            const preview = await conversationPathStore.previewMerge({
+              tenantId,
+              sourcePathId,
+              targetPathId,
+              mergeMode,
+              selectedMessageIds,
+              summaryPrompt,
+            });
 
-    if (mergeMode === 'summary' && preview.messagesToMerge.length > 0) {
-      try {
-        const summaryResult = await generateMergeSummary({
-          branchMessages: preview.messagesToMerge,
-          sourcePath: preview.sourcePath,
-          targetPath: preview.targetPath,
-          customPrompt: summaryPrompt,
-          tenantId,
-        });
+            // Generate AI summary for summary mode
+            let generatedSummary = preview.generatedSummary;
+            let aiGenerated = false;
 
-        generatedSummary = summaryResult.summary;
-        aiGenerated = summaryResult.aiGenerated;
+            if (mergeMode === 'summary' && preview.messagesToMerge.length > 0) {
+              try {
+                const summaryResult = await generateMergeSummary({
+                  branchMessages: preview.messagesToMerge,
+                  sourcePath: preview.sourcePath,
+                  targetPath: preview.targetPath,
+                  customPrompt: summaryPrompt,
+                  tenantId,
+                });
 
-        if (summaryResult.error) {
-          logger.warn({ error: summaryResult.error }, 'Summary generation warning');
-        }
-      } catch (summaryError) {
-        logger.error({ err: summaryError }, 'Failed to generate AI summary');
-        // Fall through - use basic preview summary from store
-      }
-    }
+                generatedSummary = summaryResult.summary;
+                aiGenerated = summaryResult.aiGenerated;
 
-    return NextResponse.json({
-      messagesToMerge: preview.messagesToMerge.map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content,
-        createdAt: msg.createdAt.toISOString(),
-      })),
-      generatedSummary,
-      aiGenerated,
-      targetPath: toClientPath(preview.targetPath),
-      sourcePath: toClientPath(preview.sourcePath),
-      estimatedMessageCount: preview.estimatedMessageCount,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
+                if (summaryResult.error) {
+                  logger.warn({ error: summaryResult.error, tenantId, conversationId, sourcePathId }, 'Summary generation warning');
+                }
+              } catch (summaryError) {
+                logger.error({ err: summaryError, tenantId, conversationId, sourcePathId }, 'Failed to generate AI summary');
+                // Fall through - use basic preview summary from store
+              }
+            }
+
+            logger.info(
+              { tenantId, conversationId, sourcePathId, targetPathId, mergeMode, messageCount: preview.messagesToMerge.length },
+              'Merge preview generated',
+            );
+
+            return NextResponse.json({
+              messagesToMerge: preview.messagesToMerge.map((msg) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.content,
+                createdAt: msg.createdAt.toISOString(),
+              })),
+              generatedSummary,
+              aiGenerated,
+              targetPath: toClientPath(preview.targetPath),
+              sourcePath: toClientPath(preview.sourcePath),
+              estimatedMessageCount: preview.estimatedMessageCount,
+            });
+          } catch (error) {
+            logger.error({ error, tenantId, conversationId, sourcePathId, targetPathId, mergeMode }, 'Failed to generate merge preview');
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return NextResponse.json({ error: message }, { status: 400 });
+          }
+        },
+      ),
+  );
 }

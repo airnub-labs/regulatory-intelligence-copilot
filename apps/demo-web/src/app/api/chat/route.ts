@@ -6,7 +6,7 @@
  */
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
-import { requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { context, propagation, trace } from '@opentelemetry/api';
 import { getServerSession } from 'next-auth/next';
 
@@ -21,6 +21,8 @@ import {
 
 // Force dynamic rendering to avoid build-time initialization
 export const dynamic = 'force-dynamic';
+
+const logger = createLogger('ChatRoute');
 
 const handler = createChatRouteHandler({
   conversationStore,
@@ -51,6 +53,7 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch (error) {
+    logger.error({ error, tenantId, userId: session.user.id }, 'Failed to parse request body');
     const message = error instanceof Error ? error.message : 'Invalid request body';
     return new Response(message, { status: 400 });
   }
