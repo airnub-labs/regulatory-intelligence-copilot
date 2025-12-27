@@ -581,7 +581,41 @@ export class SupabaseConversationStore implements ConversationStore {
         'app.tenant.id': input.tenantId,
         ...(input.conversationId ? { 'app.conversation.id': input.conversationId } : {}),
       },
-      fn
+      async () => {
+        this.logger.debug({
+          operation: input.operation,
+          table: input.table,
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+        }, `DB ${input.operation.toUpperCase()} on ${input.table}`);
+        return fn();
+      }
+    );
+  }
+
+  private wrapQuery<T>(
+    input: { operation: string; table: string; tenantId: string; conversationId?: string },
+    fn: () => Promise<T>
+  ) {
+    return withSpan(
+      'db.supabase.query',
+      {
+        [SEMATTRS_DB_SYSTEM]: 'postgresql',
+        [SEMATTRS_DB_NAME]: 'supabase',
+        [SEMATTRS_DB_OPERATION]: input.operation,
+        [SEMATTRS_DB_SQL_TABLE]: input.table,
+        'app.tenant.id': input.tenantId,
+        ...(input.conversationId ? { 'app.conversation.id': input.conversationId } : {}),
+      },
+      async () => {
+        this.logger.debug({
+          operation: input.operation,
+          table: input.table,
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+        }, `DB ${input.operation.toUpperCase()} on ${input.table}`);
+        return fn();
+      }
     );
   }
 
@@ -589,21 +623,26 @@ export class SupabaseConversationStore implements ConversationStore {
     tenantId: string,
     conversationId: string
   ): Promise<ConversationRecord | null> {
-    const { data, error } = await this.client
-      .from('conversations_view')
-      .select(
-        'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, active_path_id, archived_at, created_at, updated_at, last_message_at'
-      )
-      .eq('id', conversationId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
+    return this.wrapQuery(
+      { operation: 'select', table: 'conversations_view', tenantId, conversationId },
+      async () => {
+        const { data, error } = await this.client
+          .from('conversations_view')
+          .select(
+            'id, tenant_id, user_id, trace_id, root_span_name, root_span_id, share_audience, tenant_access, authorization_model, authorization_spec, persona_id, jurisdictions, title, active_path_id, archived_at, created_at, updated_at, last_message_at'
+          )
+          .eq('id', conversationId)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
 
-    if (error) {
-      throw new Error(`Failed to load conversation: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to load conversation: ${error.message}`);
+        }
 
-    if (!data) return null;
-    return mapConversationRow(data as SupabaseConversationRow);
+        if (!data) return null;
+        return mapConversationRow(data as SupabaseConversationRow);
+      }
+    );
   }
 
   async createConversation(input: {
