@@ -903,6 +903,7 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               profile: normalizedProfile,
               tenantId,
               conversationId,
+              traceContext,
               executionTools,
               forceTool: validatedForceTool,
             })) {

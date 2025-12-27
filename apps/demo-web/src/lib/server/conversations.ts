@@ -1,10 +1,10 @@
 import 'server-only';
 
 import {
-  ConversationEventHub,
-  ConversationListEventHub,
   RedisConversationEventHub,
   RedisConversationListEventHub,
+  SupabaseRealtimeConversationEventHub,
+  SupabaseRealtimeConversationListEventHub,
   InMemoryConversationContextStore,
   InMemoryConversationStore,
   InMemoryConversationPathStore,
@@ -27,6 +27,8 @@ const normalizeConversationStoreMode = (
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+const supabaseRealtimeKey =
+  supabaseServiceKey ?? process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const nextPhase = process.env.NEXT_PHASE;
 // Only allow dev-like behavior in actual dev/test phases, not during production builds.
 // This ensures production builds fail if database credentials are missing, preventing
@@ -62,6 +64,15 @@ const supabaseInternalClient =
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: 'copilot_internal' },
+        global: { fetch: tracingFetch },
+      })
+    : null;
+
+const supabaseRealtimeClient =
+  supabaseUrl && supabaseRealtimeKey
+    ? supabaseClient ??
+      createClient(supabaseUrl, supabaseRealtimeKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
         global: { fetch: tracingFetch },
       })
     : null;
@@ -118,8 +129,8 @@ export const conversationPathStore = supabaseClient
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
 
-let conversationEventHub: ConversationEventHub | RedisConversationEventHub;
-let conversationListEventHub: ConversationListEventHub | RedisConversationListEventHub;
+let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
+let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 
 if (redisUrl && redisToken) {
   logger.info(
@@ -147,14 +158,34 @@ if (redisUrl && redisToken) {
       logger.error({ error: result.error }, 'Redis event hub health check failed');
     }
   });
-} else {
+} else if (supabaseRealtimeClient && supabaseUrl && supabaseRealtimeKey) {
   logger.info(
-    { mode: normalizeConversationStoreMode },
-    'Using in-memory event hubs (not suitable for multi-instance deployments)'
+    { supabaseUrl, mode: normalizeConversationStoreMode },
+    'Using Supabase Realtime event hubs for distributed SSE',
   );
 
-  conversationEventHub = new ConversationEventHub();
-  conversationListEventHub = new ConversationListEventHub();
+  conversationEventHub = new SupabaseRealtimeConversationEventHub({
+    client: supabaseRealtimeClient,
+    prefix: 'copilot:events',
+  });
+
+  conversationListEventHub = new SupabaseRealtimeConversationListEventHub({
+    client: supabaseRealtimeClient,
+    prefix: 'copilot:events',
+  });
+
+  void conversationEventHub.healthCheck().then(result => {
+    if (result.healthy) {
+      logger.info('Supabase Realtime event hub health check passed');
+    } else {
+      logger.error({ error: result.error }, 'Supabase Realtime event hub health check failed');
+    }
+  });
+} else {
+  const message =
+    'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.';
+  logger.error({ mode: normalizeConversationStoreMode }, message);
+  throw new Error(message);
 }
 
 export { conversationEventHub, conversationListEventHub };

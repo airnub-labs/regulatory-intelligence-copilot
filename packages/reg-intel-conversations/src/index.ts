@@ -3,6 +3,7 @@ export * from './pathStores.js';
 export * from './types/paths.js';
 export * from './eventHub.js';
 export * from './redisEventHub.js';
+export * from './supabaseEventHub.js';
 export * from './presenters.js';
 export * from './sseTypes.js';
 export * from './executionContextStores.js';
