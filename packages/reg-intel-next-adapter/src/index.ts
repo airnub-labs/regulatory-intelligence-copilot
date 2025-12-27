@@ -822,7 +822,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             }
 
       // When editing a message, soft-delete the edited message and all subsequent messages
-      // This creates a clean branch from the edit point
+      // NOTE: This legacy code path is no longer used - UI now creates branches instead
+      // Keeping for backward compatibility with older API clients
       if (replaceMessageId && editIndex >= 0) {
         // Soft-delete the edited message
         await conversationStore.softDeleteMessage({
@@ -830,7 +831,6 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           conversationId,
           messageId: replaceMessageId,
           userId,
-          supersededBy: appendedMessageId,
         });
 
         // Soft-delete all messages after the edited one
@@ -841,7 +841,6 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             conversationId,
             messageId: msg.id,
             userId,
-            supersededBy: appendedMessageId,
           });
         }
       }

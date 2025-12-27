@@ -211,7 +211,13 @@ export function Message({
   // Render branch preview card when viewing a branch version
   if (isBranchPreview && branchPathId && onViewBranch) {
     return (
-      <div className={cn("group flex w-full gap-3", isUser ? "justify-end" : "justify-start", className)}>
+      <div
+        id={messageId ? `message-${messageId}` : undefined}
+        data-message-id={messageId}
+        data-is-branch-preview={true}
+        data-branch-path-id={branchPathId}
+        className={cn("group flex w-full gap-3", isUser ? "justify-end" : "justify-start", className)}
+      >
         {!isUser && (
           <Avatar className="h-9 w-9 shrink-0 shadow-sm">
             <AvatarFallback className="bg-primary/60 text-primary-foreground text-xs">
@@ -270,6 +276,10 @@ export function Message({
 
   return (
     <div
+      id={messageId ? `message-${messageId}` : undefined}
+      data-message-id={messageId}
+      data-is-branch-point={isBranchPoint}
+      data-branched-paths={hasBranches ? branchedPaths.join(',') : undefined}
       className={cn(
         "group flex w-full gap-3",
         isUser ? "justify-end" : "justify-start",
@@ -289,6 +299,23 @@ export function Message({
               You
               <span className="h-1 w-1 rounded-full bg-muted-foreground" />
               Trusted input
+              {hasBranches && (
+                <>
+                  <span className="h-1 w-1 rounded-full bg-muted-foreground" />
+                  <button
+                    onClick={() => onViewBranch?.(branchedPaths[0])}
+                    className="flex items-center gap-1 transition-colors hover:text-foreground"
+                    title={`This message has ${branchedPaths.length} branch${branchedPaths.length > 1 ? 'es' : ''}`}
+                  >
+                    <GitBranch className="h-3.5 w-3.5" />
+                    {branchedPaths.length > 1 && (
+                      <Badge variant="secondary" className="h-4 px-1.5 text-[9px] font-bold">
+                        {branchedPaths.length}
+                      </Badge>
+                    )}
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>

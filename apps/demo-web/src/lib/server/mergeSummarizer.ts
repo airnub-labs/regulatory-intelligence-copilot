@@ -122,7 +122,7 @@ export async function generateMergeSummary(
   // Build the user prompt
   const branchContent = formatMessagesForPrompt(branchMessages);
   const branchName = sourcePath.name ?? 'Unnamed Branch';
-  const targetName = targetPath.name ?? (targetPath.isPrimary ? 'Main Conversation' : 'Target Branch');
+  const targetName = targetPath.name ?? (targetPath.isPrimary ? 'Primary Conversation' : 'Target Branch');
 
   let userPrompt = `Please summarize the following conversation branch for merging into "${targetName}".
 
