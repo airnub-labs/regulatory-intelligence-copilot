@@ -861,8 +861,26 @@ export class LlmRouter implements LlmClient {
     const tenantId = options?.tenantId ?? 'default';
     const task = options?.task;
 
+    this.logger.debug({
+      tenantId,
+      task,
+      requestedModel: options?.model,
+      temperature: options?.temperature,
+      maxTokens: options?.maxTokens,
+      hasTools: Boolean(options?.tools && options.tools.length > 0),
+    }, 'Resolving provider and model for LLM request');
+
     // Get tenant policy
     const policy = await this.policyStore.getPolicy(tenantId);
+
+    this.logger.debug({
+      tenantId,
+      hasPolicyFound: Boolean(policy),
+      defaultProvider: policy?.defaultProvider,
+      defaultModel: policy?.defaultModel,
+      allowRemoteEgress: policy?.allowRemoteEgress,
+      taskPoliciesCount: policy?.tasks?.length ?? 0,
+    }, 'Retrieved tenant policy');
 
     // Determine provider and model
     let provider = this.defaultProvider;
@@ -885,7 +903,20 @@ export class LlmRouter implements LlmClient {
         ? policy.tasks.find(t => t.task === task)
         : undefined;
 
+      this.logger.debug({
+        tenantId,
+        task,
+        hasTaskPolicy: Boolean(taskPolicy),
+        taskPolicyProvider: taskPolicy?.provider,
+        taskPolicyModel: taskPolicy?.model,
+      }, 'Resolved task-specific policy');
+
       if (!policy.allowRemoteEgress) {
+        this.logger.debug({
+          tenantId,
+          task,
+        }, 'Remote egress disabled for tenant, enforcing local provider');
+
         // Remote egress disabled - enforce local provider only
         if (!this.providers.local) {
           throw new LlmError(
