@@ -121,12 +121,34 @@ function PathToolbarContent({
   const branchPaths = paths.filter(p => !p.isPrimary && p.isActive);
   const hasBranches = branchPaths.length > 0;
 
-  // Build path tree for display
+  // Build path tree for display with depth-aware prefixes
   const buildPathLabel = (path: ClientPath): string => {
     if (path.isPrimary) {
-      return path.name || 'Main';
+      return path.name || 'Primary';
     }
-    const prefix = path.parentPathId ? '  └ ' : '';
+
+    // Calculate depth for enhanced tree visualization
+    let depth = 0;
+    let current = path;
+    const pathMap = new Map(paths.map(p => [p.id, p]));
+
+    while (current.parentPathId) {
+      depth++;
+      const parent = pathMap.get(current.parentPathId);
+      if (!parent) break;
+      current = parent;
+    }
+
+    // Generate prefix based on depth
+    let prefix = '';
+    if (depth === 0) {
+      prefix = '';
+    } else if (depth === 1) {
+      prefix = '  └─ ';
+    } else {
+      prefix = '  '.repeat(depth) + '└─ ';
+    }
+
     return prefix + (path.name || `Branch ${path.id.slice(0, 6)}`);
   };
 
@@ -152,7 +174,7 @@ function PathToolbarContent({
               {paths.filter(p => p.isActive).map(path => (
                 <SelectItem key={path.id} value={path.id}>
                   <span className="flex items-center gap-1">
-                    {path.isPrimary && <Badge variant="secondary" className="h-4 px-1 text-[10px]">Main</Badge>}
+                    {path.isPrimary && <Badge variant="secondary" className="h-4 px-1 text-[10px]">Primary</Badge>}
                     <span className="truncate">{path.name || `Path ${path.id.slice(0, 6)}`}</span>
                   </span>
                 </SelectItem>
@@ -205,7 +227,7 @@ function PathToolbarContent({
                 <SelectItem key={path.id} value={path.id}>
                   <span className="flex items-center gap-2">
                     {path.isPrimary ? (
-                      <Badge variant="default" className="h-5 px-1.5 text-[10px]">Main</Badge>
+                      <Badge variant="default" className="h-5 px-1.5 text-[10px]">Primary</Badge>
                     ) : (
                       <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Branch</Badge>
                     )}
