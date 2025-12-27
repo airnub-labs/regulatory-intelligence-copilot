@@ -124,6 +124,25 @@ These docs are important whenever you’re touching:
 
 ---
 
+## Observability & Client Telemetry
+
+Observability architecture and telemetry systems:
+
+- `architecture/client-telemetry-architecture-v1.md` – Production-ready client telemetry system with batching, rate limiting, and OpenTelemetry Collector integration.
+- `client-telemetry/README.md` – Complete user guide covering setup, configuration, deployment, and troubleshooting.
+- `client-telemetry/QUICKSTART.md` – Quick start guide to get running in 5 minutes.
+- `testing/client-telemetry-test-requirements.md` – Mandatory test requirements to prevent regression of scalability features.
+
+**CRITICAL:** The client telemetry system has strict non-regression requirements documented in `AGENTS.md` (§ Client telemetry). Any changes to telemetry code must pass all tests in the test requirements document before merging.
+
+These docs are important whenever you're:
+- Adding new client-side telemetry events
+- Modifying the telemetry batching or delivery system
+- Configuring OpenTelemetry Collector integration
+- Deploying telemetry infrastructure
+
+---
+
 ## Phases & reviews
 
 - `phases/PHASE_*` – phase-specific plans, reviews, and checklists (e.g. v0.6 implementation plans, crits, and gap analyses).

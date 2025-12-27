@@ -63,6 +63,27 @@ v0.6 updates the v0.4 agent design by:
 - OpenTelemetry configuration is optional but available via environment variables (see `ENV_SETUP.md`).
 - Observability exports are configured in `packages/reg-intel-observability` - do not create ad-hoc logging implementations.
 
+**Client telemetry (browser → server):**
+
+- **CRITICAL:** Client telemetry uses a production-ready batching and scalability architecture - **never regress these features**.
+- All client-side telemetry **MUST** use the batching queue in `apps/demo-web/src/lib/clientTelemetry.ts`:
+  - Events are automatically batched (default: 20 events or 2 seconds, whichever comes first).
+  - Page unload and visibility change handlers ensure reliable event delivery.
+  - `navigator.sendBeacon()` is used for non-blocking transmission with `fetch()` fallback.
+  - Configuration via environment variables (`NEXT_PUBLIC_CLIENT_TELEMETRY_*`).
+- **DO NOT** regress to sending individual events per `fetch()` call - this creates excessive HTTP requests.
+- The server endpoint (`/api/client-telemetry`) **MUST** maintain:
+  - Support for both single events (legacy) and batched events (new format).
+  - IP-based rate limiting (configurable via `CLIENT_TELEMETRY_RATE_LIMIT_*` env vars).
+  - Optional OpenTelemetry Collector forwarding via `OTEL_COLLECTOR_ENDPOINT`.
+  - Non-blocking async forwarding (OTEL forwarding must not block the response).
+- Full documentation: `docs/client-telemetry/README.md` and `docs/client-telemetry/QUICKSTART.md`.
+- **Testing requirement:** Any changes to client telemetry must verify:
+  - Batching still works (events are grouped, not sent individually).
+  - Rate limiting is functional (returns 429 when exceeded).
+  - OTEL forwarding works when configured (check logs for forwarding success/failure).
+  - Page unload events are captured (use `beforeunload` + `visibilitychange` handlers).
+
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.
