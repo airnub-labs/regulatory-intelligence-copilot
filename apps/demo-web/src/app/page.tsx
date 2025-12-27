@@ -965,10 +965,30 @@ export default function Home() {
     setBranchDialogOpen(true)
   }
 
-  const handleBranchCreated = () => {
+  const handleBranchCreated = async (newPath: { id: string; name?: string }) => {
     // Close the dialog and reset state after successful branch creation
     setBranchDialogOpen(false)
     setBranchFromMessageId(null)
+
+    // Switch to the new branch and reload the conversation
+    if (conversationId && newPath.id) {
+      try {
+        // Set the new branch as active
+        await fetch(`/api/conversations/${conversationId}/active-path`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ pathId: newPath.id }),
+        })
+
+        // Reload conversation to show messages from the new branch
+        await loadConversation(conversationId)
+
+        telemetry.info({ conversationId, pathId: newPath.id }, 'Switched to new branch')
+      } catch (error) {
+        telemetry.error({ err: error, conversationId, pathId: newPath.id }, 'Failed to switch to new branch')
+      }
+    }
   }
 
   const handleViewBranch = (pathId: string) => {
@@ -1324,6 +1344,7 @@ export default function Home() {
               open={branchDialogOpen}
               onOpenChange={setBranchDialogOpen}
               messageId={branchFromMessageId}
+              messagePreview={messages.find(m => m.id === branchFromMessageId)?.content}
               onBranchCreated={handleBranchCreated}
             />
           )}
