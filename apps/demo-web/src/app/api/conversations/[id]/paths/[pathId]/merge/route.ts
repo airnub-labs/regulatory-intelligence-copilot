@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
-import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan, recordMergeExecute } from '@reg-copilot/reg-intel-observability';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore, executionContextManager } from '@/lib/server/conversations';
@@ -241,6 +241,15 @@ export async function POST(
               { tenantId, conversationId, sourcePathId, targetPathId, mergeMode, success: result.success },
               'Merge completed successfully',
             );
+
+            // Record merge execution metric
+            recordMergeExecute({
+              mergeMode,
+              sourcePathId,
+              targetPathId,
+              messageCount: result.mergedMessageIds?.length,
+              conversationId,
+            });
 
             return NextResponse.json({
               success: result.success,

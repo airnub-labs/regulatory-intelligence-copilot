@@ -20,7 +20,7 @@
  * - Egress control settings
  */
 
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, recordLlmTokenUsage, recordLlmRequest } from '@reg-copilot/reg-intel-observability';
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
 import {
@@ -277,6 +277,9 @@ export class OpenAiProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): Promise<string> {
+    const startTime = Date.now();
+    let success = true;
+
     try {
       const { generateText } = require('ai');
 
@@ -290,8 +293,53 @@ export class OpenAiProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
+      // Record metrics
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'openai',
+        model,
+        success: true,
+        streaming: false,
+      });
+
+      // Record token usage if available
+      if (result.usage) {
+        if (result.usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'openai',
+            model,
+            tokenType: 'input',
+            tokens: result.usage.promptTokens,
+          });
+        }
+        if (result.usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'openai',
+            model,
+            tokenType: 'output',
+            tokens: result.usage.completionTokens,
+          });
+        }
+        if (result.usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'openai',
+            model,
+            tokenType: 'total',
+            tokens: result.usage.totalTokens,
+          });
+        }
+      }
+
       return result.text;
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'openai',
+        model,
+        success: false,
+        streaming: false,
+      });
+
       throw new LlmError(
         `OpenAI error: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -308,6 +356,9 @@ export class OpenAiProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): AsyncIterable<LlmStreamChunk> {
+    const startTime = Date.now();
+    let success = true;
+
     try {
       const { streamText } = require('ai');
 
@@ -324,7 +375,53 @@ export class OpenAiProviderClient implements LlmProviderClient {
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
+
+      // Record metrics after stream completes
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'openai',
+        model,
+        success: true,
+        streaming: true,
+      });
+
+      // Record token usage if available from the finalized result
+      const usage = await result.usage;
+      if (usage) {
+        if (usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'openai',
+            model,
+            tokenType: 'input',
+            tokens: usage.promptTokens,
+          });
+        }
+        if (usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'openai',
+            model,
+            tokenType: 'output',
+            tokens: usage.completionTokens,
+          });
+        }
+        if (usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'openai',
+            model,
+            tokenType: 'total',
+            tokens: usage.totalTokens,
+          });
+        }
+      }
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'openai',
+        model,
+        success: false,
+        streaming: true,
+      });
+
       yield {
         type: 'error',
         error:
@@ -368,6 +465,8 @@ export class GroqProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): Promise<string> {
+    const startTime = Date.now();
+
     try {
       const { generateText } = require('ai');
 
@@ -381,8 +480,53 @@ export class GroqProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
+      // Record metrics
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'groq',
+        model,
+        success: true,
+        streaming: false,
+      });
+
+      // Record token usage if available
+      if (result.usage) {
+        if (result.usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'groq',
+            model,
+            tokenType: 'input',
+            tokens: result.usage.promptTokens,
+          });
+        }
+        if (result.usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'groq',
+            model,
+            tokenType: 'output',
+            tokens: result.usage.completionTokens,
+          });
+        }
+        if (result.usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'groq',
+            model,
+            tokenType: 'total',
+            tokens: result.usage.totalTokens,
+          });
+        }
+      }
+
       return result.text;
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'groq',
+        model,
+        success: false,
+        streaming: false,
+      });
+
       throw new LlmError(
         `Groq error: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -399,6 +543,8 @@ export class GroqProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): AsyncIterable<LlmStreamChunk> {
+    const startTime = Date.now();
+
     try {
       const { streamText } = require('ai');
 
@@ -415,7 +561,53 @@ export class GroqProviderClient implements LlmProviderClient {
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
+
+      // Record metrics after stream completes
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'groq',
+        model,
+        success: true,
+        streaming: true,
+      });
+
+      // Record token usage if available
+      const usage = await result.usage;
+      if (usage) {
+        if (usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'groq',
+            model,
+            tokenType: 'input',
+            tokens: usage.promptTokens,
+          });
+        }
+        if (usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'groq',
+            model,
+            tokenType: 'output',
+            tokens: usage.completionTokens,
+          });
+        }
+        if (usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'groq',
+            model,
+            tokenType: 'total',
+            tokens: usage.totalTokens,
+          });
+        }
+      }
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'groq',
+        model,
+        success: false,
+        streaming: true,
+      });
+
       yield {
         type: 'error',
         error:
@@ -459,6 +651,8 @@ export class AnthropicProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): Promise<string> {
+    const startTime = Date.now();
+
     try {
       const { generateText } = require('ai');
 
@@ -472,8 +666,53 @@ export class AnthropicProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
+      // Record metrics
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'anthropic',
+        model,
+        success: true,
+        streaming: false,
+      });
+
+      // Record token usage if available
+      if (result.usage) {
+        if (result.usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'anthropic',
+            model,
+            tokenType: 'input',
+            tokens: result.usage.promptTokens,
+          });
+        }
+        if (result.usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'anthropic',
+            model,
+            tokenType: 'output',
+            tokens: result.usage.completionTokens,
+          });
+        }
+        if (result.usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'anthropic',
+            model,
+            tokenType: 'total',
+            tokens: result.usage.totalTokens,
+          });
+        }
+      }
+
       return result.text;
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'anthropic',
+        model,
+        success: false,
+        streaming: false,
+      });
+
       throw new LlmError(
         `Anthropic error: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -490,6 +729,8 @@ export class AnthropicProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): AsyncIterable<LlmStreamChunk> {
+    const startTime = Date.now();
+
     try {
       const { streamText } = require('ai');
 
@@ -506,7 +747,53 @@ export class AnthropicProviderClient implements LlmProviderClient {
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
+
+      // Record metrics after stream completes
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'anthropic',
+        model,
+        success: true,
+        streaming: true,
+      });
+
+      // Record token usage if available
+      const usage = await result.usage;
+      if (usage) {
+        if (usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'anthropic',
+            model,
+            tokenType: 'input',
+            tokens: usage.promptTokens,
+          });
+        }
+        if (usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'anthropic',
+            model,
+            tokenType: 'output',
+            tokens: usage.completionTokens,
+          });
+        }
+        if (usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'anthropic',
+            model,
+            tokenType: 'total',
+            tokens: usage.totalTokens,
+          });
+        }
+      }
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'anthropic',
+        model,
+        success: false,
+        streaming: true,
+      });
+
       yield {
         type: 'error',
         error:
@@ -550,6 +837,8 @@ export class GeminiProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): Promise<string> {
+    const startTime = Date.now();
+
     try {
       const { generateText } = require('ai');
 
@@ -563,8 +852,53 @@ export class GeminiProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
+      // Record metrics
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'google',
+        model,
+        success: true,
+        streaming: false,
+      });
+
+      // Record token usage if available
+      if (result.usage) {
+        if (result.usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'google',
+            model,
+            tokenType: 'input',
+            tokens: result.usage.promptTokens,
+          });
+        }
+        if (result.usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'google',
+            model,
+            tokenType: 'output',
+            tokens: result.usage.completionTokens,
+          });
+        }
+        if (result.usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'google',
+            model,
+            tokenType: 'total',
+            tokens: result.usage.totalTokens,
+          });
+        }
+      }
+
       return result.text;
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'google',
+        model,
+        success: false,
+        streaming: false,
+      });
+
       throw new LlmError(
         `Google Gemini error: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -581,6 +915,8 @@ export class GeminiProviderClient implements LlmProviderClient {
       toolChoice?: LlmCompletionOptions['toolChoice'];
     }
   ): AsyncIterable<LlmStreamChunk> {
+    const startTime = Date.now();
+
     try {
       const { streamText } = require('ai');
 
@@ -597,7 +933,53 @@ export class GeminiProviderClient implements LlmProviderClient {
       });
 
       yield* streamTextPartsToLlmChunks(result.fullStream);
+
+      // Record metrics after stream completes
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'google',
+        model,
+        success: true,
+        streaming: true,
+      });
+
+      // Record token usage if available
+      const usage = await result.usage;
+      if (usage) {
+        if (usage.promptTokens) {
+          recordLlmTokenUsage({
+            provider: 'google',
+            model,
+            tokenType: 'input',
+            tokens: usage.promptTokens,
+          });
+        }
+        if (usage.completionTokens) {
+          recordLlmTokenUsage({
+            provider: 'google',
+            model,
+            tokenType: 'output',
+            tokens: usage.completionTokens,
+          });
+        }
+        if (usage.totalTokens) {
+          recordLlmTokenUsage({
+            provider: 'google',
+            model,
+            tokenType: 'total',
+            tokens: usage.totalTokens,
+          });
+        }
+      }
     } catch (error) {
+      const durationMs = Date.now() - startTime;
+      recordLlmRequest(durationMs, {
+        provider: 'google',
+        model,
+        success: false,
+        streaming: true,
+      });
+
       yield {
         type: 'error',
         error:

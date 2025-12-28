@@ -19,7 +19,7 @@ import { LOG_PREFIX, NON_ADVICE_DISCLAIMER, DEFAULT_JURISDICTION } from '../cons
 import { REGULATORY_COPILOT_SYSTEM_PROMPT } from '../llm/llmClient.js';
 import { buildPromptWithAspects } from '@reg-copilot/reg-intel-prompts';
 import { SingleDirector_IE_SocialSafetyNet_Agent } from './SingleDirector_IE_SocialSafetyNet_Agent.js';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, recordAgentSelection } from '@reg-copilot/reg-intel-observability';
 
 const AGENT_ID = 'GlobalRegulatoryComplianceAgent';
 const AGENT_NAME = 'Global Regulatory Compliance Agent';
@@ -94,6 +94,15 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
         const canHandle = await agent.canHandle(input);
         if (canHandle) {
           logger.info({ event: 'delegate.agent', agentId: agent.id });
+
+          // Record agent selection metric
+          recordAgentSelection({
+            agentType: 'domain',
+            agentName: agent.id,
+            domain: agent.id.includes('SocialSafetyNet') ? 'social-welfare' : 'unknown',
+            jurisdiction: input.profile?.jurisdictions?.[0] || DEFAULT_JURISDICTION,
+          });
+
           return agent.handle(input, ctx);
         }
       } catch (error) {
@@ -103,6 +112,13 @@ export const GlobalRegulatoryComplianceAgent: Agent = {
 
     // No specialized agent matched, handle globally
     logger.info({ event: 'handle.global' });
+
+    // Record global agent selection metric
+    recordAgentSelection({
+      agentType: 'global',
+      agentName: AGENT_ID,
+      jurisdiction: input.profile?.jurisdictions?.[0] || DEFAULT_JURISDICTION,
+    });
 
     // Get cross-border context if multiple jurisdictions
     const jurisdictions = input.profile?.jurisdictions || [DEFAULT_JURISDICTION];

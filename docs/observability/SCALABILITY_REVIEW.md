@@ -22,7 +22,7 @@ The logging and telemetry framework is **fully implemented and wired** throughou
 | OTEL Collector | ✅ Configured | ✅ Docker | ✅ Memory limiter | Backpressure handling |
 | Loki Log Backend | ✅ Configured | ✅ Pipeline | ✅ 7-day retention | Production-ready |
 | Trace Propagation | ✅ Complete | ✅ Wired | ✅ W3C Context | Cross-service correlation |
-| Business Metrics | ✅ Complete | ⚠️ Partial | ✅ Ready | Some callsites pending |
+| Business Metrics | ✅ Complete | ✅ Wired | ✅ Ready | All callsites wired |
 | Grafana Dashboard | ✅ Complete | ✅ Provisioned | ✅ Ready | Auto-configured |
 
 ---
@@ -330,17 +330,17 @@ exporters:
 
 | Metric Name | Type | Description | Integration Status |
 |-------------|------|-------------|-------------------|
-| `regintel.agent.selection.total` | Counter | Agent selections by type | Defined |
+| `regintel.agent.selection.total` | Counter | Agent selections by type | ✅ Wired in `GlobalRegulatoryComplianceAgent.ts` |
 | `regintel.graph.query.duration` | Histogram | Graph query latency (ms) | ✅ Wired in `graphClient.ts` |
 | `regintel.graph.query.total` | Counter | Graph queries by operation | ✅ Wired in `graphClient.ts` |
-| `regintel.llm.tokens.total` | Counter | LLM tokens consumed | Defined |
-| `regintel.llm.request.duration` | Histogram | LLM request latency (ms) | Defined |
+| `regintel.llm.tokens.total` | Counter | LLM tokens consumed | ✅ Wired in all LLM providers (`llmRouter.ts`) |
+| `regintel.llm.request.duration` | Histogram | LLM request latency (ms) | ✅ Wired in all LLM providers (`llmRouter.ts`) |
 | `regintel.egressguard.scan.total` | Counter | Egress guard scans | ✅ Wired in `egressGuard.ts` |
 | `regintel.egressguard.block.total` | Counter | PII/sensitive data blocks | ✅ Wired in `egressGuard.ts` |
-| `regintel.ui.breadcrumb.navigate.total` | Counter | Breadcrumb navigation | Defined |
-| `regintel.ui.branch.create.total` | Counter | Branch creations | Defined |
-| `regintel.ui.path.switch.total` | Counter | Path switches | Defined |
-| `regintel.ui.merge.execute.total` | Counter | Merge operations | Defined |
+| `regintel.ui.breadcrumb.navigate.total` | Counter | Breadcrumb navigation | ⚠️ Pending (UI component needed) |
+| `regintel.ui.branch.create.total` | Counter | Branch creations | ✅ Wired in `/api/conversations/[id]/branch/route.ts` |
+| `regintel.ui.path.switch.total` | Counter | Path switches | ⚠️ Pending (UI component needed) |
+| `regintel.ui.merge.execute.total` | Counter | Merge operations | ✅ Wired in `/api/conversations/[id]/paths/[pathId]/merge/route.ts` |
 
 ### 4.2 Usage Example
 
