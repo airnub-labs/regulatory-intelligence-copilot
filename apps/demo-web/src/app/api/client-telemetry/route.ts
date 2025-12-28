@@ -272,13 +272,13 @@ export async function POST(request: Request) {
       );
     } else {
       // Legacy single event format
-      const event = payload as any;
+      const event = payload as unknown;
 
-      if (!event.level || !event.message || !isValidEvent(event)) {
+      if (!isValidEvent(event)) {
         return Response.json({ error: 'Invalid telemetry payload' }, { status: 400 });
       }
 
-      events = [event as ClientTelemetryEvent];
+      events = [event];
 
       logger.debug(
         {

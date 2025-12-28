@@ -114,7 +114,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       const extendedToken = token as ExtendedJWT
       const extendedUser = user as ExtendedUser | undefined
 
@@ -199,7 +199,7 @@ export const authOptions: NextAuthOptions = {
       const extendedToken = token as ExtendedJWT
       logger.info({ userId: extendedToken.sub }, 'User signed out')
     },
-    async session({ session, token }) {
+    async session({ token }) {
       const extendedToken = token as ExtendedJWT
       // Log if session is being used without a valid user ID
       if (!extendedToken.sub) {

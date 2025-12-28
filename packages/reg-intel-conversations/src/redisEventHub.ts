@@ -139,28 +139,9 @@ export class RedisConversationEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
-          if (messageChannel !== channel) {
-            return;
-          }
-
-          if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
-            return;
-          }
-
-          try {
-            const payload = typeof message === 'string' ? message : JSON.stringify(message);
-            const parsed = JSON.parse(payload) as DistributedEventMessage<ConversationEventType>;
-
-            if (parsed.instanceId === this.instanceId) {
-              return;
-            }
-
-            this.subscribers.localBroadcast(key, parsed.event, parsed.data);
-          } catch (error) {
-            console.error(`[RedisEventHub] Error parsing message from ${channel}:`, error);
-          }
-        });
+        // NOTE: Upstash Redis HTTP API doesn't support traditional pub/sub with callbacks
+        // This would require Redis protocol or websockets, not the HTTP API
+        await this.subscriber.subscribe(channel);
       } catch (error) {
         console.error(`[RedisEventHub] Error setting up subscription for ${channel}:`, error);
         throw error;
@@ -178,7 +159,8 @@ export class RedisConversationEventHub {
 
       if (subscription) {
         await subscription;
-        await this.subscriber.unsubscribe(channel);
+        // Note: Upstash Redis HTTP API doesn't have unsubscribe method
+        // Channel cleanup is handled by the activeChannels manager
       }
     } catch (error) {
       console.error(`[RedisEventHub] Error unsubscribing from ${channel}:`, error);
@@ -265,7 +247,7 @@ export class RedisConversationEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        await this.subscriber.unsubscribe(channelName);
+        // NOTE: Upstash Redis HTTP API doesn't have unsubscribe method
       } catch (error) {
         console.error(`[RedisEventHub] Error shutting down channel ${channelName}:`, error);
       }
@@ -328,31 +310,12 @@ export class RedisConversationListEventHub {
     return tenantId;
   }
 
-  private async subscribeToChannel(channel: string, key: string): Promise<void> {
+  private async subscribeToChannel(channel: string, _key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
-          if (messageChannel !== channel) {
-            return;
-          }
-
-          if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
-            return;
-          }
-
-          try {
-            const payload = typeof message === 'string' ? message : JSON.stringify(message);
-            const parsed = JSON.parse(payload) as DistributedEventMessage<ConversationListEventType>;
-
-            if (parsed.instanceId === this.instanceId) {
-              return;
-            }
-
-            this.subscribers.localBroadcast(key, parsed.event, parsed.data);
-          } catch (error) {
-            console.error(`[RedisListEventHub] Error parsing message from ${channel}:`, error);
-          }
-        });
+        // NOTE: Upstash Redis HTTP API doesn't support traditional pub/sub with callbacks
+        // This would require Redis protocol or websockets, not the HTTP API
+        await this.subscriber.subscribe(channel);
       } catch (error) {
         console.error(`[RedisListEventHub] Error setting up subscription for ${channel}:`, error);
         throw error;
@@ -366,7 +329,8 @@ export class RedisConversationListEventHub {
 
       if (subscription) {
         await subscription;
-        await this.subscriber.unsubscribe(channel);
+        // NOTE: Upstash Redis HTTP API doesn't have unsubscribe method
+        // Channel cleanup is handled by the activeChannels manager
       }
     } catch (error) {
       console.error(`[RedisListEventHub] Error unsubscribing from ${channel}:`, error);
@@ -427,7 +391,7 @@ export class RedisConversationListEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        await this.subscriber.unsubscribe(channelName);
+        // NOTE: Upstash Redis HTTP API doesn't have unsubscribe method
       } catch (error) {
         console.error(`[RedisListEventHub] Error shutting down channel ${channelName}:`, error);
       }

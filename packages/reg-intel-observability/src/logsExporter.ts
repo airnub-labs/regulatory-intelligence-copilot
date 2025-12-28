@@ -6,7 +6,7 @@ import {
   BatchLogRecordProcessor,
 } from '@opentelemetry/sdk-logs';
 import { Resource } from '@opentelemetry/resources';
-import type { Writable } from 'node:stream';
+import { Writable } from 'node:stream';
 
 /**
  * Maps Pino log levels to OpenTelemetry severity numbers
@@ -77,6 +77,19 @@ export const initLogsExporter = (options: LogsExporterOptions): LoggerProvider =
 };
 
 /**
+ * Helper to convert Pino numeric level to level name
+ */
+function getLevelName(level: number): string {
+  // Pino levels: trace=10, debug=20, info=30, warn=40, error=50, fatal=60
+  if (level >= 60) return 'fatal';
+  if (level >= 50) return 'error';
+  if (level >= 40) return 'warn';
+  if (level >= 30) return 'info';
+  if (level >= 20) return 'debug';
+  return 'trace';
+}
+
+/**
  * Creates a Pino transport stream that forwards logs to OpenTelemetry
  * This allows Pino logs to be sent to the OTEL collector alongside traces and metrics
  */
@@ -102,7 +115,7 @@ export const createPinoOtelTransport = (provider: LoggerProvider): Writable => {
         } = logRecord;
 
         // Determine severity from Pino level
-        const severityText = this.getLevelName(level);
+        const severityText = getLevelName(level);
         const severityNumber = PINO_LEVEL_TO_OTEL_SEVERITY[severityText] ?? SeverityNumber.UNSPECIFIED;
 
         // Create OTEL log record
@@ -125,17 +138,6 @@ export const createPinoOtelTransport = (provider: LoggerProvider): Writable => {
         // Don't fail on log parsing errors
         callback();
       }
-    },
-
-    // Helper to convert Pino numeric level to level name
-    getLevelName(level: number): string {
-      // Pino levels: trace=10, debug=20, info=30, warn=40, error=50, fatal=60
-      if (level >= 60) return 'fatal';
-      if (level >= 50) return 'error';
-      if (level >= 40) return 'warn';
-      if (level >= 30) return 'info';
-      if (level >= 20) return 'debug';
-      return 'trace';
     },
   });
 };

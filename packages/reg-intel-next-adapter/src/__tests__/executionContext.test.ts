@@ -11,7 +11,7 @@ import {
   getExecutionContextManagerSafe,
   isExecutionContextManagerInitialized,
   shutdownExecutionContextManager,
-} from '../executionContext';
+} from '../executionContext.js';
 
 describe('E2BSandboxClient', () => {
   describe('create', () => {

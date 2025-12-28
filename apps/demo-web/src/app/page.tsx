@@ -397,7 +397,7 @@ export default function Home() {
     fetchSummaries()
 
     return () => controller.abort()
-  }, [chatMetadata?.referencedNodes, (chatMetadata as ChatSseMetadata)?.priorTurnNodes, telemetry])
+  }, [chatMetadata, telemetry])
 
   const loadConversations = useCallback(async (status: 'active' | 'archived' = conversationListTab) => {
     if (!isAuthenticated) return
@@ -638,7 +638,7 @@ export default function Home() {
     return () => {
       controller.abort()
     }
-  }, [isAuthenticated, conversationListTab, conversationId, telemetry])
+  }, [isAuthenticated, conversationListTab, conversationId, telemetry, startNewConversation])
 
   // Subscribe to individual conversation updates for real-time changes
   useEffect(() => {
@@ -1159,7 +1159,7 @@ export default function Home() {
     }
   }
 
-  const startNewConversation = () => {
+  const startNewConversation = useCallback(() => {
     setConversationId(undefined)
     conversationIdRef.current = undefined
     setMessages([])
@@ -1175,7 +1175,7 @@ export default function Home() {
     // Clear URL when starting new conversation
     updateUrl(undefined)
     setConversationListTab('active')
-  }
+  }, [updateUrl])
 
   const toggleArchiveConversation = async (convId: string, currentlyArchived: boolean) => {
     if (!isAuthenticated) return

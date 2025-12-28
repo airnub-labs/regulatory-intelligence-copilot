@@ -178,7 +178,9 @@ export function PathBreadcrumbs({
             )}
 
             <button
-              ref={(el) => (buttonRefs.current[index] = el)}
+              ref={(el) => {
+                buttonRefs.current[index] = el
+              }}
               onClick={() => handlePathClick(path, index)}
               onKeyDown={(e) => handleKeyDown(e, index)}
               disabled={isActive}
