@@ -46,7 +46,32 @@ export interface ProfileTag {
 export interface GraphNode {
   id: string;
   label: string;
-  type: 'Statute' | 'Section' | 'Benefit' | 'Relief' | 'Condition' | 'Timeline' | 'Case' | 'Guidance' | 'EURegulation' | 'EUDirective' | 'ProfileTag' | 'Jurisdiction' | 'Update';
+  type:
+    | 'Statute'
+    | 'Section'
+    | 'Benefit'
+    | 'Relief'
+    | 'Condition'
+    | 'Timeline'
+    | 'Case'
+    | 'Guidance'
+    | 'EURegulation'
+    | 'EUDirective'
+    | 'ProfileTag'
+    | 'Jurisdiction'
+    | 'Update'
+    | 'Concept'
+    | 'Label'
+    | 'Region'
+    | 'Agreement'
+    | 'Treaty'
+    | 'Regime'
+    | 'Community'
+    | 'ChangeEvent'
+    | 'Obligation'
+    | 'Threshold'
+    | 'Rate'
+    | 'Form';
   properties: Record<string, unknown>;
 }
 

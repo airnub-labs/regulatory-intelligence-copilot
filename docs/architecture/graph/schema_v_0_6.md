@@ -338,6 +338,91 @@ Represents a SKOS‑style alternative label or synonym for a `:Concept`.
 
 > **Note:** For many use cases, it is sufficient to use `:Concept.pref_label` + `:Concept.alt_labels[]`. `:Label` nodes are used when you want richer graph‑level semantics around synonyms.
 
+### 2.20 `:Obligation`
+
+Represents a compliance requirement (filing, reporting, payment, registration).
+
+**Properties**
+- `id: string` – e.g. `"IE_CT1_FILING"`.
+- `label: string` – e.g. `"Corporation Tax Return (CT1)"`.
+- `category: string` – `"FILING" | "REPORTING" | "PAYMENT" | "REGISTRATION"`.
+- `frequency?: string` – `"ANNUAL" | "QUARTERLY" | "MONTHLY" | "ONE_TIME"`.
+- `penalty_applies?: boolean`
+- `description?: string`
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- CT1 filing for Irish companies
+- Form 11 filing for self-employed individuals
+- Preliminary tax payments
+- CRO annual returns
+
+### 2.21 `:Threshold`
+
+Represents a numeric limit or boundary used in eligibility rules.
+
+**Properties**
+- `id: string` – e.g. `"IE_CGT_ANNUAL_EXEMPTION_2024"`.
+- `label: string` – e.g. `"CGT Annual Exemption"`.
+- `value: number` – the threshold value, e.g. `1270`.
+- `unit: string` – `"EUR" | "GBP" | "WEEKS" | "DAYS" | "COUNT" | "PERCENT"`.
+- `direction: string` – `"ABOVE" | "BELOW" | "BETWEEN"`.
+- `upper_bound?: number` – for bands/ranges.
+- `effective_from?: datetime`
+- `effective_to?: datetime`
+- `category?: string` – e.g. `"CGT"`, `"PRSI"`, `"BIK"`.
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- CGT annual exemption (€1,270 in IE)
+- Small benefit exemption (€1,000 in IE)
+- PRSI contribution thresholds
+
+### 2.22 `:Rate`
+
+Represents a tax rate, contribution rate, or benefit rate.
+
+**Properties**
+- `id: string` – e.g. `"IE_INCOME_TAX_HIGHER_2024"`.
+- `label: string` – e.g. `"Higher Rate Income Tax"`.
+- `percentage?: number` – rate as percentage, e.g. `40`.
+- `flat_amount?: number` – for flat-rate amounts.
+- `currency?: string` – `"EUR" | "GBP"`.
+- `band_lower?: number` – lower bound of income band.
+- `band_upper?: number` – upper bound of income band.
+- `effective_from?: datetime`
+- `effective_to?: datetime`
+- `category: string` – `"INCOME_TAX" | "PRSI" | "VAT" | "CGT" | "USC"`.
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- Income tax rates (20%, 40%)
+- PRSI rates by class
+- VAT rates (standard, reduced, zero)
+
+### 2.23 `:Form`
+
+Represents a regulatory form or document required for compliance or claiming benefits.
+
+**Properties**
+- `id: string` – e.g. `"IE_REVENUE_FORM_CT1"`.
+- `label: string` – e.g. `"Corporation Tax Return (CT1)"`.
+- `issuing_body: string` – `"Revenue" | "DSP" | "CRO"`.
+- `form_number?: string` – e.g. `"CT1"`, `"Form 11"`.
+- `source_url?: string` – link to form or guidance.
+- `category: string` – `"TAX" | "SOCIAL_WELFARE" | "COMPANY"`.
+- `online_only?: boolean`
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- Revenue forms (CT1, Form 11, RCT30)
+- DSP claim forms (UP1, PRSI history)
+- CRO forms (B1, B10)
+
 ---
 
 ## 3. Core Relationship Types
@@ -443,6 +528,36 @@ These relationships support the SKOS‑like concept capture pipeline.
 >
 > 1. Link `:Concept` to specific rule nodes via `ALIGNS_WITH`, and
 > 2. Enrich those rule nodes, rather than embedding all logic directly in `:Concept`.
+
+### 3.11 Obligations, Rates, Thresholds, and Forms
+
+These relationships support compliance workflows and numeric reasoning.
+
+**Obligations:**
+- `(:ProfileTag)-[:HAS_OBLIGATION]->(:Obligation)` – Links personas to their compliance duties.
+- `(:Statute|:Section)-[:CREATES_OBLIGATION]->(:Obligation)` – Legislative source of obligation.
+- `(:Obligation)-[:IN_JURISDICTION]->(:Jurisdiction)` – Jurisdiction where obligation applies.
+- `(:Obligation)-[:FILING_DEADLINE]->(:Timeline)` – Deadline for fulfilling obligation.
+- `(:Obligation)-[:REQUIRES_FORM]->(:Form)` – Form needed for compliance.
+
+**Forms:**
+- `(:Benefit)-[:CLAIMED_VIA]->(:Form)` – How to claim a benefit.
+- `(:Form)-[:IN_JURISDICTION]->(:Jurisdiction)` – Jurisdiction where form is used.
+
+**Thresholds:**
+- `(:Condition)-[:HAS_THRESHOLD]->(:Threshold)` – Numeric condition for eligibility.
+- `(:Benefit|:Relief)-[:LIMITED_BY_THRESHOLD]->(:Threshold)` – Upper/lower bounds on benefit/relief.
+- `(:Update)-[:CHANGES_THRESHOLD]->(:Threshold)` – Threshold adjustments over time.
+
+**Rates:**
+- `(:Relief|:Benefit|:Section)-[:HAS_RATE]->(:Rate)` – Applicable rate for calculation.
+- `(:ProfileTag)-[:SUBJECT_TO_RATE]->(:Rate)` – Rate applicability by profile.
+- `(:Regime)-[:APPLIES_RATE]->(:Rate)` – Rate within a specific regime.
+
+**SKOS Hierarchy (for Concepts):**
+- `(:Concept)-[:BROADER]->(:Concept)` – Parent concept in taxonomy.
+- `(:Concept)-[:NARROWER]->(:Concept)` – Child concept in taxonomy.
+- `(:Concept)-[:RELATED]->(:Concept)` – Semantically related concepts.
 
 ---
 

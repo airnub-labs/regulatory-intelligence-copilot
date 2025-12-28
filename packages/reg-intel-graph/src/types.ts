@@ -17,12 +17,93 @@ export interface Timeline {
 }
 
 /**
+ * Obligation representing a compliance requirement
+ */
+export interface Obligation {
+  id: string;
+  label: string;
+  category: 'FILING' | 'REPORTING' | 'PAYMENT' | 'REGISTRATION';
+  frequency?: 'ANNUAL' | 'QUARTERLY' | 'MONTHLY' | 'ONE_TIME';
+  penalty_applies?: boolean;
+  description?: string;
+}
+
+/**
+ * Threshold representing a numeric limit or boundary
+ */
+export interface Threshold {
+  id: string;
+  label: string;
+  value: number;
+  unit: 'EUR' | 'GBP' | 'WEEKS' | 'DAYS' | 'COUNT' | 'PERCENT';
+  direction: 'ABOVE' | 'BELOW' | 'BETWEEN';
+  upper_bound?: number;
+  effective_from?: string;
+  effective_to?: string;
+  category?: string;
+}
+
+/**
+ * Rate representing a tax rate, contribution rate, or benefit rate
+ */
+export interface Rate {
+  id: string;
+  label: string;
+  percentage?: number;
+  flat_amount?: number;
+  currency?: string;
+  band_lower?: number;
+  band_upper?: number;
+  effective_from?: string;
+  effective_to?: string;
+  category: string;
+}
+
+/**
+ * Form representing a regulatory form or document
+ */
+export interface Form {
+  id: string;
+  label: string;
+  issuing_body: string;
+  form_number?: string;
+  source_url?: string;
+  category: string;
+  online_only?: boolean;
+}
+
+/**
  * Graph node representing any regulatory entity
  */
 export interface GraphNode {
   id: string;
   label: string;
-  type: 'Statute' | 'Section' | 'Benefit' | 'Relief' | 'Condition' | 'Timeline' | 'Case' | 'Guidance' | 'EURegulation' | 'EUDirective' | 'ProfileTag' | 'Jurisdiction' | 'Update';
+  type:
+    | 'Statute'
+    | 'Section'
+    | 'Benefit'
+    | 'Relief'
+    | 'Condition'
+    | 'Timeline'
+    | 'Case'
+    | 'Guidance'
+    | 'EURegulation'
+    | 'EUDirective'
+    | 'ProfileTag'
+    | 'Jurisdiction'
+    | 'Update'
+    | 'Concept'
+    | 'Label'
+    | 'Region'
+    | 'Agreement'
+    | 'Treaty'
+    | 'Regime'
+    | 'Community'
+    | 'ChangeEvent'
+    | 'Obligation'
+    | 'Threshold'
+    | 'Rate'
+    | 'Form';
   properties: Record<string, unknown>;
 }
 
@@ -84,6 +165,50 @@ export interface GraphClient {
    * Get cross-border slice for multiple jurisdictions
    */
   getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext>;
+
+  /**
+   * Get obligations for a profile and jurisdiction
+   */
+  getObligationsForProfile(
+    profileId: string,
+    jurisdictionId: string
+  ): Promise<Obligation[]>;
+
+  /**
+   * Get thresholds for a condition
+   */
+  getThresholdsForCondition(conditionId: string): Promise<Threshold[]>;
+
+  /**
+   * Get rates for a category and jurisdiction
+   */
+  getRatesForCategory(
+    category: string,
+    jurisdictionId: string
+  ): Promise<Rate[]>;
+
+  /**
+   * Check if a value is near any threshold (within tolerance)
+   */
+  getThresholdsNearValue(
+    value: number,
+    unit: string,
+    tolerancePercent: number
+  ): Promise<Threshold[]>;
+
+  /**
+   * Get form required for an obligation or benefit
+   */
+  getFormForObligation(obligationId: string): Promise<Form | null>;
+
+  /**
+   * Get concept hierarchy (broader/narrower concepts)
+   */
+  getConceptHierarchy(conceptId: string): Promise<{
+    broader: GraphNode[];
+    narrower: GraphNode[];
+    related: GraphNode[];
+  }>;
 
   /**
    * Execute raw Cypher query
