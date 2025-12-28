@@ -272,7 +272,7 @@ export async function POST(request: Request) {
       );
     } else {
       // Legacy single event format
-      const event = payload as any;
+      const event = payload as Partial<ClientTelemetryEvent>;
 
       if (!event.level || !event.message || !isValidEvent(event)) {
         return Response.json({ error: 'Invalid telemetry payload' }, { status: 400 });

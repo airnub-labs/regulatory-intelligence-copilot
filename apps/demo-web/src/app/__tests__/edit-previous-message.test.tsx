@@ -351,7 +351,7 @@ describe('Edit Previous Message and Path Switching', () => {
     });
 
     it('should preserve full original path when editing and show all messages when switching back', async () => {
-      const { container } = render(
+      render(
         <SessionProvider session={mockSession}>
           <Home />
         </SessionProvider>
@@ -487,7 +487,7 @@ describe('Edit Previous Message and Path Switching', () => {
     it('should show complete original conversation when switching from branch back to main path', async () => {
       // This test verifies the complete UI flow
 
-      const { container } = render(
+      render(
         <SessionProvider session={mockSession}>
           <Home />
         </SessionProvider>
@@ -496,8 +496,6 @@ describe('Edit Previous Message and Path Switching', () => {
       await waitFor(() => {
         expect(screen.queryByText(/Regulatory Intelligence Copilot/i)).toBeInTheDocument();
       });
-
-      const input = document.querySelector('textarea[placeholder*="Ask about"]') as HTMLTextAreaElement;
 
       const conversationId = 'test-conv-ui-switch';
       conversationState.messages.set(conversationId, []);

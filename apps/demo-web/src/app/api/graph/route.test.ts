@@ -14,6 +14,13 @@
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 
+interface GraphNode {
+  id: string;
+  label: string;
+  type: string;
+  properties: Record<string, unknown>;
+}
+
 const mockGetServerSession = vi.fn();
 const mockHasActiveSandbox = vi.fn();
 const mockGetMcpGatewayUrl = vi.fn();
@@ -469,7 +476,7 @@ describe('GET /api/graph', () => {
       const { GET } = await import('./route');
 
       const request = new Request('http://localhost:3000/api/graph?keyword=housing');
-      const response = await GET(request);
+      await GET(request);
 
       expect(mockGetRulesForProfileAndJurisdiction).toHaveBeenCalledWith(
         expect.any(String),
@@ -548,8 +555,8 @@ describe('GET /api/graph', () => {
 
       // Only edges where both source and target are in bounded nodes
       for (const edge of data.edges) {
-        const sourceInNodes = data.nodes.some((n: any) => n.id === edge.source);
-        const targetInNodes = data.nodes.some((n: any) => n.id === edge.target);
+        const sourceInNodes = data.nodes.some((n: GraphNode) => n.id === edge.source);
+        const targetInNodes = data.nodes.some((n: GraphNode) => n.id === edge.target);
         expect(sourceInNodes).toBe(true);
         expect(targetInNodes).toBe(true);
       }
@@ -698,7 +705,7 @@ describe('GET /api/graph', () => {
 
       // Should deduplicate 'shared' node
       expect(data.nodes).toHaveLength(3); // shared, node1, node2
-      const sharedNodes = data.nodes.filter((n: any) => n.id === 'shared');
+      const sharedNodes = data.nodes.filter((n: GraphNode) => n.id === 'shared');
       expect(sharedNodes).toHaveLength(1);
     });
 

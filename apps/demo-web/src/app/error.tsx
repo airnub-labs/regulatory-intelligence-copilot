@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Button } from '@reg-copilot/reg-intel-ui';
 
 /**
  * Error boundary for app-level error handling
@@ -55,18 +54,18 @@ export default function Error({
         )}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Button
+          <button
             onClick={reset}
-            variant="default"
+            className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground ring-offset-background transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
             Try again
-          </Button>
-          <Button
+          </button>
+          <button
             onClick={() => window.location.href = '/'}
-            variant="outline"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
             Go to home
-          </Button>
+          </button>
         </div>
       </div>
     </div>

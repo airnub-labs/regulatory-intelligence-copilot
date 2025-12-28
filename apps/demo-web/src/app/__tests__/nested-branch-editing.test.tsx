@@ -243,7 +243,7 @@ describe('Nested Branch Editing - UI Label Test', () => {
       });
     });
 
-    global.fetch = fetchMock as any;
+    global.fetch = fetchMock as typeof global.fetch;
   });
 
   it('should correctly label paths in nested branch scenario: Main > Branch1 > Branch2 (edit)', async () => {
@@ -400,9 +400,6 @@ describe('Nested Branch Editing - UI Label Test', () => {
 
     // STEP 5: Check UI labels and their clarity
     console.log('\n=== STEP 5: Verify UI Labels ===');
-
-    // Check if PathToolbar shows the paths
-    const pathSelectors = container.querySelectorAll('[role="combobox"]');
 
     // The issue: When viewing Branch 2, the UI still shows "Main" for the primary path
     // This can be confusing because you're 2 levels deep in branching

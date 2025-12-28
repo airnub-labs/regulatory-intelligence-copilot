@@ -7,6 +7,7 @@
 
 import { createChatRouteHandler } from '@reg-copilot/reg-intel-next-adapter';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import type { ConversationEventHub, ConversationListEventHub } from '@reg-copilot/reg-intel-conversations';
 import { context, propagation, trace } from '@opentelemetry/api';
 import { getServerSession } from 'next-auth/next';
 
@@ -27,8 +28,8 @@ const logger = createLogger('ChatRoute');
 const handler = createChatRouteHandler({
   conversationStore,
   conversationContextStore,
-  eventHub: conversationEventHub,
-  conversationListEventHub,
+  eventHub: conversationEventHub as unknown as ConversationEventHub,
+  conversationListEventHub: conversationListEventHub as unknown as ConversationListEventHub,
   executionContextManager,
 });
 

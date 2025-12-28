@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       { 'app.route': '/api/conversations/stream', 'app.tenant.id': tenantId, 'app.user.id': userId },
       async () => {
         const initialConversations = await conversationStore.listConversations({ tenantId, userId, status })
-        logger.info({ tenantId, userId, status, count: initialConversations.length }, 'Starting conversation stream')
+        logger.info({ tenantId, userId, status, count: initialConversations.conversations.length }, 'Starting conversation stream')
 
         const stream = new ReadableStream({
           start(controller) {
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
             // Use type-safe payload from shared package
             const snapshotPayload: ConversationListEventPayloadMap['snapshot'] = {
               status,
-              conversations: initialConversations.map(toClientConversation),
+              conversations: initialConversations.conversations.map(toClientConversation),
             }
             subscriber.send('snapshot', snapshotPayload)
 

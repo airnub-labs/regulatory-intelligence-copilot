@@ -252,7 +252,6 @@ describe('Path System Integration Tests', () => {
 
       // Handle paths list
       if (url.includes('/paths') && !url.includes('/paths/')) {
-        const conversationId = url.split('/')[3];
         const paths = Array.from(conversationState.paths.values());
         return {
           ok: true,

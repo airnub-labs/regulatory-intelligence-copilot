@@ -178,7 +178,7 @@ class TelemetryBatchQueue {
 
     try {
       await this.sendBatch(events);
-    } catch (error) {
+    } catch {
       // Swallow errors to avoid impacting UX
       // Events are lost, but this is acceptable for client telemetry
     } finally {

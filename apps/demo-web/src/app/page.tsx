@@ -57,6 +57,7 @@ interface ChatMetadata {
   uncertaintyLevel?: 'low' | 'medium' | 'high'
   disclaimerKey?: string
   referencedNodes?: string[]
+  priorTurnNodes?: Array<{ id: string }>
   warnings?: string[]
   timelineSummary?: string
   timelineFocus?: string
@@ -397,7 +398,7 @@ export default function Home() {
     fetchSummaries()
 
     return () => controller.abort()
-  }, [chatMetadata?.referencedNodes, (chatMetadata as ChatSseMetadata)?.priorTurnNodes, telemetry])
+  }, [chatMetadata, telemetry])
 
   const loadConversations = useCallback(async (status: 'active' | 'archived' = conversationListTab) => {
     if (!isAuthenticated) return
@@ -638,6 +639,7 @@ export default function Home() {
     return () => {
       controller.abort()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, conversationListTab, conversationId, telemetry])
 
   // Subscribe to individual conversation updates for real-time changes
@@ -1059,7 +1061,7 @@ export default function Home() {
     setBranchDialogOpen(true)
   }
 
-  const handleBranchCreated = async (newPath: { id: string; name?: string }) => {
+  const handleBranchCreated = async (newPath: { id: string; name?: string | null }) => {
     // Close the dialog and reset state after successful branch creation
     setBranchDialogOpen(false)
     setBranchFromMessageId(null)
@@ -1159,7 +1161,7 @@ export default function Home() {
     }
   }
 
-  const startNewConversation = () => {
+  const startNewConversation = useCallback(() => {
     setConversationId(undefined)
     conversationIdRef.current = undefined
     setMessages([])
@@ -1175,7 +1177,7 @@ export default function Home() {
     // Clear URL when starting new conversation
     updateUrl(undefined)
     setConversationListTab('active')
-  }
+  }, [updateUrl])
 
   const toggleArchiveConversation = async (convId: string, currentlyArchived: boolean) => {
     if (!isAuthenticated) return
