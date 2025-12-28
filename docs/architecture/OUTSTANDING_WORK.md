@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
 > **Last Updated**: 2025-12-28
-> **Status**: Comprehensive codebase review and gap analysis
-> **Document Version**: 4.6
+> **Status**: Comprehensive codebase review and gap analysis (verified)
+> **Document Version**: 4.9
 
 ---
 
@@ -493,19 +493,27 @@ This document consolidates all outstanding work identified from reviewing the ar
 **Description**: The logging and telemetry framework is fully implemented but needs enhancements for cloud-scale deployments. The OTEL Collector is configured but Pino logs are not automatically forwarded.
 
 **Current State**:
-- ✅ Pino structured logging implemented
+- ✅ Pino structured logging implemented (`packages/reg-intel-observability/src/logger.ts`)
 - ✅ OTEL traces and metrics export working
 - ✅ OTEL Collector configured (Docker)
-- ⚠️ Pino-to-OTEL transport not wired
+- ✅ `createPinoOtelTransport()` function EXISTS (`logsExporter.ts:75-133`)
+- ⚠️ **GAP**: Transport NOT WIRED into `createLogger()` (see `logger.ts:71-104`)
 - ⚠️ OTEL_LOGS_ENABLED defaults to false
 - ⚠️ No production log backend configured (Loki/Elasticsearch)
 - ⚠️ No custom business metrics
 
+**Technical Details of Gap**:
+- `createPinoOtelTransport(provider)` at `logsExporter.ts:75` creates a Writable stream
+- The stream converts Pino logs to OTEL LogRecords and forwards to OTEL Collector
+- **However**, `createLogger()` at `logger.ts:71` uses single destination: `pino(options, destination ?? pino.destination({ sync: false }))`
+- Need to use `pino.multistream([{ stream: stdout }, { stream: otelTransport }])` for dual-write
+
 **Tasks**:
 
-- [ ] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH)
-  - Modify `createLogger()` to use `pino.multistream()`
-  - Add OTEL transport stream conditional on `OTEL_LOGS_ENABLED`
+- [ ] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH - 2-4 hours)
+  - Modify `createLogger()` in `logger.ts` to use `pino.multistream()`
+  - Import and call `createPinoOtelTransport()` from `logsExporter.ts`
+  - Add OTEL transport stream conditional on `OTEL_LOGS_ENABLED=true`
   - Test dual-write to stdout + OTEL Collector
 
 - [ ] **Task OBS.2**: Configure production log backend (HIGH)
@@ -917,7 +925,9 @@ Branch navigation with preview cards fully functional.
 
 ### API Route Test Coverage
 
-**Total API Routes**: 19 files | **Routes with tests**: 19 (100%) | **Coverage improvement**: +84% (from 16%)
+**Total API Routes**: 20 files (19 custom + 1 NextAuth) | **Custom routes with tests**: 19/19 (100%) | **Coverage improvement**: +84% (from 16%)
+
+> **Note**: The `/api/auth/[...nextauth]/route.ts` is a NextAuth.js route handler that delegates to the library. It doesn't contain custom logic requiring tests.
 
 **✅ Tested Routes** (19/19):
 - `/api/chat` ✅ (231 LOC)
@@ -1063,27 +1073,37 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ### Codebase Statistics
 
-| Metric | Before (2025-12-27 AM) | After Phase 1-3 | After Phase 4 | After Phase 5 | After Phase 6 | After Phase 7 (Current) |
-|--------|--------|--------|--------|--------|--------|--------|
-| Total packages | 8 | 8 | 8 | 8 | 8 | 8 |
-| Total test files | 35 (30 pkg + 5 app) | 47 (31 pkg + 16 app) | 48 (32 pkg + 16 app) | 54+ (38 pkg + 16 app) | 58+ (42 pkg + 16 app) | 60+ (44 pkg + 16 app) |
-| Total test LOC | ~10,240 | ~13,100+ | ~13,800+ | ~17,000+ | ~18,500+ | ~19,500+ |
-| Estimated total tests | ~290 | ~367+ | ~396+ | ~420+ | ~502+ | ~552+ |
-| API route files | 19 | 19 | 19 | 19 | 19 | 19 |
-| API routes with tests | 3 (16%) | 14 (74%) | 18 (95%) | 19 (100%) ✅ | 19 (100%) ✅ | 19 (100%) ✅ |
-| Packages with 0 tests | 2 | 0 | 0 | 0 | 0 | 0 |
-| Packages with partial tests | 0 | 1 | 3 | 2 (conversations, core) | 2 (conversations LOW, core) | 2 (LOW priority only) |
-| Packages with comprehensive tests | 6 | 7 | 5 | 6 (+reg-intel-ui) | 6 (conversations HIGH/MEDIUM ✅) | 7 (+reg-intel-core MEDIUM ✅) |
-| UI components tested | 0 | 1 | 2 | 8 (100%) ✅ | 8 (100%) ✅ | 8 (100%) ✅ |
+| Metric | Before (2025-12-27 AM) | After Phase 1-3 | After Phase 4 | After Phase 5 | After Phase 6 | After Phase 7 | Current (v4.9) |
+|--------|--------|--------|--------|--------|--------|--------|--------|
+| Total packages | 8 | 8 | 8 | 8 | 8 | 8 | 8 |
+| Total test files | 35 (30 pkg + 5 app) | 47 (31 pkg + 16 app) | 48 (32 pkg + 16 app) | 54+ (38 pkg + 16 app) | 58+ (42 pkg + 16 app) | 60+ (44 pkg + 16 app) | 60+ (verified) |
+| Total test LOC | ~10,240 | ~13,100+ | ~13,800+ | ~17,000+ | ~18,500+ | ~19,500+ | ~19,500+ |
+| Estimated total tests | ~290 | ~367+ | ~396+ | ~420+ | ~502+ | ~552+ | ~552+ (verified) |
+| API route files | 19 | 19 | 19 | 19 | 19 | 19 | 20 (incl. NextAuth) |
+| API routes with tests | 3 (16%) | 14 (74%) | 18 (95%) | 19 (100%) ✅ | 19 (100%) ✅ | 19 (100%) ✅ | 19/19 custom ✅ |
+| Packages with 0 tests | 2 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Packages with partial tests | 0 | 1 | 3 | 2 (conversations, core) | 2 (conversations LOW, core) | 2 (LOW priority only) | 2 (LOW only) |
+| Packages with comprehensive tests | 6 | 7 | 5 | 6 (+reg-intel-ui) | 6 (conversations HIGH/MEDIUM ✅) | 7 (+reg-intel-core MEDIUM ✅) | 7 ✅ |
+| UI components tested | 0 | 1 | 2 | 8 (100%) ✅ | 8 (100%) ✅ | 8 (100%) ✅ | 8 (100%) ✅ |
 
 ---
 
-**Document Version**: 4.8
+**Document Version**: 4.9
 **Last Updated**: 2025-12-28
-**Previous Versions**: 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v4.9 (2025-12-28): Comprehensive review and gap verification refresh
+  - **VERIFIED**: Scenario Engine still has ZERO implementation (grep confirmed no ScenarioEngine class)
+  - **VERIFIED**: Test coverage numbers confirmed accurate (9 test files in reg-intel-core, 8 in reg-intel-conversations, 8 in reg-intel-ui)
+  - **VERIFIED**: API route test coverage at 100% (19/19 routes tested, excluding NextAuth auth route)
+  - **ENHANCED**: Observability section with specific file/line locations for Pino-OTEL wiring gap
+    - `createPinoOtelTransport()` exists at `logsExporter.ts:75-133`
+    - Not wired into `createLogger()` at `logger.ts:71-104`
+    - Added technical details explaining the gap and fix required
+  - **UPDATED**: Document status to "verified" indicating manual codebase validation
+  - **NO NEW GAPS IDENTIFIED**: All previously documented gaps remain accurate
 - v4.8 (2025-12-28): Package test coverage expansion - reg-intel-core MEDIUM priority complete ✅
   - **COMPLETED**: reg-intel-core MEDIUM priority test coverage
     - Added 2 new test files with 50 comprehensive tests
