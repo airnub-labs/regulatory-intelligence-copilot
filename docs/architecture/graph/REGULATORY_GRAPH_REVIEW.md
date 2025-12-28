@@ -69,15 +69,30 @@ The current schema (v0.6) provides a solid foundation with 19 node labels and 40
 **Rationale:** Most regulatory questions involve understanding what users **must** do, not just what they can claim. Obligations are the mirror image of benefits in regulatory modelling.
 
 **Proposed Properties for `:Obligation`:**
+```typescript
+interface Obligation {
+  id: string;                    // e.g., "IE_PAYE_FILING_OBLIGATION"
+  name: string;                  // "PAYE Filing Requirement"
+  label: string;                 // Short display label
+  description: string;           // Detailed description
+  category: string;              // "FILING" | "REGISTRATION" | "REPORTING" | "PAYMENT" | "RECORD_KEEPING"
+  frequency?: string;            // "MONTHLY" | "QUARTERLY" | "ANNUAL" | "EVENT_TRIGGERED" | "ONGOING"
+  penalty_type?: string;         // "FIXED" | "PERCENTAGE" | "INTEREST" | "CRIMINAL"
+  jurisdictionCode: string;      // "IE", "UK", etc.
+  authority?: string;            // "Revenue", "CRO", "DSP"
+  created_at: localdatetime;
+  updated_at: localdatetime;
+}
 ```
-- id: string
-- label: string
-- description: string
-- category: string (e.g., "FILING", "REGISTRATION", "REPORTING", "PAYMENT")
-- frequency: string (e.g., "ANNUAL", "QUARTERLY", "MONTHLY", "ONE_TIME", "ONGOING")
-- jurisdiction: string
-- authority: string (e.g., "Revenue", "CRO", "DSP")
-- created_at, updated_at
+
+**Key Relationships for `:Obligation`:**
+```cypher
+(:ProfileTag)-[:SUBJECT_TO]->(:Obligation)
+(:Obligation)-[:FILING_DEADLINE]->(:Timeline)
+(:Benefit|Relief)-[:TRIGGERS_OBLIGATION]->(:Obligation)
+(:Obligation)-[:PENALIZED_BY]->(:Penalty)
+(:Obligation)-[:IN_JURISDICTION]->(:Jurisdiction)
+(:Obligation)-[:ADMINISTERED_BY]->(:Authority)
 ```
 
 ---
@@ -94,19 +109,36 @@ The current schema (v0.6) provides a solid foundation with 19 node labels and 40
 | `:Limit` | Maximum/minimum constraint | Pension contribution limits, R&D credit caps |
 
 **Proposed Properties for `:Threshold`:**
-```
-- id: string
-- label: string
-- value: number
-- unit: string (e.g., "EUR", "WEEKS", "MONTHS", "PERCENT")
-- direction: string ("ABOVE", "BELOW", "AT_OR_ABOVE", "AT_OR_BELOW")
-- effective_from: localdatetime
-- effective_to: localdatetime
-- jurisdiction: string
-- notes: string
+```typescript
+interface Threshold {
+  id: string;                    // e.g., "IE_VAT_REGISTRATION_THRESHOLD_SERVICES"
+  name: string;                  // "VAT Registration Threshold (Services)"
+  label: string;                 // Short display label
+  value: number;                 // 37500
+  currency?: string;             // "EUR" | "GBP" | null for non-monetary
+  unit: string;                  // "EUR" | "WEEKS" | "MONTHS" | "PERCENT" | "COUNT"
+  period?: string;               // "ANNUAL" | "LIFETIME" | "PER_TRANSACTION" | "ROLLING_12_MONTHS"
+  direction: string;             // "ABOVE" | "BELOW" | "AT_OR_ABOVE" | "AT_OR_BELOW"
+  inflation_indexed?: boolean;   // true if adjusted for inflation
+  effective_from?: localdatetime;
+  effective_to?: localdatetime;
+  jurisdictionCode: string;
+  notes?: string;
+  created_at: localdatetime;
+  updated_at: localdatetime;
+}
 ```
 
-**Rationale:** Enables queries like "show me all thresholds that apply to my situation" and supports timeline engine calculations involving monetary/temporal boundaries.
+**Key Relationships for `:Threshold`:**
+```cypher
+(:Condition)-[:HAS_THRESHOLD]->(:Threshold)
+(:Threshold)-[:TRIGGERS]->(:Obligation)              // Crossing threshold triggers obligation
+(:Threshold)-[:EQUIVALENT_TO]->(:Threshold)          // Cross-jurisdiction comparison
+(:Update|ChangeEvent)-[:CHANGES]->(:Threshold)       // Track threshold changes
+(:Threshold)-[:SUPERSEDES]->(:Threshold)             // Historical chain
+```
+
+**Rationale:** Enables queries like "show me all thresholds that apply to my situation" and supports timeline engine calculations involving monetary/temporal boundaries. Critical for cross-jurisdiction comparisons ("What's the VAT threshold in IE vs UK?").
 
 ---
 
@@ -125,15 +157,33 @@ The current schema (v0.6) provides a solid foundation with 19 node labels and 40
 | `:RateBand` | Income/value bands with rates | Income tax bands (20%, 40%), CGT rates |
 
 **Proposed Properties for `:Rate`:**
+```typescript
+interface Rate {
+  id: string;                    // e.g., "IE_PRSI_CLASS_S_RATE_2024"
+  name: string;                  // "Class S PRSI Rate"
+  label: string;                 // Short display label
+  percentage?: number;           // 4.0 (for percentage rates)
+  fixed_amount?: number;         // For fixed-amount rates
+  currency?: string;             // "EUR" | "GBP"
+  base?: string;                 // "GROSS_INCOME" | "TAXABLE_INCOME" | "CAPITAL_GAIN" | "TURNOVER"
+  category: string;              // "STANDARD" | "REDUCED" | "ZERO" | "EXEMPT" | "HIGHER"
+  min_threshold?: number;        // Minimum income/value for rate to apply
+  max_threshold?: number;        // Maximum income/value (for band rates)
+  effective_from?: localdatetime;
+  effective_to?: localdatetime;
+  jurisdictionCode: string;
+  created_at: localdatetime;
+  updated_at: localdatetime;
+}
 ```
-- id: string
-- label: string
-- value: number
-- unit: string ("PERCENT", "EUR", "GBP")
-- category: string ("STANDARD", "REDUCED", "ZERO", "EXEMPT")
-- effective_from: localdatetime
-- effective_to: localdatetime
-- jurisdiction: string
+
+**Key Relationships for `:Rate`:**
+```cypher
+(:Benefit|Relief|Obligation)-[:HAS_RATE]->(:Rate)
+(:Contribution)-[:HAS_RATE]->(:Rate)
+(:Rate)-[:SUPERSEDES]->(:Rate)                       // Rate history chain
+(:Rate)-[:EQUIVALENT_TO]->(:Rate)                    // Cross-jurisdiction comparison
+(:Rate)-[:APPLIES_IN_BAND]->(:RateBand)              // For progressive rate systems
 ```
 
 ---
@@ -766,6 +816,278 @@ Incorporating insights from external review:
 | Employment law domain | Domain | Broader coverage |
 | Company law domain | Domain | Director-focused coverage |
 | Property domain | Domain | Common user questions |
+
+---
+
+## 13. Project Vision Alignment Analysis
+
+This section validates each proposed enhancement against the project's core vision and architectural principles.
+
+### 13.1 Core Project Vision (from architecture review)
+
+The Regulatory Intelligence Copilot is a **chat-first, graph-backed research partner** with these key principles:
+
+1. **Explicit semantic edges are the source of truth** - The LLM cannot hallucinate regulatory interactions; it explains what the graph explicitly represents
+2. **Path-based queries are primary** - Core behavior uses bounded multi-hop traversals (2-4 hops), not free-form inference
+3. **Profile-based filtering via ProfileTag** - Personas filter rules without storing user PII in the graph
+4. **Timeline as first-class abstraction** - Time-based constraints are explicit and queryable by the Timeline Engine
+5. **Self-population via concept capture** - Conversations enrich the graph through SKOS-style concept nodes
+6. **LLM as explanation layer** - The graph provides structure; LLM explains in plain language with evidence
+7. **Research, not advice** - Frame outputs as evidence-linked explanations, direct users to professionals
+8. **Cross-border by design** - Jurisdictions, Regions, Agreements, and Regimes explicitly model coordination
+
+### 13.2 Validation Matrix
+
+| Proposed Enhancement | Explicit Edges | Multi-Hop | Profile Filter | Timeline | Self-Pop | Cross-Border | Verdict |
+|---------------------|----------------|-----------|----------------|----------|----------|--------------|---------|
+| `:Obligation` | ✅ SUBJECT_TO, TRIGGERS | ✅ Profile→Obligation→Penalty | ✅ Via ProfileTag | ✅ FILING_DEADLINE | ✅ Concept can align | ✅ IN_JURISDICTION | **HIGH VALUE** |
+| `:Threshold` | ✅ HAS_THRESHOLD, TRIGGERS | ✅ Condition→Threshold→Obligation | ❌ Indirect | ✅ EFFECTIVE_FROM/TO | ✅ | ✅ EQUIVALENT_TO | **HIGH VALUE** |
+| `:Rate` | ✅ HAS_RATE, SUPERSEDES | ✅ Benefit→Rate→History | ❌ Indirect | ✅ EFFECTIVE_FROM/TO | ✅ | ✅ EQUIVALENT_TO | **HIGH VALUE** |
+| `:Authority` | ✅ ADMINISTERED_BY | ✅ Obligation→Authority→Jurisdiction | ❌ | ❌ | ✅ | ✅ | **MEDIUM VALUE** |
+| `:Form` | ✅ DOCUMENTED_VIA | ✅ Obligation→Form→Authority | ❌ | ✅ FILING_DEADLINE | ✅ | ✅ | **MEDIUM VALUE** |
+| `:Penalty` | ✅ PENALIZED_BY | ✅ Obligation→Penalty→Timeline | ❌ | ✅ Duration/Grace | ✅ | ✅ | **MEDIUM VALUE** |
+| `:Contribution` | ✅ PAYS, COUNTS_TOWARDS | ✅ Profile→Contribution→Benefit | ✅ Direct via PAYS | ✅ LOOKBACK_WINDOW | ✅ | ✅ COORDINATED_WITH | **HIGH VALUE** |
+| `TRIGGERS` | ✅ Core causal | ✅ Enables reasoning chains | ✅ | ✅ | ✅ | ✅ | **HIGH VALUE** |
+| `UNLOCKS` | ✅ Cascading eligibility | ✅ Benefit→Benefit chains | ✅ | ✅ Conditional timing | ✅ | ✅ | **HIGH VALUE** |
+| `SUPERSEDES` | ✅ Lifecycle | ✅ Historical chains | ❌ | ✅ Temporal | ✅ | ✅ | **HIGH VALUE** |
+| `STACKS_WITH` | ✅ Complement to EXCLUDES | ✅ | ✅ | ❌ | ✅ | ✅ | **HIGH VALUE** |
+| Provenance properties | ✅ Trust scoring | ✅ Filter by source | ❌ | ❌ | ✅ Source tracking | ✅ | **HIGH VALUE** |
+| `:ScenarioTemplate` | ⚠️ Meta-level | ⚠️ Not traversable | ✅ | ❌ | ❌ | ⚠️ | **LOW VALUE** |
+| `:Disqualification` | ✅ | ✅ | ✅ DISQUALIFIES_FROM | ✅ Duration | ✅ | ✅ | **MEDIUM VALUE** |
+
+### 13.3 Alignment Concerns
+
+**Fully Aligned (Proceed):**
+- `:Obligation`, `:Threshold`, `:Rate`, `:Contribution` - These fill critical gaps while supporting all core principles
+- `TRIGGERS`, `UNLOCKS`, `SUPERSEDES`, `STACKS_WITH` - Essential causal/lifecycle relationships for multi-hop reasoning
+- Provenance properties - Enables trust-scoring without breaking edge semantics
+
+**Mostly Aligned (Proceed with care):**
+- `:Authority`, `:Form`, `:Penalty` - Administrative context is valuable but ensure edges are queryable, not just informational
+- `:Disqualification` - Useful for negative eligibility chains
+
+**Questionable Alignment (Reconsider):**
+- `:ScenarioTemplate` - This is more of a **UI/orchestration concern** than a graph node. Scenarios are meant to live in Supabase per the architecture. Consider whether this belongs in the Scenario Engine code rather than Memgraph.
+- `:PensionScheme`, `:LifetimeAllowance`, `:AnnualAllowance`, `:RetirementAge` - These might be better modeled as specializations of existing nodes (`:Benefit` with category, `:Threshold`, `:Condition`, `:Timeline`) rather than new labels.
+
+---
+
+## 14. GraphRAG Validation for Complex Reasoning
+
+This section evaluates whether the proposed enhancements support **Microsoft GraphRAG-style** complex relationship loading for LLM reasoning.
+
+### 14.1 GraphRAG Core Requirements
+
+For effective GraphRAG, the graph must support:
+
+1. **Rich semantic relationships** - Not just structural links, but meaning-bearing edges
+2. **Multi-hop traversability** - Bounded depth (2-4 hops) for impact analysis
+3. **Community structure** - Related nodes cluster for context loading
+4. **Provenance & confidence** - Trust scoring for relationship claims
+5. **Temporal awareness** - Time-based filtering and versioning
+6. **Entity resolution** - Canonical identifiers for concept matching
+
+### 14.2 Complex Query Patterns Enabled
+
+The proposed enhancements enable these high-value query patterns:
+
+**Pattern 1: "What must I do?" (Obligation Discovery)**
+```cypher
+// Find all obligations for a profile, with penalties and deadlines
+MATCH (p:ProfileTag {id: $profileId})-[:SUBJECT_TO]->(o:Obligation)
+MATCH (o)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+OPTIONAL MATCH (o)-[:FILING_DEADLINE]->(t:Timeline)
+OPTIONAL MATCH (o)-[:PENALIZED_BY]->(pen:Penalty)
+OPTIONAL MATCH (o)-[:DOCUMENTED_VIA]->(f:Form)
+RETURN o, t, pen, f
+```
+*LLM receives: Structured list of obligations with deadlines, penalties, and forms*
+
+**Pattern 2: Threshold-Triggered Reasoning**
+```cypher
+// Find what obligations are triggered by crossing thresholds
+MATCH (c:Condition)-[:HAS_THRESHOLD]->(th:Threshold)
+WHERE th.value <= $userValue AND th.direction = 'AT_OR_ABOVE'
+MATCH (th)-[:TRIGGERS]->(o:Obligation)
+MATCH (o)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+RETURN th, o, j
+```
+*LLM receives: "Crossing €40,000 turnover triggers VAT registration obligation"*
+
+**Pattern 3: Cascading Eligibility (UNLOCKS chains)**
+```cypher
+// Find benefits unlocked by claiming a specific benefit
+MATCH (b1:Benefit {id: $benefitId})-[:UNLOCKS*1..3]->(b2:Benefit)
+MATCH (b2)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+OPTIONAL MATCH (b2)-[:REQUIRES]->(c:Condition)
+RETURN b1, b2, c
+```
+*LLM receives: "Illness Benefit → unlocks → Invalidity Pension (after 12 months)"*
+
+**Pattern 4: Cross-Jurisdiction Rate Comparison**
+```cypher
+// Compare rates across jurisdictions
+MATCH (r1:Rate)-[:EQUIVALENT_TO]->(r2:Rate)
+WHERE r1.jurisdictionCode = 'IE' AND r2.jurisdictionCode = 'UK'
+OPTIONAL MATCH (r1)<-[:HAS_RATE]-(rule1)
+OPTIONAL MATCH (r2)<-[:HAS_RATE]-(rule2)
+RETURN r1, r2, rule1, rule2
+```
+*LLM receives: "IE Corporation Tax 12.5% equivalent to UK 25% (with caveats)"*
+
+**Pattern 5: Contribution Counting for Eligibility**
+```cypher
+// Check if contributions satisfy benefit requirements
+MATCH (p:ProfileTag {id: $profileId})-[:PAYS]->(c:Contribution)
+MATCH (c)-[:COUNTS_TOWARDS]->(cond:Condition)
+MATCH (b:Benefit)-[:REQUIRES]->(cond)
+MATCH (c)-[:LOOKBACK_WINDOW]->(t:Timeline)
+WHERE t.window_months >= 12
+RETURN b, c, cond, t
+```
+*LLM receives: "52 Class S contributions in last 12 months satisfies Jobseeker's Benefit requirement"*
+
+**Pattern 6: Historical Rule Evolution (SUPERSEDES chains)**
+```cypher
+// Trace how a rule evolved over time
+MATCH path = (current:Section {id: $sectionId})-[:SUPERSEDES*0..5]->(older:Section)
+OPTIONAL MATCH (older)-[:EFFECTIVE_WINDOW]->(t:Timeline)
+RETURN path, collect(t) AS timelines
+ORDER BY length(path) DESC
+```
+*LLM receives: Chronological chain of rule versions with effective dates*
+
+**Pattern 7: Interaction Analysis (STACKS_WITH + EXCLUDES)**
+```cypher
+// Find what benefits can and cannot be combined
+MATCH (b:Benefit {id: $benefitId})
+OPTIONAL MATCH (b)-[:STACKS_WITH]->(stackable:Benefit)
+OPTIONAL MATCH (b)-[:EXCLUDES|MUTUALLY_EXCLUSIVE_WITH]->(excluded:Benefit)
+RETURN b, collect(DISTINCT stackable) AS canCombine, collect(DISTINCT excluded) AS cannotCombine
+```
+*LLM receives: "Child Benefit STACKS_WITH Working Family Payment, EXCLUDES Jobseeker's Allowance"*
+
+### 14.3 Community Detection Integration
+
+The proposed nodes naturally form communities that can be detected by Leiden algorithm:
+
+| Community Type | Anchor Nodes | High-Centrality Nodes |
+|---------------|--------------|----------------------|
+| **IE Tax Compliance** | `:Jurisdiction {id: 'IE'}` | CT1 Form, Corporation Tax Rate, R&D Credit |
+| **Social Welfare Eligibility** | `:ProfileTag {id: 'self-employed'}` | PRSI Contributions, Jobseeker's Benefit, Illness Benefit |
+| **Cross-Border Coordination** | `:Agreement {id: 'CTA'}` | CTA Mobility Rights, Social Security Coordination |
+| **Pension Planning** | `:PensionScheme` nodes | Contribution Limits, Retirement Age, ARF Rules |
+
+This enables **context-aware retrieval**: for a broad question, fetch the community summary + top-K central nodes.
+
+### 14.4 Provenance for Trust-Weighted Reasoning
+
+With provenance properties, the LLM can weight its explanations:
+
+```cypher
+// Get relationships with confidence scores
+MATCH (b:Benefit)-[r:EXCLUDES]->(other:Benefit)
+WHERE r.source_type = 'LEGISLATION' OR r.confidence > 0.8
+RETURN b, r, other
+ORDER BY r.confidence DESC
+```
+
+This enables responses like:
+- "This exclusion is definitive (source: SWCA 2005)" vs
+- "This interaction is inferred from Revenue guidance (confidence: 0.7)"
+
+### 14.5 Multi-Regulatory-Body Reasoning
+
+The `:Authority` and `ADMINISTERED_BY` relationships enable queries across regulatory bodies:
+
+```cypher
+// Find all obligations for a profile across different authorities
+MATCH (p:ProfileTag {id: $profileId})-[:SUBJECT_TO]->(o:Obligation)
+MATCH (o)-[:ADMINISTERED_BY]->(a:Authority)
+RETURN a.name AS authority, collect(o.name) AS obligations
+```
+
+*LLM receives: "Revenue: [CT1 Filing, PAYE Reporting], DSP: [PRSI Contributions], CRO: [Annual Return]"*
+
+### 14.6 Summary: GraphRAG Readiness
+
+| Requirement | Current v0.6 | With Proposed Enhancements |
+|-------------|--------------|---------------------------|
+| Semantic relationships | Good (40+ types) | Excellent (60+ types with causal/lifecycle) |
+| Multi-hop traversability | Good (2-4 hops) | Excellent (causal chains, eligibility cascades) |
+| Community structure | Basic (optional Leiden) | Strong (natural clusters around obligations, contributions) |
+| Provenance & confidence | Partial (EQUIVALENT_TO only) | Full (all critical relationships) |
+| Temporal awareness | Good (Timeline nodes) | Excellent (versioning chains, historical rates) |
+| Entity resolution | Good (SKOS concepts) | Good (no change needed) |
+| Cross-jurisdiction | Good (EQUIVALENT_TO, COORDINATED_WITH) | Excellent (rate/threshold comparisons) |
+| Profile-based reasoning | Good (ProfileTag) | Excellent (SUBJECT_TO obligations, PAYS contributions) |
+
+**Verdict:** The proposed enhancements significantly improve GraphRAG readiness, particularly for:
+1. **Causal reasoning** (TRIGGERS, UNLOCKS chains)
+2. **Obligation discovery** (the biggest current gap)
+3. **Historical analysis** (SUPERSEDES chains)
+4. **Trust-weighted responses** (provenance properties)
+5. **Cross-jurisdiction comparison** (rate/threshold equivalence)
+
+---
+
+## 15. Recommendations: Final Prioritization
+
+After validation against project vision and GraphRAG requirements:
+
+### 15.1 Tier 1 - Implement Immediately (Highest GraphRAG Value)
+
+| Enhancement | Why It's Critical |
+|-------------|-------------------|
+| `:Obligation` + `SUBJECT_TO` | Fills the biggest semantic gap - "what must I do" |
+| `:Threshold` + `TRIGGERS` | Enables quantitative reasoning chains |
+| `:Contribution` + `COUNTS_TOWARDS` | Critical for PRSI/pension eligibility paths |
+| `UNLOCKS` relationship | Enables cascading eligibility reasoning |
+| `SUPERSEDES` relationship | Enables historical analysis |
+| Provenance properties | Enables trust-weighted LLM responses |
+
+### 15.2 Tier 2 - Implement Soon (Strong Value)
+
+| Enhancement | Why It's Valuable |
+|-------------|-------------------|
+| `:Rate` + rate history | Cross-jurisdiction comparisons, historical rates |
+| `:Authority` + `ADMINISTERED_BY` | Multi-regulatory-body reasoning |
+| `STACKS_WITH` relationship | Complement to EXCLUDES for combination analysis |
+| `:Form` + `DOCUMENTED_VIA` | Practical action guidance |
+| `:Penalty` + `PENALIZED_BY` | Non-compliance consequences |
+
+### 15.3 Tier 3 - Defer or Reconsider
+
+| Enhancement | Recommendation |
+|-------------|----------------|
+| `:ScenarioTemplate` | **Defer** - Better suited for Scenario Engine code than graph |
+| Pension sub-labels | **Reconsider** - May work better as specializations of existing labels |
+| `:Disqualification` | **Defer** - Lower priority than core obligation/threshold gaps |
+| Employment/Company law domains | **Defer** - Expand after core enhancements are stable |
+
+### 15.4 Implementation Sequence
+
+```
+Phase 1 (Foundation):
+  └── Add :Obligation, :Threshold, :Contribution nodes
+  └── Add TRIGGERS, UNLOCKS, SUPERSEDES, COUNTS_TOWARDS relationships
+  └── Add provenance properties to critical relationships
+  └── Update GraphIngressGuard whitelists
+  └── Update GraphWriteService with upsert methods
+
+Phase 2 (Enrichment):
+  └── Add :Rate with history chains
+  └── Add :Authority with ADMINISTERED_BY
+  └── Add STACKS_WITH relationship
+  └── Add :Form, :Penalty administrative nodes
+  └── Seed graph with example data
+
+Phase 3 (Optimization):
+  └── Validate community detection on enriched graph
+  └── Test multi-hop query patterns
+  └── Profile query performance
+  └── Add concept capture support for new node types
+```
 
 ---
 
