@@ -1,6 +1,110 @@
-# Logging and tracing framework proposal (Node 24 / Next.js)
+# Logging and Tracing Framework (Node 24 / Next.js)
 
-This plan focuses on end-to-end request correlation for the `/api/chat` entrypoint in `apps/demo-web/src/app/api/chat/route.ts` and the orchestrator in `packages/reg-intel-core/src/orchestrator/complianceEngine.ts`, with coverage for graph access, LLM routing, MCP/E2B calls, and conversation stores.
+> **Status**: ✅ Fully Implemented
+> **Last Updated**: 2025-12-28
+
+This document describes the end-to-end request correlation for the `/api/chat` entrypoint in `apps/demo-web/src/app/api/chat/route.ts` and the orchestrator in `packages/reg-intel-core/src/orchestrator/complianceEngine.ts`, with coverage for graph access, LLM routing, MCP/E2B calls, and conversation stores.
+
+---
+
+## Implementation Architecture
+
+The logging and telemetry framework is designed to scale independently of the Next.js application, using the OTEL Collector as a decoupled aggregation layer:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      Next.js Application Instances                          │
+│                         (Horizontal Scaling)                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   Instance 1              Instance 2              Instance N                │
+│   ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐      │
+│   │  Next.js App    │     │  Next.js App    │     │  Next.js App    │      │
+│   │                 │     │                 │     │                 │      │
+│   │  ┌───────────┐  │     │  ┌───────────┐  │     │  ┌───────────┐  │      │
+│   │  │Pino Logger│  │     │  │Pino Logger│  │     │  │Pino Logger│  │      │
+│   │  │(async I/O)│  │     │  │(async I/O)│  │     │  │(async I/O)│  │      │
+│   │  └─────┬─────┘  │     │  └─────┬─────┘  │     │  └─────┬─────┘  │      │
+│   │        │        │     │        │        │     │        │        │      │
+│   │  ┌─────▼─────┐  │     │  ┌─────▼─────┐  │     │  ┌─────▼─────┐  │      │
+│   │  │Multistream│  │     │  │Multistream│  │     │  │Multistream│  │      │
+│   │  ├───────────┤  │     │  ├───────────┤  │     │  ├───────────┤  │      │
+│   │  │→ stdout   │  │     │  │→ stdout   │  │     │  │→ stdout   │  │      │
+│   │  │→ OTEL     │  │     │  │→ OTEL     │  │     │  │→ OTEL     │  │      │
+│   │  └─────┬─────┘  │     │  └─────┬─────┘  │     │  └─────┬─────┘  │      │
+│   │        │        │     │        │        │     │        │        │      │
+│   │  ┌─────▼─────┐  │     │  ┌─────▼─────┐  │     │  ┌─────▼─────┐  │      │
+│   │  │ OTEL SDK  │  │     │  │ OTEL SDK  │  │     │  │ OTEL SDK  │  │      │
+│   │  │  Batch    │  │     │  │  Batch    │  │     │  │  Batch    │  │      │
+│   │  │ Exporters │  │     │  │ Exporters │  │     │  │ Exporters │  │      │
+│   │  └─────┬─────┘  │     │  └─────┬─────┘  │     │  └─────┬─────┘  │      │
+│   └────────┼────────┘     └────────┼────────┘     └────────┼────────┘      │
+│            │                       │                       │                │
+│            │    OTLP/HTTP (4318)   │                       │                │
+│            │    Fire-and-Forget    │                       │                │
+│            └───────────────────────┴───────────────────────┘                │
+│                                    │                                        │
+└────────────────────────────────────┼────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                        OTEL Collector Cluster                               │
+│                    (Scales Independently of App)                            │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                         Processing Pipeline                          │  │
+│   ├─────────────────────────────────────────────────────────────────────┤  │
+│   │   Receivers          Processors              Exporters              │  │
+│   │   ──────────         ──────────              ─────────              │  │
+│   │   ┌─────────┐        ┌──────────────┐        ┌───────────────┐     │  │
+│   │   │  OTLP   │───────▶│memory_limiter│───────▶│    Loki       │     │  │
+│   │   │  HTTP   │        │  (512MB max) │        │   (Logs)      │     │  │
+│   │   │ :4318   │        └──────────────┘        └───────────────┘     │  │
+│   │   └─────────┘               │                                      │  │
+│   │   ┌─────────┐        ┌──────────────┐        ┌───────────────┐     │  │
+│   │   │  OTLP   │───────▶│    batch     │───────▶│   Jaeger      │     │  │
+│   │   │  gRPC   │        │  (100/1s)    │        │  (Traces)     │     │  │
+│   │   │ :4317   │        └──────────────┘        └───────────────┘     │  │
+│   │   └─────────┘               │                                      │  │
+│   │                      ┌──────────────┐        ┌───────────────┐     │  │
+│   │                      │  resource    │───────▶│  Prometheus   │     │  │
+│   │                      │  detection   │        │  (Metrics)    │     │  │
+│   │                      └──────────────┘        └───────────────┘     │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         Observability Backends                              │
+├────────────────────────────────────────────────────────────────────────────┤
+│    ┌───────────────┐    ┌───────────────┐    ┌───────────────┐            │
+│    │     Loki      │    │  Prometheus   │    │    Jaeger     │            │
+│    │   (:3100)     │    │   (:9090)     │    │   (:16686)    │            │
+│    └───────┬───────┘    └───────┬───────┘    └───────┬───────┘            │
+│            └────────────────────┼────────────────────┘                     │
+│                                 ▼                                          │
+│                       ┌───────────────────┐                                │
+│                       │      Grafana      │                                │
+│                       │     (:3200)       │                                │
+│                       │  Unified Dashboard│                                │
+│                       └───────────────────┘                                │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why This Scales
+
+| Mechanism | Implementation | Benefit |
+|-----------|---------------|---------|
+| **Async I/O** | `pino.destination({ sync: false })` | Event loop never blocks |
+| **Dual-Write** | `pino.multistream([stdout, otel])` | Local + centralized |
+| **Batch Export** | `BatchLogRecordProcessor` (1s) | Network calls amortized |
+| **Memory Limiter** | Collector: 512MB limit | Prevents OOM under load |
+| **Backpressure** | Collector drops oldest on overflow | App never blocked |
+
+See [SCALABILITY_REVIEW.md](./SCALABILITY_REVIEW.md) for detailed scalability analysis.
+
+---
 
 ## Existing documentation to anchor tracing/logging design
 - **Async context as a first-class primitive:** Node 24 is already justified in the stack because its improved AsyncLocalStorage underpins per-request/tenant context for APM and logging across agents, LLM router calls, graph/MCP access, and more. This provides the propagation substrate that the span-aware logger/tracer should reuse instead of bespoke context stores. 【F:docs/node_24_lts_rationale.md†L52-L64】
