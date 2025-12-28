@@ -134,8 +134,40 @@ exporters:
   #   traces_index: "reg-copilot-traces"
 
   # Loki exporter (for Grafana Loki)
-  # loki:
-  #   endpoint: "http://loki:3100/loki/api/v1/push"
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+    default_labels_enabled:
+      exporter: true
+      job: true
+      instance: true
+      level: true
+    labels:
+      attributes:
+        # Map OTEL attributes to Loki labels
+        severity: severity
+        service.name: service_name
+        deployment.environment: environment
+        host.name: host
+        # Extract custom labels from log attributes
+        component: component
+        scope: scope
+        trace_id: trace_id
+      resources:
+        service.name: service
+        service.namespace: namespace
+    # Send all log body/attributes as structured JSON
+    format: json
+    # Connection settings
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 1000
 
 # Extensions for monitoring and health checks
 extensions:
@@ -168,10 +200,10 @@ service:
         - batch
       exporters:
         - debug          # Console output for development
+        - loki           # Send to Loki for log aggregation ✅ PRODUCTION
         - file/logs      # Backup to file
         # - otlphttp     # Forward to backend (uncomment if needed)
         # - elasticsearch # Send to Elasticsearch (uncomment if needed)
-        # - loki         # Send to Loki (uncomment if needed)
 
     # Traces pipeline
     traces:

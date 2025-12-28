@@ -1,0 +1,18 @@
+# Grafana Dashboards Provisioning
+# Auto-loads dashboard definitions from the filesystem
+#
+
+apiVersion: 1
+
+providers:
+  # Load dashboards from the dashboards directory
+  - name: 'Regulatory Intelligence Copilot'
+    orgId: 1
+    folder: 'Observability'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/definitions
+      foldersFromFilesStructure: true

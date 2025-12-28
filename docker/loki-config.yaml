@@ -1,0 +1,171 @@
+# Loki Configuration for Regulatory Intelligence Copilot
+#
+# This configuration sets up Loki for log aggregation from the OTEL Collector
+# Production-ready settings with appropriate retention and performance tuning
+#
+# Architecture:
+# OTEL Collector → Loki (push) → Grafana (query/visualization)
+#
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+
+# Common configuration shared across components
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Ingester configuration - receives and buffers log streams
+ingester:
+  # How long to keep chunks in memory before flushing to storage
+  chunk_idle_period: 5m
+  chunk_block_size: 262144
+  chunk_target_size: 1536000
+  chunk_retain_period: 30s
+
+  # WAL (Write-Ahead Log) for crash recovery
+  wal:
+    enabled: true
+    dir: /loki/wal
+    checkpoint_duration: 5m
+    flush_on_shutdown: true
+
+  # Lifecycle settings
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+
+  # Limits per ingester
+  max_chunk_age: 1h
+
+# Schema configuration - defines how logs are indexed and stored
+schema_config:
+  configs:
+    # Current schema version
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Storage configuration
+storage_config:
+  filesystem:
+    directory: /loki/chunks
+
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+    cache_ttl: 24h
+    shared_store: filesystem
+
+# Compactor - manages index and chunk cleanup
+compactor:
+  working_directory: /loki/retention
+  shared_store: filesystem
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+
+# Query configuration
+query_range:
+  # Cache query results
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+  # Split queries into subqueries
+  split_queries_by_interval: 15m
+  parallelise_shardable_queries: true
+
+# Limits configuration - prevent abuse and ensure stability
+limits_config:
+  # Retention period for logs (7 days)
+  retention_period: 168h
+
+  # Ingestion rate limits
+  ingestion_rate_mb: 10
+  ingestion_burst_size_mb: 20
+
+  # Per-stream limits
+  per_stream_rate_limit: 5MB
+  per_stream_rate_limit_burst: 10MB
+
+  # Maximum number of streams per tenant
+  max_streams_per_user: 10000
+
+  # Query limits
+  max_query_length: 721h  # 30 days
+  max_query_parallelism: 32
+  max_query_series: 10000
+  max_entries_limit_per_query: 10000
+
+  # Cardinality limits
+  max_label_name_length: 1024
+  max_label_value_length: 2048
+  max_label_names_per_series: 30
+
+  # Split queries exceeding these limits
+  split_queries_by_interval: 15m
+
+  # Reject logs older than this
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+
+  # Enable unordered writes
+  unordered_writes: true
+
+# Table Manager (deprecated but included for compatibility)
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 168h
+
+# Chunk store configuration
+chunk_store_config:
+  max_look_back_period: 0s
+
+# Ruler configuration (for alerting rules)
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://localhost:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+  enable_alertmanager_v2: true
+
+# Analytics
+analytics:
+  reporting_enabled: false
+
+# Operational settings
+operational_config:
+  # Enable for better debugging
+  verbose_query_logging: false
+
+  # Faster reloads
+  reload_period: 10s
