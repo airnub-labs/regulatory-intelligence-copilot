@@ -26,8 +26,8 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | Client Telemetry | ✅ Complete | ✅ Complete | ✅ Wired |
-| v0.7 | Logging Framework | ✅ Complete | N/A | ⚠️ OTEL transport gap |
-| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ⚠️ Scalability gaps |
+| v0.7 | Logging Framework | ✅ Complete | N/A | ✅ Wired (OTEL transport) |
+| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ✅ Wired (metrics + logs) |
 | v0.7 | Scenario Engine | ❌ Not Started | ❌ Not Started | ❌ Not Started |
 | - | UI Component Test Coverage | ✅ Complete | ✅ Complete | ✅ Complete (210+ tests) |
 | - | API Route Test Coverage | ✅ Complete | N/A | ✅ Complete (100% - 19/19) |
@@ -616,24 +616,76 @@ This document consolidates all outstanding work identified from reviewing the ar
 ### 4.2 LOW: Graph View & Context Ribbon Enhancement
 
 **Priority**: LOW
-**Effort**: 1 week
-**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
+**Effort**: 1 week (3-5 days)
+**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md` (line 54)
+**Task**: "Expand UI to surface context summaries and referenced graph nodes visually"
 
-**Description**: Basic ribbon present but deeper integration needed.
+**Description**: The backend captures regulatory concepts via `capture_concepts` LLM tool and stores them in `referencedNodes` field. Basic UI display exists but deeper integration with graph visualization and richer metadata rendering is needed.
 
-**Current State**:
+**Current State (Baseline ~30% Complete)**:
+- ✅ Backend concept capture working (`capture_concepts` tool writes to Memgraph)
+- ✅ `referencedNodes` stored in message metadata and `activeNodeIds` in conversation context
 - ✅ Basic ribbon exists (`apps/demo-web/src/components/chat/path-toolbar.tsx`)
 - ✅ Graph visualization works (767 lines in `GraphVisualization.tsx`)
-- ⚠️ Context node highlighting incomplete
-- ⚠️ Timeline visualization missing
-- ⚠️ Scenario state display missing
+- ✅ Sidebar card displays node count and summaries (`page.tsx:1573-1597`)
+- ✅ Per-message node count badge in message footer (`message.tsx:459`)
+- ✅ API endpoint fetches node summaries (`/api/graph?ids=...`, max 25 nodes)
+- ⚠️ Context node highlighting incomplete - graph doesn't distinguish active nodes
+- ⚠️ Timeline visualization missing - TimelineEngine exists but no UI
+- ⚠️ Scenario state display missing - blocked by unimplemented ScenarioEngine
+- ⚠️ Rich metadata ribbon missing - only shows label/type, not relationships or rules
+
+**Current UI Implementation Details**:
+
+| Feature | Location | Status |
+|---------|----------|--------|
+| Node reference link in chat header | `page.tsx:1283-1291` | ✅ Shows count + link to `/graph` |
+| Node summaries sidebar card | `page.tsx:1573-1597` | ✅ Lists up to 25 nodes with labels |
+| Node summary fetch logic | `page.tsx:330-366` | ✅ Fetches from `/api/graph` |
+| Per-message node count badge | `message.tsx:459` | ✅ Shows "Nodes: N" in footer |
+| GraphVisualization component | `GraphVisualization.tsx` | ✅ Full graph view at `/graph` |
+| Context-aware graph highlighting | - | ❌ Not implemented |
+| Timeline constraint display | - | ❌ Not implemented |
 
 **Tasks**:
 
-- [ ] **Task G.1**: Add graph context node highlighting
-- [ ] **Task G.2**: Implement timeline visualization
-- [ ] **Task G.3**: Add scenario state display
-- [ ] **Task G.4**: Improve ribbon metadata rendering
+- [ ] **Task G.1**: Add graph context node highlighting (2-4 hours)
+  - Pass `activeNodeIds` prop from conversation context to `GraphVisualization`
+  - Add visual styling (color, glow, size) for nodes in current conversation context
+  - Add URL param support: `/graph?conversationId=xxx` highlights those nodes
+  - **Files**: `GraphVisualization.tsx`, `graph/page.tsx`
+
+- [ ] **Task G.2**: Implement timeline visualization (4-8 hours)
+  - Create `TimelineVisualization` or `ContextTimeline` component
+  - Display temporal constraints from TimelineEngine for referenced nodes
+  - Show lookbacks, lock-in periods, deadlines visually
+  - **Dependency**: TimelineEngine already implemented (`packages/reg-intel-core/src/timeline/`)
+  - **Files**: New component in `apps/demo-web/src/components/`
+
+- [ ] **Task G.3**: Add scenario state display (4-8 hours)
+  - Display what-if scenario results alongside referenced nodes
+  - Show impact assessment (eligible/ineligible/locked-out)
+  - **Blocker**: ScenarioEngine not yet implemented (see §2.1)
+  - **Defer until**: Scenario Engine implementation complete
+
+- [ ] **Task G.4**: Improve ribbon metadata rendering (4-6 hours)
+  - Enhance sidebar card beyond simple label/type list
+  - Show node relationships (edges to other context nodes)
+  - Display applicable rules/sections for each node
+  - Add uncertainty indicators and temporal constraints
+  - Make nodes clickable to expand details or focus in graph
+  - **Files**: `page.tsx` (sidebar card section), new `ContextNodeCard` component
+
+**Data Available for Enhancement** (from `ChatMetadata` interface, `page.tsx:51-60`):
+```typescript
+interface ChatMetadata {
+  referencedNodes?: string[]     // Node IDs captured from conversation
+  timelineSummary?: string       // Timeline summary text
+  timelineFocus?: string         // Current timeline focus
+  uncertaintyLevel?: 'low' | 'medium' | 'high'
+  jurisdictions?: string[]       // Active jurisdictions
+}
+```
 
 ---
 
