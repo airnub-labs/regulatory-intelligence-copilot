@@ -210,7 +210,7 @@ export async function PATCH(
             }
 
             // Broadcast SSE event for metadata change
-            conversationEventHub.broadcast(tenantId, conversationId, 'message:updated', {
+            conversationEventHub.broadcast(tenantId, conversationId, 'metadata', {
               messageId,
               metadata: updatedMetadata,
               updatedBy: userId,
@@ -289,7 +289,7 @@ export async function DELETE(
             });
 
             // Broadcast SSE event for message deletion
-            conversationEventHub.broadcast(tenantId, conversationId, 'message:deleted', {
+            conversationEventHub.broadcast(tenantId, conversationId, 'message', {
               messageId,
               deletedBy: userId,
               deletedAt: new Date().toISOString(),

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const limitParam = url.searchParams.get('limit');
   // SEC.3: Add pagination bounds validation (min: 1, max: 100) to prevent resource exhaustion
   const limit = Math.min(
-    Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam, 10)),
+    Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam || '50', 10)),
     100
   );
   const cursor = url.searchParams.get('cursor') || null;

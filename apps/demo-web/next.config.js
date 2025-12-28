@@ -48,6 +48,11 @@ const nextConfig = {
     config.plugins.push(
       new webpack.IgnorePlugin({
         resourceRegExp: /^tap$/,
+      }),
+      // Make ioredis optional - it's a runtime-only dependency for Redis caching
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^ioredis$/,
+        contextRegExp: /distributedValidationCache/,
       })
     );
     if (!isServer) {

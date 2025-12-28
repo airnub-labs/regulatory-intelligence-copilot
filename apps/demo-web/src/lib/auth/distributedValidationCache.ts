@@ -10,6 +10,22 @@
 
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 
+// Type definition for ioredis (optional dependency, dynamically imported at runtime)
+interface Redis {
+  get(key: string): Promise<string | null>
+  setex(key: string, seconds: number, value: string): Promise<void>
+  del(...keys: string[]): Promise<number>
+  keys(pattern: string): Promise<string[]>
+  on(event: 'connect', handler: () => void): void
+  on(event: 'error', handler: (error: Error) => void): void
+  on(event: 'close', handler: () => void): void
+  connect(): Promise<void>
+}
+
+interface RedisConstructor {
+  new (url: string, options?: { maxRetriesPerRequest?: number; enableReadyCheck?: boolean; lazyConnect?: boolean }): Redis
+}
+
 const logger = createLogger('DistributedValidationCache')
 
 // Cache TTL: 5 minutes (as requested by user)
@@ -37,7 +53,7 @@ interface DistributedCache {
  * Redis cache implementation (for multi-instance deployments)
  */
 class RedisCache implements DistributedCache {
-  private redis: any // Redis client (dynamically imported)
+  private redis: Redis | null = null // Redis client (dynamically imported)
   private isConnected = false
 
   constructor(redisUrl: string) {
@@ -47,7 +63,10 @@ class RedisCache implements DistributedCache {
   private async initializeRedis(redisUrl: string) {
     try {
       // Dynamic import to avoid bundling Redis in environments without it
-      const { default: Redis } = await import('ioredis')
+      // ioredis is an optional runtime dependency, not required at build time
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore
+      const { default: Redis } = await import('ioredis') as { default: RedisConstructor }
       this.redis = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
         enableReadyCheck: true,
@@ -77,7 +96,7 @@ class RedisCache implements DistributedCache {
   }
 
   async get(userId: string): Promise<CacheEntry | null> {
-    if (!this.isConnected) return null
+    if (!this.isConnected || !this.redis) return null
 
     try {
       const cached = await this.redis.get(`auth:validation:${userId}`)
@@ -92,7 +111,7 @@ class RedisCache implements DistributedCache {
   }
 
   async set(userId: string, isValid: boolean, tenantId?: string): Promise<void> {
-    if (!this.isConnected) return
+    if (!this.isConnected || !this.redis) return
 
     try {
       const entry: CacheEntry = {
@@ -112,7 +131,7 @@ class RedisCache implements DistributedCache {
   }
 
   async invalidate(userId: string): Promise<void> {
-    if (!this.isConnected) return
+    if (!this.isConnected || !this.redis) return
 
     try {
       await this.redis.del(`auth:validation:${userId}`)
@@ -123,7 +142,7 @@ class RedisCache implements DistributedCache {
   }
 
   async clear(): Promise<void> {
-    if (!this.isConnected) return
+    if (!this.isConnected || !this.redis) return
 
     try {
       // Clear all auth validation keys
@@ -138,7 +157,7 @@ class RedisCache implements DistributedCache {
   }
 
   async getStats() {
-    if (!this.isConnected) {
+    if (!this.isConnected || !this.redis) {
       return {
         size: 0,
         maxSize: 0,

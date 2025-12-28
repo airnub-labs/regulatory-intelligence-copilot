@@ -9,8 +9,8 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const mockNextAuth = vi.fn((options) => {
-  return vi.fn((req) => {
+const mockNextAuth = vi.fn(() => {
+  return vi.fn(() => {
     return Response.json({ status: 'ok' });
   });
 });
