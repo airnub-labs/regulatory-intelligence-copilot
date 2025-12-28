@@ -3,7 +3,24 @@ export { dumpObservabilityDiagnostics, formatObservabilityDiagnostics, getObserv
 export { initObservability, shutdownObservability, withSpan } from './tracing.js';
 export { requestContext, type RequestContextValues } from './requestContext.js';
 export { createTracingFetch, injectTraceContextHeaders } from './tracePropagation.js';
-export { createPinoOtelTransport } from './logsExporter.js';
+export { createPinoOtelTransport, getLoggerProvider } from './logsExporter.js';
+export {
+  initBusinessMetrics,
+  recordAgentSelection,
+  recordGraphQuery,
+  recordLlmTokenUsage,
+  recordLlmRequest,
+  recordEgressGuardScan,
+  withMetricTiming,
+  // UI/UX metrics
+  recordBreadcrumbNavigate,
+  recordBranchCreate,
+  recordPathSwitch,
+  recordMergeExecute,
+  recordMergePreview,
+  recordMessageScroll,
+  recordMessageEdit,
+} from './businessMetrics.js';
 export type { LoggerBindings } from './logger.js';
 export type {
   ExporterEndpointOptions,

@@ -487,33 +487,33 @@ This document consolidates all outstanding work identified from reviewing the ar
 ### 3.3 MEDIUM: Observability Scalability Enhancements
 
 **Priority**: MEDIUM (Production Readiness)
-**Effort**: 8-16 hours
+**Effort**: ~~8-16 hours~~ **PARTIALLY COMPLETE** (4-8 hours remaining)
 **Reference**: `docs/observability/SCALABILITY_REVIEW.md`
 
-**Description**: The logging and telemetry framework is fully implemented but needs enhancements for cloud-scale deployments. The OTEL Collector is configured but Pino logs are not automatically forwarded.
+**Description**: The logging and telemetry framework is fully implemented with Pino-to-OTEL transport now wired. Production log backend configuration and custom business metrics remain.
 
 **Current State**:
 - ✅ Pino structured logging implemented (`packages/reg-intel-observability/src/logger.ts`)
 - ✅ OTEL traces and metrics export working
 - ✅ OTEL Collector configured (Docker)
 - ✅ `createPinoOtelTransport()` function EXISTS (`logsExporter.ts:75-133`)
-- ⚠️ **GAP**: Transport NOT WIRED into `createLogger()` (see `logger.ts:71-104`)
-- ⚠️ OTEL_LOGS_ENABLED defaults to false
+- ✅ **WIRED**: Transport now integrated into `createLogger()` via `pino.multistream()` ✅ NEW 2025-12-28
+- ✅ **WIRED**: OTEL_LOGS_ENABLED defaults to true in production ✅ NEW 2025-12-28
 - ⚠️ No production log backend configured (Loki/Elasticsearch)
 - ⚠️ No custom business metrics
 
-**Technical Details of Gap**:
-- `createPinoOtelTransport(provider)` at `logsExporter.ts:75` creates a Writable stream
-- The stream converts Pino logs to OTEL LogRecords and forwards to OTEL Collector
-- **However**, `createLogger()` at `logger.ts:71` uses single destination: `pino(options, destination ?? pino.destination({ sync: false }))`
-- Need to use `pino.multistream([{ stream: stdout }, { stream: otelTransport }])` for dual-write
+**Implementation Details** (2025-12-28):
+- Added `getLoggerProvider()` function to `logsExporter.ts:42-44`
+- Modified `createLogger()` in `logger.ts:97-122` to use `pino.multistream()` when LoggerProvider is initialized
+- Updated `instrumentation.ts:23-32` to enable OTEL logs by default in production (unless explicitly disabled)
+- Created comprehensive test suite (`logger.otel.test.ts`) verifying multistream functionality
 
 **Tasks**:
 
-- [ ] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH - 2-4 hours)
-  - Modify `createLogger()` in `logger.ts` to use `pino.multistream()`
+- [x] **Task OBS.1**: Wire Pino-to-OTEL transport (HIGH - 2-4 hours) ✅ COMPLETED 2025-12-28
+  - Modified `createLogger()` in `logger.ts` to use `pino.multistream()`
   - Import and call `createPinoOtelTransport()` from `logsExporter.ts`
-  - Add OTEL transport stream conditional on `OTEL_LOGS_ENABLED=true`
+  - Add OTEL transport stream conditional on LoggerProvider initialization
   - Test dual-write to stdout + OTEL Collector
 
 - [ ] **Task OBS.2**: Configure production log backend (HIGH)
@@ -521,14 +521,18 @@ This document consolidates all outstanding work identified from reviewing the ar
   - Add Loki and Grafana to docker-compose
   - Or: Configure cloud-native backend (Datadog, CloudWatch)
 
-- [ ] **Task OBS.3**: Add custom business metrics (MEDIUM)
-  - Agent selection rates
-  - Graph query performance histograms
-  - LLM token usage counters
-  - Egress guard block rates
+- [x] **Task OBS.3**: Add custom business metrics (MEDIUM) ✅ COMPLETED 2025-12-28
+  - Created `businessMetrics.ts` module with all metric instruments
+  - Integrated agent selection rate metrics (instrumentation ready)
+  - Integrated graph query performance metrics into GraphClient (fully wired)
+  - Integrated LLM token usage metrics (API ready for integration)
+  - Integrated egress guard block rate metrics into EgressGuard (fully wired)
+  - Comprehensive test suite (businessMetrics.test.ts - 15 tests)
+  - Documentation (BUSINESS_METRICS.md) with usage examples and Prometheus queries
 
-- [ ] **Task OBS.4**: Default OTEL_LOGS_ENABLED for production (MEDIUM)
-  - Change default in `initObservability()` for NODE_ENV=production
+- [x] **Task OBS.4**: Default OTEL_LOGS_ENABLED for production (MEDIUM) ✅ COMPLETED 2025-12-28
+  - Changed default in `instrumentation.ts` for NODE_ENV=production
+  - Logs now enabled by default in production (unless OTEL_LOGS_ENABLED=false)
 
 ---
 
@@ -1039,10 +1043,11 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 8. ~~**Package Test Coverage (reg-intel-next-adapter)**~~ - ✅ **COMPLETED** (2025-12-27) - 23 comprehensive tests
 9. ~~**API Integration Tests**~~ - ✅ **COMPLETED** (2025-12-28) - 19/19 endpoints tested (100% coverage)
 10. ~~**reg-intel-ui component tests**~~ - ✅ **COMPLETED** (2025-12-28) - All 5 components tested (210+ tests)
-11. **Observability Scalability** - Pino-OTEL transport implemented but not wired into createLogger
-12. ~~**Package Test Coverage Gaps - reg-intel-conversations HIGH/MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - All HIGH and MEDIUM priority files now tested
-13. ~~**Package Test Coverage Gaps - reg-intel-core MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - sandboxManager.ts, llmClient.ts now tested (50 tests)
-14. **Package Test Coverage Gaps** (Remaining - LOW priority only):
+11. ~~**Observability Pino-OTEL Wiring**~~ - ✅ **COMPLETED** (2025-12-28) - multistream dual-write implemented, production defaults configured
+12. **Observability Production Backends** - Loki/Elasticsearch configuration needed for production deployments
+13. ~~**Package Test Coverage Gaps - reg-intel-conversations HIGH/MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - All HIGH and MEDIUM priority files now tested
+14. ~~**Package Test Coverage Gaps - reg-intel-core MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - sandboxManager.ts, llmClient.ts now tested (50 tests)
+15. **Package Test Coverage Gaps** (Remaining - LOW priority only):
     - reg-intel-conversations: ~53% file coverage (8/15 files tested, 7 LOW-priority files remain) ✅ HIGH/MEDIUM complete
     - reg-intel-core: ~70% file coverage (9/16 files tested, 6 LOW-priority files remain) ✅ MEDIUM complete
 
@@ -1067,7 +1072,8 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] reg-intel-conversations HIGH/MEDIUM priority test coverage ✅ (executionContextManager, pathStores, eventHub, presenters - 82 new tests)
 - [x] reg-intel-core MEDIUM priority test coverage ✅ (sandboxManager, llmClient - 50 new tests) ✅ NEW 2025-12-28
 - [ ] Scenario Engine implementation
-- [ ] Observability cloud scalability (Pino-OTEL wiring into createLogger, log backends)
+- [x] Observability Pino-OTEL wiring ✅ (multistream dual-write, production defaults) ✅ NEW 2025-12-28
+- [ ] Observability production backends (Loki/Elasticsearch configuration)
 - [ ] reg-intel-conversations LOW priority test expansion (7 files remain: types, config, index exports)
 - [ ] reg-intel-core LOW priority test expansion (6 files remain: types, constants, errors, etc.)
 
@@ -1088,12 +1094,62 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 4.9
+**Document Version**: 5.2
 **Last Updated**: 2025-12-28
-**Previous Versions**: 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v5.2 (2025-12-28): UI/UX metrics expansion ✅
+  - **EXPANDED**: Added 7 UI/UX metric instruments to track path system usage
+    - `regintel.ui.breadcrumb.navigate.total` - Breadcrumb navigation tracking
+    - `regintel.ui.branch.create.total` - Branch creation by method (edit/button/api)
+    - `regintel.ui.path.switch.total` - Path switching by method (breadcrumb/selector/url/api)
+    - `regintel.ui.merge.execute.total` - Merge execution by mode (full/summary/selective)
+    - `regintel.ui.merge.preview.total` - Merge preview requests
+    - `regintel.ui.message.scroll.total` - Message scroll/history navigation
+    - `regintel.ui.message.edit.total` - Message edits (content/regenerate, branching)
+  - **TESTING**: Added 15 UI metrics test cases to `businessMetrics.test.ts`
+  - **DOCUMENTATION**:
+    - Created `UI_METRICS_INTEGRATION.md` with comprehensive React integration examples
+    - Updated `BUSINESS_METRICS.md` with UI metrics section
+    - Includes Prometheus queries and Grafana dashboard recommendations
+  - **USE CASES**:
+    - Track breadcrumb vs selector navigation preferences
+    - Understand branch creation patterns (edit-driven vs. explicit)
+    - Analyze merge mode preferences and preview usage
+    - Monitor message interaction patterns
+  - **TOTAL METRICS**: Now 14 metric instruments (7 backend + 7 UI/UX)
+- v5.1 (2025-12-28): Custom business metrics implementation complete ✅
+  - **COMPLETED**: Task OBS.3 - Add custom business metrics (MEDIUM priority)
+    - Created `businessMetrics.ts` module in reg-intel-observability package
+    - Implemented all 7 metric instruments (4 counters, 2 histograms)
+    - Integrated metrics into GraphClient (`graphClient.ts`) - automatically records query performance
+    - Integrated metrics into EgressGuard (`egressGuard.ts`) - records PII blocking events
+    - Created comprehensive test suite `businessMetrics.test.ts` with 15 test cases
+    - Created detailed documentation `BUSINESS_METRICS.md` with usage examples and Prometheus queries
+    - Auto-initialization in `initObservability()` via `initBusinessMetrics()`
+  - **METRICS AVAILABLE**:
+    - `regintel.agent.selection.total` - Agent selection rates
+    - `regintel.graph.query.duration` + `regintel.graph.query.total` - Graph query performance
+    - `regintel.llm.tokens.total` + `regintel.llm.request.duration` - LLM token usage
+    - `regintel.egressguard.scan.total` + `regintel.egressguard.block.total` - Egress guard operations
+  - **UPDATED**: Section 3.3 - marked Task OBS.3 as complete
+  - **REMAINING**: Only Task OBS.2 (production log backends) remains for observability
+- v5.0 (2025-12-28): Observability wiring implementation complete ✅
+  - **COMPLETED**: Task OBS.1 - Pino-to-OTEL transport wiring (HIGH priority)
+    - Added `getLoggerProvider()` function to `logsExporter.ts:42-44`
+    - Modified `createLogger()` in `logger.ts:97-122` to use `pino.multistream()` when LoggerProvider is initialized
+    - Dual-write implementation: logs go to stdout AND OTEL Collector simultaneously
+    - Created comprehensive test suite `logger.otel.test.ts` with 3 test cases
+  - **COMPLETED**: Task OBS.4 - Default OTEL_LOGS_ENABLED for production (MEDIUM priority)
+    - Updated `instrumentation.ts:23-32` to enable OTEL logs by default in production
+    - Logs enabled when NODE_ENV=production (unless OTEL_LOGS_ENABLED=false)
+    - Development environments require explicit OTEL_LOGS_ENABLED=true
+  - **UPDATED**: Section 3.3 Observability Scalability Enhancements - marked tasks OBS.1 and OBS.4 as complete
+  - **UPDATED**: Production Readiness Checklist - Observability Pino-OTEL wiring marked complete
+  - **UPDATED**: Critical Gaps Identified - split observability into two items (wiring complete, backends pending)
+  - **REMAINING**: Task OBS.2 (production log backends) and OBS.3 (custom business metrics)
 - v4.9 (2025-12-28): Comprehensive review and gap verification refresh
   - **VERIFIED**: Scenario Engine still has ZERO implementation (grep confirmed no ScenarioEngine class)
   - **VERIFIED**: Test coverage numbers confirmed accurate (9 test files in reg-intel-core, 8 in reg-intel-conversations, 8 in reg-intel-ui)

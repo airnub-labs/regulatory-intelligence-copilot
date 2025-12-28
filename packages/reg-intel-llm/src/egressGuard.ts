@@ -53,7 +53,7 @@
  */
 
 import { Redactor } from '@redactpii/node';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, recordEgressGuardScan } from '@reg-copilot/reg-intel-observability';
 
 const logger = createLogger('EgressGuard');
 
@@ -95,6 +95,12 @@ export interface SanitizationOptions {
    * e.g., ['[IP_ADDRESS]', '[IBAN]'] to skip IP and IBAN detection
    */
   excludePatterns?: string[];
+
+  /**
+   * Scan type for metrics tracking
+   * Helps understand where sanitization is being applied
+   */
+  scanType?: 'llm_request' | 'llm_response' | 'sandbox_output' | 'agent_output';
 }
 
 /**
@@ -495,6 +501,16 @@ export function sanitizeTextWithAudit(
     sanitizedLength: result.sanitizedLength,
     reductionBytes: result.originalLength - result.sanitizedLength,
   }, 'PII sanitization completed');
+
+  // Record metrics for egress guard operations
+  if (options?.scanType) {
+    recordEgressGuardScan({
+      scanType: options.scanType,
+      blocked: result.redacted,
+      piiDetected: result.redacted,
+      sensitiveDataTypes: result.redactionTypes,
+    });
+  }
 
   return result;
 }

@@ -3,6 +3,7 @@ import pino, { DestinationStream, LoggerOptions } from 'pino';
 import { trace } from '@opentelemetry/api';
 import { sanitizeObjectForEgress, sanitizeTextForEgress } from './payloadSanitizer.js';
 import { requestContext } from './requestContext.js';
+import { getLoggerProvider, createPinoOtelTransport } from './logsExporter.js';
 
 export type LoggerBindings = {
   component?: string;
@@ -93,9 +94,27 @@ export const createLogger = (scope: string, bindings: LoggerBindings = {}) => {
     },
   };
 
-  // Use async destination for better performance in production
-  // Async logging prevents blocking the event loop on log writes
-  const logger = pino(options, destination ?? pino.destination({ sync: false }));
+  // Check if OTEL logs are enabled and LoggerProvider is initialized
+  const loggerProvider = getLoggerProvider();
+  const shouldUseOtelTransport = loggerProvider !== null;
+
+  let logger: pino.Logger;
+
+  if (shouldUseOtelTransport) {
+    // Use multistream to write to both stdout and OTEL Collector
+    // This enables dual-write: logs go to stdout for local viewing AND to OTEL for centralized observability
+    const stdoutStream = pino.destination({ sync: false });
+    const otelStream = createPinoOtelTransport(loggerProvider);
+
+    logger = pino(options, pino.multistream([
+      { stream: destination ?? stdoutStream },
+      { stream: otelStream },
+    ]));
+  } else {
+    // Use async destination for better performance in production
+    // Async logging prevents blocking the event loop on log writes
+    logger = pino(options, destination ?? pino.destination({ sync: false }));
+  }
 
   // Track logger instance for graceful shutdown
   loggerInstances.add(logger);

@@ -14,7 +14,7 @@ import type {
 } from '../types.js';
 import { callMemgraphMcp } from '../mcpClient.js';
 import { ensureMcpGatewayConfigured } from '../sandboxManager.js';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createLogger, recordGraphQuery } from '@reg-copilot/reg-intel-observability';
 
 const logger = createLogger('GraphClient', { component: 'Graph' });
 
@@ -114,9 +114,36 @@ function parseTimelineResult(result: unknown): Timeline[] {
   return timelines;
 }
 
-async function runMemgraphQuery(query: string): Promise<unknown> {
-  await ensureMcpGatewayConfigured();
-  return callMemgraphMcp(query);
+async function runMemgraphQuery(query: string, operation = 'read'): Promise<unknown> {
+  const startTime = Date.now();
+  let success = true;
+  let result: unknown = null;
+  let nodeCount: number | undefined;
+
+  try {
+    await ensureMcpGatewayConfigured();
+    result = await callMemgraphMcp(query);
+
+    // Try to count nodes in result for metrics
+    if (Array.isArray(result)) {
+      nodeCount = result.length;
+    }
+
+    return result;
+  } catch (error) {
+    success = false;
+    throw error;
+  } finally {
+    const durationMs = Date.now() - startTime;
+
+    // Record graph query metrics
+    recordGraphQuery(durationMs, {
+      operation,
+      queryType: 'cypher',
+      success,
+      ...(nodeCount !== undefined && { nodeCount }),
+    });
+  }
 }
 
 /**
