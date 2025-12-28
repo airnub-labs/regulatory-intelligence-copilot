@@ -194,7 +194,11 @@ function decodeCursor(cursor: string): { timestamp: number; id: string } | null 
     const timestamp = parseInt(timestampStr, 10);
     if (isNaN(timestamp) || !id) return null;
     return { timestamp, id };
-  } catch {
+  } catch (error) {
+    baseConversationLogger.debug({
+      cursor: cursor.substring(0, 20), // Log only first 20 chars to avoid exposing full cursor
+      error: error instanceof Error ? error.message : String(error),
+    }, 'Failed to decode cursor');
     return null;
   }
 }

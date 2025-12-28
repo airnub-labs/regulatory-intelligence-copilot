@@ -6,6 +6,7 @@ import {
   generateInstanceId,
   type DistributedEventMessage,
 } from './sharedEventHub.js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 export interface SupabaseRealtimeEventHubConfig {
   supabaseUrl?: string;
@@ -36,6 +37,7 @@ export class SupabaseRealtimeConversationEventHub {
   private prefix: string;
   private instanceId: string;
   private isShuttingDown = false;
+  private logger = createLogger('SupabaseConversationEventHub');
 
   constructor(config: SupabaseRealtimeEventHubConfig) {
     this.prefix = config.prefix ?? 'copilot:events';
@@ -74,7 +76,10 @@ export class SupabaseRealtimeConversationEventHub {
 
           this.subscribers.localBroadcast(key, parsed.event, parsed.data);
         } catch (error) {
-          console.error(`[SupabaseConversationEventHub] Error handling payload from ${channel}:`, error);
+          this.logger.error({
+            channel,
+            error: error instanceof Error ? error.message : String(error),
+          }, 'Error handling payload from channel');
         }
       });
 
@@ -94,7 +99,10 @@ export class SupabaseRealtimeConversationEventHub {
 
     if (firstSubscriber) {
       void this.ensureChannel(channel, key).catch(error => {
-        console.error(`[SupabaseConversationEventHub] Failed to subscribe to ${channel}:`, error);
+        this.logger.error({
+          channel,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Failed to subscribe to channel');
       });
     }
 
@@ -118,7 +126,10 @@ export class SupabaseRealtimeConversationEventHub {
         void channelPromise
           .then(realtimeChannel => realtimeChannel.unsubscribe())
           .catch(error => {
-            console.error(`[SupabaseConversationEventHub] Failed to unsubscribe from ${channel}:`, error);
+            this.logger.error({
+              channel,
+              error: error instanceof Error ? error.message : String(error),
+            }, 'Failed to unsubscribe from channel');
           });
       }
     }
@@ -145,7 +156,10 @@ export class SupabaseRealtimeConversationEventHub {
         }),
       )
       .catch(error => {
-        console.error(`[SupabaseConversationEventHub] Error publishing to ${channel}:`, error);
+        this.logger.error({
+          channel,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Error publishing to channel');
       });
   }
 
@@ -157,7 +171,10 @@ export class SupabaseRealtimeConversationEventHub {
         const channel = await channelPromise;
         await channel.unsubscribe();
       } catch (error) {
-        console.error(`[SupabaseConversationEventHub] Error shutting down channel ${channelName}:`, error);
+        this.logger.error({
+          channelName,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Error shutting down channel');
       }
     });
 
@@ -187,6 +204,7 @@ export class SupabaseRealtimeConversationListEventHub {
   private prefix: string;
   private instanceId: string;
   private isShuttingDown = false;
+  private logger = createLogger('SupabaseConversationListEventHub');
 
   constructor(config: SupabaseRealtimeEventHubConfig) {
     this.prefix = config.prefix ?? 'copilot:events';
@@ -221,7 +239,10 @@ export class SupabaseRealtimeConversationListEventHub {
 
           this.subscribers.localBroadcast(key, parsed.event, parsed.data);
         } catch (error) {
-          console.error(`[SupabaseConversationListEventHub] Error handling payload from ${channel}:`, error);
+          this.logger.error({
+            channel,
+            error: error instanceof Error ? error.message : String(error),
+          }, 'Error handling payload from channel');
         }
       });
 
@@ -237,7 +258,10 @@ export class SupabaseRealtimeConversationListEventHub {
 
     if (firstSubscriber) {
       void this.ensureChannel(channel, key).catch(error => {
-        console.error(`[SupabaseConversationListEventHub] Failed to subscribe to ${channel}:`, error);
+        this.logger.error({
+          channel,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Failed to subscribe to channel');
       });
     }
 
@@ -257,7 +281,10 @@ export class SupabaseRealtimeConversationListEventHub {
         void channelPromise
           .then(realtimeChannel => realtimeChannel.unsubscribe())
           .catch(error => {
-            console.error(`[SupabaseConversationListEventHub] Failed to unsubscribe from ${channel}:`, error);
+            this.logger.error({
+              channel,
+              error: error instanceof Error ? error.message : String(error),
+            }, 'Failed to unsubscribe from channel');
           });
       }
     }
@@ -283,7 +310,10 @@ export class SupabaseRealtimeConversationListEventHub {
         }),
       )
       .catch(error => {
-        console.error(`[SupabaseConversationListEventHub] Error publishing to ${channel}:`, error);
+        this.logger.error({
+          channel,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Error publishing to channel');
       });
   }
 
@@ -295,7 +325,10 @@ export class SupabaseRealtimeConversationListEventHub {
         const channel = await channelPromise;
         await channel.unsubscribe();
       } catch (error) {
-        console.error(`[SupabaseConversationListEventHub] Error shutting down channel ${channelName}:`, error);
+        this.logger.error({
+          channelName,
+          error: error instanceof Error ? error.message : String(error),
+        }, 'Error shutting down channel');
       }
     });
 
