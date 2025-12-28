@@ -69,6 +69,20 @@ export async function POST(
             return NextResponse.json({ error: 'sourceMessageId is required' }, { status: 400 });
           }
 
+          // HIGH: Validate name and description to prevent injection and resource exhaustion
+          if (name !== undefined && typeof name !== 'string') {
+            return NextResponse.json({ error: 'name must be a string' }, { status: 400 });
+          }
+          if (name && name.length > 255) {
+            return NextResponse.json({ error: 'name exceeds maximum length of 255 characters' }, { status: 400 });
+          }
+          if (description !== undefined && typeof description !== 'string') {
+            return NextResponse.json({ error: 'description must be a string' }, { status: 400 });
+          }
+          if (description && description.length > 2000) {
+            return NextResponse.json({ error: 'description exceeds maximum length of 2000 characters' }, { status: 400 });
+          }
+
           try {
             const result = await conversationPathStore.branchFromMessage({
               tenantId,

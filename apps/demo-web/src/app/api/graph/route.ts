@@ -86,13 +86,18 @@ export async function GET(request: Request) {
   const tenantId = session?.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
   const userId = session?.user?.id;
 
+  // SEC.2: Require authenticated user for graph access
+  if (!userId) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   return requestContext.run({ tenantId, userId }, () =>
     withSpan(
       'api.graph.snapshot',
       {
         'app.route': '/api/graph',
         'app.tenant.id': tenantId,
-        ...(userId ? { 'app.user.id': userId } : {}),
+        'app.user.id': userId,
       },
       async () => {
     try {
@@ -121,6 +126,15 @@ export async function GET(request: Request) {
 
         if (ids.length === 0) {
           return Response.json({ type: 'node_lookup', nodes: [] });
+        }
+
+        // SEC.4: Validate node ID format to prevent injection attacks
+        const isValidNodeId = (id: string) => /^[a-zA-Z0-9_-]+$/.test(id) && id.length < 256;
+        if (!ids.every(isValidNodeId)) {
+          return Response.json(
+            { type: 'error', error: 'Invalid node ID format' },
+            { status: 400 }
+          );
         }
 
         const graphClient = createGraphClient();
