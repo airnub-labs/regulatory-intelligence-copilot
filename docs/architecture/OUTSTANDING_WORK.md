@@ -2,7 +2,7 @@
 
 > **Last Updated**: 2025-12-28
 > **Status**: Comprehensive codebase review and gap analysis (verified)
-> **Document Version**: 4.9
+> **Document Version**: 5.3
 
 ---
 
@@ -29,6 +29,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.7 | Logging Framework | ✅ Complete | N/A | ⚠️ OTEL transport gap |
 | v0.7 | Observability & Cleanup | ✅ Complete | N/A | ⚠️ Scalability gaps |
 | v0.7 | Scenario Engine | ❌ Not Started | ❌ Not Started | ❌ Not Started |
+| v0.7 | Context Summaries & Graph Nodes UI | ✅ Complete | ❌ Not Surfaced | ⚠️ Backend exists, UI gap |
 | - | UI Component Test Coverage | ✅ Complete | ✅ Complete | ✅ Complete (210+ tests) |
 | - | API Route Test Coverage | ✅ Complete | N/A | ✅ Complete (100% - 19/19) |
 
@@ -613,27 +614,131 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
-### 4.2 LOW: Graph View & Context Ribbon Enhancement
+### 4.2 MEDIUM: Context Summaries & Referenced Graph Nodes UI
 
-**Priority**: LOW
-**Effort**: 1 week
-**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`
+**Priority**: MEDIUM (elevated from LOW - significant UX gap identified)
+**Effort**: 1-2 weeks
+**Reference**: `docs/development/V0_6_IMPLEMENTATION_STATUS.md`, `packages/reg-intel-core/src/orchestrator/complianceEngine.ts`
 
-**Description**: Basic ribbon present but deeper integration needed.
+**Description**: Expand UI to surface context summaries and referenced graph nodes visually. Backend capabilities exist but are not surfaced to users.
+
+**Gap Analysis** (verified 2025-12-28):
+
+| Feature | Backend Status | UI Status | Gap |
+|---------|---------------|-----------|-----|
+| Context Summaries | ✅ Built (`complianceEngine.ts:829`) | ❌ Not surfaced | **HIGH** - built but never returned to UI |
+| Referenced Nodes (basic) | ✅ In SSE metadata | ⚠️ Basic links only | Node relationships not shown |
+| Node Type Grouping | ✅ Data available | ❌ Not implemented | No categorization |
+| Node Relationships | ✅ Available in graph | ❌ Not visualized | No mini-graph view |
+| Inline Node References | ❌ Not implemented | ❌ Not implemented | Response text lacks node links |
 
 **Current State**:
 - ✅ Basic ribbon exists (`apps/demo-web/src/components/chat/path-toolbar.tsx`)
 - ✅ Graph visualization works (767 lines in `GraphVisualization.tsx`)
-- ⚠️ Context node highlighting incomplete
+- ✅ Referenced nodes sidebar exists (`page.tsx:1553-1596`) - basic list with links
+- ✅ Message metadata displays agent/jurisdictions/uncertainty (`message.tsx:449-460`)
+- ✅ `buildConversationContextSummary()` generates context summaries for LLM
+- ❌ **Context summaries NOT returned in API response** - only used internally for LLM prompt
+- ❌ **No visualization of node relationships** in chat context
+- ❌ **No node type grouping/filtering** in referenced nodes panel
+- ❌ **No explanation of why nodes are referenced**
 - ⚠️ Timeline visualization missing
 - ⚠️ Scenario state display missing
 
+**Backend Code Reference**:
+```typescript
+// packages/reg-intel-core/src/orchestrator/complianceEngine.ts:829-839
+private buildConversationContextSummary(nodes: ResolvedNodeMeta[]) {
+  if (!nodes.length) return undefined;
+  const nodeText = nodes
+    .map(node => `${node.label}${node.type ? ` (${node.type})` : ''}`)
+    .join(', ');
+  return `Previous turns referenced: ${nodeText}. Keep follow-up answers consistent...`;
+}
+// ⚠️ This summary is passed to LLM but NEVER returned to UI
+```
+
 **Tasks**:
 
+#### Phase 1: Surface Context Summaries (HIGH - 2-3 days)
+
+- [ ] **Task CS.1**: Return context summary in SSE metadata
+  - Modify `complianceEngine.ts` to include `conversationContextSummary` in metadata chunk
+  - Update `ComplianceStreamChunk.metadata` type to include summary field
+  - Update `reg-intel-next-adapter` `buildMetadataChunk()` to pass through
+
+- [ ] **Task CS.2**: Display context summary in chat UI
+  - Add "Context from previous turns" section above message metadata
+  - Show referenced nodes from prior conversation with badges
+  - Collapsible panel to avoid clutter
+
+- [ ] **Task CS.3**: Add context summary tests
+  - Unit tests for metadata propagation
+  - UI component tests for display
+
+#### Phase 2: Enhanced Referenced Nodes Panel (MEDIUM - 3-4 days)
+
+- [ ] **Task RN.1**: Add node type grouping/filtering
+  - Group referenced nodes by type (Benefit, Rule, Jurisdiction, etc.)
+  - Add type badges with color coding (matching GraphVisualization colors)
+  - Add collapse/expand per group
+
+- [ ] **Task RN.2**: Add node details popover
+  - On hover/click, show node properties
+  - Show direct connections to other referenced nodes
+  - Add "View in Graph" link with pre-applied filter
+
+- [ ] **Task RN.3**: Mini-graph visualization
+  - Show small force-directed graph of referenced nodes only
+  - Display relationships between them
+  - Clickable nodes to expand details or navigate to full graph
+
+- [ ] **Task RN.4**: Add relevance/confidence indicators
+  - Show why each node was referenced (query match, jurisdiction, etc.)
+  - Add confidence score if available from LLM
+
+#### Phase 3: Timeline & Scenario Integration (LOW - 2-3 days)
+
 - [ ] **Task G.1**: Add graph context node highlighting
+  - Highlight referenced nodes in main GraphVisualization
+  - Add filter preset for "Referenced in current chat"
+
 - [ ] **Task G.2**: Implement timeline visualization
+  - Show temporal aspects of referenced regulatory rules
+  - Connect to TimelineEngine results
+
 - [ ] **Task G.3**: Add scenario state display
+  - Display what-if scenario state when Scenario Engine is implemented
+  - Show hypothetical vs actual node states
+
 - [ ] **Task G.4**: Improve ribbon metadata rendering
+  - Enhanced path-toolbar with context preview
+  - Quick access to referenced nodes
+
+**Implementation Notes**:
+
+1. **SSE Metadata Update** - Key change in `complianceEngine.ts`:
+   ```typescript
+   // In handleChat() around line 510, add to metadata emission:
+   metadata: {
+     agentUsed: result.agentId,
+     jurisdictions: this.jurisdictions,
+     uncertaintyLevel: result.uncertaintyLevel,
+     referencedNodes: result.referencedNodes,
+     conversationContextSummary: conversationContext?.summary, // ADD THIS
+     priorTurnNodes: conversationContext?.nodes, // ADD THIS
+   }
+   ```
+
+2. **UI Component Locations**:
+   - Context summary display: `apps/demo-web/src/components/chat/message.tsx`
+   - Referenced nodes panel: `apps/demo-web/src/app/page.tsx:1553-1596`
+   - New mini-graph component: `apps/demo-web/src/components/chat/referenced-nodes-graph.tsx`
+
+3. **Type Updates Required**:
+   - `MessageMetadata` in `message.tsx`
+   - `ComplianceStreamChunk` in `complianceEngine.ts`
+   - `buildMetadataChunk()` in `reg-intel-next-adapter`
 
 ---
 
@@ -829,6 +934,7 @@ Branch navigation with preview cards fully functional.
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
 | 2.1 Scenario Engine | HIGH | 2-3 weeks | 🔴 Not Started |
+| 4.2 Context Summaries & Graph Nodes UI | MEDIUM | 1-2 weeks | 🔵 Pending (backend exists, UI gap) |
 | ~~3.1 API Integration Tests~~ | ~~MEDIUM~~ | ~~1-2 days~~ | ✅ **COMPLETED** (73% coverage improvement) |
 | ~~3.2 Package Test Coverage~~ | ~~MEDIUM~~ | ~~2-3 days~~ | ✅ **COMPLETED** (reg-intel-next-adapter) |
 | 3.3 Observability Scalability | MEDIUM | 8-16 hours | 🔵 Pending |
@@ -1023,31 +1129,35 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~2-3 weeks (Scenario Engine is the primary remaining work)
+**Total Outstanding Effort**: ~3-5 weeks (Scenario Engine + Context Summaries UI are primary remaining work)
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 2-3 weeks (Scenario Engine only) |
-| MEDIUM | 1 | 8-16 hours (Observability wiring only) |
+| MEDIUM | 2 | 1-2 weeks (Context Summaries UI) + 8-16 hours (Observability backends) |
 | LOW | 4 | 1-2 weeks (LOW priority tests, UI polish) |
 
 ### Critical Gaps Identified
 
 1. **Scenario Engine** - Fully documented (503 lines spec), zero implementation - **PRIMARY GAP**
-2. ~~**Path System Page Wiring**~~ - ✅ **COMPLETED** (2025-12-27, 100% wired)
-3. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
-4. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
-5. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
-6. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
-7. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
-8. ~~**Package Test Coverage (reg-intel-next-adapter)**~~ - ✅ **COMPLETED** (2025-12-27) - 23 comprehensive tests
-9. ~~**API Integration Tests**~~ - ✅ **COMPLETED** (2025-12-28) - 19/19 endpoints tested (100% coverage)
-10. ~~**reg-intel-ui component tests**~~ - ✅ **COMPLETED** (2025-12-28) - All 5 components tested (210+ tests)
-11. ~~**Observability Pino-OTEL Wiring**~~ - ✅ **COMPLETED** (2025-12-28) - multistream dual-write implemented, production defaults configured
-12. **Observability Production Backends** - Loki/Elasticsearch configuration needed for production deployments
-13. ~~**Package Test Coverage Gaps - reg-intel-conversations HIGH/MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - All HIGH and MEDIUM priority files now tested
-14. ~~**Package Test Coverage Gaps - reg-intel-core MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - sandboxManager.ts, llmClient.ts now tested (50 tests)
-15. **Package Test Coverage Gaps** (Remaining - LOW priority only):
+2. **Context Summaries & Graph Nodes UI** - Backend complete (`complianceEngine.ts:829`), but **NOT surfaced to UI** - **MEDIUM PRIORITY GAP** (NEW 2025-12-28)
+   - `buildConversationContextSummary()` builds summaries for LLM, never returned in API response
+   - Referenced nodes displayed as basic links only, no relationships/grouping/explanations
+   - See Section 4.2 for detailed implementation plan (3 phases, 11 tasks)
+3. ~~**Path System Page Wiring**~~ - ✅ **COMPLETED** (2025-12-27, 100% wired)
+4. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
+5. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
+6. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
+7. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
+8. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
+9. ~~**Package Test Coverage (reg-intel-next-adapter)**~~ - ✅ **COMPLETED** (2025-12-27) - 23 comprehensive tests
+10. ~~**API Integration Tests**~~ - ✅ **COMPLETED** (2025-12-28) - 19/19 endpoints tested (100% coverage)
+11. ~~**reg-intel-ui component tests**~~ - ✅ **COMPLETED** (2025-12-28) - All 5 components tested (210+ tests)
+12. ~~**Observability Pino-OTEL Wiring**~~ - ✅ **COMPLETED** (2025-12-28) - multistream dual-write implemented, production defaults configured
+13. **Observability Production Backends** - Loki/Elasticsearch configuration needed for production deployments
+14. ~~**Package Test Coverage Gaps - reg-intel-conversations HIGH/MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - All HIGH and MEDIUM priority files now tested
+15. ~~**Package Test Coverage Gaps - reg-intel-core MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - sandboxManager.ts, llmClient.ts now tested (50 tests)
+16. **Package Test Coverage Gaps** (Remaining - LOW priority only):
     - reg-intel-conversations: ~53% file coverage (8/15 files tested, 7 LOW-priority files remain) ✅ HIGH/MEDIUM complete
     - reg-intel-core: ~70% file coverage (9/16 files tested, 6 LOW-priority files remain) ✅ MEDIUM complete
 
@@ -1072,6 +1182,7 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] reg-intel-conversations HIGH/MEDIUM priority test coverage ✅ (executionContextManager, pathStores, eventHub, presenters - 82 new tests)
 - [x] reg-intel-core MEDIUM priority test coverage ✅ (sandboxManager, llmClient - 50 new tests) ✅ NEW 2025-12-28
 - [ ] Scenario Engine implementation
+- [ ] Context Summaries & Graph Nodes UI (backend complete, UI not surfaced)
 - [x] Observability Pino-OTEL wiring ✅ (multistream dual-write, production defaults) ✅ NEW 2025-12-28
 - [ ] Observability production backends (Loki/Elasticsearch configuration)
 - [ ] reg-intel-conversations LOW priority test expansion (7 files remain: types, config, index exports)
@@ -1094,12 +1205,26 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 5.2
+**Document Version**: 5.3
 **Last Updated**: 2025-12-28
-**Previous Versions**: 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v5.3 (2025-12-28): Context Summaries & Graph Nodes UI gap analysis ✅
+  - **IDENTIFIED**: Major UI gap - context summaries built on backend but never surfaced to UI
+  - **ELEVATED**: Section 4.2 from LOW to MEDIUM priority (significant UX impact)
+  - **DETAILED**: Comprehensive gap analysis with verification of backend code (`complianceEngine.ts:829`)
+  - **PLANNED**: 3-phase implementation plan with 11 specific tasks:
+    - Phase 1: Surface Context Summaries (HIGH - 2-3 days) - Tasks CS.1-CS.3
+    - Phase 2: Enhanced Referenced Nodes Panel (MEDIUM - 3-4 days) - Tasks RN.1-RN.4
+    - Phase 3: Timeline & Scenario Integration (LOW - 2-3 days) - Tasks G.1-G.4
+  - **ADDED**: Implementation notes with code snippets for SSE metadata update
+  - **UPDATED**: Overall Status table with new "Context Summaries & Graph Nodes UI" row
+  - **UPDATED**: Phase B priorities to include this item
+  - **UPDATED**: Critical Gaps Identified section (#2)
+  - **UPDATED**: Production Readiness Checklist with new item
+  - **UPDATED**: Total Outstanding Effort from ~2-3 weeks to ~3-5 weeks
 - v5.2 (2025-12-28): UI/UX metrics expansion ✅
   - **EXPANDED**: Added 7 UI/UX metric instruments to track path system usage
     - `regintel.ui.breadcrumb.navigate.total` - Breadcrumb navigation tracking
