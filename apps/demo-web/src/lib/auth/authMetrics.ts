@@ -3,11 +3,26 @@
  *
  * Tracks authentication events for monitoring, cost optimization, and performance analysis.
  * Provides insights into login patterns, validation frequency, cache effectiveness, and database usage.
+ *
+ * See: ../metrics/types.ts for type definitions
+ * See: docs/METRICS_SPECIFICATION.md for complete documentation
  */
 
 import { createLogger } from '@reg-copilot/reg-intel-observability'
+import type {
+  AuthenticationMetrics,
+  AuthenticationMetricsCollector,
+  SecurityMetrics,
+} from '../metrics/types'
 
 const logger = createLogger('AuthMetrics')
+
+interface SecurityEvent {
+  timestamp: number
+  eventType: string
+  userId?: string
+  details: string
+}
 
 interface AuthMetrics {
   // Login tracking
@@ -31,6 +46,11 @@ interface AuthMetrics {
   deletedUsersDetected: number
   bannedUsersDetected: number
 
+  // Security events
+  securityEvents: SecurityEvent[]
+  unauthorizedAttempts: number
+  invalidTokens: number
+
   // Cost tracking
   estimatedDatabaseCost: number // Based on query count
 
@@ -39,7 +59,7 @@ interface AuthMetrics {
   lastResetTime: number
 }
 
-class AuthMetricsCollector {
+class AuthMetricsCollectorImpl implements AuthenticationMetricsCollector {
   private metrics: AuthMetrics = {
     totalLogins: 0,
     loginsByHour: {},
@@ -57,6 +77,10 @@ class AuthMetricsCollector {
     activeUsers: new Set(),
     deletedUsersDetected: 0,
     bannedUsersDetected: 0,
+
+    securityEvents: [],
+    unauthorizedAttempts: 0,
+    invalidTokens: 0,
 
     estimatedDatabaseCost: 0,
 
@@ -138,6 +162,9 @@ class AuthMetricsCollector {
     this.metrics.deletedUsersDetected++
     this.metrics.activeUsers.delete(userId)
 
+    // Record as security event
+    this.recordSecurityEvent('deleted_user_detected', userId, 'User attempted access after deletion')
+
     logger.info({
       userId,
       totalDeleted: this.metrics.deletedUsersDetected
@@ -151,10 +178,53 @@ class AuthMetricsCollector {
     this.metrics.bannedUsersDetected++
     this.metrics.activeUsers.delete(userId)
 
+    // Record as security event
+    this.recordSecurityEvent('banned_user_detected', userId, 'User attempted access while banned')
+
     logger.info({
       userId,
       totalBanned: this.metrics.bannedUsersDetected
     }, 'Banned user detected')
+  }
+
+  /**
+   * Record a security event
+   */
+  recordSecurityEvent(eventType: string, userId?: string, details: string = ''): void {
+    const event: SecurityEvent = {
+      timestamp: Date.now(),
+      eventType,
+      userId,
+      details,
+    }
+
+    this.metrics.securityEvents.push(event)
+
+    // Track specific event types
+    if (eventType === 'unauthorized_attempt') {
+      this.metrics.unauthorizedAttempts++
+    } else if (eventType === 'invalid_token') {
+      this.metrics.invalidTokens++
+    }
+
+    // Keep only last 100 security events
+    if (this.metrics.securityEvents.length > 100) {
+      this.metrics.securityEvents.shift()
+    }
+
+    logger.warn({
+      eventType,
+      userId,
+      details,
+      totalEvents: this.metrics.securityEvents.length
+    }, 'Security event recorded')
+  }
+
+  /**
+   * Generic record method for MetricCollector interface
+   */
+  record(event: unknown): void {
+    logger.debug({ event }, 'Generic auth metric event recorded')
   }
 
   /**
@@ -206,20 +276,30 @@ class AuthMetricsCollector {
   /**
    * Get comprehensive metrics summary
    */
-  getMetrics() {
+  getMetrics(): AuthenticationMetrics {
     const uptime = Date.now() - this.metrics.metricsStartTime
     const uptimeHours = uptime / (1000 * 60 * 60)
     const cacheHitRate = this.getCacheHitRate()
     const costSavings = this.getCostSavings()
 
-    return {
-      // Summary
-      uptime: {
-        milliseconds: uptime,
-        hours: uptimeHours,
-        startTime: new Date(this.metrics.metricsStartTime).toISOString(),
-      },
+    // Get recent security events
+    const recentSecurityEvents = this.metrics.securityEvents
+      .slice(-10)
+      .map((event) => ({
+        timestamp: new Date(event.timestamp).toISOString(),
+        eventType: event.eventType,
+        userId: event.userId,
+        details: event.details,
+      }))
 
+    const security: SecurityMetrics = {
+      totalEvents: this.metrics.securityEvents.length,
+      unauthorizedAttempts: this.metrics.unauthorizedAttempts,
+      invalidTokens: this.metrics.invalidTokens,
+      recentEvents: recentSecurityEvents,
+    }
+
+    return {
       // Login metrics
       logins: {
         total: this.metrics.totalLogins,
@@ -258,6 +338,9 @@ class AuthMetricsCollector {
         queriesPerHour: uptimeHours > 0 ? Math.round(this.metrics.validationDatabaseQueries / uptimeHours) : 0,
       },
 
+      // Security events
+      security,
+
       // Performance insights
       performance: {
         cacheEffectiveness: cacheHitRate > 95 ? 'Excellent' : cacheHitRate > 90 ? 'Good' : cacheHitRate > 80 ? 'Fair' : 'Poor',
@@ -292,6 +375,10 @@ class AuthMetricsCollector {
       deletedUsersDetected: 0,
       bannedUsersDetected: 0,
 
+      securityEvents: [],
+      unauthorizedAttempts: 0,
+      invalidTokens: 0,
+
       estimatedDatabaseCost: 0,
 
       metricsStartTime: Date.now(),
@@ -301,7 +388,7 @@ class AuthMetricsCollector {
 }
 
 // Singleton instance
-export const authMetrics = new AuthMetricsCollector()
+export const authMetrics = new AuthMetricsCollectorImpl()
 
 // Log metrics summary every hour
 if (typeof setInterval !== 'undefined') {

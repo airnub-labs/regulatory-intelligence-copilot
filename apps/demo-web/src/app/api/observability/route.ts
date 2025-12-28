@@ -1,8 +1,9 @@
-import { getObservabilityDiagnostics, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { authMetrics } from '@/lib/auth/authMetrics';
-import { distributedValidationCache } from '@/lib/auth/distributedValidationCache';
+import { systemMetrics, businessMetrics } from '@/lib/metrics';
+import type { AggregatedMetrics } from '@/lib/metrics/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,21 +25,21 @@ export async function GET() {
         'api.observability.diagnostics',
         { 'app.route': '/api/observability', 'app.tenant.id': tenantId, 'app.user.id': userId },
         async () => {
-          // Get base observability diagnostics
-          const baseDiagnostics = getObservabilityDiagnostics();
+          // Collect metrics from all categories
+          const systemMetricsData = systemMetrics.getMetrics();
+          const authenticationMetricsData = authMetrics.getMetrics();
+          const businessMetricsData = businessMetrics.getMetrics();
 
-          // Get authentication metrics
-          const authenticationMetrics = authMetrics.getMetrics();
+          // Build aggregated metrics response
+          const aggregatedMetrics: AggregatedMetrics = {
+            system: systemMetricsData,
+            authentication: authenticationMetricsData,
+            business: businessMetricsData,
+            timestamp: new Date().toISOString(),
+            version: process.env.APP_VERSION || process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
+          };
 
-          // Get cache stats
-          const cacheStats = await distributedValidationCache.getStats();
-
-          // Combine all diagnostics
-          return Response.json({
-            ...baseDiagnostics,
-            authentication: authenticationMetrics,
-            validationCache: cacheStats,
-          });
+          return Response.json(aggregatedMetrics);
         },
       ),
   );
