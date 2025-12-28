@@ -36,6 +36,14 @@ export interface LogsExporterOptions {
 let loggerProvider: LoggerProvider | null = null;
 
 /**
+ * Gets the current LoggerProvider instance if initialized
+ * Returns null if initLogsExporter has not been called yet
+ */
+export const getLoggerProvider = (): LoggerProvider | null => {
+  return loggerProvider;
+};
+
+/**
  * Initializes the OpenTelemetry logs exporter
  * This sets up the OTLP log exporter that sends logs to the OTEL collector
  */

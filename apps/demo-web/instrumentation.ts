@@ -21,7 +21,11 @@ export async function register() {
         process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
     },
     logsExporter: {
-      enabled: process.env.OTEL_LOGS_ENABLED === 'true',
+      // Enable OTEL logs by default in production (unless explicitly disabled)
+      // In development, only enable if explicitly set to 'true'
+      enabled:
+        process.env.OTEL_LOGS_ENABLED === 'true' ||
+        (process.env.NODE_ENV === 'production' && process.env.OTEL_LOGS_ENABLED !== 'false'),
       url:
         process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
       useBatchProcessor: process.env.NODE_ENV === 'production',
