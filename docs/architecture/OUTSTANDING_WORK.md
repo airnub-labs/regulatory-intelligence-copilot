@@ -1094,12 +1094,32 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 5.1
+**Document Version**: 5.2
 **Last Updated**: 2025-12-28
-**Previous Versions**: 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v5.2 (2025-12-28): UI/UX metrics expansion ✅
+  - **EXPANDED**: Added 7 UI/UX metric instruments to track path system usage
+    - `regintel.ui.breadcrumb.navigate.total` - Breadcrumb navigation tracking
+    - `regintel.ui.branch.create.total` - Branch creation by method (edit/button/api)
+    - `regintel.ui.path.switch.total` - Path switching by method (breadcrumb/selector/url/api)
+    - `regintel.ui.merge.execute.total` - Merge execution by mode (full/summary/selective)
+    - `regintel.ui.merge.preview.total` - Merge preview requests
+    - `regintel.ui.message.scroll.total` - Message scroll/history navigation
+    - `regintel.ui.message.edit.total` - Message edits (content/regenerate, branching)
+  - **TESTING**: Added 15 UI metrics test cases to `businessMetrics.test.ts`
+  - **DOCUMENTATION**:
+    - Created `UI_METRICS_INTEGRATION.md` with comprehensive React integration examples
+    - Updated `BUSINESS_METRICS.md` with UI metrics section
+    - Includes Prometheus queries and Grafana dashboard recommendations
+  - **USE CASES**:
+    - Track breadcrumb vs selector navigation preferences
+    - Understand branch creation patterns (edit-driven vs. explicit)
+    - Analyze merge mode preferences and preview usage
+    - Monitor message interaction patterns
+  - **TOTAL METRICS**: Now 14 metric instruments (7 backend + 7 UI/UX)
 - v5.1 (2025-12-28): Custom business metrics implementation complete ✅
   - **COMPLETED**: Task OBS.3 - Add custom business metrics (MEDIUM priority)
     - Created `businessMetrics.ts` module in reg-intel-observability package

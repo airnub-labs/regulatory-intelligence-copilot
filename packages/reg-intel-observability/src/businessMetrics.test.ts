@@ -9,6 +9,13 @@ import {
   recordLlmRequest,
   recordEgressGuardScan,
   withMetricTiming,
+  recordBreadcrumbNavigate,
+  recordBranchCreate,
+  recordPathSwitch,
+  recordMergeExecute,
+  recordMergePreview,
+  recordMessageScroll,
+  recordMessageEdit,
 } from './businessMetrics.js';
 
 describe('Business Metrics', () => {
@@ -213,6 +220,178 @@ describe('Business Metrics', () => {
 
       expect(recordedDuration).toBeGreaterThanOrEqual(10);
       expect(recordedSuccess).toBe(false);
+    });
+  });
+
+  describe('UI/UX Metrics', () => {
+    describe('recordBreadcrumbNavigate', () => {
+      it('records breadcrumb navigation with all attributes', () => {
+        expect(() =>
+          recordBreadcrumbNavigate({
+            fromPathId: 'path-1',
+            toPathId: 'path-2',
+            pathDepth: 3,
+            conversationId: 'conv-123',
+          })
+        ).not.toThrow();
+      });
+
+      it('records breadcrumb navigation with minimal attributes', () => {
+        expect(() =>
+          recordBreadcrumbNavigate({
+            fromPathId: 'path-1',
+            toPathId: 'path-2',
+            pathDepth: 2,
+          })
+        ).not.toThrow();
+      });
+    });
+
+    describe('recordBranchCreate', () => {
+      it('records branch creation via edit', () => {
+        expect(() =>
+          recordBranchCreate({
+            method: 'edit',
+            conversationId: 'conv-123',
+            sourcePathId: 'path-1',
+            fromMessageId: 'msg-456',
+          })
+        ).not.toThrow();
+      });
+
+      it('records branch creation via button', () => {
+        expect(() =>
+          recordBranchCreate({
+            method: 'button',
+            conversationId: 'conv-123',
+            sourcePathId: 'path-1',
+          })
+        ).not.toThrow();
+      });
+
+      it('records branch creation via API', () => {
+        expect(() =>
+          recordBranchCreate({
+            method: 'api',
+          })
+        ).not.toThrow();
+      });
+    });
+
+    describe('recordPathSwitch', () => {
+      it('records path switch via breadcrumb', () => {
+        expect(() =>
+          recordPathSwitch({
+            fromPathId: 'path-1',
+            toPathId: 'path-2',
+            switchMethod: 'breadcrumb',
+            conversationId: 'conv-123',
+          })
+        ).not.toThrow();
+      });
+
+      it('records path switch via selector', () => {
+        expect(() =>
+          recordPathSwitch({
+            fromPathId: 'path-1',
+            toPathId: 'path-3',
+            switchMethod: 'selector',
+          })
+        ).not.toThrow();
+      });
+    });
+
+    describe('recordMergeExecute', () => {
+      it('records full merge', () => {
+        expect(() =>
+          recordMergeExecute({
+            mergeMode: 'full',
+            sourcePathId: 'path-2',
+            targetPathId: 'path-1',
+            messageCount: 5,
+            conversationId: 'conv-123',
+          })
+        ).not.toThrow();
+      });
+
+      it('records summary merge', () => {
+        expect(() =>
+          recordMergeExecute({
+            mergeMode: 'summary',
+            sourcePathId: 'path-2',
+            targetPathId: 'path-1',
+          })
+        ).not.toThrow();
+      });
+
+      it('records selective merge', () => {
+        expect(() =>
+          recordMergeExecute({
+            mergeMode: 'selective',
+            sourcePathId: 'path-2',
+            targetPathId: 'path-1',
+            messageCount: 3,
+          })
+        ).not.toThrow();
+      });
+    });
+
+    describe('recordMergePreview', () => {
+      it('records merge preview', () => {
+        expect(() =>
+          recordMergePreview({
+            sourcePathId: 'path-2',
+            targetPathId: 'path-1',
+            conversationId: 'conv-123',
+          })
+        ).not.toThrow();
+      });
+    });
+
+    describe('recordMessageScroll', () => {
+      it('records scroll up', () => {
+        expect(() =>
+          recordMessageScroll({
+            scrollDirection: 'up',
+            messageCount: 10,
+            conversationId: 'conv-123',
+            pathId: 'path-1',
+          })
+        ).not.toThrow();
+      });
+
+      it('records scroll down', () => {
+        expect(() =>
+          recordMessageScroll({
+            scrollDirection: 'down',
+            messageCount: 5,
+          })
+        ).not.toThrow();
+      });
+    });
+
+    describe('recordMessageEdit', () => {
+      it('records content edit that creates branch', () => {
+        expect(() =>
+          recordMessageEdit({
+            messageId: 'msg-123',
+            editType: 'content',
+            createsBranch: true,
+            conversationId: 'conv-123',
+            pathId: 'path-1',
+          })
+        ).not.toThrow();
+      });
+
+      it('records regenerate without branching', () => {
+        expect(() =>
+          recordMessageEdit({
+            messageId: 'msg-456',
+            editType: 'regenerate',
+            createsBranch: false,
+          })
+        ).not.toThrow();
+      });
     });
   });
 });

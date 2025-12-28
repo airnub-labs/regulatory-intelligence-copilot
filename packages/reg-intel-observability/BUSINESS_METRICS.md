@@ -147,6 +147,182 @@ const result = await withMetricTiming(
 );
 ```
 
+## UI/UX Metrics
+
+Track user interactions with the path system to understand usage patterns and optimize UX.
+
+### Breadcrumb Navigation
+
+**Metric**: `regintel.ui.breadcrumb.navigate.total` (Counter)
+
+**Attributes**:
+- `fromPathId` (string): Source path ID
+- `toPathId` (string): Destination path ID
+- `pathDepth` (number): Depth in the path hierarchy
+- `conversationId` (string, optional): Conversation ID
+
+**Usage**:
+```typescript
+import { recordBreadcrumbNavigate } from '@reg-copilot/reg-intel-observability';
+
+recordBreadcrumbNavigate({
+  fromPathId: 'path-1',
+  toPathId: 'path-2',
+  pathDepth: 3,
+  conversationId: 'conv-123',
+});
+```
+
+### Branch Creation
+
+**Metric**: `regintel.ui.branch.create.total` (Counter)
+
+**Attributes**:
+- `method` ("edit" | "button" | "api"): How the branch was created
+- `conversationId` (string, optional): Conversation ID
+- `sourcePathId` (string, optional): Source path ID
+- `fromMessageId` (string, optional): Message that triggered branch (for edits)
+
+**Usage**:
+```typescript
+import { recordBranchCreate } from '@reg-copilot/reg-intel-observability';
+
+// Branch created via button
+recordBranchCreate({
+  method: 'button',
+  conversationId: 'conv-123',
+  sourcePathId: 'path-1',
+});
+
+// Branch created via message edit
+recordBranchCreate({
+  method: 'edit',
+  conversationId: 'conv-123',
+  sourcePathId: 'path-1',
+  fromMessageId: 'msg-456',
+});
+```
+
+### Path Switching
+
+**Metric**: `regintel.ui.path.switch.total` (Counter)
+
+**Attributes**:
+- `fromPathId` (string): Source path ID
+- `toPathId` (string): Destination path ID
+- `switchMethod` ("breadcrumb" | "selector" | "url" | "api"): How the switch occurred
+- `conversationId` (string, optional): Conversation ID
+
+**Usage**:
+```typescript
+import { recordPathSwitch } from '@reg-copilot/reg-intel-observability';
+
+recordPathSwitch({
+  fromPathId: 'path-1',
+  toPathId: 'path-2',
+  switchMethod: 'selector',
+  conversationId: 'conv-123',
+});
+```
+
+### Merge Operations
+
+**Metrics**:
+- `regintel.ui.merge.execute.total` (Counter)
+- `regintel.ui.merge.preview.total` (Counter)
+
+**Attributes** (execute):
+- `mergeMode` ("full" | "summary" | "selective"): Merge mode used
+- `sourcePathId` (string): Source path ID
+- `targetPathId` (string): Target path ID
+- `messageCount` (number, optional): Number of messages merged
+- `conversationId` (string, optional): Conversation ID
+
+**Attributes** (preview):
+- `sourcePathId` (string): Source path ID
+- `targetPathId` (string): Target path ID
+- `conversationId` (string, optional): Conversation ID
+
+**Usage**:
+```typescript
+import { recordMergeExecute, recordMergePreview } from '@reg-copilot/reg-intel-observability';
+
+// Preview merge
+recordMergePreview({
+  sourcePathId: 'path-2',
+  targetPathId: 'path-1',
+  conversationId: 'conv-123',
+});
+
+// Execute merge
+recordMergeExecute({
+  mergeMode: 'summary',
+  sourcePathId: 'path-2',
+  targetPathId: 'path-1',
+  messageCount: 5,
+  conversationId: 'conv-123',
+});
+```
+
+### Message Interactions
+
+**Metrics**:
+- `regintel.ui.message.scroll.total` (Counter)
+- `regintel.ui.message.edit.total` (Counter)
+
+**Attributes** (scroll):
+- `scrollDirection` ("up" | "down"): Scroll direction
+- `messageCount` (number, optional): Total messages in view
+- `conversationId` (string, optional): Conversation ID
+- `pathId` (string, optional): Active path ID
+
+**Attributes** (edit):
+- `messageId` (string): Message ID
+- `editType` ("content" | "regenerate"): Type of edit
+- `createsBranch` (boolean): Whether edit created a branch
+- `conversationId` (string, optional): Conversation ID
+- `pathId` (string, optional): Active path ID
+
+**Usage**:
+```typescript
+import { recordMessageScroll, recordMessageEdit } from '@reg-copilot/reg-intel-observability';
+
+// Scroll tracking
+recordMessageScroll({
+  scrollDirection: 'down',
+  messageCount: 10,
+  conversationId: 'conv-123',
+  pathId: 'path-1',
+});
+
+// Message edit tracking
+recordMessageEdit({
+  messageId: 'msg-123',
+  editType: 'content',
+  createsBranch: true,
+  conversationId: 'conv-123',
+  pathId: 'path-1',
+});
+```
+
+### UI Metrics Prometheus Queries
+
+```promql
+# Branch creation method distribution
+sum(rate(regintel_ui_branch_create_total[1h])) by (method)
+
+# Most used merge modes
+sum(rate(regintel_ui_merge_execute_total[1h])) by (mergeMode)
+
+# Path switching methods
+sum(rate(regintel_ui_path_switch_total[1h])) by (switchMethod)
+
+# Message edits that create branches
+sum(rate(regintel_ui_message_edit_total{createsBranch="true"}[1h]))
+```
+
+**For detailed UI integration examples**, see [UI_METRICS_INTEGRATION.md](./UI_METRICS_INTEGRATION.md).
+
 ## Initialization
 
 Business metrics are automatically initialized when you call `initObservability()`:

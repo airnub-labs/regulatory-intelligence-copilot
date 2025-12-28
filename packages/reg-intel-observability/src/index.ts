@@ -12,6 +12,14 @@ export {
   recordLlmRequest,
   recordEgressGuardScan,
   withMetricTiming,
+  // UI/UX metrics
+  recordBreadcrumbNavigate,
+  recordBranchCreate,
+  recordPathSwitch,
+  recordMergeExecute,
+  recordMergePreview,
+  recordMessageScroll,
+  recordMessageEdit,
 } from './businessMetrics.js';
 export type { LoggerBindings } from './logger.js';
 export type {
