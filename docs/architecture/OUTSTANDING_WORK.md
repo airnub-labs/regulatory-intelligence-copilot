@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
 > **Last Updated**: 2025-12-28
-> **Status**: Comprehensive codebase review and gap analysis (verified)
-> **Document Version**: 5.3
+> **Status**: Comprehensive security and quality review completed
+> **Document Version**: 5.4
 
 ---
 
@@ -31,7 +31,9 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.7 | Scenario Engine | ❌ Not Started | ❌ Not Started | ❌ Not Started |
 | v0.7 | Context Summaries & Graph Nodes UI | ✅ Complete | ❌ Not Surfaced | ⚠️ Backend exists, UI gap |
 | - | UI Component Test Coverage | ✅ Complete | ✅ Complete | ✅ Complete (210+ tests) |
-| - | API Route Test Coverage | ✅ Complete | N/A | ✅ Complete (100% - 19/19) |
+| - | API Route Test Coverage | ⚠️ Partial | N/A | ⚠️ 90% (18/20) - see §3.5 |
+| - | Security & Input Validation | ⚠️ Gaps | N/A | ⚠️ See §2.2 |
+| - | Error Handling | ⚠️ Gaps | N/A | ⚠️ Silent catches, no error boundaries |
 
 ---
 
@@ -255,21 +257,135 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
+### 2.2 HIGH: Security & Input Validation Gaps
+
+**Priority**: HIGH (Security)
+**Effort**: 1-2 days
+**Identified**: 2025-12-28 (comprehensive security review)
+
+**Description**: Security review identified several gaps in authentication, authorization, and input validation that need immediate attention.
+
+**Current State**:
+
+#### 2.2.1 Authentication Gaps
+
+| Issue | File | Severity | Description |
+|-------|------|----------|-------------|
+| **Unprotected /api/observability** | `apps/demo-web/src/app/api/observability/route.ts` | 🔴 HIGH | Diagnostics endpoint has NO authentication - exposes system health info |
+| **Incomplete userId validation** | `apps/demo-web/src/app/api/graph/route.ts:84-96` | 🟡 MEDIUM | `userId` can be `undefined` but still passed to logging context |
+
+**Code Issue - /api/observability (lines 5-15)**:
+```typescript
+export async function GET() {
+  return requestContext.run(
+    { tenantId: 'system', userId: 'observability' },  // ⚠️ NO AUTH CHECK
+    // Returns: getObservabilityDiagnostics()
+  );
+}
+```
+
+#### 2.2.2 Input Validation Gaps
+
+| Issue | File | Severity | Description |
+|-------|------|----------|-------------|
+| **Missing pagination bounds** | `apps/demo-web/src/app/api/conversations/route.ts:23-25` | 🟡 MEDIUM | No upper bound on `limit` parameter - could request millions of records |
+| **No node ID format validation** | `apps/demo-web/src/app/api/graph/route.ts:113-120` | 🟡 MEDIUM | Node IDs not validated before Memgraph query |
+
+**Tasks**:
+
+- [ ] **Task SEC.1**: Add authentication to `/api/observability` endpoint
+  - Add session check or move behind admin-only route
+  - Consider requiring `ADMIN` role for access
+
+- [ ] **Task SEC.2**: Add userId validation to `/api/graph` route
+  ```typescript
+  if (!userId) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  ```
+
+- [ ] **Task SEC.3**: Add pagination bounds validation
+  ```typescript
+  const limit = Math.min(
+    Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam, 10)),
+    500  // max limit
+  );
+  ```
+
+- [ ] **Task SEC.4**: Add node ID format validation
+  ```typescript
+  const isValidNodeId = (id: string) => /^[a-zA-Z0-9_-]+$/.test(id) && id.length < 256;
+  if (!ids.every(isValidNodeId)) {
+    return Response.json({ error: 'Invalid node IDs' }, { status: 400 });
+  }
+  ```
+
+---
+
+### 2.3 HIGH: Error Handling & Resilience Gaps
+
+**Priority**: HIGH (Reliability)
+**Effort**: 1 day
+**Identified**: 2025-12-28
+
+**Description**: Critical error handling issues that could cause silent failures or application crashes.
+
+#### 2.3.1 Silent Catch Blocks
+
+| File | Line | Issue |
+|------|------|-------|
+| `packages/reg-intel-observability/src/logger.ts` | 389-391 | ML-based PII redaction failures silently ignored |
+| `packages/reg-intel-conversations/src/conversationStores.ts` | 197-199 | Parsing failures return `null` without logging |
+
+**Example Issue - logger.ts**:
+```typescript
+} catch {
+  // Continue with pattern-based redaction  // ⚠️ No logging of what went wrong
+}
+```
+**Risk**: Silent data leaks if PII redaction fails
+
+#### 2.3.2 Unhandled Promise Chains
+
+| File | Lines | Issue |
+|------|-------|-------|
+| `packages/reg-intel-conversations/src/supabaseEventHub.ts` | 119-143, 258-278 | `.send()` calls not wrapped in catch |
+
+#### 2.3.3 Missing React Error Boundaries
+
+- **No `error.tsx` files found** in `/apps/demo-web/src/`
+- **No React Error Boundary components** detected
+- **Risk**: Unhandled errors crash entire app UI
+
+**Tasks**:
+
+- [ ] **Task ERR.1**: Add logging to silent catch blocks
+  - `logger.ts:389-391` - Log PII redaction fallback reason
+  - `conversationStores.ts:197-199` - Log parsing failure details
+
+- [ ] **Task ERR.2**: Add error handling to promise chains in `supabaseEventHub.ts`
+
+- [ ] **Task ERR.3**: Add React error boundaries
+  - Create `apps/demo-web/src/app/error.tsx` for app-level error handling
+  - Create `apps/demo-web/src/app/global-error.tsx` for root error handling
+
+---
+
 ## 3. Outstanding Work - MEDIUM Priority
 
-### 3.1 MEDIUM: Missing API Integration Tests ✅ COMPLETED
+### 3.1 MEDIUM: Missing API Integration Tests ⚠️ CORRECTED
 
 **Priority**: MEDIUM (Quality)
-**Effort**: ~~1-2 days~~ **COMPLETED**: 2025-12-28
-**Status**: ✅ **100% coverage** - All 19/19 endpoints now have comprehensive tests (up from 16%)
+**Effort**: ~~1-2 days~~ **MOSTLY COMPLETE**: 2025-12-28
+**Status**: ⚠️ **90% coverage** - 18/20 endpoints tested (corrected from previous 100% claim)
 
-**Description**: API integration test coverage improved from 16% to 100% with 16 new test files covering all endpoints including SSE streaming.
+**Description**: API integration test coverage improved significantly but 2 routes remain untested.
 
-**API Test Coverage Summary**:
-- **Total API Routes**: 19 files
-- **Routes with tests**: 19 (100%) - up from 3 (16%)
-- **Routes without tests**: 0 (0%)
-- **Coverage improvement**: +84 percentage points
+**API Test Coverage Summary** (CORRECTED):
+- **Total API Routes**: 20 files
+- **Routes with tests**: 18 (90%)
+- **Routes without tests**: 2 (10%)
+- **Coverage improvement**: +74 percentage points (from 16%)
 
 **✅ COMPLETED Tests - Phase 1 (8 test files, 52 tests)** - Morning 2025-12-27:
 
@@ -310,9 +426,14 @@ This document consolidates all outstanding work identified from reviewing the ar
 **Existing Coverage** (3 test files):
 - `apps/demo-web/src/app/api/chat/route.test.ts` ✅ (231 LOC)
 - `apps/demo-web/src/app/api/client-telemetry/route.test.ts` ✅ (142 LOC)
-- `apps/demo-web/src/app/api/graph/route.logging.test.ts` ✅ (93 LOC)
+- `apps/demo-web/src/app/api/graph/route.logging.test.ts` ✅ (93 LOC - logging only)
 
-**Coverage Complete**: All 19 API routes now have comprehensive test coverage.
+**❌ Routes WITHOUT Tests** (2 routes - NEEDS ATTENTION):
+
+| Route | File | Issue |
+|-------|------|-------|
+| `/api/graph` (GET) | `apps/demo-web/src/app/api/graph/route.ts` | ❌ **No tests** - Graph snapshot parsing/filtering untested (80+ LOC) |
+| `/api/auth/[...nextauth]` | `apps/demo-web/src/app/api/auth/[...nextauth]/route.ts` | ⚠️ NextAuth wrapper - basic integration test recommended |
 
 **Tasks**:
 
@@ -324,6 +445,8 @@ This document consolidates all outstanding work identified from reviewing the ar
 - [x] **Task IT.6**: Create path detail & messages tests ✅
 - [x] **Task IT.7**: Create SSE streaming tests (4 routes) ✅
 - [x] **Task IT.8**: Create message CRUD tests ✅ (NEW 2025-12-28)
+- [ ] **Task IT.9**: Create `/api/graph` GET endpoint tests (graph parsing, boundary enforcement)
+- [ ] **Task IT.10**: Create basic NextAuth integration test
 
 ---
 
@@ -582,6 +705,95 @@ This document consolidates all outstanding work identified from reviewing the ar
 - [x] **Task UI.2**: Add persistent branch indicator badges to Message component ✅
 - [x] **Task UI.3**: Track active path in URL with `?pathId=xxx` parameter ✅
 - [x] **Task UI.4**: Remove legacy `supersededBy` pattern from codebase ✅
+
+---
+
+### 3.5 MEDIUM: Critical Untested Implementation Files
+
+**Priority**: MEDIUM (Quality/Security)
+**Effort**: 2-3 days
+**Identified**: 2025-12-28 (comprehensive codebase review)
+
+**Description**: Several critical implementation files with security and reliability implications have NO test coverage. These files handle sensitive operations like PII sanitization, logging, and real-time events.
+
+**Critical Untested Files**:
+
+| File | LOC | Purpose | Risk Level |
+|------|-----|---------|------------|
+| `packages/reg-intel-llm/src/egressGuard.ts` | 500+ | **PII Sanitization** - 44 regex patterns for detecting/redacting sensitive data | 🔴 **CRITICAL** |
+| `packages/reg-intel-observability/src/logger.ts` | 100+ | Core logging with PII redaction | 🟡 HIGH |
+| `packages/reg-intel-observability/src/logsExporter.ts` | 140+ | OTEL log export | 🟡 HIGH |
+| `packages/reg-intel-observability/src/tracing.ts` | 280+ | Distributed tracing | 🟡 HIGH |
+| `packages/reg-intel-conversations/src/supabaseEventHub.ts` | 200+ | Real-time SSE events via Supabase | 🟡 MEDIUM |
+| `packages/reg-intel-conversations/src/sharedEventHub.ts` | 150+ | Shared event handling | 🟡 MEDIUM |
+| `packages/reg-intel-observability/src/cli.ts` | ~100 | CLI tools | 🟢 LOW |
+
+#### 3.5.1 CRITICAL: egressGuard.ts Has NO Tests
+
+**File**: `packages/reg-intel-llm/src/egressGuard.ts`
+**Lines**: 500+
+**Status**: ❌ **ZERO test coverage**
+
+**What's Untested**:
+- 44 PII detection patterns (SSN, email, IBAN, API keys, JWTs, phone numbers, etc.)
+- Context-aware sanitization modes (`chat`, `calculation`, `strict`, `off`)
+- ML-based PII detection fallback
+- Edge cases (unicode, malformed data, special characters)
+- False positive/negative rates
+
+**Risk**: If any pattern is incorrect, PII could leak to LLM providers or logs.
+
+**Example Untested Patterns** (lines 150-240):
+```typescript
+// SSN (US) - exact format XXX-XX-XXXX with hyphens required
+{ pattern: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: '[SSN REDACTED]' },
+// Irish PPSN - 7 digits + 1-2 letters
+{ pattern: /\b\d{7}[A-Z]{1,2}\b/gi, replacement: '[PPSN REDACTED]' },
+// IBAN - various country formats
+{ pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{4,30}\b/gi, replacement: '[IBAN REDACTED]' },
+```
+
+#### 3.5.2 Observability Package Gaps
+
+**Package**: `reg-intel-observability`
+**Status**: 50% file coverage (5/10 files tested)
+
+**Untested Files**:
+- `logger.ts` - Core logging, PII redaction in logs
+- `logsExporter.ts` - OTEL log export configuration
+- `tracing.ts` - Span creation, trace context propagation
+- `payloadSanitizer.ts` - Request/response sanitization
+- `requestContext.ts` - Async context management
+- `cli.ts` - CLI diagnostic tools
+
+**Tasks**:
+
+- [ ] **Task CUT.1**: Add comprehensive tests for `egressGuard.ts` (CRITICAL)
+  - Test all 44 PII patterns with valid and edge cases
+  - Test context modes (chat, calculation, strict, off)
+  - Test ML fallback behavior
+  - Test false positive scenarios
+  - Benchmark pattern performance
+
+- [ ] **Task CUT.2**: Add tests for `logger.ts`
+  - Test PII redaction in log messages
+  - Test log level filtering
+  - Test structured log output format
+
+- [ ] **Task CUT.3**: Add tests for `logsExporter.ts`
+  - Test OTEL transport configuration
+  - Test log batching and flush behavior
+  - Test error handling for failed exports
+
+- [ ] **Task CUT.4**: Add tests for `tracing.ts`
+  - Test span creation and attributes
+  - Test trace context propagation
+  - Test parent-child span relationships
+
+- [ ] **Task CUT.5**: Add tests for `supabaseEventHub.ts`
+  - Test real-time subscription lifecycle
+  - Test message delivery guarantees
+  - Test reconnection handling
 
 ---
 
@@ -1033,16 +1245,13 @@ Branch navigation with preview cards fully functional.
 - ✅ Store mode selection - memory, supabase, auto (6 tests)
 - **Status**: ✅ Comprehensive coverage for all adapter functionality
 
-### API Route Test Coverage
+### API Route Test Coverage (CORRECTED 2025-12-28)
 
-**Total API Routes**: 20 files (19 custom + 1 NextAuth) | **Custom routes with tests**: 19/19 (100%) | **Coverage improvement**: +84% (from 16%)
+**Total API Routes**: 20 files | **Routes with tests**: 18/20 (90%) | **Coverage improvement**: +74% (from 16%)
 
-> **Note**: The `/api/auth/[...nextauth]/route.ts` is a NextAuth.js route handler that delegates to the library. It doesn't contain custom logic requiring tests.
-
-**✅ Tested Routes** (19/19):
+**✅ Tested Routes** (18/20):
 - `/api/chat` ✅ (231 LOC)
 - `/api/client-telemetry` ✅ (142 LOC)
-- `/api/graph` ✅ (93 LOC logging)
 - `/api/conversations/[id]/messages/[messageId]/pin` ✅ (6 tests Phase 1)
 - `/api/cron/cleanup-contexts` ✅ (7 tests Phase 1)
 - `/api/conversations/[id]/branch` ✅ (6 tests Phase 1)
@@ -1058,9 +1267,13 @@ Branch navigation with preview cards fully functional.
 - `/api/conversations/stream` ✅ (19 tests Phase 3 - SSE list streaming)
 - `/api/graph/stream` ✅ (19 tests Phase 3 - SSE/WS streaming)
 - `/api/observability` ✅ (12 tests Phase 3 - diagnostics)
-- `/api/conversations/[id]/messages/[messageId]` ✅ (537 LOC Phase 4 - message CRUD) NEW
+- `/api/conversations/[id]/messages/[messageId]` ✅ (537 LOC Phase 4 - message CRUD)
 
-**Coverage Status**: ✅ 100% - All 19 API routes now have comprehensive tests.
+**❌ Routes WITHOUT Tests** (2/20):
+- `/api/graph` (GET) ❌ - Graph snapshot parsing/filtering untested (80+ LOC implementation)
+- `/api/auth/[...nextauth]` ❌ - NextAuth integration test recommended
+
+**Coverage Status**: ⚠️ 90% - 2 routes need tests (see §3.1 for tasks IT.9 and IT.10)
 
 **Previously Tested Routes** (original coverage before improvements):
 - `/api/chat/route.ts` - 231 LOC tests ✅
@@ -1129,64 +1342,89 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~3-5 weeks (Scenario Engine + Context Summaries UI are primary remaining work)
+**Total Outstanding Effort**: ~4-6 weeks (Scenario Engine + Security/Error Handling + Context Summaries UI)
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 1 | 2-3 weeks (Scenario Engine only) |
-| MEDIUM | 2 | 1-2 weeks (Context Summaries UI) + 8-16 hours (Observability backends) |
+| HIGH | 3 | 2-3 weeks (Scenario Engine) + 1-2 days (Security) + 1 day (Error Handling) |
+| MEDIUM | 4 | 1-2 weeks (Context Summaries UI) + 2-3 days (Critical Untested Files) + 8-16 hours (Observability) |
 | LOW | 4 | 1-2 weeks (LOW priority tests, UI polish) |
 
 ### Critical Gaps Identified
 
+**🔴 HIGH Priority (Immediate Action Required)**:
+
 1. **Scenario Engine** - Fully documented (503 lines spec), zero implementation - **PRIMARY GAP**
-2. **Context Summaries & Graph Nodes UI** - Backend complete (`complianceEngine.ts:829`), but **NOT surfaced to UI** - **MEDIUM PRIORITY GAP** (NEW 2025-12-28)
-   - `buildConversationContextSummary()` builds summaries for LLM, never returned in API response
-   - Referenced nodes displayed as basic links only, no relationships/grouping/explanations
+2. **Security & Input Validation Gaps** (NEW 2025-12-28) - See §2.2
+   - `/api/observability` endpoint has NO authentication
+   - `/api/graph` has incomplete userId validation
+   - Missing pagination bounds and node ID format validation
+3. **Error Handling & Resilience Gaps** (NEW 2025-12-28) - See §2.3
+   - Silent catch blocks in `logger.ts`, `conversationStores.ts`
+   - Unhandled promise chains in `supabaseEventHub.ts`
+   - No React error boundaries (app crashes on unhandled errors)
+
+**🟡 MEDIUM Priority**:
+
+4. **Context Summaries & Graph Nodes UI** - Backend complete (`complianceEngine.ts:829`), but **NOT surfaced to UI**
    - See Section 4.2 for detailed implementation plan (3 phases, 11 tasks)
-3. ~~**Path System Page Wiring**~~ - ✅ **COMPLETED** (2025-12-27, 100% wired)
-4. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
-5. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 comprehensive tests
-6. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
-7. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
-8. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
-9. ~~**Package Test Coverage (reg-intel-next-adapter)**~~ - ✅ **COMPLETED** (2025-12-27) - 23 comprehensive tests
-10. ~~**API Integration Tests**~~ - ✅ **COMPLETED** (2025-12-28) - 19/19 endpoints tested (100% coverage)
-11. ~~**reg-intel-ui component tests**~~ - ✅ **COMPLETED** (2025-12-28) - All 5 components tested (210+ tests)
-12. ~~**Observability Pino-OTEL Wiring**~~ - ✅ **COMPLETED** (2025-12-28) - multistream dual-write implemented, production defaults configured
-13. **Observability Production Backends** - Loki/Elasticsearch configuration needed for production deployments
-14. ~~**Package Test Coverage Gaps - reg-intel-conversations HIGH/MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - All HIGH and MEDIUM priority files now tested
-15. ~~**Package Test Coverage Gaps - reg-intel-core MEDIUM priority**~~ - ✅ **COMPLETED** (2025-12-28) - sandboxManager.ts, llmClient.ts now tested (50 tests)
-16. **Package Test Coverage Gaps** (Remaining - LOW priority only):
-    - reg-intel-conversations: ~53% file coverage (8/15 files tested, 7 LOW-priority files remain) ✅ HIGH/MEDIUM complete
-    - reg-intel-core: ~70% file coverage (9/16 files tested, 6 LOW-priority files remain) ✅ MEDIUM complete
+5. **Critical Untested Implementation Files** (NEW 2025-12-28) - See §3.5
+   - `egressGuard.ts` (500+ LOC) - **PII sanitization patterns with ZERO tests** 🔴
+   - `logger.ts`, `logsExporter.ts`, `tracing.ts` - Core observability untested
+   - `supabaseEventHub.ts` - Real-time events untested
+6. **API Route Test Coverage** (CORRECTED 2025-12-28) - 18/20 routes tested (90%, not 100%)
+   - Missing: `/api/graph` GET endpoint, `/api/auth/[...nextauth]`
+7. **Observability Production Backends** - Loki/Elasticsearch configuration needed
+
+**✅ COMPLETED** (items 8-18 moved to archive):
+
+8. ~~**Path System Page Wiring**~~ - ✅ **COMPLETED** (2025-12-27, 100% wired)
+9. ~~**Redis SSE**~~ - ✅ **COMPLETED** (2025-12-27)
+10. ~~**reg-intel-prompts tests**~~ - ✅ **COMPLETED** (2025-12-27) - 67 tests
+11. ~~**Supabase Persistence**~~ - ✅ **COMPLETED** (2025-12-27)
+12. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
+13. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 tests
+14. ~~**reg-intel-next-adapter tests**~~ - ✅ **COMPLETED** (2025-12-27) - 23 tests
+15. ~~**reg-intel-ui component tests**~~ - ✅ **COMPLETED** (2025-12-28) - 210+ tests
+16. ~~**Observability Pino-OTEL Wiring**~~ - ✅ **COMPLETED** (2025-12-28)
+17. ~~**reg-intel-conversations HIGH/MEDIUM tests**~~ - ✅ **COMPLETED** (2025-12-28) - 82 tests
+18. ~~**reg-intel-core MEDIUM tests**~~ - ✅ **COMPLETED** (2025-12-28) - 50 tests
 
 ### Production Readiness Checklist
 
+**✅ Complete**:
 - [x] EgressGuard fully wired
 - [x] Client telemetry with batching
 - [x] Logging framework wired
 - [x] Execution context cleanup job
-- [x] Redis/distributed SSE ✅
-- [x] Supabase persistence wired ✅
-- [x] Authorization service integrated ✅
-- [x] Graph services (read/write) ✅
-- [x] Conversation branching & merging ✅
-- [x] Path system fully wired ✅
-- [x] Breadcrumb navigation ✅
-- [x] Message pinning ✅
-- [x] Core test coverage ✅ (420+ tests across 49+ files - up from 290 across 35)
-- [x] Hook test coverage ✅ (useConversationPaths fully tested with 29 tests)
-- [x] UI component test coverage ✅ (reg-intel-ui - all 5 path components tested, 210+ tests)
-- [x] API route test coverage ✅ (100% - 19/19 routes tested)
-- [x] reg-intel-conversations HIGH/MEDIUM priority test coverage ✅ (executionContextManager, pathStores, eventHub, presenters - 82 new tests)
-- [x] reg-intel-core MEDIUM priority test coverage ✅ (sandboxManager, llmClient - 50 new tests) ✅ NEW 2025-12-28
+- [x] Redis/distributed SSE
+- [x] Supabase persistence wired
+- [x] Authorization service integrated
+- [x] Graph services (read/write)
+- [x] Conversation branching & merging
+- [x] Path system fully wired
+- [x] Breadcrumb navigation
+- [x] Message pinning
+- [x] Core test coverage (420+ tests)
+- [x] Hook test coverage (29 tests)
+- [x] UI component test coverage (210+ tests)
+- [x] Observability Pino-OTEL wiring
+
+**⚠️ Needs Attention (NEW 2025-12-28)**:
+- [ ] **Security: Add auth to /api/observability** (§2.2)
+- [ ] **Security: Add input validation** (§2.2)
+- [ ] **Error Handling: Add React error boundaries** (§2.3)
+- [ ] **Error Handling: Fix silent catch blocks** (§2.3)
+- [ ] **Tests: egressGuard.ts PII patterns** (§3.5) - CRITICAL
+- [ ] **Tests: /api/graph GET endpoint** (§3.1)
+- [ ] API route test coverage ⚠️ (90% - 18/20 routes tested)
+
+**❌ Not Started**:
 - [ ] Scenario Engine implementation
-- [ ] Context Summaries & Graph Nodes UI (backend complete, UI not surfaced)
-- [x] Observability Pino-OTEL wiring ✅ (multistream dual-write, production defaults) ✅ NEW 2025-12-28
-- [ ] Observability production backends (Loki/Elasticsearch configuration)
-- [ ] reg-intel-conversations LOW priority test expansion (7 files remain: types, config, index exports)
-- [ ] reg-intel-core LOW priority test expansion (6 files remain: types, constants, errors, etc.)
+- [ ] Context Summaries & Graph Nodes UI
+- [ ] Observability production backends (Loki/Elasticsearch)
+- [ ] reg-intel-conversations LOW priority test expansion
+- [ ] reg-intel-core LOW priority test expansion
 
 ### Codebase Statistics
 
@@ -1205,12 +1443,37 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ---
 
-**Document Version**: 5.3
+**Document Version**: 5.4
 **Last Updated**: 2025-12-28
-**Previous Versions**: 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Previous Versions**: 5.3, 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v5.4 (2025-12-28): Comprehensive security and quality review ✅
+  - **NEW SECTION §2.2**: Security & Input Validation Gaps (HIGH priority)
+    - `/api/observability` endpoint has NO authentication - exposes system health
+    - `/api/graph` has incomplete userId validation
+    - Missing pagination bounds validation (could request millions of records)
+    - Missing node ID format validation before Memgraph queries
+    - Added 4 security tasks (SEC.1-SEC.4)
+  - **NEW SECTION §2.3**: Error Handling & Resilience Gaps (HIGH priority)
+    - Silent catch blocks in `logger.ts:389-391`, `conversationStores.ts:197-199`
+    - Unhandled promise chains in `supabaseEventHub.ts`
+    - No React error boundaries (app crashes on unhandled errors)
+    - Added 3 error handling tasks (ERR.1-ERR.3)
+  - **NEW SECTION §3.5**: Critical Untested Implementation Files (MEDIUM priority)
+    - `egressGuard.ts` (500+ LOC) - PII sanitization with ZERO tests 🔴 CRITICAL
+    - `logger.ts`, `logsExporter.ts`, `tracing.ts` - Observability untested
+    - `supabaseEventHub.ts` - Real-time events untested
+    - Added 5 critical untested file tasks (CUT.1-CUT.5)
+  - **CORRECTED**: API route test coverage from 100% (19/19) to 90% (18/20)
+    - Missing tests for `/api/graph` GET endpoint (80+ LOC)
+    - Missing tests for `/api/auth/[...nextauth]`
+    - Added 2 new tasks (IT.9, IT.10)
+  - **UPDATED**: Overall Status table with Security & Error Handling rows
+  - **UPDATED**: Summary with 3 HIGH priority items (was 1)
+  - **UPDATED**: Production Readiness Checklist with "Needs Attention" section
+  - **UPDATED**: Total Outstanding Effort from ~3-5 weeks to ~4-6 weeks
 - v5.3 (2025-12-28): Context Summaries & Graph Nodes UI gap analysis ✅
   - **IDENTIFIED**: Major UI gap - context summaries built on backend but never surfaced to UI
   - **ELEVATED**: Section 4.2 from LOW to MEDIUM priority (significant UX impact)
