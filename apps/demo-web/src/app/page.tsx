@@ -27,6 +27,7 @@ import { PathBreadcrumbNav } from '@/components/chat/path-breadcrumb-nav'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
+import { MiniGraph } from '@/components/chat/mini-graph'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput, type ForceTool } from '@/components/chat/prompt-input'
 import { AppHeader } from '@/components/layout/app-header'
@@ -141,6 +142,8 @@ interface ReferencedNodeSummary {
   id: string
   label: string
   type?: string
+  source?: 'current' | 'prior' // Indicates if from current response or prior conversation
+  relevance?: string // Why this node is referenced
 }
 
 interface ChatSseMetadata extends ChatMetadata {
@@ -271,6 +274,7 @@ export default function Home() {
   const [isLoadingNodeSummaries, setIsLoadingNodeSummaries] = useState(false)
   const [selectedNodeTypeFilter, setSelectedNodeTypeFilter] = useState<string | null>(null)
   const [expandedNodeTypes, setExpandedNodeTypes] = useState<Set<string>>(new Set())
+  const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
@@ -332,8 +336,13 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const ids = chatMetadata?.referencedNodes ?? []
-    if (!ids.length) {
+    const currentNodeIds = chatMetadata?.referencedNodes ?? []
+    const priorTurnNodes = (chatMetadata as ChatSseMetadata)?.priorTurnNodes ?? []
+
+    // Get unique IDs from both current and prior turns
+    const allIds = [...new Set([...currentNodeIds, ...priorTurnNodes.map(n => n.id)])]
+
+    if (!allIds.length) {
       setReferencedNodeSummaries([])
       setIsLoadingNodeSummaries(false)
       return
@@ -343,18 +352,39 @@ export default function Home() {
     const fetchSummaries = async () => {
       setIsLoadingNodeSummaries(true)
       try {
-        const params = new URLSearchParams({ ids: ids.slice(0, 25).join(',') })
+        const params = new URLSearchParams({ ids: allIds.slice(0, 50).join(',') })
         const response = await fetch(`/api/graph?${params.toString()}`, { signal: controller.signal })
         if (!response.ok) {
           throw new Error(`Lookup failed with status ${response.status}`)
         }
-        const payload = (await response.json()) as { nodes?: ReferencedNodeSummary[] }
+        const payload = (await response.json()) as { nodes?: Array<{ id: string; label: string; type?: string }> }
         if (!controller.signal.aborted) {
-          setReferencedNodeSummaries(payload.nodes ?? [])
+          // Enhance nodes with source and relevance information
+          const enhancedNodes: ReferencedNodeSummary[] = (payload.nodes ?? []).map(node => {
+            const isCurrentTurn = currentNodeIds.includes(node.id)
+            const isPriorTurn = priorTurnNodes.some(p => p.id === node.id)
+
+            let source: 'current' | 'prior' | undefined
+            let relevance: string | undefined
+
+            if (isCurrentTurn && isPriorTurn) {
+              source = 'current'
+              relevance = 'Referenced in this response and previous conversation'
+            } else if (isCurrentTurn) {
+              source = 'current'
+              relevance = 'Referenced in this response'
+            } else if (isPriorTurn) {
+              source = 'prior'
+              relevance = 'Referenced in previous conversation'
+            }
+
+            return { ...node, source, relevance }
+          })
+          setReferencedNodeSummaries(enhancedNodes)
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          telemetry.error({ err: error, ids }, 'Failed to fetch node summaries')
+          telemetry.error({ err: error, ids: allIds }, 'Failed to fetch node summaries')
           setReferencedNodeSummaries([])
         }
       } finally {
@@ -367,7 +397,7 @@ export default function Home() {
     fetchSummaries()
 
     return () => controller.abort()
-  }, [chatMetadata?.referencedNodes, telemetry])
+  }, [chatMetadata?.referencedNodes, (chatMetadata as ChatSseMetadata)?.priorTurnNodes, telemetry])
 
   const loadConversations = useCallback(async (status: 'active' | 'archived' = conversationListTab) => {
     if (!isAuthenticated) return
@@ -1630,6 +1660,10 @@ export default function Home() {
                   )}
                   {!isLoadingNodeSummaries && referencedNodeSummaries.length > 0 && (
                     <>
+                      <div className="pb-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground mb-2">Visual Overview</h4>
+                        <MiniGraph nodes={referencedNodeSummaries} maxNodes={20} />
+                      </div>
                       {nodeTypes.length > 1 && (
                         <div className="flex flex-wrap gap-1.5 pb-1">
                           <Button
@@ -1675,16 +1709,82 @@ export default function Home() {
                             {expandedNodeTypes.has(type) && (
                               <div className="space-y-1 pl-2">
                                 {nodes.map(node => (
-                                  <a
-                                    key={node.id}
-                                    href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
-                                    className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors"
-                                  >
-                                    <div className="flex-1 truncate">
-                                      <span className="font-medium">{node.label}</span>
+                                  <div key={node.id} className="space-y-1">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          setExpandedNodeId(expandedNodeId === node.id ? null : node.id)
+                                        }}
+                                        className="group/node flex flex-1 items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                                        title={node.relevance}
+                                      >
+                                        <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
+                                          <span className="font-medium truncate">{node.label}</span>
+                                          {node.source && (
+                                            <Badge
+                                              variant={node.source === 'current' ? 'default' : 'secondary'}
+                                              className={`shrink-0 text-[9px] px-1 h-4 ${
+                                                node.source === 'current'
+                                                  ? 'bg-blue-500 text-white border-blue-600 dark:bg-blue-600'
+                                                  : 'bg-gray-400 text-white border-gray-500 dark:bg-gray-600'
+                                              }`}
+                                            >
+                                              {node.source === 'current' ? 'Current' : 'Prior'}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          {expandedNodeId === node.id ? (
+                                            <ChevronUp className="h-3 w-3 text-muted-foreground" />
+                                          ) : (
+                                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                          )}
+                                        </div>
+                                      </button>
                                     </div>
-                                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                                  </a>
+                                    {expandedNodeId === node.id && (
+                                      <div className="ml-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 space-y-2 text-xs">
+                                        <div className="space-y-1">
+                                          <div className="flex items-start gap-2">
+                                            <span className="font-semibold text-muted-foreground min-w-[60px]">ID:</span>
+                                            <span className="font-mono text-[10px] break-all">{node.id}</span>
+                                          </div>
+                                          {node.type && (
+                                            <div className="flex items-start gap-2">
+                                              <span className="font-semibold text-muted-foreground min-w-[60px]">Type:</span>
+                                              <Badge variant="outline" className={`text-[10px] ${getNodeTypeColor(node.type)}`}>
+                                                {node.type}
+                                              </Badge>
+                                            </div>
+                                          )}
+                                          {node.relevance && (
+                                            <div className="flex items-start gap-2">
+                                              <span className="font-semibold text-muted-foreground min-w-[60px]">Context:</span>
+                                              <span className="text-muted-foreground italic">{node.relevance}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex gap-2 pt-1">
+                                          <Button
+                                            asChild
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 px-2 text-xs"
+                                          >
+                                            <a
+                                              href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                            >
+                                              <ExternalLink className="mr-1 h-3 w-3" />
+                                              View in Graph
+                                            </a>
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 ))}
                               </div>
                             )}
