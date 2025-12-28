@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
-> **Last Updated**: 2025-12-27
+> **Last Updated**: 2025-12-28
 > **Status**: Comprehensive codebase review and gap analysis
-> **Document Version**: 4.2
+> **Document Version**: 4.4
 
 ---
 
@@ -319,7 +319,42 @@ This document consolidates all outstanding work identified from reviewing the ar
 **Priority**: MEDIUM (Quality)
 **Effort**: 2-3 days
 
-**Description**: Two packages have zero test coverage, creating risk for future maintenance.
+**Description**: Some packages have partial test coverage with specific files lacking tests, creating risk for future maintenance.
+
+#### 3.2.0 reg-intel-conversations (Partial coverage - needs expansion)
+
+**Priority**: MEDIUM (Quality)
+**Status**: ⚠️ ~27% file-level coverage (4/15 files tested)
+
+**Current State**:
+- ✅ `authorizationService.test.ts` - Authorization flows tested (27 tests)
+- ✅ `conversationStores.test.ts` - Store implementations tested
+- ✅ `redisEventHub.test.ts` - Redis event hub tested
+- ✅ `executionContextStores.test.ts` - Context stores tested
+- ⚠️ 11 source files without dedicated tests
+
+**Files WITHOUT Tests** (11 files - MEDIUM priority):
+
+| File | Lines | Purpose | Risk |
+|------|-------|---------|------|
+| `conversationConfig.ts` | ~80 | Configuration management | Low |
+| `eventHub.ts` | ~120 | Base event hub abstraction | Medium |
+| `executionContextManager.ts` | ~150 | Context lifecycle management | **High** |
+| `pathStores.ts` | ~200 | Path persistence abstraction | **High** |
+| `presenters.ts` | ~180 | Data presentation/transformation | Medium |
+| `sharedEventHub.ts` | ~100 | Shared event handling | Medium |
+| `supabaseEventHub.ts` | ~150 | Supabase-specific events | Medium |
+| `sseTypes.ts` | ~80 | SSE type definitions | Low |
+| `types/index.ts` | ~120 | Core type exports | Low |
+| `types/paths.ts` | ~140 | Path-specific types | Low |
+| `index.ts` | ~200 | Module exports | Low |
+
+**Tasks**:
+
+- [ ] **Task TC.1**: Add tests for `executionContextManager.ts` (HIGH - lifecycle critical)
+- [ ] **Task TC.2**: Add tests for `pathStores.ts` (HIGH - data persistence)
+- [ ] **Task TC.3**: Add tests for `eventHub.ts` and event handling (MEDIUM)
+- [ ] **Task TC.4**: Add tests for `presenters.ts` (MEDIUM)
 
 #### 3.2.1 reg-intel-ui (Partial coverage - needs expansion)
 
@@ -379,6 +414,39 @@ This document consolidates all outstanding work identified from reviewing the ar
   - Test `E2BSandboxClient.reconnect()` with mocked E2B ✅
   - Test singleton initialization/shutdown ✅
   - Test error handling for missing config ✅
+
+#### 3.2.3 reg-intel-core (Partial coverage - ~50% file-level)
+
+**Priority**: LOW (Quality Enhancement)
+**Status**: ⚠️ ~50% file-level coverage (7 test files, 9 source files without tests)
+
+**Current State**:
+- ✅ `GlobalRegulatoryComplianceAgent.test.ts` - Agent logic tested
+- ✅ `SingleDirector_IE_SocialSafetyNet_Agent.test.ts` - Agent tested
+- ✅ `e2bClient.test.ts` - E2B client tested
+- ✅ `mcpClient.test.ts` - MCP client tested
+- ✅ `graphClient.test.ts` - Graph client tested
+- ✅ `complianceEngine.test.ts` - Orchestrator tested
+- ✅ `timelineEngine.test.ts` - Timeline engine tested
+- ⚠️ 9 source files without dedicated tests
+
+**Files WITHOUT Tests** (9 files - LOW priority):
+
+| File | Lines | Purpose | Risk |
+|------|-------|---------|------|
+| `types.ts` | 262 | Core type definitions | Low (types only) |
+| `sandboxManager.ts` | 85 | E2B sandbox lifecycle | Medium |
+| `constants.ts` | 59 | Configuration constants | Low |
+| `errors.ts` | 67 | Error type definitions | Low |
+| `client.ts` | 26 | Client utilities | Low |
+| `profiles.ts` | 14 | User profiles | Low |
+| `index.ts` | 145 | Module exports | Low |
+| `llm/llmClient.ts` | ~150 | LLM client wrapper | Medium |
+
+**Tasks**:
+
+- [ ] **Task TCO.1**: Add tests for `sandboxManager.ts` (MEDIUM - resource management)
+- [ ] **Task TCO.2**: Add tests for `llm/llmClient.ts` (MEDIUM - LLM integration)
 
 ---
 
@@ -737,10 +805,8 @@ Branch navigation with preview cards fully functional.
 
 | Package | Test Files | Test LOC | Total Tests | Status |
 |---------|------------|----------|-------------|--------|
-| reg-intel-conversations | 4 files | ~1,428 LOC | ~30 tests | ✅ Good |
 | reg-intel-prompts | 3 files | ~1,076 LOC | 67 tests | ✅ Excellent |
 | reg-intel-llm | 6 files | ~2,233 LOC | ~25 tests | ✅ Good |
-| reg-intel-core | 7 files | ~751 LOC | ~35 tests | ✅ Good |
 | reg-intel-observability | 3 files | ~359 LOC | ~15 tests | ✅ Adequate |
 | reg-intel-graph | 6 files | ~2,687 LOC | 85 tests | ✅ Excellent |
 | reg-intel-next-adapter | 1 file | ~370 LOC | 23 tests | ✅ Excellent (NEW 2025-12-27) |
@@ -749,7 +815,9 @@ Branch navigation with preview cards fully functional.
 
 | Package | Source Files | Source LOC | Test Files | Issue |
 |---------|--------------|------------|------------|-------|
-| reg-intel-ui | 6 files | ~1,413 LOC | 2 files | ⚠️ Partial (PathBreadcrumbs tested, 5 components + 1 hook need tests) |
+| reg-intel-conversations | 15 files | ~1,800 LOC | 4 files | ⚠️ Partial (~27% file coverage, 11 files untested) |
+| reg-intel-ui | 6 files | ~1,413 LOC | 3 files | ⚠️ Partial (PathBreadcrumbs + hooks tested, 5 components need tests) |
+| reg-intel-core | 16 files | ~1,200 LOC | 7 files | ⚠️ Partial (~50% file coverage, 9 files untested) |
 
 ### Package Test Details
 
@@ -761,12 +829,27 @@ Branch navigation with preview cards fully functional.
 - `canonicalConceptHandler.test.ts` - 20+ tests (ID generation, normalization, duplicate detection)
 - **Status**: ✅ Comprehensive coverage for all graph write operations
 
-**reg-intel-ui** (2 test files, 30 tests - ⚠️ partial coverage):
+**reg-intel-ui** (3 test files, 59 tests - ⚠️ partial coverage):
 - ✅ `PathBreadcrumbs.test.tsx` - 29 tests (rendering, navigation, keyboard a11y, tooltips, edge cases)
+- ✅ `useConversationPaths.test.tsx` - 29 tests (all hook functions, error handling)
 - ✅ `scroll-to-message.test.ts` - 1 test (utility function)
 - Components WITHOUT tests: `PathSelector`, `BranchButton`, `BranchDialog`, `MergeDialog`, `VersionNavigator`
-- Hook WITHOUT tests: `useConversationPaths`
 - **Recommended**: Add tests for remaining 5 components using existing Vitest + RTL setup
+
+**reg-intel-conversations** (4 test files, ~30 tests - ⚠️ partial coverage):
+- ✅ `authorizationService.test.ts` - 27 tests (authorization flows)
+- ✅ `conversationStores.test.ts` - Store implementations tested
+- ✅ `redisEventHub.test.ts` - Redis event hub tested
+- ✅ `executionContextStores.test.ts` - Context stores tested
+- Files WITHOUT tests: `executionContextManager.ts`, `pathStores.ts`, `eventHub.ts`, `presenters.ts` (11 files total)
+- **Recommended**: Add tests for high-risk files: `executionContextManager.ts`, `pathStores.ts`
+
+**reg-intel-core** (7 test files, ~35 tests - ⚠️ partial coverage):
+- ✅ `GlobalRegulatoryComplianceAgent.test.ts` - Agent tested
+- ✅ `SingleDirector_IE_SocialSafetyNet_Agent.test.ts` - Agent tested
+- ✅ `e2bClient.test.ts`, `mcpClient.test.ts`, `graphClient.test.ts`, `complianceEngine.test.ts`, `timelineEngine.test.ts`
+- Files WITHOUT tests: `types.ts`, `sandboxManager.ts`, `llmClient.ts` (9 files total)
+- **Recommended**: Add tests for `sandboxManager.ts` (resource management)
 
 **reg-intel-next-adapter** (1 test file, 23 tests - ✅ comprehensive NEW 2025-12-27):
 - ✅ `executionContext.test.ts` - 23 tests (E2BSandboxClient, singleton pattern, store modes)
@@ -875,8 +958,8 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 2-3 weeks (Scenario Engine) |
-| MEDIUM | 1 | 8-16 hours (Observability) |
-| LOW | 5 | 2-3 weeks (UI tests, polish) |
+| MEDIUM | 2 | 1-2 weeks (Observability + test coverage expansion) |
+| LOW | 5 | 2-3 weeks (UI component tests, polish) |
 
 ### Critical Gaps Identified
 
@@ -888,8 +971,12 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 6. ~~**OpenFGA integration**~~ - ✅ **COMPLETED** (2025-12-27)
 7. ~~**reg-intel-graph tests**~~ - ✅ **COMPLETED** (2025-12-27) - 85 comprehensive tests
 8. ~~**Package Test Coverage (reg-intel-next-adapter)**~~ - ✅ **COMPLETED** (2025-12-27) - 23 comprehensive tests
-9. ~~**API Integration Tests**~~ - ✅ **COMPLETED** (Partial, 2025-12-27) - 8/11 HIGH+MEDIUM priority endpoints tested (73% improvement)
+9. ~~**API Integration Tests**~~ - ✅ **COMPLETED** (Partial, 2025-12-27) - 14/19 endpoints tested (74% coverage)
 10. **Observability Scalability** - Pino-OTEL transport, log backends not wired
+11. **Package Test Coverage Gaps** (NEW 2025-12-28):
+    - reg-intel-conversations: ~27% file coverage (4/15 files tested, 11 files need tests)
+    - reg-intel-core: ~50% file coverage (7/16 files tested, 9 files need tests)
+    - reg-intel-ui: 5 components still without tests
 
 ### Production Readiness Checklist
 
@@ -909,7 +996,9 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] Hook test coverage ✅ (useConversationPaths fully tested with 29 tests)
 - [ ] Scenario Engine implementation
 - [ ] Observability cloud scalability (Pino-OTEL, log backends)
-- [ ] UI component test coverage (reg-intel-ui components - 5 components pending)
+- [ ] UI component test coverage (reg-intel-ui - 5 components pending)
+- [ ] reg-intel-conversations test expansion (11 files need tests, 2 HIGH priority)
+- [ ] reg-intel-core test expansion (9 files need tests, 2 MEDIUM priority)
 
 ### Codebase Statistics
 
@@ -922,17 +1011,32 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 | API route files | 19 | 19 | 19 | - |
 | API routes with tests | 3 (16%) | 14 (74%) | 14 (74%) | +58% ✅ |
 | Packages with 0 tests | 2 | 0 | 0 | -2 ✅ |
-| Packages with partial tests | 0 | 1 | 1 | +1 |
-| Packages with comprehensive tests | 6 | 7 | 7 | +1 ✅ |
+| Packages with partial tests | 0 | 1 | 3 | +3 (detailed analysis) |
+| Packages with comprehensive tests | 6 | 7 | 5 | Reclassified after detailed review |
 
 ---
 
-**Document Version**: 4.3
-**Last Updated**: 2025-12-27
-**Previous Versions**: 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Document Version**: 4.4
+**Last Updated**: 2025-12-28
+**Previous Versions**: 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v4.4 (2025-12-28): Comprehensive codebase review and gap analysis refresh ✅
+  - **NEW**: Added §3.2.0 reg-intel-conversations test coverage gap analysis
+    - Identified 11 source files without tests (~27% file coverage)
+    - Flagged 2 HIGH priority files: `executionContextManager.ts`, `pathStores.ts`
+    - Added tasks TC.1-TC.4 for test expansion
+  - **NEW**: Added §3.2.3 reg-intel-core test coverage gap analysis
+    - Identified 9 source files without tests (~50% file coverage)
+    - Added tasks TCO.1-TCO.2 for high-risk files
+  - **UPDATED**: Packages Needing Coverage table with 3 packages now identified
+  - **UPDATED**: Package Test Details section with detailed file-level analysis
+  - **UPDATED**: Critical Gaps Identified (item 11 added for package test gaps)
+  - **UPDATED**: Production Readiness Checklist with new test coverage items
+  - **VERIFIED**: Scenario Engine still has ZERO implementation (confirmed via grep)
+  - **VERIFIED**: Observability scalability gaps remain (Pino-OTEL transport not wired)
+  - Reclassified package coverage: 5 comprehensive, 3 partial (more accurate assessment)
 - v4.3 (2025-12-27): Test coverage improvements - Phase 4: reg-intel-ui infrastructure & hook tests ✅
   - **COMPLETED**: reg-intel-ui Testing Infrastructure
     - Created vitest.config.ts with jsdom environment for React component testing
