@@ -2,6 +2,11 @@ name: regulatory-intelligence-copilot
 
 services:
   # OpenTelemetry Collector for observability (logs, traces, metrics)
+  # Development config: ./otel-collector-config.yaml
+  # Production config: ./otel-collector-config.production.yaml
+  #
+  # To use production config:
+  #   docker compose -f docker-compose.yml -f docker-compose.production.yml up
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     container_name: reg-copilot-otel-collector
@@ -9,6 +14,7 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
       - otel_logs:/var/log/otel
+      - otel_file_storage:/var/lib/otel/file_storage  # For production queue persistence
     ports:
       - "4317:4317"   # OTLP gRPC receiver
       - "4318:4318"   # OTLP HTTP receiver (used by Next.js and scripts)

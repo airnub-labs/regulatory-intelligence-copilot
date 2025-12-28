@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 
-import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan, recordBranchCreate } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
 
@@ -97,6 +97,14 @@ export async function POST(
               { tenantId, conversationId, sourceMessageId, pathId: result.path.id, name },
               'Branch created successfully',
             );
+
+            // Record branch creation metric
+            recordBranchCreate({
+              method: 'api',
+              conversationId,
+              sourcePathId: result.path.parentPathId ?? undefined,
+              fromMessageId: sourceMessageId,
+            });
 
             return NextResponse.json({
               path: toClientPath(result.path),
