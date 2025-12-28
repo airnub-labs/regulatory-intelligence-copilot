@@ -1,0 +1,81 @@
+# Grafana Datasources Provisioning
+# Auto-configures datasources on Grafana startup
+#
+# This file configures:
+# - Prometheus (metrics)
+# - Loki (logs)
+# - Jaeger (traces)
+#
+
+apiVersion: 1
+
+datasources:
+  # Prometheus datasource for metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: false
+    editable: true
+    jsonData:
+      httpMethod: POST
+      # Enable Exemplars for trace correlation
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+      # Query timeout
+      timeInterval: 15s
+    version: 1
+
+  # Loki datasource for logs
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true  # Make Loki the default for log queries
+    editable: true
+    jsonData:
+      # Maximum number of lines to retrieve
+      maxLines: 1000
+      # Derived fields for trace correlation
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: "trace_id=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+        - datasourceUid: jaeger
+          matcherRegex: '"trace_id":"(\\w+)"'
+          name: TraceID
+          url: "$${__value.raw}"
+    version: 1
+
+  # Jaeger datasource for traces
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    isDefault: false
+    editable: true
+    jsonData:
+      # Enable trace to logs correlation
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+        tags: [{ key: 'service.name', value: 'service' }]
+        filterByTraceID: true
+        filterBySpanID: false
+      # Enable trace to metrics correlation
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+        tags: [{ key: 'service.name', value: 'service' }]
+      # Node graph settings
+      nodeGraph:
+        enabled: true
+      # Service map settings
+      serviceMap:
+        datasourceUid: prometheus
+    version: 1
