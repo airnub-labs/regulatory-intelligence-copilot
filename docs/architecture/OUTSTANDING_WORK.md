@@ -356,36 +356,43 @@ This document consolidates all outstanding work identified from reviewing the ar
 - [ ] **Task TC.3**: Add tests for `eventHub.ts` and event handling (MEDIUM)
 - [ ] **Task TC.4**: Add tests for `presenters.ts` (MEDIUM)
 
-#### 3.2.1 reg-intel-ui (Partial coverage - needs expansion)
+#### 3.2.1 reg-intel-ui (Comprehensive coverage) ✅ COMPLETED
 
 **Priority**: LOW (Quality Enhancement)
-**Status**: ⚠️ **PARTIAL**: 2025-12-27 (Hook tests complete, component tests pending)
+**Status**: ✅ **COMPLETED**: 2025-12-28 (All components and hooks now have tests)
 
 **Current State**:
-- ✅ `PathBreadcrumbs` component fully tested (29 test cases, 541 LOC)
-- ✅ `scroll-to-message` utility tested
+- ✅ `PathBreadcrumbs` component fully tested (29 test cases)
+- ✅ `BranchButton` component fully tested (23 test cases) NEW 2025-12-28
+- ✅ `VersionNavigator` component fully tested (27 test cases) NEW 2025-12-28
+- ✅ `PathSelector` component fully tested (26 test cases) NEW 2025-12-28
+- ✅ `BranchDialog` component fully tested (33 test cases) NEW 2025-12-28
+- ✅ `MergeDialog` component fully tested (43 test cases) NEW 2025-12-28
 - ✅ `useConversationPaths` hook fully tested (29 test cases)
+- ✅ `scroll-to-message` utility tested (15 test cases)
 - ✅ Testing infrastructure complete (Vitest + React Testing Library)
-- ⚠️ 5 React components still without tests
 
-**Tests Completed**:
-- ✅ `PathBreadcrumbs.tsx` (6.7 KB) - 29 test cases covering rendering, navigation, keyboard a11y, tooltips
-- ✅ `useConversationPaths` hook - 29 test cases covering all hook functions and error handling
-- ✅ `scroll-to-message` utility - 15 test cases
-
-**Components WITHOUT Tests**:
-- `PathSelector.tsx` (8.5 KB) - Dropdown selection logic
-- `BranchButton.tsx` (2.8 KB) - Branch creation trigger
-- `BranchDialog.tsx` (8.6 KB) - Branch creation form
-- `MergeDialog.tsx` (13.4 KB) - Merge workflow + AI summarization
-- `VersionNavigator.tsx` (4.5 KB) - Branch tree visualization
+**Tests Completed** (210+ test cases across 8 test files):
+- ✅ `PathBreadcrumbs.test.tsx` - 29 test cases (rendering, navigation, keyboard a11y, tooltips)
+- ✅ `BranchButton.test.tsx` - 23 test cases (variants, sizes, labels, tooltips, click handling)
+- ✅ `VersionNavigator.test.tsx` - 27 test cases (navigation, state, timestamps, sizes, a11y)
+- ✅ `PathSelector.test.tsx` - 26 test cases (loading, empty states, variants, dropdown, disabled)
+- ✅ `BranchDialog.test.tsx` - 33 test cases (rendering, form fields, submission, errors, loading)
+- ✅ `MergeDialog.test.tsx` - 43 test cases (merge modes, preview, archive, errors, loading)
+- ✅ `useConversationPaths.test.tsx` - 29 test cases (all hook functions, error handling)
+- ✅ `scroll-to-message.test.ts` - 15 test cases
 
 **Tasks**:
 
 - [x] **Task TU.1**: Set up Vitest + React Testing Library ✅
 - [x] **Task TU.2**: Add PathBreadcrumbs component tests ✅ (29 tests)
 - [x] **Task TU.3**: Add hook tests for `useConversationPaths` ✅ (29 tests)
-- [ ] **Task TU.4**: Add component tests for dialogs and selectors (LOW priority)
+- [x] **Task TU.4**: Add component tests for dialogs and selectors ✅ (152 tests) NEW 2025-12-28
+  - ✅ BranchButton.test.tsx (23 tests)
+  - ✅ VersionNavigator.test.tsx (27 tests)
+  - ✅ PathSelector.test.tsx (26 tests)
+  - ✅ BranchDialog.test.tsx (33 tests)
+  - ✅ MergeDialog.test.tsx (43 tests)
 
 #### 3.2.2 reg-intel-next-adapter ✅ COMPLETED
 
