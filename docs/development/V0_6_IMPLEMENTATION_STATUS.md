@@ -1,6 +1,7 @@
 # v0.6 Implementation Status
 
-> **Last Updated**: 2025-12-27
+> **Last Updated**: 2025-12-28
+> **Status**: All v0.6 features complete except Scenario Engine
 
 This tracker summarises what is implemented versus still pending for the v0.6 architecture. It is intentionally concise and replaces earlier scattered phase notes.
 
@@ -28,8 +29,11 @@ This tracker summarises what is implemented versus still pending for the v0.6 ar
   - Three implementations: `SupabaseRLSAuthorizationService`, `OpenFGAAuthorizationService`, `HybridAuthorizationService`.
   - Per-conversation authorization model configuration.
   - 27 unit tests covering all authorization flows.
-- **Graph view integration & context ribbon** — **In progress** ⚠️
-  - Basic ribbon present; deeper graph highlighting pending.
+- **Graph view integration & context ribbon** — **Done** ✅
+  - Context summaries and referenced graph nodes surfaced in chat UI (PR #208, 2025-12-28).
+  - `mini-graph.tsx` component for color-coded node visualization.
+  - Collapsible context summary panels in message components.
+  - Test coverage: 9 tests for context summary display.
 - **Docs & governance updates** — **Done** ✅
   - Architecture/decisions updated for persistence + SSE + authorization.
 
@@ -48,9 +52,24 @@ This tracker summarises what is implemented versus still pending for the v0.6 ar
 - ✅ reg-intel-ui hook tests (useConversationPaths - 29 tests, 100% passing)
 - ✅ reg-intel-ui testing infrastructure (Vitest + React Testing Library)
 
+## Completed Work (2025-12-28)
+
+- ✅ Context Summaries & Graph Nodes UI (PR #208) - mini-graph.tsx, collapsible panels
+- ✅ Security & Input Validation fixes (PR #204) - all 4 SEC tasks complete
+- ✅ Error Handling improvements (PR #206) - error boundaries, catch blocks fixed
+- ✅ API integration tests 100% complete (20/20 routes tested)
+- ✅ reg-intel-ui component tests (210+ tests across 8 components)
+- ✅ reg-intel-core MEDIUM priority tests (sandboxManager, llmClient - 50 tests)
+- ✅ reg-intel-conversations MEDIUM priority tests (82 tests added)
+- ✅ egressGuard.ts comprehensive tests (133 tests)
+- ✅ Observability stack complete (Loki/Grafana production stack, PR #210)
+
 ## Follow-on tasks
 
-- [ ] Implement Scenario Engine (see `docs/architecture/engines/scenario-engine/spec_v_0_1.md`) - **PRIMARY GAP**
-- [ ] Expand UI to surface context summaries and referenced graph nodes visually
-- [ ] Add component tests for `reg-intel-ui` (5 components pending: PathSelector, BranchButton, BranchDialog, MergeDialog, VersionNavigator)
-- [ ] Add tests for remaining 5 API routes (SSE streaming, message CRUD - all LOW priority)
+- [ ] Implement Scenario Engine (see `docs/architecture/engines/scenario-engine/spec_v_0_1.md`) - **ONLY REMAINING GAP**
+
+## Archived Tasks (Completed)
+
+- [x] ~~Expand UI to surface context summaries and referenced graph nodes visually~~ ✅ DONE (PR #208)
+- [x] ~~Add component tests for `reg-intel-ui`~~ ✅ DONE (210+ tests, all 8 components)
+- [x] ~~Add tests for remaining API routes~~ ✅ DONE (100% coverage, 20/20 routes)
