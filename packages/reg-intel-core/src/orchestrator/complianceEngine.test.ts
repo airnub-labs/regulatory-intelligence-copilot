@@ -641,4 +641,211 @@ describe('ComplianceEngine streaming', () => {
 
     createLoggerSpy.mockRestore();
   });
+
+  describe('Context Summaries', () => {
+    it('includes conversationContextSummary in metadata when prior turn nodes exist', async () => {
+      const mockContextStore: ConversationContextStore = {
+        load: vi.fn().mockResolvedValue({
+          activeNodeIds: ['node-1', 'node-2'],
+        }),
+        save: vi.fn(),
+        mergeActiveNodeIds: vi.fn(),
+      };
+
+      const mockGraphClient: GraphClient = {
+        ...graphClient,
+        getRulesForProfileAndJurisdiction: vi.fn().mockResolvedValue({
+          nodes: [
+            { id: 'node-1', label: 'Prior Node 1', type: 'Benefit', properties: {} },
+            { id: 'node-2', label: 'Prior Node 2', type: 'Rule', properties: {} },
+          ],
+          edges: [],
+        }),
+      };
+
+      const llmRouter = createRouter();
+      const engine = new ComplianceEngine({
+        llmRouter,
+        graphWriteService,
+        canonicalConceptHandler,
+        conversationContextStore: mockContextStore,
+        llmClient,
+        graphClient: mockGraphClient,
+        timelineEngine,
+        egressGuard,
+      });
+
+      const request: ComplianceRequest = {
+        messages: [{ role: 'user', content: 'Follow-up question' }],
+        profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+        tenantId: 'tenant-1',
+        conversationId: 'conversation-1',
+        traceContext,
+      };
+
+      const chunks = [] as any[];
+      for await (const chunk of engine.handleChatStream(request)) {
+        chunks.push(chunk);
+      }
+
+      const metadataChunk = chunks.find(c => c.type === 'metadata');
+      expect(metadataChunk).toBeDefined();
+      expect(metadataChunk.metadata.conversationContextSummary).toBeDefined();
+      expect(metadataChunk.metadata.conversationContextSummary).toContain('Previous turns referenced');
+      expect(metadataChunk.metadata.conversationContextSummary).toContain('Prior Node 1');
+      expect(metadataChunk.metadata.conversationContextSummary).toContain('Prior Node 2');
+    });
+
+    it('includes priorTurnNodes array in metadata', async () => {
+      const mockContextStore: ConversationContextStore = {
+        load: vi.fn().mockResolvedValue({
+          activeNodeIds: ['node-1', 'node-2', 'node-3'],
+        }),
+        save: vi.fn(),
+        mergeActiveNodeIds: vi.fn(),
+      };
+
+      const mockGraphClient: GraphClient = {
+        ...graphClient,
+        getRulesForProfileAndJurisdiction: vi.fn().mockResolvedValue({
+          nodes: [
+            { id: 'node-1', label: 'Benefit A', type: 'Benefit', properties: {} },
+            { id: 'node-2', label: 'Rule B', type: 'Rule', properties: {} },
+            { id: 'node-3', label: 'Jurisdiction C', type: 'Jurisdiction', properties: {} },
+          ],
+          edges: [],
+        }),
+      };
+
+      const llmRouter = createRouter();
+      const engine = new ComplianceEngine({
+        llmRouter,
+        graphWriteService,
+        canonicalConceptHandler,
+        conversationContextStore: mockContextStore,
+        llmClient,
+        graphClient: mockGraphClient,
+        timelineEngine,
+        egressGuard,
+      });
+
+      const request: ComplianceRequest = {
+        messages: [{ role: 'user', content: 'Another question' }],
+        profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+        tenantId: 'tenant-1',
+        conversationId: 'conversation-1',
+        traceContext,
+      };
+
+      const chunks = [] as any[];
+      for await (const chunk of engine.handleChatStream(request)) {
+        chunks.push(chunk);
+      }
+
+      const metadataChunk = chunks.find(c => c.type === 'metadata');
+      expect(metadataChunk).toBeDefined();
+      expect(metadataChunk.metadata.priorTurnNodes).toBeDefined();
+      expect(metadataChunk.metadata.priorTurnNodes).toHaveLength(3);
+
+      const priorNodes = metadataChunk.metadata.priorTurnNodes;
+      expect(priorNodes[0]).toEqual({ id: 'node-1', label: 'Benefit A', type: 'Benefit' });
+      expect(priorNodes[1]).toEqual({ id: 'node-2', label: 'Rule B', type: 'Rule' });
+      expect(priorNodes[2]).toEqual({ id: 'node-3', label: 'Jurisdiction C', type: 'Jurisdiction' });
+    });
+
+    it('omits conversationContextSummary when no prior turn nodes exist', async () => {
+      const mockContextStore: ConversationContextStore = {
+        load: vi.fn().mockResolvedValue({
+          activeNodeIds: [],
+        }),
+        save: vi.fn(),
+        mergeActiveNodeIds: vi.fn(),
+      };
+
+      const llmRouter = createRouter();
+      const engine = new ComplianceEngine({
+        llmRouter,
+        graphWriteService,
+        canonicalConceptHandler,
+        conversationContextStore: mockContextStore,
+        llmClient,
+        graphClient,
+        timelineEngine,
+        egressGuard,
+      });
+
+      const request: ComplianceRequest = {
+        messages: [{ role: 'user', content: 'First question' }],
+        profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+        tenantId: 'tenant-1',
+        conversationId: 'conversation-1',
+        traceContext,
+      };
+
+      const chunks = [] as any[];
+      for await (const chunk of engine.handleChatStream(request)) {
+        chunks.push(chunk);
+      }
+
+      const metadataChunk = chunks.find(c => c.type === 'metadata');
+      expect(metadataChunk).toBeDefined();
+      expect(metadataChunk.metadata.conversationContextSummary).toBeUndefined();
+      expect(metadataChunk.metadata.priorTurnNodes).toEqual([]);
+    });
+
+    it('handles nodes with missing type in context summary', async () => {
+      const mockContextStore: ConversationContextStore = {
+        load: vi.fn().mockResolvedValue({
+          activeNodeIds: ['node-1', 'node-2'],
+        }),
+        save: vi.fn(),
+        mergeActiveNodeIds: vi.fn(),
+      };
+
+      const mockGraphClient: GraphClient = {
+        ...graphClient,
+        getRulesForProfileAndJurisdiction: vi.fn().mockResolvedValue({
+          nodes: [
+            { id: 'node-1', label: 'Node Without Type', properties: {} },
+            { id: 'node-2', label: 'Node With Type', type: 'Rule', properties: {} },
+          ],
+          edges: [],
+        }),
+      };
+
+      const llmRouter = createRouter();
+      const engine = new ComplianceEngine({
+        llmRouter,
+        graphWriteService,
+        canonicalConceptHandler,
+        conversationContextStore: mockContextStore,
+        llmClient,
+        graphClient: mockGraphClient,
+        timelineEngine,
+        egressGuard,
+      });
+
+      const request: ComplianceRequest = {
+        messages: [{ role: 'user', content: 'Test question' }],
+        profile: { personaType: 'self-employed', jurisdictions: ['IE'] },
+        tenantId: 'tenant-1',
+        conversationId: 'conversation-1',
+        traceContext,
+      };
+
+      const chunks = [] as any[];
+      for await (const chunk of engine.handleChatStream(request)) {
+        chunks.push(chunk);
+      }
+
+      const metadataChunk = chunks.find(c => c.type === 'metadata');
+      expect(metadataChunk).toBeDefined();
+      expect(metadataChunk.metadata.conversationContextSummary).toContain('Node Without Type');
+      expect(metadataChunk.metadata.conversationContextSummary).toContain('Node With Type (Rule)');
+
+      const priorNodes = metadataChunk.metadata.priorTurnNodes;
+      expect(priorNodes[0].type).toBe('');
+      expect(priorNodes[1].type).toBe('Rule');
+    });
+  });
 });
