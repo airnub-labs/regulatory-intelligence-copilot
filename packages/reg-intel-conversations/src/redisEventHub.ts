@@ -17,6 +17,26 @@ import {
 } from './supabaseEventHub.js';
 
 /**
+ * Type for Redis client with callback-based pub/sub methods.
+ *
+ * Note: The @upstash/redis package's TypeScript definitions only include the REST API,
+ * but when using redis:// protocol URLs (not https://), the client supports traditional
+ * pub/sub with callbacks similar to ioredis. This type represents that runtime behavior.
+ *
+ * This is a known limitation of the @upstash/redis TypeScript definitions.
+ * @see https://upstash.com/docs/redis/features/pubsub
+ */
+interface RedisWithCallbackPubSub {
+  subscribe(
+    channel: string,
+    callback: (message: unknown, channel: string) => void
+  ): Promise<void>;
+  unsubscribe(channel: string): Promise<void>;
+  ping(): Promise<string>;
+  publish(channel: string, message: string): Promise<number>;
+}
+
+/**
  * Configuration for Redis-backed event hubs
  */
 export interface RedisEventHubConfig {
@@ -97,7 +117,7 @@ export type EventHubFactoryConfig =
  */
 export class RedisConversationEventHub {
   private redis: Redis;
-  private subscriber: Redis;
+  private subscriber: RedisWithCallbackPubSub;
   private subscribers = new LocalSubscriptionManager<ConversationEventType>();
   private activeChannels = new ChannelLifecycleManager<void>();
   private prefix: string;
@@ -115,10 +135,13 @@ export class RedisConversationEventHub {
       token: config.token,
     });
 
+    // Type assertion: When using redis:// URLs (not https://), the @upstash/redis client
+    // supports callback-based pub/sub methods at runtime, even though the TypeScript
+    // definitions don't include them. This is documented Upstash behavior.
     this.subscriber = new Redis({
       url: config.url,
       token: config.token,
-    });
+    }) as unknown as RedisWithCallbackPubSub;
   }
 
   private channelName(tenantId: string, conversationId: string): string {
@@ -139,8 +162,7 @@ export class RedisConversationEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).subscribe(channel, (message: unknown, messageChannel: string) => {
+        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
           if (messageChannel !== channel) {
             return;
           }
@@ -179,8 +201,7 @@ export class RedisConversationEventHub {
 
       if (subscription) {
         await subscription;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channel);
+        await this.subscriber.unsubscribe(channel);
       }
     } catch (error) {
       console.error(`[RedisEventHub] Error unsubscribing from ${channel}:`, error);
@@ -267,8 +288,7 @@ export class RedisConversationEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channelName);
+        await this.subscriber.unsubscribe(channelName);
       } catch (error) {
         console.error(`[RedisEventHub] Error shutting down channel ${channelName}:`, error);
       }
@@ -301,7 +321,7 @@ export class RedisConversationEventHub {
  */
 export class RedisConversationListEventHub {
   private redis: Redis;
-  private subscriber: Redis;
+  private subscriber: RedisWithCallbackPubSub;
   private subscribers = new LocalSubscriptionManager<ConversationListEventType>();
   private activeChannels = new ChannelLifecycleManager<void>();
   private prefix: string;
@@ -317,10 +337,13 @@ export class RedisConversationListEventHub {
       token: config.token,
     });
 
+    // Type assertion: When using redis:// URLs (not https://), the @upstash/redis client
+    // supports callback-based pub/sub methods at runtime, even though the TypeScript
+    // definitions don't include them. This is documented Upstash behavior.
     this.subscriber = new Redis({
       url: config.url,
       token: config.token,
-    });
+    }) as unknown as RedisWithCallbackPubSub;
   }
 
   private channelName(tenantId: string): string {
@@ -334,8 +357,7 @@ export class RedisConversationListEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).subscribe(channel, (message: unknown, messageChannel: string) => {
+        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
           if (messageChannel !== channel) {
             return;
           }
@@ -370,8 +392,7 @@ export class RedisConversationListEventHub {
 
       if (subscription) {
         await subscription;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channel);
+        await this.subscriber.unsubscribe(channel);
       }
     } catch (error) {
       console.error(`[RedisListEventHub] Error unsubscribing from ${channel}:`, error);
@@ -432,8 +453,7 @@ export class RedisConversationListEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channelName);
+        await this.subscriber.unsubscribe(channelName);
       } catch (error) {
         console.error(`[RedisListEventHub] Error shutting down channel ${channelName}:`, error);
       }
