@@ -114,7 +114,7 @@ export async function POST(
             return NextResponse.json({ error: 'Cannot merge primary path' }, { status: 400 });
           }
 
-          // Validate selectedMessageIds for selective mode
+          // HIGH: Validate selectedMessageIds for selective mode with bounds and content validation
           if (mergeMode === 'selective') {
             if (!Array.isArray(selectedMessageIds) || selectedMessageIds.length === 0) {
               logger.warn({ tenantId, conversationId, sourcePathId, mergeMode }, 'selectedMessageIds is required for selective merge mode');
@@ -122,6 +122,38 @@ export async function POST(
                 { error: 'selectedMessageIds is required for selective merge mode' },
                 { status: 400 },
               );
+            }
+            // Add array bounds validation
+            if (selectedMessageIds.length > 1000) {
+              return NextResponse.json(
+                { error: 'selectedMessageIds exceeds maximum length of 1000' },
+                { status: 400 },
+              );
+            }
+            // Validate each message ID in the array
+            if (!selectedMessageIds.every((id) => typeof id === 'string' && id.length < 256)) {
+              return NextResponse.json(
+                { error: 'Invalid message ID format in selectedMessageIds' },
+                { status: 400 },
+              );
+            }
+          }
+
+          // HIGH: Validate summaryPrompt and summaryContent to prevent resource exhaustion
+          if (summaryPrompt !== undefined && summaryPrompt !== null) {
+            if (typeof summaryPrompt !== 'string') {
+              return NextResponse.json({ error: 'summaryPrompt must be a string' }, { status: 400 });
+            }
+            if (summaryPrompt.length > 5000) {
+              return NextResponse.json({ error: 'summaryPrompt exceeds maximum length of 5000 characters' }, { status: 400 });
+            }
+          }
+          if (summaryContent !== undefined && summaryContent !== null) {
+            if (typeof summaryContent !== 'string') {
+              return NextResponse.json({ error: 'summaryContent must be a string' }, { status: 400 });
+            }
+            if (summaryContent.length > 10000) {
+              return NextResponse.json({ error: 'summaryContent exceeds maximum length of 10000 characters' }, { status: 400 });
             }
           }
 

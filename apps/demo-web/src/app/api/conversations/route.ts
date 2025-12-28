@@ -21,7 +21,11 @@ export async function GET(request: NextRequest) {
   const statusParam = url.searchParams.get('status');
   const status = statusParam === 'archived' || statusParam === 'all' ? (statusParam as 'archived' | 'all') : 'active';
   const limitParam = url.searchParams.get('limit');
-  const limit = limitParam ? parseInt(limitParam, 10) : 50;
+  // SEC.3: Add pagination bounds validation (min: 1, max: 100) to prevent resource exhaustion
+  const limit = Math.min(
+    Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam, 10)),
+    100
+  );
   const cursor = url.searchParams.get('cursor') || null;
 
   const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';

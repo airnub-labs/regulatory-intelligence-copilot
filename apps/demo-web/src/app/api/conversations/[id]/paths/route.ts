@@ -130,6 +130,35 @@ export async function POST(
 
           const { name, description, parentPathId, branchPointMessageId, isPrimary } = body;
 
+          // HIGH: Validate all input parameters to prevent injection and resource exhaustion
+          if (name !== undefined && typeof name !== 'string') {
+            return NextResponse.json({ error: 'name must be a string' }, { status: 400 });
+          }
+          if (name && name.length > 255) {
+            return NextResponse.json({ error: 'name exceeds maximum length of 255 characters' }, { status: 400 });
+          }
+          if (description !== undefined && typeof description !== 'string') {
+            return NextResponse.json({ error: 'description must be a string' }, { status: 400 });
+          }
+          if (description && description.length > 2000) {
+            return NextResponse.json({ error: 'description exceeds maximum length of 2000 characters' }, { status: 400 });
+          }
+          if (parentPathId !== undefined && parentPathId !== null && typeof parentPathId !== 'string') {
+            return NextResponse.json({ error: 'parentPathId must be a string' }, { status: 400 });
+          }
+          if (parentPathId && parentPathId.length > 255) {
+            return NextResponse.json({ error: 'parentPathId exceeds maximum length' }, { status: 400 });
+          }
+          if (branchPointMessageId !== undefined && branchPointMessageId !== null && typeof branchPointMessageId !== 'string') {
+            return NextResponse.json({ error: 'branchPointMessageId must be a string' }, { status: 400 });
+          }
+          if (branchPointMessageId && branchPointMessageId.length > 255) {
+            return NextResponse.json({ error: 'branchPointMessageId exceeds maximum length' }, { status: 400 });
+          }
+          if (isPrimary !== undefined && typeof isPrimary !== 'boolean') {
+            return NextResponse.json({ error: 'isPrimary must be a boolean' }, { status: 400 });
+          }
+
           try {
             const { pathId } = await conversationPathStore.createPath({
               tenantId,

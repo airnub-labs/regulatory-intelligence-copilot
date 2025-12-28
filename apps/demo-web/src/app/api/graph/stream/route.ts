@@ -52,6 +52,11 @@ export async function GET(request: Request) {
   const tenantId = session?.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
   const userId = session?.user?.id;
 
+  // CRITICAL: Require authenticated user for graph stream access
+  if (!userId) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
   const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
@@ -67,7 +72,7 @@ export async function GET(request: Request) {
       {
         'app.route': '/api/graph/stream',
         'app.tenant.id': tenantId,
-        ...(userId ? { 'app.user.id': userId } : {}),
+        'app.user.id': userId,
       },
       () => {
         const upgradeHeader = request.headers.get('upgrade');
@@ -87,7 +92,7 @@ function handleSse(
   request: Request,
   filter: ChangeFilter,
   tenantId: string,
-  userId?: string
+  userId: string
 ): Response {
   const encoder = new TextEncoder();
 
@@ -144,7 +149,7 @@ function handleSse(
   });
 }
 
-function handleWebSocket(filter: ChangeFilter, tenantId: string, userId?: string) {
+function handleWebSocket(filter: ChangeFilter, tenantId: string, userId: string) {
   const WebSocketPair = (globalThis as CloudflareGlobalThis).WebSocketPair;
   if (!WebSocketPair) {
     throw new Error('WebSocketPair not available');

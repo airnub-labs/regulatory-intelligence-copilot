@@ -65,8 +65,16 @@ export async function GET(
 
           const searchParams = request.nextUrl.searchParams;
           const includeDeleted = searchParams.get('includeDeleted') === 'true';
-          const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined;
-          const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!, 10) : undefined;
+
+          // HIGH: Add bounds validation for pagination parameters to prevent resource exhaustion
+          const limitParam = searchParams.get('limit');
+          const offsetParam = searchParams.get('offset');
+          const limit = limitParam
+            ? Math.min(Math.max(1, isNaN(parseInt(limitParam, 10)) ? 1000 : parseInt(limitParam, 10)), 1000)
+            : undefined;
+          const offset = offsetParam
+            ? Math.max(0, isNaN(parseInt(offsetParam, 10)) ? 0 : parseInt(offsetParam, 10))
+            : undefined;
 
           try {
             const messages = await conversationPathStore.resolvePathMessages({
