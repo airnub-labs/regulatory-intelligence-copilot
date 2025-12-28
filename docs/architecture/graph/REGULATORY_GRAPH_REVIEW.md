@@ -521,6 +521,254 @@ RETURN t, older ORDER BY older.effective_from DESC
 
 ---
 
+## 11. Cross-Cutting Enhancements (From External Review)
+
+The following enhancements address cross-cutting concerns that would significantly improve graph quality and trustworthiness.
+
+### 11.1 HIGH VALUE - Provenance & Evidence Tracking
+
+**Gap:** Relationships lack systematic provenance tracking for how they were derived. The current `EQUIVALENT_TO` has a confidence property, but this isn't applied consistently.
+
+**Proposal:** Add provenance properties to all relationships:
+
+```typescript
+interface RelationshipProvenance {
+  source_type: 'LEGISLATION' | 'CASE_LAW' | 'GUIDANCE' | 'LLM_INFERRED' | 'HUMAN_VERIFIED';
+  source_id?: string;        // reference to source node
+  confidence: number;        // 0.0 - 1.0
+  verified_by?: string;      // human verifier ID (not PII - internal role/ID only)
+  verified_at?: datetime;
+  extraction_method?: string; // 'MCP_TOOL' | 'MANUAL' | 'LLM_EXTRACTION'
+}
+```
+
+**Priority Relationships for Provenance:**
+- `EQUIVALENT_TO` (cross-jurisdiction equivalence claims)
+- `EXCLUDES` / `MUTUALLY_EXCLUSIVE_WITH` (conflict claims)
+- `REQUIRES` (eligibility requirements)
+- `TRIGGERS` (causal claims)
+
+**Rationale:** This enables trust-scoring of graph data. LLM-inferred relationships can be flagged for human review, while legislation-sourced relationships can be treated as authoritative.
+
+---
+
+### 11.2 HIGH VALUE - Temporal Versioning of Rules
+
+**Gap:** Nodes have `effective_from`/`effective_to` but there's no explicit versioning chain showing how a rule evolved.
+
+**Proposal:** Add `RuleVersion` pattern:
+
+```cypher
+(:Section)-[:HAS_VERSION]->(:SectionVersion {
+  version: int,
+  effective_from: datetime,
+  effective_to: datetime,
+  content_hash: string,
+  change_summary: string
+})
+
+(:SectionVersion)-[:PREVIOUS_VERSION]->(:SectionVersion)
+```
+
+**Alternative (simpler):** Add `SUPERSEDES` chains between versioned section nodes:
+
+```cypher
+(:Section {id: 'IE_TCA_1997_s766_v2'})-[:SUPERSEDES]->(:Section {id: 'IE_TCA_1997_s766_v1'})
+```
+
+**Use Case:** "Show me how R&D credit rules changed from 2020 to 2024" / "What was the threshold before this Finance Act?"
+
+---
+
+### 11.3 MEDIUM VALUE - Confidence/Uncertainty Modelling
+
+**Gap:** No explicit modelling of uncertainty in rule interpretation.
+
+**Proposal:** Add `uncertainty_level` property to applicable nodes:
+
+| Level | Meaning | Example |
+|-------|---------|---------|
+| `SETTLED` | Clear law, no dispute | Standard VAT rate |
+| `GUIDANCE_BASED` | Relies on non-binding guidance | Revenue eBrief interpretation |
+| `CASE_PENDING` | Active litigation on point | Pending TAC appeal |
+| `UNSETTLED` | Conflicting interpretations | Novel cross-border scenario |
+| `EVOLVING` | Expected legislative change | Budget announcement |
+
+**Properties:**
+```
+- uncertainty_level: string
+- uncertainty_notes: string
+- last_assessed_at: datetime
+```
+
+**Rationale:** Enables agents to caveat responses appropriately. "Note: this interpretation is based on Revenue guidance; case law is pending."
+
+---
+
+### 11.4 MEDIUM VALUE - Contribution Nodes
+
+**Gap:** PRSI contributions, pension contributions are implicit in conditions but not explicitly modelled.
+
+**Missing Node: `:Contribution`**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | e.g., `IE_PRSI_CLASS_S_CONTRIBUTION` |
+| `name` | string | "Class S PRSI Contribution" |
+| `contribution_type` | string | `MANDATORY` / `VOLUNTARY` / `CREDITED` |
+| `category` | string | `PRSI` / `PENSION` / `LEVY` |
+| `jurisdiction` | string | |
+
+**Relationships:**
+```cypher
+(:ProfileTag)-[:PAYS]->(:Contribution)
+(:Benefit)-[:REQUIRES_CONTRIBUTIONS]->(:Contribution)
+(:Contribution)-[:HAS_RATE]->(:Rate)
+(:Contribution)-[:LOOKBACK_WINDOW]->(:Timeline)
+(:Contribution)-[:COUNTS_TOWARDS]->(:Condition)
+```
+
+**Use Case:** "How many Class S contributions do I need for Jobseeker's Benefit?" / "Do my voluntary contributions count towards state pension?"
+
+---
+
+### 11.5 MEDIUM VALUE - Disqualification Nodes
+
+**Gap:** Distinct from Penalty - represents being barred from roles, benefits, or activities.
+
+**Missing Node: `:Disqualification`**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | e.g., `IE_DIRECTOR_DISQUALIFICATION` |
+| `name` | string | "Company Director Disqualification" |
+| `category` | string | `OFFICE_HOLDER` / `BENEFIT` / `RELIEF` / `LICENSE` |
+| `duration_min` | number | Minimum period in months |
+| `duration_max` | number | Maximum period in months |
+
+**Relationships:**
+```cypher
+(:Section|Statute)-[:CAN_TRIGGER]->(:Disqualification)
+(:Disqualification)-[:DISQUALIFIES_FROM]->(:Benefit|Relief|ProfileTag)
+(:Disqualification)-[:DURATION]->(:Timeline)
+```
+
+**Use Case:** "What could disqualify me from being a company director?" / "If I'm disqualified, what benefits am I excluded from?"
+
+---
+
+### 11.6 LOW VALUE - Scenario Templates
+
+**Gap:** No graph structure to persist reusable scenario templates for common fact patterns.
+
+**Missing Node: `:ScenarioTemplate`**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | e.g., `SCENARIO_DIRECTOR_RELOCATING_TO_MALTA` |
+| `name` | string | "Irish Director Relocating to Malta" |
+| `profile_constraints` | json | Profile requirements for scenario |
+| `decision_points` | string[] | Key decisions in scenario |
+| `common_questions` | string[] | Frequently asked in this scenario |
+
+**Relationships:**
+```cypher
+(:ScenarioTemplate)-[:INVOLVES]->(:Benefit|Relief|Obligation)
+(:ScenarioTemplate)-[:DECISION_POINT]->(:Section)
+(:ScenarioTemplate)-[:APPLIES_TO_PROFILE]->(:ProfileTag)
+```
+
+**Rationale:** Enables "smart" scenario suggestions when user profile matches template. Supports Scenario Engine integration.
+
+---
+
+### 11.7 Additional Relationship Types from External Review
+
+| Relationship | Priority | Purpose |
+|--------------|----------|---------|
+| `UNLOCKS` | HIGH | One benefit/relief unlocks eligibility for another |
+| `COUNTS_TOWARDS` | HIGH | Contributions count towards eligibility condition |
+| `SATISFIES` | MEDIUM | Action/condition satisfies requirement |
+| `OFFSETS` | MEDIUM | One relief offsets an obligation |
+| `GRANDFATHERED_BY` | MEDIUM | Transitional rule protects existing cohort |
+
+**`UNLOCKS` Example:**
+```cypher
+(:Benefit {id: 'IE_ILLNESS_BENEFIT'})-[:UNLOCKS { condition: 'After 6 months' }]->(:Benefit {id: 'IE_INVALIDITY_PENSION'})
+```
+
+**`COUNTS_TOWARDS` Example:**
+```cypher
+(:Contribution {id: 'IE_PRSI_CLASS_S'})-[:COUNTS_TOWARDS]->(:Condition {id: 'IE_52_CONTRIBUTIONS_REQUIREMENT'})
+```
+
+---
+
+### 11.8 Pensions Domain Expansion
+
+**Gap:** Pensions are minimally modelled. A dedicated pension sub-schema is needed.
+
+**Additional Pension Nodes:**
+
+| Label | Purpose |
+|-------|---------|
+| `:PensionScheme` | Occupational pension, Personal pension, PRSA, State pension |
+| `:PensionBenefit` | Lump sum, annuity, ARF drawdown |
+| `:LifetimeAllowance` | Maximum pension pot (UK concept, may apply to some Irish schemes) |
+| `:AnnualAllowance` | Maximum annual contribution |
+| `:RetirementAge` | Normal retirement age, early retirement, state pension age |
+
+**Key Pension Relationships:**
+```cypher
+(:PensionScheme)-[:TAX_TREATMENT]->(:Relief)
+(:PensionScheme)-[:VESTING_PERIOD]->(:Timeline)
+(:PensionScheme)-[:TRANSFERS_TO]->(:PensionScheme)
+(:PensionScheme)-[:CONTRIBUTION_LIMIT]->(:Limit)
+(:ProfileTag)-[:MEMBER_OF]->(:PensionScheme)
+```
+
+---
+
+## 12. Updated Priority Summary
+
+Incorporating insights from external review:
+
+### Tier 1 - Immediate High Value
+
+| Addition | Type | Impact |
+|----------|------|--------|
+| `:Obligation` | Node | Critical for "what must I do" queries |
+| `:Threshold` | Node | Enables cross-jurisdiction comparisons |
+| `:Rate` | Node | Essential for tax planning queries |
+| `SUPERSEDES` | Relationship | Tracks regulatory evolution |
+| `TRIGGERS` / `UNLOCKS` | Relationship | Models cascading eligibility |
+| `STACKS_WITH` | Relationship | Complement to mutual exclusions |
+| **Provenance on relationships** | Enhancement | **Trust & explainability** |
+| **Temporal versioning** | Enhancement | **Historical queries** |
+
+### Tier 2 - Medium Value Additions
+
+| Addition | Type | Impact |
+|----------|------|--------|
+| `:Form` | Node | Practical action guidance |
+| `:Authority` | Node | Better guidance attribution |
+| `:Contribution` | Node | PRSI/pension modelling |
+| `:Disqualification` | Node | Non-compliance consequences |
+| `COUNTS_TOWARDS` | Relationship | Contribution counting |
+| Pension domain expansion | Domain | Major user need |
+| Confidence/uncertainty modelling | Enhancement | Risk-aware responses |
+
+### Tier 3 - Future Considerations
+
+| Addition | Type | Impact |
+|----------|------|--------|
+| `:ScenarioTemplate` | Node | Scenario Engine support |
+| Employment law domain | Domain | Broader coverage |
+| Company law domain | Domain | Director-focused coverage |
+| Property domain | Domain | Common user questions |
+
+---
+
 ## Appendix A: Comparison with Similar Systems
 
 For reference, comparable regulatory knowledge graphs typically include:
