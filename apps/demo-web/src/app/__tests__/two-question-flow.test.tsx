@@ -324,7 +324,7 @@ describe('Two Question Flow', () => {
 
   it('should properly clear isStreamingRef between questions', async () => {
     // This test specifically verifies that the isStreamingRef flag is properly managed
-    let streamingStates: boolean[] = [];
+    const streamingStates: boolean[] = [];
     let chatRequestCount = 0;
 
     fetchMock.mockImplementation((url: string, options?: RequestInit) => {

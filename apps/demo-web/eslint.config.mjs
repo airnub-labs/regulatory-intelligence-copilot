@@ -1,4 +1,3 @@
-import { fixupConfigRules } from "@eslint/compat";
 import pluginReact from "eslint-plugin-react";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginNext from "@next/eslint-plugin-next";
