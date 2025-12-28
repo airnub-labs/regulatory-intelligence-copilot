@@ -4,18 +4,20 @@ import { cookies } from 'next/headers'
 import { NextAuthOptions, Session } from 'next-auth'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { validateUserExists } from './sessionValidation'
+import { authMetrics } from './authMetrics'
 
 const logger = createLogger('AuthOptions')
 
-// Session validation interval (2 minutes)
-// JWT callback calls validateUserExists() every 2 minutes (aligned with cache TTL)
-// PERFORMANCE: Validation cache (2-min TTL) drastically reduces database load
-//   - Without cache: 1000 users * 30 requests/hour = 30,000 DB queries/hour
-//   - With cache: 1000 users * 30 requests/hour = 30,000 cache checks, ~500 DB queries/hour
+// Session validation interval (5 minutes)
+// JWT callback calls validateUserExists() every 5 minutes (aligned with cache TTL)
+// PERFORMANCE: Distributed cache (5-min TTL) drastically reduces database load
+//   - Without cache: 1000 users * 12 requests/hour = 12,000 DB queries/hour
+//   - With cache: 1000 users * 12 requests/hour = 12,000 cache checks, ~200 DB queries/hour
 //   - Result: ~98% reduction in database queries
-// SECURITY: Deleted users locked out within 2 minutes maximum
-// SCALABILITY: Cache lookups are O(1) in-memory operations (~microseconds)
-const SESSION_VALIDATION_INTERVAL_MS = 2 * 60 * 1000 // 2 minutes
+// SECURITY: Deleted users locked out within 5 minutes maximum
+// MULTI-INSTANCE: Redis cache ensures consistency across multiple app instances
+// METRICS: Tracks authentication patterns for cost optimization
+const SESSION_VALIDATION_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
 // Define extended types for our auth callbacks
 interface ExtendedJWT {
@@ -92,6 +94,9 @@ export const authOptions: NextAuthOptions = {
         if (error || !data.user) {
           return null
         }
+
+        // Record successful login in metrics
+        authMetrics.recordLogin(data.user.id)
 
         return {
           id: data.user.id,
