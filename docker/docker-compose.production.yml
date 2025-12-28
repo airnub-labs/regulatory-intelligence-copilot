@@ -1,0 +1,151 @@
+# Production override for docker-compose.yml
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+#
+# This file:
+# - Switches to production OTEL Collector config
+# - Adds resource limits
+# - Disables debug endpoints
+# - Configures production secrets via environment variables
+#
+
+name: regulatory-intelligence-copilot
+
+services:
+  # OTEL Collector - Production Configuration
+  otel-collector:
+    command: ["--config=/etc/otel-collector-config.production.yaml"]
+    volumes:
+      - ./otel-collector-config.production.yaml:/etc/otel-collector-config.production.yaml
+      - otel_logs:/var/log/otel
+      - otel_file_storage:/var/lib/otel/file_storage  # Persistent queue storage
+    environment:
+      # Production endpoints (replace with your actual endpoints)
+      - LOKI_ENDPOINT=${LOKI_ENDPOINT:-https://loki.yourdomain.com/loki/api/v1/push}
+      - LOKI_API_KEY=${LOKI_API_KEY}
+      - TRACES_ENDPOINT=${TRACES_ENDPOINT:-https://traces.yourdomain.com:4317}
+      - TRACES_API_KEY=${TRACES_API_KEY}
+      - PROMETHEUS_REMOTE_WRITE_ENDPOINT=${PROMETHEUS_REMOTE_WRITE_ENDPOINT}
+      - PROMETHEUS_API_KEY=${PROMETHEUS_API_KEY}
+      # AWS/GCP metadata
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - CLUSTER_NAME=${CLUSTER_NAME:-prod-cluster}
+      # CORS allowed origins
+      - ALLOWED_ORIGIN_1=${ALLOWED_ORIGIN_1:-https://app.yourdomain.com}
+      - ALLOWED_ORIGIN_2=${ALLOWED_ORIGIN_2:-https://api.yourdomain.com}
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4096M
+        reservations:
+          cpus: '2'
+          memory: 2048M
+    # Remove debug ports
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics (collector self-monitoring)
+      - "8889:8889"   # Prometheus exporter
+      - "13133:13133" # Health check
+      # Removed: 55679 (zPages - debug only)
+      # Removed: 1777 (pprof - debug only)
+
+  # Jaeger - Production mode (or replace with cloud provider)
+  jaeger:
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=badger  # Persistent storage
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+    volumes:
+      - jaeger_data:/badger
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2048M
+        reservations:
+          cpus: '1'
+          memory: 1024M
+
+  # Prometheus - Production configuration
+  prometheus:
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'  # 30 day retention
+      - '--storage.tsdb.retention.size=50GB'  # 50GB max
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4096M
+        reservations:
+          cpus: '1'
+          memory: 2048M
+
+  # Loki - Production configuration
+  loki:
+    command: -config.file=/etc/loki/local-config.yaml -target=all
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2048M
+        reservations:
+          cpus: '1'
+          memory: 1024M
+
+  # Grafana - Production configuration
+  grafana:
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-https://grafana.yourdomain.com}
+      - GF_SECURITY_SECRET_KEY=${GF_SECURITY_SECRET_KEY}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      # SMTP for alerting
+      - GF_SMTP_ENABLED=${GF_SMTP_ENABLED:-true}
+      - GF_SMTP_HOST=${GF_SMTP_HOST}
+      - GF_SMTP_USER=${GF_SMTP_USER}
+      - GF_SMTP_PASSWORD=${GF_SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=${GF_SMTP_FROM_ADDRESS:-grafana@yourdomain.com}
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Redis - Production configuration
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  otel_file_storage:
+    driver: local
+  jaeger_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  loki_data:
+    driver: local
+  grafana_data:
+    driver: local

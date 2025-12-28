@@ -1,0 +1,391 @@
+# OpenTelemetry Collector Production Configuration
+#
+# This is a production-tuned configuration for high-volume deployments.
+# Optimized for throughput, reliability, and resource efficiency.
+#
+# Key differences from development config:
+# - Higher memory limits (2GB+ vs 512MB)
+# - Larger batch sizes (2000 vs 100)
+# - More aggressive batching (5s vs 1s)
+# - More queue workers (20 vs 10)
+# - Longer retry windows
+# - Debug exporters disabled
+# - File exporters disabled (use log aggregation instead)
+# - Stricter CORS policies
+#
+
+receivers:
+  # OTLP receiver for application telemetry
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        # Production CORS - restrict to your actual domains
+        cors:
+          allowed_origins:
+            - "${env:ALLOWED_ORIGIN_1}"  # e.g., "https://app.yourdomain.com"
+            - "${env:ALLOWED_ORIGIN_2}"  # e.g., "https://api.yourdomain.com"
+          allowed_headers:
+            - "Content-Type"
+            - "Authorization"
+            - "X-Trace-Id"
+            - "X-Request-Id"
+          max_age: 86400
+        # Connection limits
+        max_recv_msg_size_mib: 16
+        max_concurrent_streams: 100
+
+      grpc:
+        endpoint: 0.0.0.0:4317
+        # Connection limits
+        max_recv_msg_size_mib: 16
+        max_concurrent_streams: 100
+
+  # Prometheus metrics scraping (collector self-monitoring)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 30s  # Less frequent in prod
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Memory limiter - CRITICAL for production stability
+  # Apply backpressure when memory usage is high
+  memory_limiter:
+    check_interval: 1s
+    # Soft limit - starts applying backpressure
+    limit_mib: 2048
+    # Spike allowance - temporary bursts allowed
+    spike_limit_mib: 512
+    # When limit is hit, refuse new data until memory drops below 80%
+    limit_percentage: 80
+    spike_limit_percentage: 20
+
+  # Batch processor - optimize network efficiency
+  # Larger batches = fewer network calls = better throughput
+  batch:
+    # Wait up to 5 seconds before sending a batch
+    timeout: 5s
+    # Send when batch reaches 2000 items
+    send_batch_size: 2000
+    # Maximum batch size (hard limit)
+    send_batch_max_size: 5000
+
+  # Resource detection - automatically detect environment
+  resourcedetection:
+    detectors:
+      - env          # Environment variables
+      - system       # Host information
+      - docker       # Docker container metadata
+      - k8s          # Kubernetes metadata (if running in k8s)
+    timeout: 5s
+    override: false
+
+  # Filter processor - drop unnecessary data to reduce costs
+  filter/drop_health_checks:
+    error_mode: ignore
+    traces:
+      span:
+        # Drop health check spans (reduce noise)
+        - 'attributes["http.target"] == "/health"'
+        - 'attributes["http.target"] == "/healthz"'
+        - 'attributes["http.target"] == "/readyz"'
+
+  filter/drop_debug_logs:
+    error_mode: ignore
+    logs:
+      log_record:
+        # Drop debug logs in production (keep only info+)
+        - 'severity_number < SEVERITY_NUMBER_INFO'
+
+  # Sampling processor - reduce trace volume (optional)
+  # Uncomment if trace volume is too high
+  # probabilistic_sampler:
+  #   sampling_percentage: 10.0  # Keep 10% of traces
+  #   hash_seed: 22              # Consistent sampling across collectors
+
+  # Tail sampling - keep interesting traces, drop boring ones
+  # This is more sophisticated than probabilistic sampling
+  tail_sampling:
+    decision_wait: 10s  # Wait to see complete trace before deciding
+    num_traces: 100000  # Keep up to 100k traces in memory
+    expected_new_traces_per_sec: 1000
+    policies:
+      # Policy 1: Always sample errors
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes:
+            - ERROR
+      # Policy 2: Always sample slow requests
+      - name: latency-policy
+        type: latency
+        latency:
+          threshold_ms: 1000  # Keep traces > 1s
+      # Policy 3: Sample 5% of normal traffic
+      - name: probabilistic-policy
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 5.0
+
+  # Attributes processor - add production metadata
+  attributes:
+    actions:
+      - key: deployment.environment
+        value: production
+        action: upsert
+      - key: collector.version
+        value: "1.0.0"
+        action: insert
+      - key: collector.instance
+        from_attribute: host.name
+        action: insert
+
+  # Resource processor - add service metadata
+  resource:
+    attributes:
+      - key: service.namespace
+        value: regulatory-intelligence-copilot
+        action: upsert
+      - key: deployment.environment
+        value: production
+        action: upsert
+
+exporters:
+  # Loki exporter for logs (PRODUCTION)
+  loki:
+    endpoint: "${env:LOKI_ENDPOINT}"  # e.g., "https://loki.yourdomain.com/loki/api/v1/push"
+    headers:
+      # Add authentication if needed
+      authorization: "Bearer ${env:LOKI_API_KEY}"
+    default_labels_enabled:
+      exporter: true
+      job: true
+      instance: true
+      level: true
+    labels:
+      attributes:
+        severity: severity
+        service.name: service_name
+        deployment.environment: environment
+        host.name: host
+        component: component
+        trace_id: trace_id
+      resources:
+        service.name: service
+        service.namespace: namespace
+    format: json
+    # Production connection settings
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 600s  # 10 minutes
+    sending_queue:
+      enabled: true
+      num_consumers: 20        # More workers for higher throughput
+      queue_size: 5000         # Larger queue
+      storage: file_storage    # Persist queue to disk (see extensions)
+
+  # Jaeger exporter for traces (or use OTLP backend)
+  otlp/traces:
+    endpoint: "${env:TRACES_ENDPOINT}"  # e.g., "https://traces.yourdomain.com:4317"
+    headers:
+      authorization: "Bearer ${env:TRACES_API_KEY}"
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+      max_elapsed_time: 600s
+    sending_queue:
+      enabled: true
+      num_consumers: 20
+      queue_size: 5000
+      storage: file_storage
+
+  # Prometheus exporter for metrics
+  prometheusremotewrite:
+    endpoint: "${env:PROMETHEUS_REMOTE_WRITE_ENDPOINT}"  # e.g., "https://prometheus.yourdomain.com/api/v1/write"
+    headers:
+      authorization: "Bearer ${env:PROMETHEUS_API_KEY}"
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 60s
+    sending_queue:
+      enabled: true
+      num_consumers: 10
+      queue_size: 2000
+      storage: file_storage
+    # Add constant labels for filtering in Prometheus
+    external_labels:
+      environment: production
+      cluster: "${env:CLUSTER_NAME}"
+      region: "${env:AWS_REGION}"
+
+  # Alternative: Local Prometheus endpoint (if running Prometheus in same cluster)
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    const_labels:
+      environment: production
+      service: regulatory-intelligence-copilot
+
+  # Optional: Send to cloud provider (Datadog, New Relic, etc.)
+  # Uncomment and configure as needed
+
+  # datadog:
+  #   api:
+  #     site: "${env:DD_SITE}"
+  #     key: "${env:DD_API_KEY}"
+  #   host_metadata:
+  #     enabled: true
+  #     hostname_source: config_or_system
+  #   compression: gzip
+
+  # otlphttp/newrelic:
+  #   endpoint: "https://otlp.nr-data.net"
+  #   headers:
+  #     api-key: "${env:NEW_RELIC_LICENSE_KEY}"
+  #   compression: gzip
+
+# Extensions for production
+extensions:
+  # Health check endpoint (for load balancer health checks)
+  health_check:
+    endpoint: "0.0.0.0:13133"
+    path: "/health"
+    check_collector_pipeline:
+      enabled: true
+      interval: 5m
+      exporter_failure_threshold: 5
+
+  # File storage for queues (persist to disk on collector restart)
+  file_storage:
+    directory: /var/lib/otel/file_storage
+    timeout: 10s
+    compaction:
+      directory: /var/lib/otel/file_storage
+      on_start: true
+      on_rebound: true
+      rebound_needed_threshold_mib: 100
+      rebound_trigger_threshold_mib: 10
+
+  # Performance profiler (disable in production for security)
+  # pprof:
+  #   endpoint: "localhost:1777"
+
+  # zPages (disable in production for security)
+  # zpages:
+  #   endpoint: "localhost:55679"
+
+# Service pipelines - production configuration
+service:
+  extensions: [health_check, file_storage]
+
+  pipelines:
+    # Logs pipeline - high throughput
+    logs:
+      receivers: [otlp]
+      processors:
+        - memory_limiter           # CRITICAL: Prevent OOM
+        - filter/drop_debug_logs   # Drop debug logs
+        - resourcedetection        # Detect environment
+        - resource                 # Add metadata
+        - attributes               # Add custom attributes
+        - batch                    # Batch for efficiency
+      exporters:
+        - loki                     # Primary log backend
+
+    # Traces pipeline - with tail sampling
+    traces:
+      receivers: [otlp]
+      processors:
+        - memory_limiter           # CRITICAL: Prevent OOM
+        - filter/drop_health_checks # Drop health check spans
+        - tail_sampling            # Intelligent sampling
+        - resourcedetection        # Detect environment
+        - resource                 # Add metadata
+        - attributes               # Add custom attributes
+        - batch                    # Batch for efficiency
+      exporters:
+        - otlp/traces              # Send to traces backend
+
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors:
+        - memory_limiter           # CRITICAL: Prevent OOM
+        - resourcedetection        # Detect environment
+        - resource                 # Add metadata
+        - batch                    # Batch for efficiency
+      exporters:
+        - prometheusremotewrite    # Send to Prometheus
+        - prometheus               # Local scraping endpoint
+
+  # Collector telemetry settings
+  telemetry:
+    logs:
+      level: warn                  # Less verbose in production
+      development: false
+      encoding: json
+      output_paths:
+        - stdout
+      error_output_paths:
+        - stderr
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+# Production deployment notes:
+#
+# 1. Resource Requirements:
+#    - CPU: 2-4 cores minimum
+#    - Memory: 4GB+ recommended (2GB limit + 512MB spike + overhead)
+#    - Disk: 10GB+ for file_storage queues
+#    - Network: Low latency to backends (<100ms)
+#
+# 2. High Availability:
+#    - Run multiple collector instances behind a load balancer
+#    - Use health check endpoint for LB health checks
+#    - Enable file_storage for queue persistence
+#    - Use stateful sets in Kubernetes for persistent storage
+#
+# 3. Scaling Guidelines:
+#    - 1 collector instance per 10k spans/sec
+#    - 1 collector instance per 100k log records/sec
+#    - Monitor memory usage and scale horizontally before hitting limits
+#
+# 4. Security:
+#    - Use TLS for all external connections
+#    - Store API keys in secrets manager (not in this file)
+#    - Restrict CORS to actual production domains
+#    - Disable debug endpoints (pprof, zpages)
+#    - Run as non-root user
+#
+# 5. Cost Optimization:
+#    - Use tail sampling to reduce trace volume (keep errors + slow requests)
+#    - Drop debug logs (filter/drop_debug_logs)
+#    - Drop health check spans (filter/drop_health_checks)
+#    - Use compression (gzip) for all exporters
+#    - Adjust batch sizes based on network latency
+#
+# 6. Monitoring:
+#    - Monitor collector metrics at :8888/metrics
+#    - Set alerts on:
+#      * Memory usage > 80%
+#      * Exporter failures > 5
+#      * Queue size > 80% capacity
+#      * Batch send latency > 10s
+#
+# 7. Tuning:
+#    - Adjust memory_limiter based on available RAM
+#    - Adjust batch sizes based on network latency and throughput
+#    - Adjust tail_sampling thresholds based on trace volume
+#    - Adjust sending_queue sizes based on burst patterns
+#
