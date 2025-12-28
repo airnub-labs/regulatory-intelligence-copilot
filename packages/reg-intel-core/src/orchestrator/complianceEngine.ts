@@ -129,6 +129,12 @@ export interface ComplianceStreamChunk {
       label: string;
       type: string;
     }>;
+    conversationContextSummary?: string;
+    priorTurnNodes?: Array<{
+      id: string;
+      label: string;
+      type: string;
+    }>;
   };
   // Text delta (streamed during response)
   delta?: string;
@@ -1187,6 +1193,12 @@ export class ComplianceEngine {
           jurisdictions: promptMetadata.jurisdictions,
           uncertaintyLevel: agentResult.uncertaintyLevel,
           referencedNodes: metadataReferencedNodes,
+          conversationContextSummary: conversationContext.summary,
+          priorTurnNodes: conversationContext.nodes.map(node => ({
+            id: node.id,
+            label: node.label,
+            type: node.type ?? '',
+          })),
         },
       };
 

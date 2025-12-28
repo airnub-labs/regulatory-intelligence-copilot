@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Bot, GitBranch, Pencil, Pin, PinOff, ShieldCheck, User } from "lucide-react"
+import { Bot, ChevronDown, ChevronUp, GitBranch, Pencil, Pin, PinOff, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -145,6 +145,8 @@ interface MessageMetadata {
   jurisdictions?: string[]
   uncertaintyLevel?: "low" | "medium" | "high"
   referencedNodes?: string[]
+  conversationContextSummary?: string
+  priorTurnNodes?: Array<{ id: string; label: string; type: string }>
   // Branch preview fields (for version navigation)
   isBranchPreview?: boolean
   branchPathId?: string
@@ -207,6 +209,8 @@ export function Message({
   const branchIndex = metadata?.branchIndex ?? 1
 
   const nodesCount = metadata?.referencedNodes?.length ?? 0
+  const hasContextSummary = !isUser && metadata?.conversationContextSummary
+  const [isContextExpanded, setIsContextExpanded] = React.useState(false)
 
   // Render branch preview card when viewing a branch version
   if (isBranchPreview && branchPathId && onViewBranch) {
@@ -445,6 +449,52 @@ export function Message({
               )}
             </div>
           </div>
+          {hasContextSummary && (
+            <div className="flex flex-col gap-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-3 py-2">
+              <button
+                onClick={() => setIsContextExpanded(!isContextExpanded)}
+                className="flex items-center justify-between text-xs font-semibold text-blue-900 dark:text-blue-100 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Context from previous turns
+                  {metadata?.priorTurnNodes && metadata.priorTurnNodes.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">
+                      {metadata.priorTurnNodes.length}
+                    </Badge>
+                  )}
+                </span>
+                {isContextExpanded ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
+              {isContextExpanded && (
+                <div className="flex flex-col gap-2 pt-1">
+                  <p className="text-xs text-blue-800 dark:text-blue-200 leading-relaxed">
+                    {metadata?.conversationContextSummary}
+                  </p>
+                  {metadata?.priorTurnNodes && metadata.priorTurnNodes.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {metadata.priorTurnNodes.map((node, idx) => (
+                        <Badge
+                          key={`${node.id}-${idx}`}
+                          variant="outline"
+                          className="text-[10px] bg-background/50 border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-100"
+                        >
+                          {node.label}
+                          {node.type && (
+                            <span className="ml-1 text-blue-600 dark:text-blue-400">({node.type})</span>
+                          )}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {!isUser && (
             <div className="flex flex-wrap items-center gap-2 rounded-xl bg-muted/60 px-3 py-2 text-[11px] font-medium text-muted-foreground">
               <span className="rounded-full bg-background px-2 py-1 text-xs font-semibold text-foreground">

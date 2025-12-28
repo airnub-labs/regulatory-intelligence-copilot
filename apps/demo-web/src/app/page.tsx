@@ -7,6 +7,8 @@ import {
   Archive,
   ArchiveRestore,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Loader2,
   PencilLine,
@@ -25,6 +27,7 @@ import { PathBreadcrumbNav } from '@/components/chat/path-breadcrumb-nav'
 import { ConditionalPathProvider } from '@/components/chat/conditional-path-provider'
 import { getPathApiClient } from '@/lib/pathApiClient'
 import { BranchDialog } from '@reg-copilot/reg-intel-ui'
+import { MiniGraph } from '@/components/chat/mini-graph'
 import type { StreamingStage } from '@/components/chat/progress-indicator'
 import { PromptInput, type ForceTool } from '@/components/chat/prompt-input'
 import { AppHeader } from '@/components/layout/app-header'
@@ -139,6 +142,8 @@ interface ReferencedNodeSummary {
   id: string
   label: string
   type?: string
+  source?: 'current' | 'prior' // Indicates if from current response or prior conversation
+  relevance?: string // Why this node is referenced
 }
 
 interface ChatSseMetadata extends ChatMetadata {
@@ -267,6 +272,9 @@ export default function Home() {
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [referencedNodeSummaries, setReferencedNodeSummaries] = useState<ReferencedNodeSummary[]>([])
   const [isLoadingNodeSummaries, setIsLoadingNodeSummaries] = useState(false)
+  const [selectedNodeTypeFilter, setSelectedNodeTypeFilter] = useState<string | null>(null)
+  const [expandedNodeTypes, setExpandedNodeTypes] = useState<Set<string>>(new Set())
+  const [expandedNodeId, setExpandedNodeId] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
@@ -328,8 +336,13 @@ export default function Home() {
   }
 
   useEffect(() => {
-    const ids = chatMetadata?.referencedNodes ?? []
-    if (!ids.length) {
+    const currentNodeIds = chatMetadata?.referencedNodes ?? []
+    const priorTurnNodes = (chatMetadata as ChatSseMetadata)?.priorTurnNodes ?? []
+
+    // Get unique IDs from both current and prior turns
+    const allIds = [...new Set([...currentNodeIds, ...priorTurnNodes.map(n => n.id)])]
+
+    if (!allIds.length) {
       setReferencedNodeSummaries([])
       setIsLoadingNodeSummaries(false)
       return
@@ -339,18 +352,39 @@ export default function Home() {
     const fetchSummaries = async () => {
       setIsLoadingNodeSummaries(true)
       try {
-        const params = new URLSearchParams({ ids: ids.slice(0, 25).join(',') })
+        const params = new URLSearchParams({ ids: allIds.slice(0, 50).join(',') })
         const response = await fetch(`/api/graph?${params.toString()}`, { signal: controller.signal })
         if (!response.ok) {
           throw new Error(`Lookup failed with status ${response.status}`)
         }
-        const payload = (await response.json()) as { nodes?: ReferencedNodeSummary[] }
+        const payload = (await response.json()) as { nodes?: Array<{ id: string; label: string; type?: string }> }
         if (!controller.signal.aborted) {
-          setReferencedNodeSummaries(payload.nodes ?? [])
+          // Enhance nodes with source and relevance information
+          const enhancedNodes: ReferencedNodeSummary[] = (payload.nodes ?? []).map(node => {
+            const isCurrentTurn = currentNodeIds.includes(node.id)
+            const isPriorTurn = priorTurnNodes.some(p => p.id === node.id)
+
+            let source: 'current' | 'prior' | undefined
+            let relevance: string | undefined
+
+            if (isCurrentTurn && isPriorTurn) {
+              source = 'current'
+              relevance = 'Referenced in this response and previous conversation'
+            } else if (isCurrentTurn) {
+              source = 'current'
+              relevance = 'Referenced in this response'
+            } else if (isPriorTurn) {
+              source = 'prior'
+              relevance = 'Referenced in previous conversation'
+            }
+
+            return { ...node, source, relevance }
+          })
+          setReferencedNodeSummaries(enhancedNodes)
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          telemetry.error({ err: error, ids }, 'Failed to fetch node summaries')
+          telemetry.error({ err: error, ids: allIds }, 'Failed to fetch node summaries')
           setReferencedNodeSummaries([])
         }
       } finally {
@@ -363,7 +397,7 @@ export default function Home() {
     fetchSummaries()
 
     return () => controller.abort()
-  }, [chatMetadata?.referencedNodes, telemetry])
+  }, [chatMetadata?.referencedNodes, (chatMetadata as ChatSseMetadata)?.priorTurnNodes, telemetry])
 
   const loadConversations = useCallback(async (status: 'active' | 'archived' = conversationListTab) => {
     if (!isAuthenticated) return
@@ -1159,6 +1193,55 @@ export default function Home() {
     }
   }
 
+  // Group referenced nodes by type
+  const groupedNodes = useMemo(() => {
+    const groups = new Map<string, ReferencedNodeSummary[]>()
+    referencedNodeSummaries.forEach(node => {
+      const type = node.type || 'Other'
+      if (!groups.has(type)) {
+        groups.set(type, [])
+      }
+      groups.get(type)!.push(node)
+    })
+    return Array.from(groups.entries()).map(([type, nodes]) => ({ type, nodes }))
+  }, [referencedNodeSummaries])
+
+  // Get unique node types for filtering
+  const nodeTypes = useMemo(() => {
+    return Array.from(new Set(referencedNodeSummaries.map(n => n.type || 'Other')))
+  }, [referencedNodeSummaries])
+
+  // Filter nodes based on selected type
+  const filteredGroupedNodes = useMemo(() => {
+    if (!selectedNodeTypeFilter) return groupedNodes
+    return groupedNodes.filter(g => g.type === selectedNodeTypeFilter)
+  }, [groupedNodes, selectedNodeTypeFilter])
+
+  // Toggle expand/collapse for a node type
+  const toggleNodeTypeExpansion = (type: string) => {
+    setExpandedNodeTypes(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(type)) {
+        newSet.delete(type)
+      } else {
+        newSet.add(type)
+      }
+      return newSet
+    })
+  }
+
+  // Get color for node type badge
+  const getNodeTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      'Benefit': 'bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-100 dark:border-green-800',
+      'Rule': 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-100 dark:border-blue-800',
+      'Jurisdiction': 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-100 dark:border-purple-800',
+      'Regulation': 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-100 dark:border-orange-800',
+      'Other': 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-950 dark:text-gray-100 dark:border-gray-800',
+    }
+    return colors[type] || colors['Other']
+  }
+
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
@@ -1563,7 +1646,7 @@ export default function Home() {
                     </Button>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1">
+                <CardContent className="space-y-2">
                   {isLoadingNodeSummaries && (
                     <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -1575,23 +1658,141 @@ export default function Home() {
                       {chatMetadata.referencedNodes.length} nodes referenced
                     </p>
                   )}
-                  <div className="max-h-[200px] space-y-1 overflow-y-auto">
-                    {referencedNodeSummaries.map(node => (
-                      <a
-                        key={node.id}
-                        href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
-                        className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50"
-                      >
-                        <div className="flex-1 truncate">
-                          <span className="font-medium">{node.label}</span>
-                          {node.type && (
-                            <span className="ml-1 text-muted-foreground">({node.type})</span>
-                          )}
+                  {!isLoadingNodeSummaries && referencedNodeSummaries.length > 0 && (
+                    <>
+                      <div className="pb-2">
+                        <h4 className="text-xs font-semibold text-muted-foreground mb-2">Visual Overview</h4>
+                        <MiniGraph nodes={referencedNodeSummaries} maxNodes={20} />
+                      </div>
+                      {nodeTypes.length > 1 && (
+                        <div className="flex flex-wrap gap-1.5 pb-1">
+                          <Button
+                            size="sm"
+                            variant={selectedNodeTypeFilter === null ? 'default' : 'outline'}
+                            className="h-6 px-2 text-xs"
+                            onClick={() => setSelectedNodeTypeFilter(null)}
+                          >
+                            All ({referencedNodeSummaries.length})
+                          </Button>
+                          {nodeTypes.map(type => (
+                            <Button
+                              key={type}
+                              size="sm"
+                              variant={selectedNodeTypeFilter === type ? 'default' : 'outline'}
+                              className={`h-6 px-2 text-xs ${selectedNodeTypeFilter === type ? '' : getNodeTypeColor(type)}`}
+                              onClick={() => setSelectedNodeTypeFilter(type)}
+                            >
+                              {type} ({groupedNodes.find(g => g.type === type)?.nodes.length ?? 0})
+                            </Button>
+                          ))}
                         </div>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      </a>
-                    ))}
-                  </div>
+                      )}
+                      <div className="max-h-[400px] space-y-2 overflow-y-auto">
+                        {filteredGroupedNodes.map(({ type, nodes }) => (
+                          <div key={type} className="space-y-1">
+                            <button
+                              onClick={() => toggleNodeTypeExpansion(type)}
+                              className="flex w-full items-center justify-between rounded-md bg-muted/60 px-2 py-1.5 text-xs font-semibold hover:bg-muted transition-colors"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className={`text-[10px] ${getNodeTypeColor(type)}`}>
+                                  {type}
+                                </Badge>
+                                <span className="text-muted-foreground">({nodes.length})</span>
+                              </div>
+                              {expandedNodeTypes.has(type) ? (
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            {expandedNodeTypes.has(type) && (
+                              <div className="space-y-1 pl-2">
+                                {nodes.map(node => (
+                                  <div key={node.id} className="space-y-1">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          setExpandedNodeId(expandedNodeId === node.id ? null : node.id)
+                                        }}
+                                        className="group/node flex flex-1 items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                                        title={node.relevance}
+                                      >
+                                        <div className="flex flex-1 items-center gap-1.5 overflow-hidden">
+                                          <span className="font-medium truncate">{node.label}</span>
+                                          {node.source && (
+                                            <Badge
+                                              variant={node.source === 'current' ? 'default' : 'secondary'}
+                                              className={`shrink-0 text-[9px] px-1 h-4 ${
+                                                node.source === 'current'
+                                                  ? 'bg-blue-500 text-white border-blue-600 dark:bg-blue-600'
+                                                  : 'bg-gray-400 text-white border-gray-500 dark:bg-gray-600'
+                                              }`}
+                                            >
+                                              {node.source === 'current' ? 'Current' : 'Prior'}
+                                            </Badge>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          {expandedNodeId === node.id ? (
+                                            <ChevronUp className="h-3 w-3 text-muted-foreground" />
+                                          ) : (
+                                            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                          )}
+                                        </div>
+                                      </button>
+                                    </div>
+                                    {expandedNodeId === node.id && (
+                                      <div className="ml-2 rounded-md border border-dashed bg-muted/30 px-3 py-2 space-y-2 text-xs">
+                                        <div className="space-y-1">
+                                          <div className="flex items-start gap-2">
+                                            <span className="font-semibold text-muted-foreground min-w-[60px]">ID:</span>
+                                            <span className="font-mono text-[10px] break-all">{node.id}</span>
+                                          </div>
+                                          {node.type && (
+                                            <div className="flex items-start gap-2">
+                                              <span className="font-semibold text-muted-foreground min-w-[60px]">Type:</span>
+                                              <Badge variant="outline" className={`text-[10px] ${getNodeTypeColor(node.type)}`}>
+                                                {node.type}
+                                              </Badge>
+                                            </div>
+                                          )}
+                                          {node.relevance && (
+                                            <div className="flex items-start gap-2">
+                                              <span className="font-semibold text-muted-foreground min-w-[60px]">Context:</span>
+                                              <span className="text-muted-foreground italic">{node.relevance}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex gap-2 pt-1">
+                                          <Button
+                                            asChild
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 px-2 text-xs"
+                                          >
+                                            <a
+                                              href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                            >
+                                              <ExternalLink className="mr-1 h-3 w-3" />
+                                              View in Graph
+                                            </a>
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}
