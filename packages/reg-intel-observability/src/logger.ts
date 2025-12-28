@@ -42,7 +42,9 @@ const serializePayload = (payload: unknown): string => {
 
   try {
     return JSON.stringify(payload);
-  } catch {
+  } catch (error) {
+    // Use console.error to avoid infinite recursion if called during logging
+    console.error('Failed to serialize payload for logging:', error instanceof Error ? error.message : String(error));
     return '[unserializable-payload]';
   }
 };

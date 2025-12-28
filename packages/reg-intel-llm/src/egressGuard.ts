@@ -386,7 +386,11 @@ export function sanitizeTextForEgress(
   if (shouldUseMLDetection(context, options)) {
     try {
       sanitized = redactPii(sanitized);
-    } catch {
+    } catch (error) {
+      logger.debug({
+        context,
+        error: error instanceof Error ? error.message : String(error),
+      }, 'ML-based PII redaction failed, falling back to pattern-based');
       // Continue with pattern-based redaction
     }
   }
