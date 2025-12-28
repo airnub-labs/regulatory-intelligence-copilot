@@ -139,7 +139,8 @@ export class RedisConversationEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
+        // Using ioredis-style API which @upstash/redis doesn't support in types
+        await (this.subscriber as any).subscribe(channel, (message: unknown, messageChannel: string) => {
           if (messageChannel !== channel) {
             return;
           }
@@ -178,7 +179,8 @@ export class RedisConversationEventHub {
 
       if (subscription) {
         await subscription;
-        await this.subscriber.unsubscribe(channel);
+        // Using ioredis-style API which @upstash/redis doesn't support in types
+        await (this.subscriber as any).unsubscribe(channel);
       }
     } catch (error) {
       console.error(`[RedisEventHub] Error unsubscribing from ${channel}:`, error);
@@ -265,7 +267,8 @@ export class RedisConversationEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        await this.subscriber.unsubscribe(channelName);
+        // Using ioredis-style API which @upstash/redis doesn't support in types
+        await (this.subscriber as any).unsubscribe(channelName);
       } catch (error) {
         console.error(`[RedisEventHub] Error shutting down channel ${channelName}:`, error);
       }
@@ -331,7 +334,8 @@ export class RedisConversationListEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, (message: unknown, messageChannel: string) => {
+        // Using ioredis-style API which @upstash/redis doesn't support in types
+        await (this.subscriber as any).subscribe(channel, (message: unknown, messageChannel: string) => {
           if (messageChannel !== channel) {
             return;
           }
@@ -366,7 +370,8 @@ export class RedisConversationListEventHub {
 
       if (subscription) {
         await subscription;
-        await this.subscriber.unsubscribe(channel);
+        // Using ioredis-style API which @upstash/redis doesn't support in types
+        await (this.subscriber as any).unsubscribe(channel);
       }
     } catch (error) {
       console.error(`[RedisListEventHub] Error unsubscribing from ${channel}:`, error);
@@ -427,7 +432,8 @@ export class RedisConversationListEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        await this.subscriber.unsubscribe(channelName);
+        // Using ioredis-style API which @upstash/redis doesn't support in types
+        await (this.subscriber as any).unsubscribe(channelName);
       } catch (error) {
         console.error(`[RedisListEventHub] Error shutting down channel ${channelName}:`, error);
       }
