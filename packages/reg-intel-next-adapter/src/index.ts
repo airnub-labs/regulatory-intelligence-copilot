@@ -243,6 +243,8 @@ function buildMetadataChunk(args: {
   referencedNodes: Array<{ id: string } | string>;
   conversationId?: string;
   warnings?: string[];
+  conversationContextSummary?: string;
+  priorTurnNodes?: Array<{ id: string; label: string; type: string }>;
 }) {
   return {
     agentId: args.agentId,
@@ -252,6 +254,8 @@ function buildMetadataChunk(args: {
     referencedNodes: args.referencedNodes.map(node => (typeof node === 'string' ? node : node.id)),
     conversationId: args.conversationId,
     warnings: args.warnings,
+    conversationContextSummary: args.conversationContextSummary,
+    priorTurnNodes: args.priorTurnNodes,
   };
 }
 
@@ -917,6 +921,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
                   referencedNodes: chunk.metadata!.referencedNodes,
                   conversationId,
                   warnings: accumulatedWarnings,
+                  conversationContextSummary: chunk.metadata!.conversationContextSummary,
+                  priorTurnNodes: chunk.metadata!.priorTurnNodes,
                 });
                 lastMetadata = metadata;
                 eventHub.broadcast(tenantId, conversationId, 'metadata', {

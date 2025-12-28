@@ -7,6 +7,8 @@ import {
   Archive,
   ArchiveRestore,
   AlertTriangle,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Loader2,
   PencilLine,
@@ -267,6 +269,8 @@ export default function Home() {
   const [chatMetadata, setChatMetadata] = useState<ChatMetadata | null>(null)
   const [referencedNodeSummaries, setReferencedNodeSummaries] = useState<ReferencedNodeSummary[]>([])
   const [isLoadingNodeSummaries, setIsLoadingNodeSummaries] = useState(false)
+  const [selectedNodeTypeFilter, setSelectedNodeTypeFilter] = useState<string | null>(null)
+  const [expandedNodeTypes, setExpandedNodeTypes] = useState<Set<string>>(new Set())
   const [warnings, setWarnings] = useState<string[]>([])
   const [scenarioHint, setScenarioHint] = useState<string | null>(null)
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null)
@@ -1159,6 +1163,55 @@ export default function Home() {
     }
   }
 
+  // Group referenced nodes by type
+  const groupedNodes = useMemo(() => {
+    const groups = new Map<string, ReferencedNodeSummary[]>()
+    referencedNodeSummaries.forEach(node => {
+      const type = node.type || 'Other'
+      if (!groups.has(type)) {
+        groups.set(type, [])
+      }
+      groups.get(type)!.push(node)
+    })
+    return Array.from(groups.entries()).map(([type, nodes]) => ({ type, nodes }))
+  }, [referencedNodeSummaries])
+
+  // Get unique node types for filtering
+  const nodeTypes = useMemo(() => {
+    return Array.from(new Set(referencedNodeSummaries.map(n => n.type || 'Other')))
+  }, [referencedNodeSummaries])
+
+  // Filter nodes based on selected type
+  const filteredGroupedNodes = useMemo(() => {
+    if (!selectedNodeTypeFilter) return groupedNodes
+    return groupedNodes.filter(g => g.type === selectedNodeTypeFilter)
+  }, [groupedNodes, selectedNodeTypeFilter])
+
+  // Toggle expand/collapse for a node type
+  const toggleNodeTypeExpansion = (type: string) => {
+    setExpandedNodeTypes(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(type)) {
+        newSet.delete(type)
+      } else {
+        newSet.add(type)
+      }
+      return newSet
+    })
+  }
+
+  // Get color for node type badge
+  const getNodeTypeColor = (type: string) => {
+    const colors: Record<string, string> = {
+      'Benefit': 'bg-green-100 text-green-800 border-green-300 dark:bg-green-950 dark:text-green-100 dark:border-green-800',
+      'Rule': 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-100 dark:border-blue-800',
+      'Jurisdiction': 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-950 dark:text-purple-100 dark:border-purple-800',
+      'Regulation': 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950 dark:text-orange-100 dark:border-orange-800',
+      'Other': 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-950 dark:text-gray-100 dark:border-gray-800',
+    }
+    return colors[type] || colors['Other']
+  }
+
   return (
     <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background text-foreground">
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_18%_18%,rgba(14,165,233,0.16),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.14),transparent_30%),radial-gradient(circle_at_50%_65%,rgba(109,40,217,0.16),transparent_28%)] blur-3xl" />
@@ -1563,7 +1616,7 @@ export default function Home() {
                     </Button>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-1">
+                <CardContent className="space-y-2">
                   {isLoadingNodeSummaries && (
                     <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />
@@ -1575,23 +1628,71 @@ export default function Home() {
                       {chatMetadata.referencedNodes.length} nodes referenced
                     </p>
                   )}
-                  <div className="max-h-[200px] space-y-1 overflow-y-auto">
-                    {referencedNodeSummaries.map(node => (
-                      <a
-                        key={node.id}
-                        href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
-                        className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50"
-                      >
-                        <div className="flex-1 truncate">
-                          <span className="font-medium">{node.label}</span>
-                          {node.type && (
-                            <span className="ml-1 text-muted-foreground">({node.type})</span>
-                          )}
+                  {!isLoadingNodeSummaries && referencedNodeSummaries.length > 0 && (
+                    <>
+                      {nodeTypes.length > 1 && (
+                        <div className="flex flex-wrap gap-1.5 pb-1">
+                          <Button
+                            size="sm"
+                            variant={selectedNodeTypeFilter === null ? 'default' : 'outline'}
+                            className="h-6 px-2 text-xs"
+                            onClick={() => setSelectedNodeTypeFilter(null)}
+                          >
+                            All ({referencedNodeSummaries.length})
+                          </Button>
+                          {nodeTypes.map(type => (
+                            <Button
+                              key={type}
+                              size="sm"
+                              variant={selectedNodeTypeFilter === type ? 'default' : 'outline'}
+                              className={`h-6 px-2 text-xs ${selectedNodeTypeFilter === type ? '' : getNodeTypeColor(type)}`}
+                              onClick={() => setSelectedNodeTypeFilter(type)}
+                            >
+                              {type} ({groupedNodes.find(g => g.type === type)?.nodes.length ?? 0})
+                            </Button>
+                          ))}
                         </div>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                      </a>
-                    ))}
-                  </div>
+                      )}
+                      <div className="max-h-[400px] space-y-2 overflow-y-auto">
+                        {filteredGroupedNodes.map(({ type, nodes }) => (
+                          <div key={type} className="space-y-1">
+                            <button
+                              onClick={() => toggleNodeTypeExpansion(type)}
+                              className="flex w-full items-center justify-between rounded-md bg-muted/60 px-2 py-1.5 text-xs font-semibold hover:bg-muted transition-colors"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className={`text-[10px] ${getNodeTypeColor(type)}`}>
+                                  {type}
+                                </Badge>
+                                <span className="text-muted-foreground">({nodes.length})</span>
+                              </div>
+                              {expandedNodeTypes.has(type) ? (
+                                <ChevronUp className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            {expandedNodeTypes.has(type) && (
+                              <div className="space-y-1 pl-2">
+                                {nodes.map(node => (
+                                  <a
+                                    key={node.id}
+                                    href={`/graph?nodeId=${encodeURIComponent(node.id)}${conversationIdRef.current ? `&conversationId=${conversationIdRef.current}` : ''}`}
+                                    className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-xs hover:bg-muted/50 transition-colors"
+                                  >
+                                    <div className="flex-1 truncate">
+                                      <span className="font-medium">{node.label}</span>
+                                    </div>
+                                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}
