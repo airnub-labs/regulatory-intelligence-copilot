@@ -2,12 +2,13 @@
  * Tests for PathBreadcrumbs component
  */
 
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PathBreadcrumbs } from '../PathBreadcrumbs';
 import type { ClientPath, PathMessage } from '../../types';
 
 describe('PathBreadcrumbs', () => {
-  const mockOnNavigate = jest.fn();
+  const mockOnNavigate = vi.fn();
 
   const primaryPath: ClientPath = {
     id: 'path-primary',

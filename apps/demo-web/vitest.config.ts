@@ -10,6 +10,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@reg-copilot/reg-intel-conversations': path.resolve(
+        __dirname,
+        '../../packages/reg-intel-conversations/src/index.ts'
+      ),
       '@reg-copilot/reg-intel-observability': path.resolve(
         __dirname,
         '../../packages/reg-intel-observability/src/index.ts'
