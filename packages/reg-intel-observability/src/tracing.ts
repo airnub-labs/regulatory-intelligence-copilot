@@ -26,6 +26,7 @@ import {
   forceFlushLogs,
   createPinoOtelTransport,
 } from './logsExporter.js';
+import { initBusinessMetrics } from './businessMetrics.js';
 
 // ATTR_DEPLOYMENT_ENVIRONMENT_NAME is not yet in semantic-conventions stable, use string literal
 const ATTR_DEPLOYMENT_ENVIRONMENT = 'deployment.environment.name';
@@ -187,6 +188,10 @@ export const initObservability = async (options: ObservabilityOptions) => {
   });
 
   await sdkInstance.start();
+
+  // Initialize custom business metrics after SDK is ready
+  initBusinessMetrics();
+
   runtimeConfig = {
     serviceName: options.serviceName,
     serviceVersion:
