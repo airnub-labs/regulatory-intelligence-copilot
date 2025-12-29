@@ -200,6 +200,50 @@ export interface TaxYear {
 }
 
 /**
+ * NIClass representing UK National Insurance classification
+ */
+export interface NIClass {
+  id: string;
+  label: string;
+  description: string;
+  rate: number;
+  threshold_weekly?: number;
+  threshold_annual?: number;
+  eligible_benefits?: string[];
+}
+
+/**
+ * BenefitCap representing maximum benefit amounts
+ */
+export interface BenefitCap {
+  id: string;
+  label: string;
+  amount_single?: number;
+  amount_couple?: number;
+  amount_with_children?: number;
+  currency: string;
+  frequency: 'WEEKLY' | 'MONTHLY' | 'ANNUAL';
+  exemptions?: string[];
+  effective_from?: string;
+  effective_to?: string;
+}
+
+/**
+ * CoordinationRule representing EU social security coordination
+ */
+export interface CoordinationRule {
+  id: string;
+  label: string;
+  regulation: string;
+  article?: string;
+  applies_to: string;
+  home_jurisdiction?: string;
+  host_jurisdiction?: string;
+  duration_months?: number;
+  description?: string;
+}
+
+/**
  * Graph node representing any regulatory entity
  */
 export interface GraphNode {
@@ -239,7 +283,10 @@ export interface GraphNode {
     | 'RegulatoryBody'
     | 'AssetClass'
     | 'MeansTest'
-    | 'TaxYear';
+    | 'TaxYear'
+    | 'NIClass'
+    | 'BenefitCap'
+    | 'CoordinationRule';
   properties: Record<string, unknown>;
 }
 
@@ -449,6 +496,39 @@ export interface GraphClient {
    * Get means test for a benefit
    */
   getMeansTestForBenefit(benefitId: string): Promise<MeansTest | null>;
+
+  /**
+   * Get National Insurance classes for a jurisdiction
+   */
+  getNIClassesForJurisdiction(jurisdictionId: string): Promise<NIClass[]>;
+
+  /**
+   * Get NI class for an employment type
+   */
+  getNIClassForEmploymentType(employmentType: string, jurisdictionId: string): Promise<NIClass | null>;
+
+  /**
+   * Get benefit caps for a jurisdiction
+   */
+  getBenefitCapsForJurisdiction(jurisdictionId: string): Promise<BenefitCap[]>;
+
+  /**
+   * Get benefits subject to a benefit cap
+   */
+  getBenefitsSubjectToCap(capId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get coordination rules between jurisdictions
+   */
+  getCoordinationRules(homeJurisdiction: string, hostJurisdiction: string): Promise<CoordinationRule[]>;
+
+  /**
+   * Get posted worker rules for a profile
+   */
+  getPostedWorkerRules(profileId: string, homeJurisdiction: string, hostJurisdiction: string): Promise<{
+    rules: CoordinationRule[];
+    benefits: GraphNode[];
+  }>;
 
   /**
    * Execute raw Cypher query
