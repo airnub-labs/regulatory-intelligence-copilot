@@ -22,6 +22,8 @@ import type {
   PRSIClass,
   LifeEvent,
   Penalty,
+  LegalEntity,
+  TaxCredit,
 } from './types.js';
 import { GraphError } from './errors.js';
 import { LOG_PREFIX } from './constants.js';
@@ -826,6 +828,157 @@ export class BoltGraphClient implements GraphClient {
     `;
 
     const records = await this.executeCypher(query, { penaltyId }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+    return context.nodes;
+  }
+
+  /**
+   * Get legal entity types for a jurisdiction
+   */
+  async getLegalEntitiesForJurisdiction(jurisdictionId: string): Promise<LegalEntity[]> {
+    this.logger.info({ jurisdictionId }, `${LOG_PREFIX.graph} Getting legal entities for jurisdiction`);
+
+    const query = `
+      MATCH (e:LegalEntity)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      RETURN e
+      ORDER BY e.category, e.label
+    `;
+
+    const records = await this.executeCypher(query, { jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const entities: LegalEntity[] = [];
+    for (const record of records) {
+      const e = record.e;
+      if (e && typeof e === 'object' && 'properties' in e) {
+        const props = (e as { properties: Record<string, unknown> }).properties;
+        entities.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Entity',
+          abbreviation: props.abbreviation as string | undefined,
+          jurisdiction: props.jurisdiction as string || jurisdictionId,
+          category: (props.category as LegalEntity['category']) || 'COMPANY',
+          sub_category: props.sub_category as string | undefined,
+          has_separate_legal_personality: props.has_separate_legal_personality as boolean || false,
+          limited_liability: props.limited_liability as boolean || false,
+          can_trade: props.can_trade as boolean || false,
+          can_hold_property: props.can_hold_property as boolean || false,
+          tax_transparent: props.tax_transparent as boolean | undefined,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return entities;
+  }
+
+  /**
+   * Get obligations specific to an entity type
+   */
+  async getObligationsForEntityType(entityTypeId: string): Promise<Obligation[]> {
+    this.logger.info({ entityTypeId }, `${LOG_PREFIX.graph} Getting obligations for entity type`);
+
+    const query = `
+      MATCH (o:Obligation)-[:APPLIES_TO_ENTITY]->(e:LegalEntity {id: $entityTypeId})
+      RETURN o
+      ORDER BY o.category, o.label
+    `;
+
+    const records = await this.executeCypher(query, { entityTypeId }) as Array<Record<string, unknown>>;
+
+    const obligations: Obligation[] = [];
+    for (const record of records) {
+      const o = record.o;
+      if (o && typeof o === 'object' && 'properties' in o) {
+        const props = (o as { properties: Record<string, unknown> }).properties;
+        obligations.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Obligation',
+          category: (props.category as Obligation['category']) || 'FILING',
+          frequency: props.frequency as Obligation['frequency'],
+          penalty_applies: props.penalty_applies as boolean | undefined,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return obligations;
+  }
+
+  /**
+   * Get tax credits for a profile and tax year
+   */
+  async getTaxCreditsForProfile(
+    profileId: string,
+    taxYear: number,
+    jurisdictionId: string
+  ): Promise<TaxCredit[]> {
+    this.logger.info({
+      profileId,
+      taxYear,
+      jurisdictionId,
+    }, `${LOG_PREFIX.graph} Getting tax credits for profile`);
+
+    const query = `
+      MATCH (pt:ProfileTag {id: $profileId})-[:ENTITLED_TO]->(c:TaxCredit)
+      MATCH (c)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      WHERE c.tax_year = $taxYear
+      RETURN c
+      ORDER BY c.category, c.amount DESC
+    `;
+
+    const records = await this.executeCypher(query, { profileId, taxYear, jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const credits: TaxCredit[] = [];
+    for (const record of records) {
+      const c = record.c;
+      if (c && typeof c === 'object' && 'properties' in c) {
+        const props = (c as { properties: Record<string, unknown> }).properties;
+        credits.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Tax Credit',
+          amount: props.amount as number || 0,
+          currency: props.currency as string || 'EUR',
+          tax_year: props.tax_year as number || taxYear,
+          refundable: props.refundable as boolean || false,
+          transferable: props.transferable as boolean || false,
+          restricted_to_marginal: props.restricted_to_marginal as boolean | undefined,
+          category: (props.category as TaxCredit['category']) || 'OTHER',
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return credits;
+  }
+
+  /**
+   * Get reliefs/benefits that stack with a given node
+   */
+  async getStackingOptions(nodeId: string): Promise<GraphNode[]> {
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting stacking options`);
+
+    const query = `
+      MATCH (n {id: $nodeId})-[:STACKS_WITH]->(stackable)
+      RETURN stackable
+    `;
+
+    const records = await this.executeCypher(query, { nodeId }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+    return context.nodes;
+  }
+
+  /**
+   * Get items that reduce a benefit/relief
+   */
+  async getReducingFactors(nodeId: string): Promise<GraphNode[]> {
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting reducing factors`);
+
+    const query = `
+      MATCH (reducer)-[:REDUCES]->(n {id: $nodeId})
+      RETURN reducer
+    `;
+
+    const records = await this.executeCypher(query, { nodeId }) as Array<Record<string, unknown>>;
     const context = this.parseGraphContext(records);
     return context.nodes;
   }

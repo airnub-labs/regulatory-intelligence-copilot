@@ -486,6 +486,63 @@ Represents consequences of non-compliance with obligations.
 - Fixed €100 CRO late filing fee
 - Loss of audit exemption (restriction)
 
+### 2.27 `:LegalEntity`
+
+Represents a type of legal structure or entity classification.
+
+**Properties**
+- `id: string` – e.g. `"IE_ENTITY_LTD"`, `"IE_ENTITY_DAC"`.
+- `label: string` – e.g. `"Private Company Limited by Shares"`, `"Sole Trader"`.
+- `abbreviation?: string` – e.g. `"LTD"`, `"DAC"`, `"PLC"`.
+- `jurisdiction: string` – Jurisdiction code (e.g., `"IE"`, `"UK"`).
+- `category: string` – `"COMPANY" | "PARTNERSHIP" | "SOLE_TRADER" | "TRUST" | "CHARITY" | "FUND"`.
+- `sub_category?: string` – e.g. `"PRIVATE"`, `"PUBLIC"`, `"DESIGNATED_ACTIVITY"`, `"LIMITED"`.
+- `has_separate_legal_personality: boolean` – Whether entity is legally distinct from owners.
+- `limited_liability: boolean` – Whether owners have limited liability.
+- `can_trade: boolean` – Whether entity can engage in trading activities.
+- `can_hold_property: boolean` – Whether entity can own property.
+- `tax_transparent?: boolean` – Whether entity is tax-transparent (profits taxed at member level).
+- `description?: string`
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- Private Company Limited by Shares (LTD) – most common Irish company type
+- Designated Activity Company (DAC) – company with objects clause
+- Public Limited Company (PLC) – can offer shares to public
+- General Partnership – tax-transparent, unlimited liability
+- Sole Trader – individual trading, tax-transparent
+- Company Limited by Guarantee (CLG) – typically charities
+- Discretionary Trust
+
+### 2.28 `:TaxCredit`
+
+Represents a direct reduction in tax liability (as opposed to tax relief which reduces taxable income).
+
+**Properties**
+- `id: string` – e.g. `"IE_PERSONAL_TAX_CREDIT_SINGLE_2024"`.
+- `label: string` – e.g. `"Personal Tax Credit (Single)"`, `"Employee Tax Credit"`.
+- `amount: number` – Credit amount in local currency.
+- `currency: string` – `"EUR" | "GBP"`.
+- `tax_year: number` – Tax year the credit applies to (e.g., `2024`).
+- `refundable: boolean` – Whether excess credit can be refunded.
+- `transferable: boolean` – Whether credit can be transferred to spouse/partner.
+- `restricted_to_marginal?: boolean` – Whether credit only applies to marginal tax.
+- `category: string` – `"PERSONAL" | "EMPLOYMENT" | "FAMILY" | "HEALTH" | "HOUSING" | "OTHER"`.
+- `description?: string`
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- Personal Tax Credit (Single) – €1,875 (2024)
+- Personal Tax Credit (Married) – €3,750 (2024, transferable)
+- Employee Tax Credit (PAYE) – €1,875 (2024, for PAYE employees)
+- Earned Income Tax Credit – €1,875 (2024, for self-employed)
+- Home Carer Tax Credit – €1,800 (2024)
+- Single Person Child Carer Credit – €1,750 (2024)
+- Age Tax Credit – €245 (2024, for 65+)
+- Incapacitated Child Tax Credit – €3,500 (2024)
+
 ---
 
 ## 3. Core Relationship Types
@@ -638,6 +695,22 @@ These relationships support compliance workflows and numeric reasoning.
 - `(:LifeEvent)-[:STARTS_TIMELINE]->(:Timeline)` – Event starts a time window.
 - `(:LifeEvent)-[:ENDS_TIMELINE]->(:Timeline)` – Event ends a time window.
 - `(:Benefit|:Relief|:Obligation)-[:TRIGGERED_BY]->(:LifeEvent)` – Reverse relationship (optional).
+
+**Legal Entities:**
+- `(:LegalEntity)-[:IN_JURISDICTION]->(:Jurisdiction)` – Entity type available in jurisdiction.
+- `(:Obligation)-[:APPLIES_TO_ENTITY]->(:LegalEntity)` – Obligation applies to this entity type.
+- `(:ProfileTag)-[:REGISTERED_AS]->(:LegalEntity)` – Profile's legal entity type.
+- `(:Benefit|:Relief)-[:AVAILABLE_TO]->(:LegalEntity)` – Benefit/relief available to entity type.
+
+**Tax Credits:**
+- `(:TaxCredit)-[:IN_JURISDICTION]->(:Jurisdiction)` – Tax credit available in jurisdiction.
+- `(:ProfileTag)-[:ENTITLED_TO]->(:TaxCredit)` – Profile entitled to tax credit.
+- `(:TaxCredit)-[:STACKS_WITH]->(:TaxCredit)` – Credits that can be claimed together.
+- `(:TaxCredit)-[:MUTUALLY_EXCLUSIVE_WITH]->(:TaxCredit)` – Credits that cannot be claimed together.
+- `(:TaxCredit)-[:CAPPED_BY]->(:Threshold)` – Maximum cap on tax credit.
+- `(:TaxCredit)-[:TRANSFERS_TO]->(:ProfileTag)` – Credit can transfer to another person.
+- `(:Relief|:Benefit)-[:REDUCES]->(:TaxCredit)` – Benefit/relief that reduces available credit.
+- `(:TaxCredit)-[:OFFSETS_AGAINST]->(:Rate)` – Tax credit offsets tax calculated at this rate.
 
 ---
 
