@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
-> **Last Updated**: 2025-12-28
-> **Status**: All architecture features complete except Scenario Engine. Observability stack production-ready.
-> **Document Version**: 5.8
+> **Last Updated**: 2025-12-29
+> **Status**: All architecture features complete except Scenario Engine. Regulatory Graph Phase 1 complete. Observability stack production-ready.
+> **Document Version**: 5.9
 
 ---
 
@@ -34,10 +34,52 @@ This document consolidates all outstanding work identified from reviewing the ar
 | - | API Route Test Coverage | ✅ Complete | N/A | ✅ Complete (100%, 20/20 routes tested) |
 | - | Security & Input Validation | ✅ Complete | N/A | ✅ Complete (SEC.1-SEC.4 fixed) |
 | - | Error Handling | ✅ Complete | N/A | ✅ Complete (ERR.1-ERR.3 fixed, error boundaries added) |
+| - | Supabase Event Hub Tests | ✅ Complete | N/A | ✅ Complete (921 LOC, PR #215) |
+| - | Regulatory Graph Phase 1 | ✅ Complete | N/A | ✅ Complete (6 node types, 20+ rel types, PR #218) |
 
 ---
 
 ## 1. Recently Completed Work (Since 2025-12-24)
+
+### 1.0 Regulatory Graph Phase 1 ✅ COMPLETED (2025-12-29)
+
+**Reference**: `docs/architecture/graph/REGULATORY_GRAPH_REVIEW.md`
+**Completed**: 2025-12-29
+**PR**: #218
+
+**Description**: Comprehensive expansion of the regulatory graph with 6 new node types and 20+ relationship types.
+
+**Implemented**:
+- ✅ **New Node Types**: `Obligation`, `Threshold`, `Rate`, `Form`, `PRSIClass`, `LifeEvent`
+- ✅ **New Relationship Types**:
+  - Obligations: `HAS_OBLIGATION`, `CREATES_OBLIGATION`, `REQUIRES_FORM`, `CLAIMED_VIA`
+  - Numeric: `HAS_THRESHOLD`, `LIMITED_BY_THRESHOLD`, `CHANGES_THRESHOLD`, `HAS_RATE`, `SUBJECT_TO_RATE`, `APPLIES_RATE`
+  - SKOS: `BROADER`, `NARROWER`, `RELATED`
+  - PRSI/Life: `ENTITLES_TO`, `HAS_PRSI_CLASS`, `CONTRIBUTION_RATE`, `TRIGGERS`, `STARTS_TIMELINE`, `ENDS_TIMELINE`, `TRIGGERED_BY`
+- ✅ **TypeScript Interfaces**: Added to `packages/reg-intel-graph/src/types.ts`
+- ✅ **GraphClient Methods**: `getObligationsForProfile()`, `getRatesForCategory()`, `getThresholdsForCondition()`
+- ✅ **Seed Files**: 5 Cypher files for Irish regulatory data
+  - `obligations.cypher` - CT1, Form 11, CRO returns, preliminary tax
+  - `thresholds_rates.cypher` - CGT exemption, small benefit, income tax rates, PRSI rates
+  - `forms.cypher` - Revenue, CRO, DSP forms
+  - `prsi_classes.cypher` - Classes A, S, B with benefit entitlements
+  - `life_events.cypher` - Child birth, marriage, job loss, business start, etc.
+- ✅ **Comprehensive Tests**: Ireland-specific tests for tax, PRSI, compliance scenarios
+
+### 1.0.1 Supabase Event Hub Tests ✅ COMPLETED (2025-12-29)
+
+**Reference**: `packages/reg-intel-conversations/src/supabaseEventHub.test.ts`
+**Completed**: 2025-12-29
+**PR**: #215
+
+**Description**: Comprehensive test coverage for the Supabase-based event hub.
+
+**Implemented**:
+- ✅ `supabaseEventHub.test.ts` - 921 lines of tests
+- ✅ Subscription management testing
+- ✅ Broadcast operations testing
+- ✅ Error handling and reconnection logic
+- ✅ Fixed linting issues across codebase
 
 ### 1.1 Path System Page Integration ✅ COMPLETED
 
@@ -689,12 +731,17 @@ This document consolidates all outstanding work identified from reviewing the ar
 **Package**: `reg-intel-observability`
 **Status**: ✅ Core files now tested (logger.ts, logsExporter.ts, tracing.ts)
 
-#### 3.5.3 REMAINING GAP: supabaseEventHub.ts
+#### 3.5.3 ~~REMAINING GAP: supabaseEventHub.ts~~ ✅ COMPLETED
 
 **File**: `packages/reg-intel-conversations/src/supabaseEventHub.ts`
 **Lines**: 352
-**Status**: ❌ **ZERO test coverage**
-**Priority**: LOW (functionality works, but no automated tests)
+**Status**: ✅ **COMPLETED** - 921 LOC comprehensive test coverage (PR #215)
+**Priority**: ~~LOW~~ RESOLVED
+
+**Completed** (2025-12-29):
+- ✅ `supabaseEventHub.test.ts` - 921 lines of comprehensive tests
+- Covers: subscription management, broadcast operations, error handling, reconnection logic
+- Fixed linting issues across codebase
 
 **Tasks**:
 
@@ -702,7 +749,60 @@ This document consolidates all outstanding work identified from reviewing the ar
 - [x] **Task CUT.2**: Add tests for `logger.ts` ✅ (38 tests)
 - [x] **Task CUT.3**: Add tests for `logsExporter.ts` ✅ (3 tests)
 - [x] **Task CUT.4**: Add tests for `tracing.ts` ✅ (2 tests)
-- [ ] **Task CUT.5**: Add tests for `supabaseEventHub.ts` (352 LOC - remaining gap)
+- [x] **Task CUT.5**: Add tests for `supabaseEventHub.ts` ✅ (921 LOC - PR #215)
+
+---
+
+### 3.6 MEDIUM: Regulatory Graph Enhancement (Phases 2-5)
+
+**Priority**: MEDIUM (Feature Enhancement)
+**Effort**: 2-4 weeks total
+**Reference**: `docs/architecture/graph/REGULATORY_GRAPH_REVIEW.md`
+
+**Description**: Following the successful implementation of Phase 1 (PR #218), remaining phases expand the regulatory graph with additional concept types and seed data.
+
+**Phase 1 Status**: ✅ **COMPLETED** (PR #218, 2025-12-29)
+- ✅ 6 new node types: `Obligation`, `Threshold`, `Rate`, `Form`, `PRSIClass`, `LifeEvent`
+- ✅ 20+ new relationship types including SKOS hierarchy
+- ✅ `types.ts` aligned with full schema
+- ✅ `graphIngressGuard.ts` updated with new types
+- ✅ 5 Cypher seed files created
+- ✅ GraphClient methods: `getObligationsForProfile`, `getRatesForCategory`, `getThresholdsForCondition`
+- ✅ Comprehensive test suite for new patterns
+
+**Remaining Phases**:
+
+#### Phase 2: Expand Numeric Structures (Thresholds & Rates)
+**Effort**: 3-4 days
+
+- [ ] **Task RG.2.1**: Add more Irish tax thresholds (USC bands, DIRT rates, stamp duty thresholds)
+- [ ] **Task RG.2.2**: Add more Irish PRSI thresholds (contribution requirements per benefit)
+- [ ] **Task RG.2.3**: Add UK equivalent thresholds (National Insurance, Income Tax bands)
+- [ ] **Task RG.2.4**: Link thresholds to existing Condition nodes
+
+#### Phase 3: Expand Forms & SKOS Hierarchy
+**Effort**: 2-3 days
+
+- [ ] **Task RG.3.1**: Add more Revenue forms (RCT, P35, R185, etc.)
+- [ ] **Task RG.3.2**: Add more DSP claim forms (Illness Benefit, Maternity Benefit applications)
+- [ ] **Task RG.3.3**: Create SKOS concept hierarchy with `BROADER`/`NARROWER`/`RELATED` relationships
+- [ ] **Task RG.3.4**: Implement `getConceptHierarchy()` in GraphClient
+
+#### Phase 4: Expand PRSIClass & LifeEvent Integration
+**Effort**: 3-4 days
+
+- [ ] **Task RG.4.1**: Complete PRSI class entitlements mapping (Classes A, B, C, D, E, H, J, K, M, S)
+- [ ] **Task RG.4.2**: Link LifeEvents to Benefits and Obligations via `TRIGGERS` relationships
+- [ ] **Task RG.4.3**: Add UK life events and National Insurance integration
+- [ ] **Task RG.4.4**: Implement `getEventsForProfile()` in GraphClient
+
+#### Phase 5: Testing & Validation
+**Effort**: 2-3 days
+
+- [ ] **Task RG.5.1**: Add integration tests for all new GraphClient methods
+- [ ] **Task RG.5.2**: Add seed data validation tests
+- [ ] **Task RG.5.3**: Update schema documentation (`schema_v_0_7.md`)
+- [ ] **Task RG.5.4**: Run Cypher seed files against Memgraph and validate graph structure
 
 ---
 
@@ -1200,13 +1300,13 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~2-3 weeks (Scenario Engine only)
+**Total Outstanding Effort**: ~4-7 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
-| HIGH | 1 | 2-3 weeks (Scenario Engine only) |
-| MEDIUM | 1 | 4-8 hours (Observability backends) |
-| LOW | 3 | 1-2 weeks (supabaseEventHub tests, LOW priority tests, UI polish) |
+| HIGH | 1 | 2-3 weeks (Scenario Engine) |
+| MEDIUM | 1 | 2-4 weeks (Regulatory Graph Phases 2-5) |
+| LOW | 3 | 1-2 weeks (LOW priority package tests, UI polish) |
 
 ### Critical Gaps Identified
 
@@ -1272,38 +1372,72 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] **Context Summaries & Graph Nodes UI** (PR #208) ✅ NEW 2025-12-28
 
 **⚠️ Low Priority (Not Blocking)**:
-- [ ] Tests: supabaseEventHub.ts (352 LOC, 0 tests)
-- [ ] Tests: reg-intel-conversations LOW priority files
-- [ ] Tests: reg-intel-core LOW priority files
+- [x] ~~Tests: supabaseEventHub.ts~~ ✅ **COMPLETED** (921 LOC, PR #215)
+- [ ] Tests: reg-intel-conversations LOW priority files (7 files - types, config, exports)
+- [ ] Tests: reg-intel-core LOW priority files (6 files - types, constants, exports)
 
 **❌ Not Started (Feature Gaps)**:
 - [ ] Scenario Engine implementation (2-3 weeks)
 
+**🟡 MEDIUM Priority (Enhancement)**:
+- [ ] Regulatory Graph Phases 2-5 (2-4 weeks) - expand thresholds, rates, forms, life events
+
 ### Codebase Statistics
 
-| Metric | Before (2025-12-27 AM) | After Phase 4 | After Phase 7 | Current (v5.6) |
-|--------|--------|--------|--------|--------|
-| Total packages | 8 | 8 | 8 | 8 |
-| Total test files | 35 (30 pkg + 5 app) | 48 (32 pkg + 16 app) | 60+ (44 pkg + 16 app) | 65+ (verified) |
-| Total test LOC | ~10,240 | ~13,800+ | ~19,500+ | ~21,500+ |
-| Estimated total tests | ~290 | ~396+ | ~552+ | ~730+ (verified) |
-| API route files | 19 | 19 | 19 | 20 (incl. NextAuth) |
-| API routes with tests | 3 (16%) | 18 (95%) | 19 (100%) | 20/20 (100%) ✅ |
-| Packages with 0 tests | 2 | 0 | 0 | 0 |
-| Packages with partial tests | 0 | 3 | 2 (LOW only) | 2 (LOW only) |
-| Packages with comprehensive tests | 6 | 5 | 7 | 8 ✅ |
-| UI components tested | 0 | 2 | 8 (100%) | 8 (100%) ✅ |
-| egressGuard.ts tests | 0 | 0 | 0 | 133 ✅ |
-| Observability tests | ~15 | ~15 | ~15 | 43 ✅ |
+| Metric | Before (2025-12-27 AM) | After Phase 4 | After Phase 7 | v5.6 | Current (v5.9) |
+|--------|--------|--------|--------|--------|--------|
+| Total packages | 8 | 8 | 8 | 8 | 8 |
+| Total test files | 35 (30 pkg + 5 app) | 48 (32 pkg + 16 app) | 60+ (44 pkg + 16 app) | 65+ | **86** ✅ |
+| Total test LOC | ~10,240 | ~13,800+ | ~19,500+ | ~21,500+ | ~24,000+ |
+| Estimated total tests | ~290 | ~396+ | ~552+ | ~730+ | **800+** ✅ |
+| API route files | 19 | 19 | 19 | 20 | 20 |
+| API routes with tests | 3 (16%) | 18 (95%) | 19 (100%) | 20/20 (100%) | 20/20 (100%) ✅ |
+| Packages with 0 tests | 2 | 0 | 0 | 0 | 0 |
+| Packages with partial tests | 0 | 3 | 2 (LOW only) | 2 (LOW only) | 2 (LOW only) |
+| Packages with comprehensive tests | 6 | 5 | 7 | 8 | 8 ✅ |
+| UI components tested | 0 | 2 | 8 (100%) | 8 (100%) | 8 (100%) ✅ |
+| egressGuard.ts tests | 0 | 0 | 0 | 133 | 133 ✅ |
+| Observability tests | ~15 | ~15 | ~15 | 43 | 43 ✅ |
+| supabaseEventHub.ts tests | 0 | 0 | 0 | 0 | **921 LOC** ✅ |
+| Regulatory Graph new types | 0 | 0 | 0 | 0 | **6 types** ✅ |
 
 ---
 
-**Document Version**: 5.8
-**Last Updated**: 2025-12-28
-**Previous Versions**: 5.7, 5.6, 5.5, 5.4, 5.3, 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Document Version**: 5.9
+**Last Updated**: 2025-12-29
+**Previous Versions**: 5.8, 5.7, 5.6, 5.5, 5.4, 5.3, 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v5.9 (2025-12-29): Major updates - supabaseEventHub tests complete, Regulatory Graph Phase 1 complete ✅
+  - **COMPLETED**: supabaseEventHub.test.ts (921 LOC) - PR #215
+    - Comprehensive test coverage for subscription management, broadcast operations
+    - Fixed linting issues across codebase
+    - Task CUT.5 marked complete
+  - **COMPLETED**: Regulatory Graph Phase 1 (PR #218)
+    - 6 new node types: `Obligation`, `Threshold`, `Rate`, `Form`, `PRSIClass`, `LifeEvent`
+    - 20+ new relationship types including SKOS hierarchy (`BROADER`, `NARROWER`, `RELATED`)
+    - 5 Cypher seed files for Irish regulatory data
+    - GraphClient new methods: `getObligationsForProfile`, `getRatesForCategory`, `getThresholdsForCondition`
+    - types.ts aligned with full schema (21 node types)
+    - graphIngressGuard.ts updated with new types and relationships
+    - Comprehensive test suite for new patterns
+  - **NEW SECTION**: Added §3.6 Regulatory Graph Enhancement (Phases 2-5) as MEDIUM priority
+    - Phase 2: Expand numeric structures (thresholds, rates)
+    - Phase 3: Expand forms & SKOS hierarchy
+    - Phase 4: Expand PRSIClass & LifeEvent integration
+    - Phase 5: Testing & validation
+  - **UPDATED**: Codebase statistics
+    - Test files: 65+ → 86 (+21 files)
+    - Estimated tests: 730+ → 800+
+    - supabaseEventHub.ts: 0 → 921 LOC tests
+    - Regulatory Graph new types: 0 → 6
+  - **UPDATED**: Summary and remaining gaps
+    - supabaseEventHub moved from "Low Priority" to "Completed"
+    - Total outstanding effort adjusted to ~4-7 weeks (was ~2-3 weeks)
+  - **CONFIRMED REMAINING GAPS**:
+    - HIGH: Scenario Engine (2-3 weeks) - zero implementation, spec complete
+    - MEDIUM: Regulatory Graph Phases 2-5 (2-4 weeks) - expand data
 - v5.8 (2025-12-28): Comprehensive review and verification ✅
   - **VERIFIED**: All completed items still accurate - codebase matches documentation
   - **VERIFIED**: Scenario Engine remains the ONLY significant outstanding feature gap
