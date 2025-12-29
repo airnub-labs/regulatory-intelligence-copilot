@@ -37,6 +37,7 @@
     "@reg-copilot/reg-intel-conversations": "workspace:*",
     "@reg-copilot/reg-intel-ui": "workspace:*",
     "@reg-copilot/reg-intel-core": "workspace:*",
+    "@reg-copilot/reg-intel-llm": "workspace:*",
     "@reg-copilot/reg-intel-next-adapter": "workspace:*",
     "@reg-copilot/reg-intel-observability": "workspace:*",
     "@supabase/ssr": "^0.5.2",

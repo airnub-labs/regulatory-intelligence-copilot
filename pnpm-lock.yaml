@@ -111,6 +111,9 @@ importers:
       '@reg-copilot/reg-intel-core':
         specifier: workspace:*
         version: link:../../packages/reg-intel-core
+      '@reg-copilot/reg-intel-llm':
+        specifier: workspace:*
+        version: link:../../packages/reg-intel-llm
       '@reg-copilot/reg-intel-next-adapter':
         specifier: workspace:*
         version: link:../../packages/reg-intel-next-adapter
