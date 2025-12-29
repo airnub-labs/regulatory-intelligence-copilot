@@ -4,16 +4,23 @@ Comprehensive test coverage for the regulatory intelligence graph package implem
 
 ## Test Overview
 
-The test suite covers **all node types, relationships, and system components** with **750+ total test cases** including advanced patterns:
+The test suite covers **all node types, relationships, and system components** with **1010+ total test cases** including advanced patterns and country-specific real-world integration tests:
 
-### Test Files
+### Core Framework Test Files
 
 1. **`boltGraphClient.test.ts`** - Unit tests for all GraphClient methods (175 tests)
 2. **`graphIntegration.test.ts`** - Integration tests for node types and relationships (201 tests)
 3. **`graphIngressGuard.test.ts`** - Schema validation, PII blocking, property whitelisting (176 tests)
 4. **`seedData.test.ts`** - Seed data integrity and cross-seed relationships (101 tests)
-5. **`complexPatterns.test.ts`** ⭐ **NEW** - Multi-hop traversals, bidirectional patterns, temporal queries, legal precedents (100+ tests)
-6. **`advancedPatterns.test.ts`** ⭐ **NEW** - Cross-jurisdictional analysis, conditional eligibility, decision trees (100+ tests)
+5. **`complexPatterns.test.ts`** ⭐ - Multi-hop traversals, bidirectional patterns, temporal queries, legal precedents (100+ tests)
+6. **`advancedPatterns.test.ts`** ⭐ - Cross-jurisdictional analysis, conditional eligibility, decision trees (100+ tests)
+
+### Country-Specific Test Files 🇮🇪
+
+7. **`countries/ireland/ireland.tax.test.ts`** ⭐ **NEW** - Irish tax system integration (60+ tests)
+8. **`countries/ireland/ireland.prsi.test.ts`** ⭐ **NEW** - PRSI social insurance (80+ tests)
+9. **`countries/ireland/ireland.compliance.test.ts`** ⭐ **NEW** - Compliance workflows (70+ tests)
+10. **`countries/ireland/ireland.realworld.test.ts`** ⭐ **NEW** - Real-world scenarios (50+ tests)
 
 ## Test Categories
 
@@ -351,6 +358,105 @@ pnpm test:watch
 - Transitive RELATED concept discovery
 - SKOS taxonomy navigation patterns
 
+## Country-Specific Real-World Integration Tests ⭐
+
+### 13. Ireland Real-World Regulatory Tests (`countries/ireland/`)
+
+**NEW**: Comprehensive country-specific integration tests validating actual Irish legislation and real-world user scenarios.
+
+**Test Structure:**
+```
+src/__tests__/countries/ireland/
+├── README.md                     # Ireland test documentation
+├── ireland.tax.test.ts          # Irish tax system (60+ tests)
+├── ireland.prsi.test.ts         # PRSI social insurance (80+ tests)
+├── ireland.compliance.test.ts   # Compliance obligations (70+ tests)
+└── ireland.realworld.test.ts    # End-to-end scenarios (50+ tests)
+```
+
+**ireland.tax.test.ts** - Irish Tax System Integration:
+- Income tax bands (20% standard, 40% higher rate)
+- Capital Gains Tax (33% rate, €1,270 exemption)
+- Small Benefit Exemption (€1,000)
+- Real-world tax calculations
+- Temporal rate validity
+- Tax year transitions
+- Profile integration
+
+**ireland.prsi.test.ts** - PRSI (Pay Related Social Insurance):
+- **Class A** (Employees): Full benefits including Jobseeker's
+- **Class S** (Self-employed): Limited benefits, NO Jobseeker's
+- **Class B/D** (Civil servants): Pre/post-1995 differences
+- **Class J** (Low earners): Minimal benefits
+- Contribution rates (4% for Class S, no ceiling for employees)
+- 104-week threshold for Jobseeker's Benefit
+- Maternity Benefit for both Class A and S
+- Life event triggering (unemployment, birth, retirement)
+- Cross-border CTA coordination
+
+**ireland.compliance.test.ts** - Compliance Workflows:
+- **CT1** Corporation Tax Return (9-month deadline)
+- **Form 11** Income Tax Return (self-employed)
+- **CRO Annual Return** (B1 form)
+- Preliminary Tax payment obligations
+- Form metadata (issuing bodies, URLs)
+- Profile-specific obligations
+- Complete compliance paths (Profile → Obligation → Form → Timeline)
+- Annual compliance calendars
+
+**ireland.realworld.test.ts** - Complete User Journeys:
+1. **Single Director Company Formation**: First-year compliance checklist
+2. **Unemployment Claim**: Life Event → Jobseeker's Benefit → Form UP1
+3. **Maternity Leave**: Birth → Maternity Benefit for Class A & S
+4. **Property Sale**: CGT calculation on €150k gain
+5. **Employee → Self-Employed**: Compliance and benefit changes
+6. **Retirement**: State Pension eligibility
+7. **Cross-Border Worker**: CTA social security coordination
+8. **Multi-Event Journey**: Complete lifecycle scenarios
+
+**Data Sources:**
+- Revenue Commissioners (www.revenue.ie)
+- Department of Social Protection (www.gov.ie)
+- Citizens Information (www.citizensinformation.ie)
+- Companies Registration Office (www.cro.ie)
+
+**Key Features Tested:**
+- ✅ Real Irish tax rates and thresholds (verified against official sources)
+- ✅ Actual PRSI classes and benefit entitlements
+- ✅ Complete compliance workflows with real forms
+- ✅ End-to-end user journeys through Irish regulatory system
+- ✅ Differential treatment (Class A vs Class S, employee vs self-employed)
+- ✅ Real-world calculations (tax, PRSI, benefits)
+- ✅ Cross-border coordination (IE-UK via CTA)
+
+**Run Ireland Tests:**
+```bash
+pnpm test countries/ireland        # All Ireland tests
+pnpm test ireland.tax.test.ts      # Tax system only
+pnpm test ireland.prsi.test.ts     # PRSI only
+pnpm test ireland.compliance.test.ts  # Compliance only
+pnpm test ireland.realworld.test.ts   # Real-world scenarios only
+```
+
+### Adding More Countries
+
+Use the **Country Test Template** (`countries/COUNTRY_TEMPLATE.md`) to implement tests for additional jurisdictions:
+
+**Recommended Implementation Priority:**
+1. **United Kingdom (UK)**: National Insurance, Income Tax, PAYE, VAT
+2. **Northern Ireland (NI)**: Special dual-regulation regime
+3. **European Union (EU)**: Directives, regulations, cross-border coordination
+4. **Germany, France, Netherlands**: Major EU member states
+
+**Template Structure:**
+- `{country}.tax.test.ts` - Tax system tests
+- `{country}.social_insurance.test.ts` - Social security tests
+- `{country}.compliance.test.ts` - Obligations and forms
+- `{country}.realworld.test.ts` - End-to-end scenarios
+- `{country}.crossborder.test.ts` - International coordination
+
+**See:** `src/__tests__/countries/COUNTRY_TEMPLATE.md` for implementation guide
+
 ## Test Results Summary
 
 | Category | Tests | Status | Notes |
@@ -364,7 +470,11 @@ pnpm test:watch
 | Seed Data Tests | 101 | 🌱 Data Required | Requires loaded seed data |
 | **Complex Patterns** ⭐ | **100+** | **🔌 DB Required** | **Multi-hop, temporal, legal precedents** |
 | **Advanced Patterns** ⭐ | **100+** | **🔌 DB Required** | **Cross-jurisdictional, decision trees** |
-| **Total** | **750+** | **251 Pass** | **500+ require database** |
+| **Ireland Tax** 🇮🇪 | **60+** | **🔌 DB Required** | **Real Irish tax rates, CGT, thresholds** |
+| **Ireland PRSI** 🇮🇪 | **80+** | **🔌 DB Required** | **All PRSI classes, benefits, life events** |
+| **Ireland Compliance** 🇮🇪 | **70+** | **🔌 DB Required** | **CT1, Form 11, CRO, complete workflows** |
+| **Ireland Real-World** 🇮🇪 | **50+** | **🔌 DB Required** | **End-to-end user journeys** |
+| **Total** | **1010+** | **251 Pass** | **760+ require database** |
 
 ## Coverage Goals
 
@@ -428,12 +538,33 @@ Tests are designed to run in CI/CD pipelines:
 
 ## Conclusion
 
-Phase 5 delivers a **comprehensive test suite** with 452 tests covering:
+The regulatory graph now has a **comprehensive test suite with 1010+ tests** covering:
+
+### Core Framework Tests (750+ tests)
 - ✅ All 27 node types
 - ✅ All 57 relationship types
 - ✅ Complete ingress guard validation
 - ✅ Comprehensive error handling
 - ✅ Real-world usage patterns
 - ✅ Data integrity checks
+- ✅ Multi-hop traversals and complex patterns
+- ✅ Temporal queries and legal precedents
+- ✅ Cross-jurisdictional analysis
 
-The test suite ensures the regulatory graph is production-ready with full validation, security (PII blocking), and data integrity guarantees.
+### Country-Specific Real-World Tests (260+ tests)
+- ✅ **Ireland** (260+ tests): Complete coverage of Irish tax, PRSI, compliance, and real-world scenarios
+- ✅ Validated against official government sources
+- ✅ Real tax rates, thresholds, and benefit calculations
+- ✅ End-to-end user journeys (unemployment, maternity, retirement, etc.)
+- ✅ Cross-border coordination (CTA, IE-UK)
+- ✅ Extensible template for additional countries (UK, NI, EU, etc.)
+
+The test suite ensures the regulatory graph is **production-ready** with:
+- **Full validation**: Schema, PII blocking, property whitelisting
+- **Security**: Comprehensive PII detection and blocking
+- **Data integrity**: Required properties, orphaned nodes, circular refs
+- **Legislative accuracy**: Real-world rates, thresholds, and rules from authoritative sources
+- **Complete workflows**: End-to-end regulatory paths from life events to compliance actions
+- **Cross-border support**: Treaty coordination and benefit portability
+
+**Next Steps**: Implement country-specific tests for UK, Northern Ireland, and EU using the provided template framework.
