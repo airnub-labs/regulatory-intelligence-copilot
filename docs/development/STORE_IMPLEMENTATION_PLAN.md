@@ -8,6 +8,19 @@ This document provides a detailed implementation plan for:
 
 Both stores are critical for multi-instance cloud deployments where state must be shared across application instances.
 
+> **Related:** See [REDIS_CACHING_CONVENTIONS.md](./REDIS_CACHING_CONVENTIONS.md) for caching standards that this implementation follows.
+
+### Conventions Applied
+
+| Convention | This Plan |
+|------------|-----------|
+| Redis client | `@upstash/redis` |
+| Key format | `copilot:llm:policy:{tenantId}`, `copilot:conv:config:{tenantId}:{userId}` |
+| TTL | 300 seconds (5 minutes) |
+| Error handling | Tier 2 (graceful degradation) |
+| Pattern | Decorator wrapping Supabase store |
+| Factory | `createPolicyStore(config)`, `createConversationConfigStore(config)` |
+
 ---
 
 ## Part 1: SupabasePolicyStore Implementation
@@ -289,7 +302,7 @@ export class SupabasePolicyStore implements LlmPolicyStore {
 export interface CachingPolicyStoreOptions {
   /** TTL in seconds (default: 300 = 5 minutes) */
   ttlSeconds?: number;
-  /** Key prefix (default: 'llm:policy') */
+  /** Key prefix (default: 'copilot:llm:policy') */
   keyPrefix?: string;
 }
 
@@ -303,7 +316,7 @@ export class CachingPolicyStore implements LlmPolicyStore {
     options: CachingPolicyStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 300;
-    this.keyPrefix = options.keyPrefix ?? 'llm:policy';
+    this.keyPrefix = options.keyPrefix ?? 'copilot:llm:policy';
   }
 
   private cacheKey(tenantId: string): string {
@@ -477,7 +490,7 @@ export interface RedisLikeClient {
 export interface CachingConfigStoreOptions {
   /** TTL in seconds (default: 300 = 5 minutes) */
   ttlSeconds?: number;
-  /** Key prefix (default: 'conv:config') */
+  /** Key prefix (default: 'copilot:conv:config') */
   keyPrefix?: string;
 }
 
@@ -491,7 +504,7 @@ export class CachingConversationConfigStore implements ConversationConfigStore {
     options: CachingConfigStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 300;
-    this.keyPrefix = options.keyPrefix ?? 'conv:config';
+    this.keyPrefix = options.keyPrefix ?? 'copilot:conv:config';
   }
 
   private cacheKey(tenantId: string, userId?: string | null): string {
