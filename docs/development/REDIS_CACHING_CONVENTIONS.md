@@ -6,9 +6,89 @@ This document establishes consistent patterns for Redis caching across the codeb
 
 ---
 
-## Current State Analysis
+## Store Caching Audit
 
-### Existing Implementations
+### Complete Store Inventory
+
+| Store | InMemory | Supabase | Redis Cache | Wired | Caching Needed? |
+|-------|----------|----------|-------------|-------|-----------------|
+| **ConversationStore** | ✅ | ✅ | ❌ | ✅ | ⚠️ Optional |
+| **ConversationContextStore** | ✅ | ✅ | ❌ | ✅ | ⚠️ Optional |
+| **ConversationPathStore** | ✅ | ✅ | ❌ | ✅ | ⚠️ Optional |
+| **ExecutionContextStore** | ✅ | ✅ | ❌ | ✅ | ❌ No (short-lived) |
+| **ConversationConfigStore** | ✅ | ✅ | ❌ | ❌ | ✅ **YES** |
+| **LlmPolicyStore** | ✅ | ❌ | ❌ | ⚠️ Partial | ✅ **YES** |
+
+### Caching Priority Assessment
+
+| Store | Read Frequency | Write Frequency | Cache Benefit | Priority |
+|-------|---------------|-----------------|---------------|----------|
+| **LlmPolicyStore** | Every LLM request | Rare (admin only) | **HIGH** | 🔴 P0 |
+| **ConversationConfigStore** | Per conversation | Rare (config changes) | **HIGH** | 🔴 P1 |
+| **ConversationStore** | Frequent | Per message | Medium | 🟡 P2 |
+| **ConversationContextStore** | Per turn | Per turn | Low | 🟢 P3 |
+| **ConversationPathStore** | Per branch op | Per branch op | Low | 🟢 P3 |
+| **ExecutionContextStore** | Per code exec | Per sandbox | None | ⚪ N/A |
+
+### Stores Requiring Caching Implementation
+
+#### 1. LlmPolicyStore (P0 - Critical)
+
+**Current State:**
+- Only `InMemoryPolicyStore` exists
+- Used in production with no Supabase implementation
+- Called on **every LLM request**
+- Multi-instance deployments have inconsistent policies
+
+**Required:**
+- [ ] `SupabasePolicyStore` - Supabase backing store
+- [ ] `CachingPolicyStore` - Redis cache decorator
+- [ ] `createPolicyStore()` - Factory function
+- [ ] Database migration for `tenant_llm_policies`
+
+**Cache Key:** `copilot:llm:policy:{tenantId}`
+
+#### 2. ConversationConfigStore (P1 - High)
+
+**Current State:**
+- Both implementations exist (`InMemory` + `Supabase`)
+- **NOT WIRED UP** - never instantiated in app
+- Database migration exists
+
+**Required:**
+- [ ] `CachingConversationConfigStore` - Redis cache decorator
+- [ ] `createConversationConfigStore()` - Factory function
+- [ ] Wire up in `conversations.ts`
+
+**Cache Key:** `copilot:conv:config:{tenantId}:{userId?}`
+
+#### 3. ConversationStore (P2 - Medium, Optional)
+
+**Current State:**
+- Both implementations exist and wired
+- Works fine without caching
+- Could benefit from caching `getConversation()` for active conversations
+
+**Optional:**
+- [ ] `CachingConversationStore` - Read-through cache for hot conversations
+- [ ] Cache invalidation on message append
+
+**Cache Key:** `copilot:conv:conversation:{conversationId}`
+
+#### 4. ConversationContextStore & PathStore (P3 - Low)
+
+**Current State:**
+- Both implementations exist and wired
+- Low read/write ratio doesn't justify caching complexity
+- Context changes frequently during conversations
+
+**Recommendation:** No caching needed at this time.
+
+---
+
+## Existing Caching Implementations
+
+### Non-Store Caches
 
 | Component | Redis Client | Key Prefix | TTL | Fallback | Error Handling |
 |-----------|-------------|------------|-----|----------|----------------|
