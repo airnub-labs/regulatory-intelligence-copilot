@@ -1,23 +1,31 @@
-# Regulatory Graph Gap Analysis: Phase 2 Recommendations
+# Regulatory Graph Future Enhancements
 
 > **Status:** Review Document
 > **Date:** 2025-12-29
-> **Reviewed Version:** Schema v0.6 (post-Phase 1 implementation)
-> **Purpose:** Identify remaining gaps and propose high-value additions for Phase 2+
+> **Reviewed Version:** Schema v0.6 (fully implemented)
+> **Purpose:** Identify future high-value additions beyond the completed implementation
 
 ---
 
 ## Executive Summary
 
-Phase 1 of the regulatory graph enhancements is complete, adding 6 new concept types:
-- ✅ `:Obligation` - Compliance requirements
-- ✅ `:Threshold` - Numeric limits and boundaries
-- ✅ `:Rate` - Tax/contribution/benefit rates
-- ✅ `:Form` - Regulatory forms and documents
-- ✅ `:PRSIClass` - Irish social insurance classification
-- ✅ `:LifeEvent` - Significant life events
+The regulatory graph review (PR #218) is **fully complete**, with all 5 phases implemented:
 
-This analysis identifies **remaining gaps** and **new high-value additions** that would significantly enhance the regulatory copilot's capabilities.
+| Phase | Content | Status |
+|-------|---------|--------|
+| Phase 1 | Types alignment + `:Obligation` | ✅ Complete |
+| Phase 2 | `:Threshold` + `:Rate` | ✅ Complete |
+| Phase 3 | `:Form` + SKOS hierarchy | ✅ Complete |
+| Phase 4 | `:PRSIClass` + `:LifeEvent` | ✅ Complete |
+| Phase 5 | Testing & Validation | ✅ Complete |
+
+**Current graph capabilities:**
+- 27 node types fully whitelisted in ingress guard
+- 44 relationship types supported
+- Seed data for all 6 new concept types
+- GraphClient methods for obligations, rates, thresholds, forms, PRSI classes, and life events
+
+This document identifies **future enhancements** - additional concept types and relationships that would further expand the copilot's capabilities beyond the current implementation.
 
 ---
 
@@ -441,9 +449,9 @@ For UK coverage parity with Ireland:
 
 ---
 
-## 5. Priority Recommendations
+## 5. Priority Recommendations for Future Work
 
-### Tier 1 (Critical - Immediate Implementation)
+### Tier 1 (Critical - Next Implementation Cycle)
 
 | Item | Type | Effort | Impact | Rationale |
 |------|------|--------|--------|-----------|
@@ -555,7 +563,7 @@ RETURN r.label, r.percentage, r.band_lower, r.band_upper
 
 ## 8. Metrics for Success
 
-After Phase 2 implementation:
+After implementing future enhancements:
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
@@ -590,14 +598,14 @@ After Phase 2 implementation:
 | Update/ChangeEvent | ✅ | Minimal |
 | Concept | ✅ | Partial |
 | Label | ✅ | Partial |
-| **Obligation** | ✅ Phase 1 | Yes |
-| **Threshold** | ✅ Phase 1 | Yes |
-| **Rate** | ✅ Phase 1 | Yes |
-| **Form** | ✅ Phase 1 | Yes |
-| **PRSIClass** | ✅ Phase 1 | Yes |
-| **LifeEvent** | ✅ Phase 1 | Yes |
+| **Obligation** | ✅ Complete | Yes |
+| **Threshold** | ✅ Complete | Yes |
+| **Rate** | ✅ Complete | Yes |
+| **Form** | ✅ Complete | Yes |
+| **PRSIClass** | ✅ Complete | Yes |
+| **LifeEvent** | ✅ Complete | Yes |
 
-### Proposed for Phase 2+
+### Proposed Future Additions
 
 | Node Type | Priority | Estimated Effort |
 |-----------|----------|-----------------|
@@ -615,14 +623,14 @@ After Phase 2 implementation:
 
 ## 10. Conclusion
 
-The Phase 1 implementation has significantly improved the regulatory graph's capability to model:
+The completed implementation (Phases 1-5) has significantly improved the regulatory graph's capability to model:
 - **Obligations** - What users must do
 - **Numeric reasoning** - Thresholds, rates, calculations
 - **Lifecycle events** - Event-driven guidance
 - **Forms** - Compliance workflow completion
 - **PRSI classification** - Irish welfare eligibility
 
-Phase 2 should focus on:
+Future enhancements should focus on:
 1. **Penalties** - Completing the compliance risk picture
 2. **Legal entities** - Entity-specific rule differentiation
 3. **Tax credits** - Proper separation from reliefs
