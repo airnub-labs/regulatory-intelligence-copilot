@@ -111,6 +111,40 @@ export interface Penalty {
 }
 
 /**
+ * LegalEntity representing a type of legal structure
+ */
+export interface LegalEntity {
+  id: string;
+  label: string;
+  abbreviation?: string;
+  jurisdiction: string;
+  category: 'COMPANY' | 'PARTNERSHIP' | 'SOLE_TRADER' | 'TRUST' | 'CHARITY' | 'FUND';
+  sub_category?: string;
+  has_separate_legal_personality: boolean;
+  limited_liability: boolean;
+  can_trade: boolean;
+  can_hold_property: boolean;
+  tax_transparent?: boolean;
+  description?: string;
+}
+
+/**
+ * TaxCredit representing a direct reduction in tax liability
+ */
+export interface TaxCredit {
+  id: string;
+  label: string;
+  amount: number;
+  currency: string;
+  tax_year: number;
+  refundable: boolean;
+  transferable: boolean;
+  restricted_to_marginal?: boolean;
+  category: 'PERSONAL' | 'EMPLOYMENT' | 'FAMILY' | 'HEALTH' | 'HOUSING' | 'OTHER';
+  description?: string;
+}
+
+/**
  * Graph node representing any regulatory entity
  */
 export interface GraphNode {
@@ -144,7 +178,9 @@ export interface GraphNode {
     | 'Form'
     | 'PRSIClass'
     | 'LifeEvent'
-    | 'Penalty';
+    | 'Penalty'
+    | 'LegalEntity'
+    | 'TaxCredit';
   properties: Record<string, unknown>;
 }
 
@@ -291,6 +327,35 @@ export interface GraphClient {
    * Check if penalty can be waived based on conditions
    */
   getPenaltyWaiverConditions(penaltyId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get legal entity types for a jurisdiction
+   */
+  getLegalEntitiesForJurisdiction(jurisdictionId: string): Promise<LegalEntity[]>;
+
+  /**
+   * Get obligations specific to an entity type
+   */
+  getObligationsForEntityType(entityTypeId: string): Promise<Obligation[]>;
+
+  /**
+   * Get tax credits for a profile and tax year
+   */
+  getTaxCreditsForProfile(
+    profileId: string,
+    taxYear: number,
+    jurisdictionId: string
+  ): Promise<TaxCredit[]>;
+
+  /**
+   * Get reliefs/benefits that stack with a given node
+   */
+  getStackingOptions(nodeId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get items that reduce a benefit/relief
+   */
+  getReducingFactors(nodeId: string): Promise<GraphNode[]>;
 
   /**
    * Execute raw Cypher query
