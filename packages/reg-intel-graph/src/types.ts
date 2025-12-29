@@ -145,6 +145,61 @@ export interface TaxCredit {
 }
 
 /**
+ * RegulatoryBody representing a government body or regulator
+ */
+export interface RegulatoryBody {
+  id: string;
+  label: string;
+  abbreviation?: string;
+  jurisdiction: string;
+  domain: 'TAX' | 'SOCIAL_WELFARE' | 'COMPANY' | 'PENSIONS' | 'FINANCIAL' | 'OTHER';
+  website?: string;
+  contact_info?: string;
+  description?: string;
+}
+
+/**
+ * AssetClass representing a category of assets for tax purposes
+ */
+export interface AssetClass {
+  id: string;
+  label: string;
+  category: 'PROPERTY' | 'SHARES' | 'CRYPTO' | 'AGRICULTURAL' | 'OTHER';
+  sub_category?: string;
+  tangible: boolean;
+  cgt_applicable: boolean;
+  cat_applicable: boolean;
+  stamp_duty_applicable: boolean;
+  description?: string;
+}
+
+/**
+ * MeansTest representing eligibility criteria for benefits
+ */
+export interface MeansTest {
+  id: string;
+  label: string;
+  income_disregard?: number;
+  capital_threshold?: number;
+  capital_weekly_assessment?: number;
+  spouse_income_assessed?: boolean;
+  maintenance_assessed?: boolean;
+  categories?: string[];
+  description?: string;
+}
+
+/**
+ * TaxYear representing a fiscal year
+ */
+export interface TaxYear {
+  id: string;
+  year: number;
+  start_date: string;
+  end_date: string;
+  jurisdiction: string;
+}
+
+/**
  * Graph node representing any regulatory entity
  */
 export interface GraphNode {
@@ -180,7 +235,11 @@ export interface GraphNode {
     | 'LifeEvent'
     | 'Penalty'
     | 'LegalEntity'
-    | 'TaxCredit';
+    | 'TaxCredit'
+    | 'RegulatoryBody'
+    | 'AssetClass'
+    | 'MeansTest'
+    | 'TaxYear';
   properties: Record<string, unknown>;
 }
 
@@ -356,6 +415,40 @@ export interface GraphClient {
    * Get items that reduce a benefit/relief
    */
   getReducingFactors(nodeId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get regulatory bodies for a jurisdiction
+   */
+  getRegulatoryBodiesForJurisdiction(jurisdictionId: string): Promise<RegulatoryBody[]>;
+
+  /**
+   * Get regulatory body that administers an obligation or benefit
+   */
+  getAdministeringBody(nodeId: string): Promise<RegulatoryBody | null>;
+
+  /**
+   * Get asset classes for a jurisdiction
+   */
+  getAssetClassesForJurisdiction(jurisdictionId: string): Promise<AssetClass[]>;
+
+  /**
+   * Get CGT rate for an asset class
+   */
+  getCGTRateForAsset(assetClassId: string): Promise<Rate | null>;
+
+  /**
+   * Get rates and thresholds for tax year
+   */
+  getRatesForTaxYear(taxYear: number, jurisdictionId: string): Promise<{
+    rates: Rate[];
+    thresholds: Threshold[];
+    credits: TaxCredit[];
+  }>;
+
+  /**
+   * Get means test for a benefit
+   */
+  getMeansTestForBenefit(benefitId: string): Promise<MeansTest | null>;
 
   /**
    * Execute raw Cypher query
