@@ -30,7 +30,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.{test,spec}.ts'],
+      exclude: ['src/**/*.{test,spec}.ts', 'src/**/__tests__/**', 'src/seeds/**'],
     },
+    testTimeout: 30000, // 30 seconds for integration tests
+    hookTimeout: 30000,
   },
 });
