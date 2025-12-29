@@ -3,10 +3,11 @@
 ## Overview
 
 This document provides a detailed implementation plan for:
-1. **SupabasePolicyStore** - New implementation with Redis caching
-2. **ConversationConfigStore wiring** - Connect existing implementation with Redis caching
+1. **SupabasePolicyStore** (P0) - New implementation with Redis caching
+2. **ConversationConfigStore wiring** (P1) - Connect existing implementation with Redis caching
+3. **ConversationStore caching** (P2) - Optional Redis caching for active conversations
 
-Both stores are critical for multi-instance cloud deployments where state must be shared across application instances.
+These stores are critical for multi-instance cloud deployments where state must be shared across application instances.
 
 > **Related:** See [REDIS_CACHING_CONVENTIONS.md](./REDIS_CACHING_CONVENTIONS.md) for caching standards that this implementation follows.
 
@@ -15,11 +16,11 @@ Both stores are critical for multi-instance cloud deployments where state must b
 | Convention | This Plan |
 |------------|-----------|
 | Redis client | `@upstash/redis` |
-| Key format | `copilot:llm:policy:{tenantId}`, `copilot:conv:config:{tenantId}:{userId}` |
-| TTL | 300 seconds (5 minutes) |
+| Key format | `copilot:llm:policy:{tenantId}`, `copilot:conv:config:{tenantId}:{userId}`, `copilot:conv:conversation:{conversationId}` |
+| TTL | 300s (policies/configs), 60s (conversations) |
 | Error handling | Tier 2 (graceful degradation) |
 | Pattern | Decorator wrapping Supabase store |
-| Factory | `createPolicyStore(config)`, `createConversationConfigStore(config)` |
+| Factory | `createPolicyStore()`, `createConversationConfigStore()`, `createConversationStore()` |
 
 ---
 
@@ -672,7 +673,217 @@ if (supabaseInternalClient) {
 
 ---
 
-## Part 3: Implementation Checklist
+## Part 3: ConversationStore Caching (Optional - P2)
+
+### 3.1 Current State
+
+The `ConversationStore` is fully implemented with both in-memory and Supabase backends, and properly wired. However, `getConversation()` is called frequently for active conversations and could benefit from Redis caching.
+
+```typescript
+// packages/reg-intel-conversations/src/conversationStores.ts
+export interface ConversationStore {
+  getConversation(input: { tenantId: string; conversationId: string; userId?: string }): Promise<ConversationRecord | null>;
+  listConversations(input: { tenantId: string; userId?: string; ... }): Promise<ConversationRecord[]>;
+  // ... other methods
+}
+```
+
+### 3.2 Caching Strategy
+
+**Cache only `getConversation()`** - Other methods are either write operations or list operations that benefit less from caching.
+
+**Invalidation triggers:**
+- `appendMessage()` - Update `lastMessageAt`, `updatedAt`
+- `updateSharing()` - Update sharing settings
+- `setArchivedState()` - Update archive state
+- `softDeleteMessage()` - May affect message count
+
+### 3.3 CachingConversationStore Implementation
+
+**File:** `packages/reg-intel-conversations/src/conversationStores.ts`
+
+Add after existing implementations:
+
+```typescript
+// ============================================================================
+// Caching Layer (Optional)
+// ============================================================================
+
+export interface CachingConversationStoreOptions {
+  /** TTL in seconds (default: 60 = 1 minute for active conversations) */
+  ttlSeconds?: number;
+  /** Key prefix (default: 'copilot:conv:conversation') */
+  keyPrefix?: string;
+}
+
+export class CachingConversationStore implements ConversationStore {
+  private readonly ttlSeconds: number;
+  private readonly keyPrefix: string;
+
+  constructor(
+    private readonly backing: ConversationStore,
+    private readonly redis: RedisLikeClient,
+    options: CachingConversationStoreOptions = {}
+  ) {
+    this.ttlSeconds = options.ttlSeconds ?? 60; // Shorter TTL for active data
+    this.keyPrefix = options.keyPrefix ?? 'copilot:conv:conversation';
+  }
+
+  private cacheKey(conversationId: string): string {
+    return `${this.keyPrefix}:${conversationId}`;
+  }
+
+  async getConversation(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+  }): Promise<ConversationRecord | null> {
+    const key = this.cacheKey(input.conversationId);
+
+    // Try cache first
+    try {
+      const cached = await this.redis.get(key);
+      if (cached) {
+        const record = JSON.parse(cached) as ConversationRecord;
+        // Verify tenant matches (security check)
+        if (record.tenantId === input.tenantId) {
+          // Restore Date objects
+          record.createdAt = new Date(record.createdAt);
+          record.updatedAt = new Date(record.updatedAt);
+          if (record.lastMessageAt) record.lastMessageAt = new Date(record.lastMessageAt);
+          if (record.archivedAt) record.archivedAt = new Date(record.archivedAt);
+          return record;
+        }
+        // Tenant mismatch - invalidate and fetch fresh
+        await this.redis.del(key);
+      }
+    } catch {
+      // Cache error - continue to backing store
+    }
+
+    // Fetch from backing store
+    const record = await this.backing.getConversation(input);
+
+    // Cache the result
+    if (record) {
+      try {
+        await this.redis.setex(key, this.ttlSeconds, JSON.stringify(record));
+      } catch {
+        // Ignore cache write errors
+      }
+    }
+
+    return record;
+  }
+
+  // Write-through methods - invalidate cache after write
+  async appendMessage(input: Parameters<ConversationStore['appendMessage']>[0]): Promise<{ messageId: string }> {
+    const result = await this.backing.appendMessage(input);
+    await this.invalidate(input.conversationId);
+    return result;
+  }
+
+  async updateSharing(input: Parameters<ConversationStore['updateSharing']>[0]): Promise<void> {
+    await this.backing.updateSharing(input);
+    await this.invalidate(input.conversationId);
+  }
+
+  async setArchivedState(input: Parameters<ConversationStore['setArchivedState']>[0]): Promise<void> {
+    await this.backing.setArchivedState(input);
+    await this.invalidate(input.conversationId);
+  }
+
+  async softDeleteMessage(input: Parameters<ConversationStore['softDeleteMessage']>[0]): Promise<void> {
+    await this.backing.softDeleteMessage(input);
+    await this.invalidate(input.conversationId);
+  }
+
+  // Pass-through methods (no caching benefit)
+  async createConversation(input: Parameters<ConversationStore['createConversation']>[0]) {
+    return this.backing.createConversation(input);
+  }
+
+  async getMessages(input: Parameters<ConversationStore['getMessages']>[0]) {
+    return this.backing.getMessages(input);
+  }
+
+  async listConversations(input: Parameters<ConversationStore['listConversations']>[0]) {
+    return this.backing.listConversations(input);
+  }
+
+  private async invalidate(conversationId: string): Promise<void> {
+    try {
+      await this.redis.del(this.cacheKey(conversationId));
+    } catch {
+      // Ignore invalidation errors
+    }
+  }
+}
+```
+
+### 3.4 Factory Function
+
+```typescript
+export interface ConversationStoreFactoryOptions {
+  supabase?: SupabaseLikeClient;
+  supabaseInternal?: SupabaseLikeClient;
+  redis?: RedisLikeClient;
+  cacheTtlSeconds?: number;
+  enableCaching?: boolean; // Default: false (opt-in)
+}
+
+export function createConversationStore(
+  options: ConversationStoreFactoryOptions
+): ConversationStore {
+  if (!options.supabase) {
+    return new InMemoryConversationStore();
+  }
+
+  const supabaseStore = new SupabaseConversationStore(
+    options.supabase,
+    options.supabaseInternal
+  );
+
+  // Caching is opt-in for ConversationStore
+  if (options.enableCaching && options.redis) {
+    return new CachingConversationStore(supabaseStore, options.redis, {
+      ttlSeconds: options.cacheTtlSeconds ?? 60,
+    });
+  }
+
+  return supabaseStore;
+}
+```
+
+### 3.5 Wire Up in Application (Optional)
+
+**File:** `apps/demo-web/src/lib/server/conversations.ts`
+
+```typescript
+// Optional: Enable conversation caching for high-traffic scenarios
+const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING === 'true';
+
+export const conversationStore = createConversationStore({
+  supabase: supabaseClient ?? undefined,
+  supabaseInternal: supabaseInternalClient ?? undefined,
+  redis: ENABLE_CONVERSATION_CACHING ? redisClient ?? undefined : undefined,
+  enableCaching: ENABLE_CONVERSATION_CACHING,
+  cacheTtlSeconds: 60, // 1 minute for active conversations
+});
+```
+
+### 3.6 When to Enable
+
+| Scenario | Enable Caching? |
+|----------|-----------------|
+| Low traffic / development | No |
+| High read volume on active conversations | Yes |
+| Supabase latency is bottleneck | Yes |
+| Write-heavy workload | No (invalidation overhead) |
+
+---
+
+## Part 4: Implementation Checklist
 
 ### Phase 1: Database Migration (PolicyStore)
 
@@ -707,23 +918,32 @@ if (supabaseInternalClient) {
 - [ ] Wire Redis client for caching
 - [ ] Add logging for store type being used
 
-### Phase 6: Testing
+### Phase 6: ConversationStore Caching (Optional - P2)
+
+- [ ] Add `CachingConversationStore` to `conversationStores.ts`
+- [ ] Add `createConversationStore` factory function
+- [ ] Add `ENABLE_CONVERSATION_CACHING` env var support
+- [ ] Unit tests for `CachingConversationStore`
+
+### Phase 7: Testing
 
 - [ ] Unit tests for `SupabasePolicyStore`
 - [ ] Unit tests for `CachingPolicyStore`
 - [ ] Unit tests for `CachingConversationConfigStore`
+- [ ] Unit tests for `CachingConversationStore` (if enabled)
 - [ ] Integration tests with real Supabase
 - [ ] Multi-instance simulation tests
 
-### Phase 7: Documentation
+### Phase 8: Documentation
 
 - [ ] Update `ENV_SETUP.md` with new env vars
 - [ ] Update `LOCAL_DEVELOPMENT.md` with caching setup
 - [ ] Add architecture diagram for store layers
+- [ ] Document when to enable conversation caching
 
 ---
 
-## Part 4: Environment Variables
+## Part 5: Environment Variables
 
 ### New Variables
 
@@ -734,9 +954,13 @@ REDIS_URL=redis://localhost:6379
 UPSTASH_REDIS_REST_URL=https://...
 UPSTASH_REDIS_REST_TOKEN=...
 
-# Cache TTL (optional, defaults to 300 seconds)
-POLICY_CACHE_TTL_SECONDS=300
-CONFIG_CACHE_TTL_SECONDS=300
+# Cache TTL (optional, defaults shown)
+POLICY_CACHE_TTL_SECONDS=300      # 5 minutes for policies
+CONFIG_CACHE_TTL_SECONDS=300      # 5 minutes for configs
+CONVERSATION_CACHE_TTL_SECONDS=60 # 1 minute for active conversations
+
+# Optional: Enable conversation caching (P2)
+ENABLE_CONVERSATION_CACHING=false # Set to 'true' to enable
 ```
 
 ### Existing Variables (unchanged)
@@ -748,7 +972,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ---
 
-## Part 5: Architecture Diagram
+## Part 6: Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -791,7 +1015,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ---
 
-## Part 6: Cache Invalidation Strategy
+## Part 7: Cache Invalidation Strategy
 
 ### PolicyStore
 
@@ -820,7 +1044,7 @@ For true multi-instance cache invalidation, consider:
 
 ---
 
-## Part 7: Testing Strategy
+## Part 8: Testing Strategy
 
 ### Unit Tests
 
