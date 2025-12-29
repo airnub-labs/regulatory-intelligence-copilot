@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
-> **Last Updated**: 2025-12-28
-> **Status**: All architecture features complete except Scenario Engine. Observability stack production-ready.
-> **Document Version**: 5.8
+> **Last Updated**: 2025-12-29
+> **Status**: All architecture features complete except Scenario Engine and Regulatory Graph Tier 2-4. Test coverage comprehensive.
+> **Document Version**: 5.9
 
 ---
 
@@ -26,14 +26,17 @@ This document consolidates all outstanding work identified from reviewing the ar
 | v0.7 | E2B Execution Contexts | ✅ Complete | ✅ Complete | ✅ Wired |
 | v0.7 | EgressGuard (All Egress Points) | ✅ Complete | N/A | ✅ Wired |
 | v0.7 | Client Telemetry | ✅ Complete | ✅ Complete | ✅ Wired |
-| v0.7 | Logging Framework | ✅ Complete | N/A | ⚠️ OTEL transport gap |
-| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ⚠️ Scalability gaps |
+| v0.7 | Logging Framework | ✅ Complete | N/A | ✅ Wired (OTEL transport complete) |
+| v0.7 | Observability & Cleanup | ✅ Complete | N/A | ✅ Wired (Loki/Grafana production stack) |
 | v0.7 | Scenario Engine | ❌ Not Started | ❌ Not Started | ❌ Not Started |
 | v0.7 | Context Summaries & Graph Nodes UI | ✅ Complete | ✅ Complete | ✅ Wired (PR #208) |
+| v0.7 | Regulatory Graph Phase 1 | ✅ Complete | N/A | ✅ Wired (PR #218, 6 node types) |
+| v0.7 | Regulatory Graph Tier 2-4 | 📋 Designed | N/A | ❌ Not Started |
 | - | UI Component Test Coverage | ✅ Complete | ✅ Complete | ✅ Complete (210+ tests) |
 | - | API Route Test Coverage | ✅ Complete | N/A | ✅ Complete (100%, 20/20 routes tested) |
 | - | Security & Input Validation | ✅ Complete | N/A | ✅ Complete (SEC.1-SEC.4 fixed) |
 | - | Error Handling | ✅ Complete | N/A | ✅ Complete (ERR.1-ERR.3 fixed, error boundaries added) |
+| - | Supabase Event Hub Tests | ✅ Complete | N/A | ✅ Complete (60+ tests, PR #215) |
 
 ---
 
@@ -199,6 +202,57 @@ This document consolidates all outstanding work identified from reviewing the ar
 - ✅ **API route coverage** - 100% coverage achieved (19/19 routes tested)
 - ✅ **reg-intel-ui component tests** - All 5 path-system components now tested (PathSelector, BranchButton, BranchDialog, MergeDialog, VersionNavigator) - 152+ tests
 - ✅ **Message CRUD route** - Fully implemented and tested (537 LOC tests)
+
+### 1.7 Regulatory Graph Phase 1 Enhancement ✅ COMPLETED
+
+**Reference**: `docs/architecture/graph/REGULATORY_GRAPH_REVIEW.md`, PR #218
+**Completed**: 2025-12-29
+
+**Description**: Phase 1 of the regulatory graph review implemented 6 new node types to enable compliance workflow, numeric reasoning, and event-driven guidance.
+
+**New Node Types Added**:
+| Node Type | Purpose | Seed Data |
+|-----------|---------|-----------|
+| `:Obligation` | Filing, reporting, payment, registration requirements | `obligations.cypher` |
+| `:Threshold` | Numeric limits (income, contributions, exemptions) | `thresholds_rates.cypher` |
+| `:Rate` | Tax/PRSI/VAT rates with bands | `thresholds_rates.cypher` |
+| `:Form` | Regulatory forms (CT1, Form 11, B1, etc.) | `forms.cypher` |
+| `:PRSIClass` | Irish social insurance classifications | `prsi_classes.cypher` |
+| `:LifeEvent` | Triggers for benefits/obligations (birth, retirement, etc.) | `life_events.cypher` |
+
+**New Relationships Added**:
+- `HAS_OBLIGATION`, `CREATES_OBLIGATION`, `REQUIRES_FORM`
+- `HAS_THRESHOLD`, `LIMITED_BY_THRESHOLD`, `CHANGES_THRESHOLD`
+- `HAS_RATE`, `SUBJECT_TO_RATE`, `APPLIES_RATE`
+- `ENTITLES_TO`, `HAS_PRSI_CLASS`, `CONTRIBUTION_RATE`
+- `TRIGGERS`, `STARTS_TIMELINE`, `ENDS_TIMELINE`, `TRIGGERED_BY`
+
+**Implementation Artifacts**:
+- `packages/reg-intel-graph/src/types.ts` - TypeScript interfaces for all 6 node types
+- `packages/reg-intel-graph/src/graphIngressGuard.ts` - Whitelist rules updated
+- `packages/reg-intel-graph/src/boltGraphClient.ts` - Direct Bolt-protocol Memgraph client
+- `packages/reg-intel-graph/src/seeds/*.cypher` - 5 seed data files (667+ lines)
+
+**Test Coverage** (5,003 LOC across 6 test files):
+- `advancedPatterns.test.ts` - 800 LOC
+- `boltGraphClient.test.ts` - 836 LOC
+- `complexPatterns.test.ts` - 1,096 LOC
+- `graphIngressGuard.test.ts` - 777 LOC
+- `graphIntegration.test.ts` - 842 LOC
+- `seedData.test.ts` - 652 LOC
+
+### 1.8 Supabase Event Hub Tests ✅ COMPLETED
+
+**Reference**: PR #215
+**Completed**: 2025-12-29
+
+**Description**: Comprehensive test coverage for Supabase Realtime event hubs.
+
+**Test Coverage** (922 LOC, 60+ tests):
+- `SupabaseRealtimeConversationEventHub` - constructor, subscribe, unsubscribe, broadcast, shutdown, healthCheck
+- `SupabaseRealtimeConversationListEventHub` - full coverage matching conversation hub
+- Integration tests for separate hub state management
+- Health check failure scenarios (unsubscribe failures, channel errors, timeouts)
 
 ---
 
@@ -667,7 +721,7 @@ This document consolidates all outstanding work identified from reviewing the ar
 | `packages/reg-intel-observability/src/logger.ts` | 100+ | ✅ TESTED | **38 tests** | Log levels, structured output, sanitization, lifecycle |
 | `packages/reg-intel-observability/src/logsExporter.ts` | 140+ | ✅ TESTED | **3 tests** | OTEL integration, multistream, correlation fields |
 | `packages/reg-intel-observability/src/tracing.ts` | 280+ | ✅ TESTED | **2 tests** | Observability init/shutdown, diagnostics |
-| `packages/reg-intel-conversations/src/supabaseEventHub.ts` | 352 | ❌ UNTESTED | **0 tests** | Real-time SSE events via Supabase - **REMAINING GAP** |
+| `packages/reg-intel-conversations/src/supabaseEventHub.ts` | 922 | ✅ TESTED | **60+ tests** | Real-time SSE events via Supabase ✅ COMPLETE (PR #215) |
 | `packages/reg-intel-conversations/src/sharedEventHub.ts` | 150+ | ⚠️ LOW | 0 tests | Shared event handling (lower priority) |
 
 #### 3.5.1 ~~CRITICAL: egressGuard.ts Has NO Tests~~ ✅ NOW FULLY TESTED
@@ -689,12 +743,17 @@ This document consolidates all outstanding work identified from reviewing the ar
 **Package**: `reg-intel-observability`
 **Status**: ✅ Core files now tested (logger.ts, logsExporter.ts, tracing.ts)
 
-#### 3.5.3 REMAINING GAP: supabaseEventHub.ts
+#### 3.5.3 ~~REMAINING GAP: supabaseEventHub.ts~~ ✅ NOW COMPLETE
 
 **File**: `packages/reg-intel-conversations/src/supabaseEventHub.ts`
-**Lines**: 352
-**Status**: ❌ **ZERO test coverage**
-**Priority**: LOW (functionality works, but no automated tests)
+**Lines**: 352 source + 922 test
+**Status**: ✅ **COMPREHENSIVE test coverage** (PR #215)
+**Completed**: 2025-12-29
+
+**Test Coverage** (60+ tests):
+- SupabaseRealtimeConversationEventHub (constructor, subscribe, unsubscribe, broadcast, shutdown, healthCheck)
+- SupabaseRealtimeConversationListEventHub (constructor, subscribe, unsubscribe, broadcast, shutdown, healthCheck)
+- Integration tests for separate hub state management
 
 **Tasks**:
 
@@ -702,7 +761,49 @@ This document consolidates all outstanding work identified from reviewing the ar
 - [x] **Task CUT.2**: Add tests for `logger.ts` ✅ (38 tests)
 - [x] **Task CUT.3**: Add tests for `logsExporter.ts` ✅ (3 tests)
 - [x] **Task CUT.4**: Add tests for `tracing.ts` ✅ (2 tests)
-- [ ] **Task CUT.5**: Add tests for `supabaseEventHub.ts` (352 LOC - remaining gap)
+- [x] **Task CUT.5**: Add tests for `supabaseEventHub.ts` ✅ (922 LOC tests - PR #215)
+
+---
+
+### 3.6 MEDIUM: Regulatory Graph Tier 2-4 Enhancements
+
+**Priority**: MEDIUM (Feature Enhancement)
+**Effort**: 2-4 weeks (phased implementation)
+**Reference**: `docs/architecture/graph/REGULATORY_GRAPH_REVIEW.md`
+
+**Description**: Phase 1 of the regulatory graph review is complete (6 node types). Tiers 2-4 contain additional concept types and relationships identified for future enhancement.
+
+**Current State**:
+- ✅ Tier 1 (Phase 1) complete - Obligation, Threshold, Rate, Form, PRSIClass, LifeEvent
+- ⚠️ Tier 2-4 items identified but not implemented
+
+**Tier 2 - Near-term (Enhanced Reasoning)**:
+| Item | Purpose | Status |
+|------|---------|--------|
+| SKOS hierarchy (`BROADER`/`NARROWER`/`RELATED`) | Better concept navigation and taxonomy queries | 📋 Designed |
+
+**Tier 3 - Medium-term (Advanced Features)**:
+| Item | Purpose | Status |
+|------|---------|--------|
+| `:Penalty` node type | Risk assessment for non-compliance (surcharges, interest, prosecution) | 📋 Designed |
+| `:LegalEntity` node type | Entity-specific rules (LTD, PLC, DAC, partnerships, trusts) | 📋 Designed |
+| Interaction relationships | `STACKS_WITH`, `REDUCES`, `OFFSETS_AGAINST` for complex scenario modelling | 📋 Designed |
+
+**Tier 4 - Future (Specialisation)**:
+| Item | Purpose | Status |
+|------|---------|--------|
+| `:TaxCredit` distinct from `:Relief` | Credits reduce liability directly (€ for €), different interaction patterns | 📋 Designed |
+| `:RegulatoryBody` nodes | Query by regulator (Revenue, DSP, CRO, HMRC, DWP) | 📋 Designed |
+| `:AssetClass` for CGT | Asset classification for CGT reasoning (shares, property, crypto) | 📋 Designed |
+
+**Tasks**:
+
+- [ ] **Task RG.1**: Add SKOS hierarchy relationships (`BROADER`, `NARROWER`, `RELATED`) to ingress guard
+- [ ] **Task RG.2**: Implement `:Penalty` node type with relationships to Obligation
+- [ ] **Task RG.3**: Implement `:LegalEntity` node type with `APPLIES_TO_ENTITY` relationship
+- [ ] **Task RG.4**: Add interaction relationships (`STACKS_WITH`, `REDUCES`) for benefits/reliefs
+- [ ] **Task RG.5**: Distinguish `:TaxCredit` from `:Relief` with separate semantics
+- [ ] **Task RG.6**: Add `:RegulatoryBody` nodes for regulator-specific queries
 
 ---
 
@@ -1205,8 +1306,8 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 2-3 weeks (Scenario Engine only) |
-| MEDIUM | 1 | 4-8 hours (Observability backends) |
-| LOW | 3 | 1-2 weeks (supabaseEventHub tests, LOW priority tests, UI polish) |
+| MEDIUM | 1 | 2-4 weeks (Regulatory Graph Tier 2-4) |
+| LOW | 2 | 1-2 weeks (LOW priority tests, UI polish) |
 
 ### Critical Gaps Identified
 
@@ -1222,14 +1323,17 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 **✅ RESOLVED** (2025-12-28):
 - ~~Observability Production Backends~~ - **COMPLETE** (Loki/Grafana production stack implemented)
 
-**✅ RESOLVED** (2025-12-28):
-- ~~Critical Untested Implementation Files~~ - **5/6 files now tested** (176 tests added)
+**✅ RESOLVED** (2025-12-28/29):
+- ~~Critical Untested Implementation Files~~ - **ALL 6 files now tested** (236+ tests added)
   - egressGuard.ts: 133 tests ✅
   - logger.ts: 38 tests ✅
   - logsExporter.ts: 3 tests ✅
   - tracing.ts: 2 tests ✅
-  - Only supabaseEventHub.ts remains (352 LOC, LOW priority)
+  - supabaseEventHub.ts: 60+ tests ✅ (PR #215 - 2025-12-29)
 - ~~API Route Test Coverage~~ - **100% complete** (20/20 routes tested, +1018 LOC tests)
+
+**✅ RESOLVED** (2025-12-29):
+- ~~Regulatory Graph Phase 1~~ - **COMPLETE** (PR #218, 6 node types, 5,003 LOC tests)
 
 **✅ COMPLETED** (items 8-18 moved to archive):
 
@@ -1270,23 +1374,26 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 - [x] **Tests: egressGuard.ts PII patterns** (133 tests) ✅ NEW 2025-12-28
 - [x] **Tests: All API routes** (100%, 20/20) ✅ NEW 2025-12-28
 - [x] **Context Summaries & Graph Nodes UI** (PR #208) ✅ NEW 2025-12-28
+- [x] **Regulatory Graph Phase 1** (PR #218, 6 node types) ✅ NEW 2025-12-29
+- [x] **Supabase Event Hub Tests** (PR #215, 60+ tests) ✅ NEW 2025-12-29
 
 **⚠️ Low Priority (Not Blocking)**:
-- [ ] Tests: supabaseEventHub.ts (352 LOC, 0 tests)
-- [ ] Tests: reg-intel-conversations LOW priority files
-- [ ] Tests: reg-intel-core LOW priority files
+- [x] Tests: supabaseEventHub.ts ✅ (922 LOC tests, 60+ tests - PR #215)
+- [ ] Tests: reg-intel-conversations LOW priority files (type definitions, config, exports)
+- [ ] Tests: reg-intel-core LOW priority files (type definitions, constants, exports)
 
 **❌ Not Started (Feature Gaps)**:
 - [ ] Scenario Engine implementation (2-3 weeks)
+- [ ] Regulatory Graph Tier 2-4 (SKOS hierarchy, Penalty, LegalEntity, etc. - 2-4 weeks)
 
 ### Codebase Statistics
 
-| Metric | Before (2025-12-27 AM) | After Phase 4 | After Phase 7 | Current (v5.6) |
+| Metric | Before (2025-12-27 AM) | After Phase 4 | After Phase 7 | Current (v5.9) |
 |--------|--------|--------|--------|--------|
 | Total packages | 8 | 8 | 8 | 8 |
-| Total test files | 35 (30 pkg + 5 app) | 48 (32 pkg + 16 app) | 60+ (44 pkg + 16 app) | 65+ (verified) |
-| Total test LOC | ~10,240 | ~13,800+ | ~19,500+ | ~21,500+ |
-| Estimated total tests | ~290 | ~396+ | ~552+ | ~730+ (verified) |
+| Total test files | 35 (30 pkg + 5 app) | 48 (32 pkg + 16 app) | 60+ (44 pkg + 16 app) | 70+ (verified) |
+| Total test LOC | ~10,240 | ~13,800+ | ~19,500+ | ~27,400+ |
+| Estimated total tests | ~290 | ~396+ | ~552+ | ~850+ (verified) |
 | API route files | 19 | 19 | 19 | 20 (incl. NextAuth) |
 | API routes with tests | 3 (16%) | 18 (95%) | 19 (100%) | 20/20 (100%) ✅ |
 | Packages with 0 tests | 2 | 0 | 0 | 0 |
@@ -1295,15 +1402,36 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 | UI components tested | 0 | 2 | 8 (100%) | 8 (100%) ✅ |
 | egressGuard.ts tests | 0 | 0 | 0 | 133 ✅ |
 | Observability tests | ~15 | ~15 | ~15 | 43 ✅ |
+| Graph schema tests | 0 | 0 | 0 | 5,003 LOC ✅ |
+| supabaseEventHub.ts tests | 0 | 0 | 0 | 60+ ✅ |
 
 ---
 
-**Document Version**: 5.8
-**Last Updated**: 2025-12-28
-**Previous Versions**: 5.7, 5.6, 5.5, 5.4, 5.3, 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
+**Document Version**: 5.9
+**Last Updated**: 2025-12-29
+**Previous Versions**: 5.8, 5.7, 5.6, 5.5, 5.4, 5.3, 5.2, 5.1, 5.0, 4.9, 4.8, 4.7, 4.6, 4.5, 4.4, 4.3, 4.2, 4.1, 4.0, 3.9, 3.8, 3.7, 3.6, 3.5, 3.4, 3.3, 3.2, 3.1, 3.0 (2025-12-27), 2.7 (2025-12-24), earlier versions
 **Author**: Claude Code
 
 **Changelog**:
+- v5.9 (2025-12-29): Regulatory Graph Phase 1 and Supabase Event Hub tests complete ✅
+  - **NEW SECTION 1.7**: Regulatory Graph Phase 1 Enhancement (PR #218)
+    - Added 6 new node types: Obligation, Threshold, Rate, Form, PRSIClass, LifeEvent
+    - Added 15+ new relationships for compliance workflow
+    - 5,003 LOC tests across 6 test files
+    - 5 seed data files (667+ lines Cypher)
+  - **NEW SECTION 1.8**: Supabase Event Hub Tests (PR #215)
+    - 922 LOC tests, 60+ test cases
+    - Full coverage for SupabaseRealtimeConversationEventHub and SupabaseRealtimeConversationListEventHub
+  - **NEW SECTION 3.6**: Regulatory Graph Tier 2-4 Enhancements (MEDIUM priority)
+    - SKOS hierarchy, Penalty, LegalEntity, interaction relationships
+    - 6 tasks identified (RG.1-RG.6)
+  - **UPDATED**: Overall Status table with Regulatory Graph Phase 1 and Tier 2-4 rows
+  - **UPDATED**: Critical Gaps section - all 6 critical files now tested
+  - **UPDATED**: Production Readiness Checklist with 2 new items
+  - **UPDATED**: Codebase Statistics - 850+ tests, 27,400+ test LOC
+  - **REMAINING GAPS**:
+    - HIGH: Scenario Engine (2-3 weeks) - still only significant feature gap
+    - MEDIUM: Regulatory Graph Tier 2-4 (2-4 weeks) - designed, not implemented
 - v5.8 (2025-12-28): Comprehensive review and verification ✅
   - **VERIFIED**: All completed items still accurate - codebase matches documentation
   - **VERIFIED**: Scenario Engine remains the ONLY significant outstanding feature gap
