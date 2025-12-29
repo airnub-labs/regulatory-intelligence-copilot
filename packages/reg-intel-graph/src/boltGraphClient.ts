@@ -21,6 +21,7 @@ import type {
   Form,
   PRSIClass,
   LifeEvent,
+  Penalty,
 } from './types.js';
 import { GraphError } from './errors.js';
 import { LOG_PREFIX } from './constants.js';
@@ -707,6 +708,126 @@ export class BoltGraphClient implements GraphClient {
     }
 
     return { benefits, obligations };
+  }
+
+  /**
+   * Get penalties for an obligation
+   */
+  async getPenaltiesForObligation(obligationId: string): Promise<Penalty[]> {
+    this.logger.info({ obligationId }, `${LOG_PREFIX.graph} Getting penalties for obligation`);
+
+    const query = `
+      MATCH (o:Obligation {id: $obligationId})-[:HAS_PENALTY]->(p:Penalty)
+      RETURN p
+      ORDER BY p.applies_after_days ASC
+    `;
+
+    const records = await this.executeCypher(query, { obligationId }) as Array<Record<string, unknown>>;
+
+    const penalties: Penalty[] = [];
+    for (const record of records) {
+      const p = record.p;
+      if (p && typeof p === 'object' && 'properties' in p) {
+        const props = (p as { properties: Record<string, unknown> }).properties;
+        penalties.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Penalty',
+          penalty_type: (props.penalty_type as Penalty['penalty_type']) || 'FIXED',
+          rate: props.rate as number | undefined,
+          daily_rate: props.daily_rate as number | undefined,
+          flat_amount: props.flat_amount as number | undefined,
+          currency: props.currency as string | undefined,
+          max_amount: props.max_amount as number | undefined,
+          applies_after_days: props.applies_after_days as number | undefined,
+          applies_after_months: props.applies_after_months as number | undefined,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return penalties;
+  }
+
+  /**
+   * Get all penalties for a profile's obligations
+   */
+  async getPenaltiesForProfile(
+    profileId: string,
+    jurisdictionId: string
+  ): Promise<{ obligation: Obligation; penalties: Penalty[] }[]> {
+    this.logger.info({
+      profileId,
+      jurisdictionId,
+    }, `${LOG_PREFIX.graph} Getting penalties for profile`);
+
+    const query = `
+      MATCH (pt:ProfileTag {id: $profileId})
+      MATCH (j:Jurisdiction {id: $jurisdictionId})
+      MATCH (pt)-[:HAS_OBLIGATION]->(o:Obligation)-[:IN_JURISDICTION]->(j)
+      OPTIONAL MATCH (o)-[:HAS_PENALTY]->(p:Penalty)
+      RETURN o, collect(p) as penalties
+    `;
+
+    const records = await this.executeCypher(query, { profileId, jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const results: { obligation: Obligation; penalties: Penalty[] }[] = [];
+
+    for (const record of records) {
+      const o = record.o;
+      const penaltyNodes = record.penalties as Array<unknown>;
+
+      if (o && typeof o === 'object' && 'properties' in o) {
+        const oProps = (o as { properties: Record<string, unknown> }).properties;
+        const obligation: Obligation = {
+          id: oProps.id as string || 'unknown',
+          label: oProps.label as string || 'Unknown Obligation',
+          category: (oProps.category as Obligation['category']) || 'FILING',
+          frequency: oProps.frequency as Obligation['frequency'],
+          penalty_applies: oProps.penalty_applies as boolean | undefined,
+          description: oProps.description as string | undefined,
+        };
+
+        const penalties: Penalty[] = [];
+        for (const p of penaltyNodes) {
+          if (p && typeof p === 'object' && 'properties' in p) {
+            const pProps = (p as { properties: Record<string, unknown> }).properties;
+            penalties.push({
+              id: pProps.id as string || 'unknown',
+              label: pProps.label as string || 'Unknown Penalty',
+              penalty_type: (pProps.penalty_type as Penalty['penalty_type']) || 'FIXED',
+              rate: pProps.rate as number | undefined,
+              daily_rate: pProps.daily_rate as number | undefined,
+              flat_amount: pProps.flat_amount as number | undefined,
+              currency: pProps.currency as string | undefined,
+              max_amount: pProps.max_amount as number | undefined,
+              applies_after_days: pProps.applies_after_days as number | undefined,
+              applies_after_months: pProps.applies_after_months as number | undefined,
+              description: pProps.description as string | undefined,
+            });
+          }
+        }
+
+        results.push({ obligation, penalties });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Check if penalty can be waived based on conditions
+   */
+  async getPenaltyWaiverConditions(penaltyId: string): Promise<GraphNode[]> {
+    this.logger.info({ penaltyId }, `${LOG_PREFIX.graph} Getting waiver conditions for penalty`);
+
+    const query = `
+      MATCH (p:Penalty {id: $penaltyId})-[:WAIVED_IF]->(c:Condition)
+      RETURN c
+    `;
+
+    const records = await this.executeCypher(query, { penaltyId }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+    return context.nodes;
   }
 
   /**

@@ -94,6 +94,23 @@ export interface LifeEvent {
 }
 
 /**
+ * Penalty representing consequences of non-compliance
+ */
+export interface Penalty {
+  id: string;
+  label: string;
+  penalty_type: 'SURCHARGE' | 'INTEREST' | 'FIXED' | 'PROSECUTION' | 'RESTRICTION';
+  rate?: number;
+  daily_rate?: number;
+  flat_amount?: number;
+  currency?: string;
+  max_amount?: number;
+  applies_after_days?: number;
+  applies_after_months?: number;
+  description?: string;
+}
+
+/**
  * Graph node representing any regulatory entity
  */
 export interface GraphNode {
@@ -126,7 +143,8 @@ export interface GraphNode {
     | 'Rate'
     | 'Form'
     | 'PRSIClass'
-    | 'LifeEvent';
+    | 'LifeEvent'
+    | 'Penalty';
   properties: Record<string, unknown>;
 }
 
@@ -255,6 +273,24 @@ export interface GraphClient {
     benefits: GraphNode[];
     obligations: GraphNode[];
   }>;
+
+  /**
+   * Get penalties for an obligation
+   */
+  getPenaltiesForObligation(obligationId: string): Promise<Penalty[]>;
+
+  /**
+   * Get all penalties for a profile's obligations
+   */
+  getPenaltiesForProfile(
+    profileId: string,
+    jurisdictionId: string
+  ): Promise<{ obligation: Obligation; penalties: Penalty[] }[]>;
+
+  /**
+   * Check if penalty can be waived based on conditions
+   */
+  getPenaltyWaiverConditions(penaltyId: string): Promise<GraphNode[]>;
 
   /**
    * Execute raw Cypher query

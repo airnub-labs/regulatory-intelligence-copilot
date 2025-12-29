@@ -79,6 +79,7 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'Form',
     'PRSIClass',
     'LifeEvent',
+    'Penalty',
   ];
 
   const allowedRelTypes = [
@@ -141,6 +142,9 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'STARTS_TIMELINE',
     'ENDS_TIMELINE',
     'TRIGGERED_BY',
+    'HAS_PENALTY',
+    'WAIVED_IF',
+    'SCALES_WITH',
   ];
 
   if (ctx.nodeLabel && !allowedNodeLabels.includes(ctx.nodeLabel)) {
@@ -367,6 +371,21 @@ export const propertyWhitelistAspect: GraphIngressAspect = async (ctx, next) => 
       'label',
       'category',
       'triggers_timeline',
+      'description',
+      'created_at',
+      'updated_at',
+    ],
+    Penalty: [
+      'id',
+      'label',
+      'penalty_type',
+      'rate',
+      'daily_rate',
+      'flat_amount',
+      'currency',
+      'max_amount',
+      'applies_after_days',
+      'applies_after_months',
       'description',
       'created_at',
       'updated_at',

@@ -460,6 +460,32 @@ Represents significant life events that trigger regulatory changes, benefits, or
 - Moving to/from Ireland
 - Starting a business
 
+### 2.26 `:Penalty`
+
+Represents consequences of non-compliance with obligations.
+
+**Properties**
+- `id: string` – e.g. `"IE_LATE_CT1_SURCHARGE_5"`.
+- `label: string` – e.g. `"Late CT1 Filing Surcharge (5%)"`.
+- `penalty_type: string` – `"SURCHARGE" | "INTEREST" | "FIXED" | "PROSECUTION" | "RESTRICTION"`.
+- `rate?: number` – Percentage for surcharges (e.g., 5, 10).
+- `daily_rate?: number` – Daily rate for interest (e.g., 0.0219).
+- `flat_amount?: number` – Fixed amount in currency.
+- `currency?: string` – `"EUR" | "GBP"`.
+- `max_amount?: number` – Maximum penalty cap.
+- `applies_after_days?: number` – Days after deadline when penalty applies.
+- `applies_after_months?: number` – Months after deadline.
+- `description?: string`
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- 5% surcharge for late CT1 filing (within 2 months)
+- 10% surcharge for late CT1 filing (after 2 months)
+- 0.0219% daily interest on late payment
+- Fixed €100 CRO late filing fee
+- Loss of audit exemption (restriction)
+
 ---
 
 ## 3. Core Relationship Types
@@ -576,6 +602,12 @@ These relationships support compliance workflows and numeric reasoning.
 - `(:Obligation)-[:IN_JURISDICTION]->(:Jurisdiction)` – Jurisdiction where obligation applies.
 - `(:Obligation)-[:FILING_DEADLINE]->(:Timeline)` – Deadline for fulfilling obligation.
 - `(:Obligation)-[:REQUIRES_FORM]->(:Form)` – Form needed for compliance.
+
+**Penalties:**
+- `(:Obligation)-[:HAS_PENALTY]->(:Penalty)` – Penalty for non-compliance with obligation.
+- `(:Penalty)-[:WAIVED_IF]->(:Condition)` – Conditions under which penalty may be waived.
+- `(:Penalty)-[:SCALES_WITH]->(:Threshold)` – Progressive penalty thresholds.
+- `(:Penalty)-[:IN_JURISDICTION]->(:Jurisdiction)` – Jurisdiction where penalty applies.
 
 **Forms:**
 - `(:Benefit)-[:CLAIMED_VIA]->(:Form)` – How to claim a benefit.
