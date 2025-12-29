@@ -825,6 +825,75 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
+### 3.7 LOW: Regulatory Graph Future Enhancements (Tiers 2-4)
+
+**Priority**: LOW (Future Expansion)
+**Effort**: 4-8 weeks total (if all implemented)
+**Reference**: `docs/architecture/graph/REGULATORY_GRAPH_REVIEW.md` §1.2, §1.3, §2.3, §3
+
+**Description**: The REGULATORY_GRAPH_REVIEW.md identified 12 concept types and 18 relationship types. Phases 1-5 implemented 6 node types (Tier 1 + some Tier 2). The remaining types are lower priority but would enhance the system's reasoning capabilities.
+
+**Remaining Node Types (from §1.2 Medium Priority)**:
+
+#### Tier 2: Enhanced Reasoning
+- [ ] **Task RG.6.1**: Add `:LegalEntity` node type - Entity-specific rules
+  - Company types: LTD, PLC, DAC, partnerships, trusts, sole traders
+  - Properties: `category`, `abbreviation`, `can_trade`, `can_hold_property`
+  - Relationships: `APPLIES_TO_ENTITY`, `HAS_ENTITY_TYPE`
+  - Value: "What rules apply to a DAC vs an LTD?"
+
+- [ ] **Task RG.6.2**: Add `:Penalty` node type - Non-compliance consequences
+  - Late filing surcharges, interest, fixed penalties, prosecution thresholds
+  - Properties: `penalty_type`, `rate`, `flat_amount`, `applies_after`
+  - Relationships: `HAS_PENALTY`, `WAIVED_IF`
+  - Value: "What happens if I miss this deadline?"
+
+- [ ] **Task RG.6.3**: Add `:TaxCredit` node type - Distinct from Relief
+  - Personal credit, Employee credit, Earned Income credit
+  - Properties: `amount`, `refundable`, `transferable`, `tax_year`
+  - Value: Credits reduce liability directly (€ for €), different from reliefs
+
+#### Tier 3: Future Expansion (from §1.3)
+- [ ] **Task RG.7.1**: Add `:RegulatoryBody` nodes
+  - Revenue, DSP, CRO, Pensions Authority, Central Bank, HMRC, DWP
+  - Value: "Show all Revenue obligations"
+
+- [ ] **Task RG.7.2**: Add `:AssetClass` for CGT reasoning
+  - Shares, Property (residential/commercial), Crypto, Agricultural land
+  - Value: "What CGT rules apply to [asset type]?"
+
+- [ ] **Task RG.7.3**: Add `:Industry` or `:Sector` nodes
+  - Construction (RCT), Farming (agricultural relief), Film (Section 481)
+  - Value: Sector-specific advice
+
+- [ ] **Task RG.7.4**: Add `:MeansTest` for benefit assessment
+  - Structured means testing rules and thresholds
+  - Value: "Am I eligible based on my income?"
+
+**Missing Relationship Types (from §2.3)**:
+
+- [ ] **Task RG.8.1**: Add interaction relationships
+  - `STACKS_WITH` - Benefits that can be combined
+  - `REDUCES` - One benefit reduces another
+  - `PARTIALLY_OVERLAPS` - Overlapping eligibility periods
+  - `OFFSETS_AGAINST` - Tax credits offsetting liabilities
+
+**Structural Patterns (from §3)**:
+
+- [ ] **Task RG.9.1**: Add contribution history modelling
+  - `:ContributionRecord` nodes for PRSI/NI history
+  - Enables: "Do I have enough contributions for [benefit]?"
+
+- [ ] **Task RG.9.2**: Add income bands and means testing structure
+  - Structured band definitions with thresholds
+  - Enables: Scenario Engine amount estimation
+
+- [ ] **Task RG.9.3**: Add `requirement_level` property to Obligations
+  - Values: `STATUTORY` | `REGULATORY` | `ADMINISTRATIVE` | `BEST_PRACTICE`
+  - Value: Distinguish legal requirements from guidance
+
+---
+
 ## 4. Outstanding Work - LOW Priority
 
 ### 4.1 LOW: Metrics Dashboard (Deferred)
@@ -1319,13 +1388,13 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~2-4 weeks
+**Total Outstanding Effort**: ~2-4 weeks (core), ~4-8 weeks additional (future graph enhancements)
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 2-3 weeks (Scenario Engine - only remaining feature gap) |
-| MEDIUM | 0 | ~~Regulatory Graph~~ ✅ COMPLETED |
-| LOW | 2 | 1-2 weeks (LOW priority package tests, UI polish) |
+| MEDIUM | 0 | ~~Regulatory Graph Phases 1-5~~ ✅ COMPLETED |
+| LOW | 3 | 1-2 weeks (package tests, UI polish) + 4-8 weeks (future graph enhancements - Tiers 2-4) |
 
 ### Critical Gaps Identified
 
@@ -1437,9 +1506,15 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
     - Phase 5: Testing & validation (Ireland tests, integration tests) ✅
   - **UPDATED**: Section 1.0 expanded with all phase details
   - **UPDATED**: Section 3.6 moved from "Outstanding" to "Completed"
-  - **UPDATED**: Summary - Regulatory Graph removed from outstanding work
-  - **UPDATED**: Total outstanding effort reduced from ~4-7 weeks to ~2-4 weeks
-  - **CONFIRMED**: Scenario Engine is now the ONLY remaining feature gap
+  - **NEW SECTION**: Added §3.7 LOW: Regulatory Graph Future Enhancements (Tiers 2-4)
+    - Documents remaining 6 node types from REGULATORY_GRAPH_REVIEW.md
+    - Tier 2: LegalEntity, Penalty, TaxCredit
+    - Tier 3: RegulatoryBody, AssetClass, Industry/Sector, MeansTest
+    - Missing relationships: STACKS_WITH, REDUCES, PARTIALLY_OVERLAPS, OFFSETS_AGAINST
+    - Structural patterns: ContributionRecord, income bands, requirement_level
+  - **UPDATED**: Summary - Regulatory Graph Phases 1-5 complete, future enhancements as LOW priority
+  - **UPDATED**: Total outstanding effort: ~2-4 weeks (core) + ~4-8 weeks (future graph)
+  - **CONFIRMED**: Scenario Engine is now the ONLY remaining HIGH priority gap
 - v5.9 (2025-12-29): Major updates - supabaseEventHub tests complete, Regulatory Graph Phase 1 complete ✅
   - **COMPLETED**: supabaseEventHub.test.ts (921 LOC) - PR #215
     - Comprehensive test coverage for subscription management, broadcast operations
