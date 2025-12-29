@@ -19,6 +19,8 @@ import type {
   Threshold,
   Rate,
   Form,
+  PRSIClass,
+  LifeEvent,
 } from './types.js';
 import { GraphError } from './errors.js';
 import { LOG_PREFIX } from './constants.js';
@@ -584,6 +586,127 @@ export class BoltGraphClient implements GraphClient {
     }
 
     return { broader, narrower, related };
+  }
+
+  /**
+   * Get PRSI class by ID
+   */
+  async getPRSIClassById(prsiClassId: string): Promise<PRSIClass | null> {
+    this.logger.info({ prsiClassId }, `${LOG_PREFIX.graph} Getting PRSI class by ID`);
+
+    const query = `
+      MATCH (p:PRSIClass {id: $prsiClassId})
+      RETURN p
+      LIMIT 1
+    `;
+
+    const records = await this.executeCypher(query, { prsiClassId }) as Array<Record<string, unknown>>;
+
+    if (records.length === 0) {
+      return null;
+    }
+
+    const p = records[0].p;
+    if (p && typeof p === 'object' && 'properties' in p) {
+      const props = (p as { properties: Record<string, unknown> }).properties;
+      return {
+        id: props.id as string || 'unknown',
+        label: props.label as string || 'Unknown PRSI Class',
+        description: props.description as string || '',
+        eligible_benefits: props.eligible_benefits as string[] | undefined,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get benefits entitled by PRSI class
+   */
+  async getBenefitsForPRSIClass(prsiClassId: string, jurisdictionId: string): Promise<GraphNode[]> {
+    this.logger.info({
+      prsiClassId,
+      jurisdictionId,
+    }, `${LOG_PREFIX.graph} Getting benefits for PRSI class`);
+
+    const query = `
+      MATCH (p:PRSIClass {id: $prsiClassId})
+      MATCH (j:Jurisdiction {id: $jurisdictionId})
+      MATCH (p)-[:ENTITLES_TO]->(b:Benefit)-[:IN_JURISDICTION]->(j)
+      RETURN b
+    `;
+
+    const records = await this.executeCypher(query, { prsiClassId, jurisdictionId }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+    return context.nodes;
+  }
+
+  /**
+   * Get life events that trigger a specific benefit or obligation
+   */
+  async getLifeEventsForNode(nodeId: string): Promise<LifeEvent[]> {
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting life events for node`);
+
+    const query = `
+      MATCH (e:LifeEvent)-[:TRIGGERS]->(n {id: $nodeId})
+      RETURN e
+    `;
+
+    const records = await this.executeCypher(query, { nodeId }) as Array<Record<string, unknown>>;
+
+    const lifeEvents: LifeEvent[] = [];
+    for (const record of records) {
+      const e = record.e;
+      if (e && typeof e === 'object' && 'properties' in e) {
+        const props = (e as { properties: Record<string, unknown> }).properties;
+        lifeEvents.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Life Event',
+          category: (props.category as LifeEvent['category']) || 'FAMILY',
+          triggers_timeline: props.triggers_timeline as boolean | undefined,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return lifeEvents;
+  }
+
+  /**
+   * Get benefits and obligations triggered by a life event
+   */
+  async getTriggeredByLifeEvent(lifeEventId: string, jurisdictionId: string): Promise<{
+    benefits: GraphNode[];
+    obligations: GraphNode[];
+  }> {
+    this.logger.info({
+      lifeEventId,
+      jurisdictionId,
+    }, `${LOG_PREFIX.graph} Getting items triggered by life event`);
+
+    const query = `
+      MATCH (e:LifeEvent {id: $lifeEventId})
+      MATCH (j:Jurisdiction {id: $jurisdictionId})
+      OPTIONAL MATCH (e)-[:TRIGGERS]->(b:Benefit)-[:IN_JURISDICTION]->(j)
+      OPTIONAL MATCH (e)-[:TRIGGERS]->(o:Obligation)-[:IN_JURISDICTION]->(j)
+      RETURN b, o
+    `;
+
+    const records = await this.executeCypher(query, { lifeEventId, jurisdictionId }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+
+    const benefits: GraphNode[] = [];
+    const obligations: GraphNode[] = [];
+
+    for (const node of context.nodes) {
+      if (node.type === 'Benefit') {
+        benefits.push(node);
+      } else if (node.type === 'Obligation') {
+        obligations.push(node);
+      }
+    }
+
+    return { benefits, obligations };
   }
 
   /**

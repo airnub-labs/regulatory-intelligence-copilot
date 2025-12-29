@@ -71,7 +71,9 @@ export interface GraphNode {
     | 'Obligation'
     | 'Threshold'
     | 'Rate'
-    | 'Form';
+    | 'Form'
+    | 'PRSIClass'
+    | 'LifeEvent';
   properties: Record<string, unknown>;
 }
 

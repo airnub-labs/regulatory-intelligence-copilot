@@ -73,6 +73,27 @@ export interface Form {
 }
 
 /**
+ * PRSIClass representing Irish social insurance classification
+ */
+export interface PRSIClass {
+  id: string;
+  label: string;
+  description: string;
+  eligible_benefits?: string[];
+}
+
+/**
+ * LifeEvent representing significant life events that trigger regulatory changes
+ */
+export interface LifeEvent {
+  id: string;
+  label: string;
+  category: 'FAMILY' | 'EMPLOYMENT' | 'HEALTH' | 'RESIDENCY';
+  triggers_timeline?: boolean;
+  description?: string;
+}
+
+/**
  * Graph node representing any regulatory entity
  */
 export interface GraphNode {
@@ -103,7 +124,9 @@ export interface GraphNode {
     | 'Obligation'
     | 'Threshold'
     | 'Rate'
-    | 'Form';
+    | 'Form'
+    | 'PRSIClass'
+    | 'LifeEvent';
   properties: Record<string, unknown>;
 }
 
@@ -208,6 +231,29 @@ export interface GraphClient {
     broader: GraphNode[];
     narrower: GraphNode[];
     related: GraphNode[];
+  }>;
+
+  /**
+   * Get PRSI class by ID
+   */
+  getPRSIClassById(prsiClassId: string): Promise<PRSIClass | null>;
+
+  /**
+   * Get benefits entitled by PRSI class
+   */
+  getBenefitsForPRSIClass(prsiClassId: string, jurisdictionId: string): Promise<GraphNode[]>;
+
+  /**
+   * Get life events that trigger a specific benefit or obligation
+   */
+  getLifeEventsForNode(nodeId: string): Promise<LifeEvent[]>;
+
+  /**
+   * Get benefits and obligations triggered by a life event
+   */
+  getTriggeredByLifeEvent(lifeEventId: string, jurisdictionId: string): Promise<{
+    benefits: GraphNode[];
+    obligations: GraphNode[];
   }>;
 
   /**

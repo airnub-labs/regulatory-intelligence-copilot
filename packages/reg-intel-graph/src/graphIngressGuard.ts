@@ -77,6 +77,8 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'Threshold',
     'Rate',
     'Form',
+    'PRSIClass',
+    'LifeEvent',
   ];
 
   const allowedRelTypes = [
@@ -132,6 +134,13 @@ export const schemaValidationAspect: GraphIngressAspect = async (ctx, next) => {
     'BROADER',
     'NARROWER',
     'RELATED',
+    'ENTITLES_TO',
+    'HAS_PRSI_CLASS',
+    'CONTRIBUTION_RATE',
+    'TRIGGERS',
+    'STARTS_TIMELINE',
+    'ENDS_TIMELINE',
+    'TRIGGERED_BY',
   ];
 
   if (ctx.nodeLabel && !allowedNodeLabels.includes(ctx.nodeLabel)) {
@@ -342,6 +351,23 @@ export const propertyWhitelistAspect: GraphIngressAspect = async (ctx, next) => 
       'source_url',
       'category',
       'online_only',
+      'created_at',
+      'updated_at',
+    ],
+    PRSIClass: [
+      'id',
+      'label',
+      'description',
+      'eligible_benefits',
+      'created_at',
+      'updated_at',
+    ],
+    LifeEvent: [
+      'id',
+      'label',
+      'category',
+      'triggers_timeline',
+      'description',
       'created_at',
       'updated_at',
     ],

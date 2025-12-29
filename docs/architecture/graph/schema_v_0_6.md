@@ -423,6 +423,43 @@ Represents a regulatory form or document required for compliance or claiming ben
 - DSP claim forms (UP1, PRSI history)
 - CRO forms (B1, B10)
 
+### 2.24 `:PRSIClass`
+
+Represents an Irish PRSI (Pay Related Social Insurance) classification.
+
+**Properties**
+- `id: string` – e.g. `"IE_PRSI_CLASS_A"`.
+- `label: string` – e.g. `"Class A"`.
+- `description: string` – Description of who this class applies to.
+- `eligible_benefits?: string[]` – High-level list of benefit categories.
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- Class A: Employees in industrial, commercial, and service employment
+- Class S: Self-employed individuals
+- Class B: Civil servants recruited before 1995
+
+### 2.25 `:LifeEvent`
+
+Represents significant life events that trigger regulatory changes, benefits, or obligations.
+
+**Properties**
+- `id: string` – e.g. `"LIFE_EVENT_CHILD_BIRTH"`.
+- `label: string` – e.g. `"Birth of Child"`.
+- `category: string` – `"FAMILY" | "EMPLOYMENT" | "HEALTH" | "RESIDENCY"`.
+- `triggers_timeline?: boolean` – Whether this event starts/ends a timeline.
+- `description?: string`
+- `created_at: localdatetime`
+- `updated_at: localdatetime`
+
+**Examples**
+- Birth of child
+- Marriage or civil partnership
+- Job loss or retirement
+- Moving to/from Ireland
+- Starting a business
+
 ---
 
 ## 3. Core Relationship Types
@@ -558,6 +595,17 @@ These relationships support compliance workflows and numeric reasoning.
 - `(:Concept)-[:BROADER]->(:Concept)` – Parent concept in taxonomy.
 - `(:Concept)-[:NARROWER]->(:Concept)` – Child concept in taxonomy.
 - `(:Concept)-[:RELATED]->(:Concept)` – Semantically related concepts.
+
+**PRSI Classes:**
+- `(:PRSIClass)-[:ENTITLES_TO]->(:Benefit)` – Benefits available to this PRSI class.
+- `(:ProfileTag)-[:HAS_PRSI_CLASS]->(:PRSIClass)` – Profile's PRSI classification.
+- `(:PRSIClass)-[:CONTRIBUTION_RATE]->(:Rate)` – Contribution rate for this class.
+
+**Life Events:**
+- `(:LifeEvent)-[:TRIGGERS]->(:Benefit|:Relief|:Obligation)` – Benefits/obligations triggered by event.
+- `(:LifeEvent)-[:STARTS_TIMELINE]->(:Timeline)` – Event starts a time window.
+- `(:LifeEvent)-[:ENDS_TIMELINE]->(:Timeline)` – Event ends a time window.
+- `(:Benefit|:Relief|:Obligation)-[:TRIGGERED_BY]->(:LifeEvent)` – Reverse relationship (optional).
 
 ---
 
