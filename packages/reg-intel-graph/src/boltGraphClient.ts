@@ -24,6 +24,12 @@ import type {
   Penalty,
   LegalEntity,
   TaxCredit,
+  RegulatoryBody,
+  AssetClass,
+  MeansTest,
+  NIClass,
+  BenefitCap,
+  CoordinationRule,
 } from './types.js';
 import { GraphError } from './errors.js';
 import { LOG_PREFIX } from './constants.js';
@@ -981,6 +987,464 @@ export class BoltGraphClient implements GraphClient {
     const records = await this.executeCypher(query, { nodeId }) as Array<Record<string, unknown>>;
     const context = this.parseGraphContext(records);
     return context.nodes;
+  }
+
+  /**
+   * Get regulatory bodies for a jurisdiction
+   */
+  async getRegulatoryBodiesForJurisdiction(jurisdictionId: string): Promise<RegulatoryBody[]> {
+    this.logger.info({ jurisdictionId }, `${LOG_PREFIX.graph} Getting regulatory bodies for jurisdiction`);
+
+    const query = `
+      MATCH (rb:RegulatoryBody)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      RETURN rb
+      ORDER BY rb.domain, rb.label
+    `;
+
+    const records = await this.executeCypher(query, { jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const bodies: RegulatoryBody[] = [];
+    for (const record of records) {
+      const rb = record.rb;
+      if (rb && typeof rb === 'object' && 'properties' in rb) {
+        const props = (rb as { properties: Record<string, unknown> }).properties;
+        bodies.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Body',
+          abbreviation: props.abbreviation as string | undefined,
+          jurisdiction: props.jurisdiction as string || jurisdictionId,
+          domain: (props.domain as RegulatoryBody['domain']) || 'OTHER',
+          website: props.website as string | undefined,
+          contact_info: props.contact_info as string | undefined,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return bodies;
+  }
+
+  /**
+   * Get regulatory body that administers an obligation or benefit
+   */
+  async getAdministeringBody(nodeId: string): Promise<RegulatoryBody | null> {
+    this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting administering body`);
+
+    const query = `
+      MATCH (n {id: $nodeId})-[:ADMINISTERED_BY]->(rb:RegulatoryBody)
+      RETURN rb
+      LIMIT 1
+    `;
+
+    const records = await this.executeCypher(query, { nodeId }) as Array<Record<string, unknown>>;
+
+    if (records.length === 0) return null;
+
+    const rb = records[0].rb;
+    if (rb && typeof rb === 'object' && 'properties' in rb) {
+      const props = (rb as { properties: Record<string, unknown> }).properties;
+      return {
+        id: props.id as string || 'unknown',
+        label: props.label as string || 'Unknown Body',
+        abbreviation: props.abbreviation as string | undefined,
+        jurisdiction: props.jurisdiction as string || 'unknown',
+        domain: (props.domain as RegulatoryBody['domain']) || 'OTHER',
+        website: props.website as string | undefined,
+        contact_info: props.contact_info as string | undefined,
+        description: props.description as string | undefined,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get asset classes for a jurisdiction
+   */
+  async getAssetClassesForJurisdiction(jurisdictionId: string): Promise<AssetClass[]> {
+    this.logger.info({ jurisdictionId }, `${LOG_PREFIX.graph} Getting asset classes for jurisdiction`);
+
+    const query = `
+      MATCH (ac:AssetClass)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      RETURN ac
+      ORDER BY ac.category, ac.label
+    `;
+
+    const records = await this.executeCypher(query, { jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const assetClasses: AssetClass[] = [];
+    for (const record of records) {
+      const ac = record.ac;
+      if (ac && typeof ac === 'object' && 'properties' in ac) {
+        const props = (ac as { properties: Record<string, unknown> }).properties;
+        assetClasses.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Asset Class',
+          category: (props.category as AssetClass['category']) || 'OTHER',
+          sub_category: props.sub_category as string | undefined,
+          tangible: props.tangible as boolean || false,
+          cgt_applicable: props.cgt_applicable as boolean || false,
+          cat_applicable: props.cat_applicable as boolean || false,
+          stamp_duty_applicable: props.stamp_duty_applicable as boolean || false,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return assetClasses;
+  }
+
+  /**
+   * Get CGT rate for an asset class
+   */
+  async getCGTRateForAsset(assetClassId: string): Promise<Rate | null> {
+    this.logger.info({ assetClassId }, `${LOG_PREFIX.graph} Getting CGT rate for asset`);
+
+    const query = `
+      MATCH (ac:AssetClass {id: $assetClassId})-[:HAS_CGT_RATE]->(r:Rate)
+      RETURN r
+      LIMIT 1
+    `;
+
+    const records = await this.executeCypher(query, { assetClassId }) as Array<Record<string, unknown>>;
+
+    if (records.length === 0) return null;
+
+    const r = records[0].r;
+    if (r && typeof r === 'object' && 'properties' in r) {
+      const props = (r as { properties: Record<string, unknown> }).properties;
+      return {
+        id: props.id as string || 'unknown',
+        label: props.label as string || 'Unknown Rate',
+        percentage: props.percentage as number | undefined,
+        flat_amount: props.flat_amount as number | undefined,
+        currency: props.currency as string | undefined,
+        band_lower: props.band_lower as number | undefined,
+        band_upper: props.band_upper as number | undefined,
+        effective_from: props.effective_from as string | undefined,
+        effective_to: props.effective_to as string | undefined,
+        category: props.category as string || 'unknown',
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get rates and thresholds for tax year
+   */
+  async getRatesForTaxYear(taxYear: number, jurisdictionId: string): Promise<{
+    rates: Rate[];
+    thresholds: Threshold[];
+    credits: TaxCredit[];
+  }> {
+    this.logger.info({
+      taxYear,
+      jurisdictionId,
+    }, `${LOG_PREFIX.graph} Getting rates/thresholds for tax year`);
+
+    const query = `
+      MATCH (ty:TaxYear {year: $taxYear, jurisdiction: $jurisdictionId})
+      OPTIONAL MATCH (r:Rate)-[:APPLIES_IN_YEAR]->(ty)
+      OPTIONAL MATCH (t:Threshold)-[:APPLIES_IN_YEAR]->(ty)
+      OPTIONAL MATCH (c:TaxCredit)-[:APPLIES_IN_YEAR]->(ty)
+      RETURN collect(DISTINCT r) as rates, collect(DISTINCT t) as thresholds, collect(DISTINCT c) as credits
+    `;
+
+    const records = await this.executeCypher(query, { taxYear, jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const rates: Rate[] = [];
+    const thresholds: Threshold[] = [];
+    const credits: TaxCredit[] = [];
+
+    if (records.length > 0) {
+      const record = records[0];
+
+      // Parse rates
+      const rateNodes = record.rates as Array<unknown>;
+      for (const r of rateNodes) {
+        if (r && typeof r === 'object' && 'properties' in r) {
+          const props = (r as { properties: Record<string, unknown> }).properties;
+          rates.push({
+            id: props.id as string || 'unknown',
+            label: props.label as string || 'Unknown Rate',
+            percentage: props.percentage as number | undefined,
+            flat_amount: props.flat_amount as number | undefined,
+            currency: props.currency as string | undefined,
+            band_lower: props.band_lower as number | undefined,
+            band_upper: props.band_upper as number | undefined,
+            effective_from: props.effective_from as string | undefined,
+            effective_to: props.effective_to as string | undefined,
+            category: props.category as string || 'unknown',
+          });
+        }
+      }
+
+      // Parse thresholds
+      const thresholdNodes = record.thresholds as Array<unknown>;
+      for (const t of thresholdNodes) {
+        if (t && typeof t === 'object' && 'properties' in t) {
+          const props = (t as { properties: Record<string, unknown> }).properties;
+          thresholds.push({
+            id: props.id as string || 'unknown',
+            label: props.label as string || 'Unknown Threshold',
+            value: props.value as number || 0,
+            unit: (props.unit as Threshold['unit']) || 'EUR',
+            direction: (props.direction as Threshold['direction']) || 'ABOVE',
+            upper_bound: props.upper_bound as number | undefined,
+            effective_from: props.effective_from as string | undefined,
+            effective_to: props.effective_to as string | undefined,
+            category: props.category as string | undefined,
+          });
+        }
+      }
+
+      // Parse credits
+      const creditNodes = record.credits as Array<unknown>;
+      for (const c of creditNodes) {
+        if (c && typeof c === 'object' && 'properties' in c) {
+          const props = (c as { properties: Record<string, unknown> }).properties;
+          credits.push({
+            id: props.id as string || 'unknown',
+            label: props.label as string || 'Unknown Tax Credit',
+            amount: props.amount as number || 0,
+            currency: props.currency as string || 'EUR',
+            tax_year: props.tax_year as number || taxYear,
+            refundable: props.refundable as boolean || false,
+            transferable: props.transferable as boolean || false,
+            restricted_to_marginal: props.restricted_to_marginal as boolean | undefined,
+            category: (props.category as TaxCredit['category']) || 'OTHER',
+            description: props.description as string | undefined,
+          });
+        }
+      }
+    }
+
+    return { rates, thresholds, credits };
+  }
+
+  /**
+   * Get means test for a benefit
+   */
+  async getMeansTestForBenefit(benefitId: string): Promise<MeansTest | null> {
+    this.logger.info({ benefitId }, `${LOG_PREFIX.graph} Getting means test for benefit`);
+
+    const query = `
+      MATCH (b:Benefit {id: $benefitId})-[:HAS_MEANS_TEST]->(mt:MeansTest)
+      RETURN mt
+      LIMIT 1
+    `;
+
+    const records = await this.executeCypher(query, { benefitId }) as Array<Record<string, unknown>>;
+
+    if (records.length === 0) return null;
+
+    const mt = records[0].mt;
+    if (mt && typeof mt === 'object' && 'properties' in mt) {
+      const props = (mt as { properties: Record<string, unknown> }).properties;
+      return {
+        id: props.id as string || 'unknown',
+        label: props.label as string || 'Unknown Means Test',
+        income_disregard: props.income_disregard as number | undefined,
+        capital_threshold: props.capital_threshold as number | undefined,
+        capital_weekly_assessment: props.capital_weekly_assessment as number | undefined,
+        spouse_income_assessed: props.spouse_income_assessed as boolean | undefined,
+        maintenance_assessed: props.maintenance_assessed as boolean | undefined,
+        categories: props.categories as string[] | undefined,
+        description: props.description as string | undefined,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get National Insurance classes for a jurisdiction
+   */
+  async getNIClassesForJurisdiction(jurisdictionId: string): Promise<NIClass[]> {
+    this.logger.info({ jurisdictionId }, `${LOG_PREFIX.graph} Getting NI classes for jurisdiction`);
+
+    const query = `
+      MATCH (ni:NIClass)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      RETURN ni
+      ORDER BY ni.label
+    `;
+
+    const records = await this.executeCypher(query, { jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const niClasses: NIClass[] = [];
+    for (const record of records) {
+      const ni = record.ni;
+      if (ni && typeof ni === 'object' && 'properties' in ni) {
+        const props = (ni as { properties: Record<string, unknown> }).properties;
+        niClasses.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown NI Class',
+          description: props.description as string || '',
+          rate: props.rate as number || 0,
+          threshold_weekly: props.threshold_weekly as number | undefined,
+          threshold_annual: props.threshold_annual as number | undefined,
+          eligible_benefits: props.eligible_benefits as string[] | undefined,
+        });
+      }
+    }
+
+    return niClasses;
+  }
+
+  /**
+   * Get NI class for an employment type
+   */
+  async getNIClassForEmploymentType(employmentType: string, jurisdictionId: string): Promise<NIClass | null> {
+    this.logger.info({ employmentType, jurisdictionId }, `${LOG_PREFIX.graph} Getting NI class for employment type`);
+
+    const query = `
+      MATCH (pt:ProfileTag {id: $employmentType})-[:HAS_NI_CLASS]->(ni:NIClass)
+      MATCH (ni)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      RETURN ni
+      LIMIT 1
+    `;
+
+    const records = await this.executeCypher(query, { employmentType, jurisdictionId }) as Array<Record<string, unknown>>;
+
+    if (records.length === 0) return null;
+
+    const ni = records[0].ni;
+    if (ni && typeof ni === 'object' && 'properties' in ni) {
+      const props = (ni as { properties: Record<string, unknown> }).properties;
+      return {
+        id: props.id as string || 'unknown',
+        label: props.label as string || 'Unknown NI Class',
+        description: props.description as string || '',
+        rate: props.rate as number || 0,
+        threshold_weekly: props.threshold_weekly as number | undefined,
+        threshold_annual: props.threshold_annual as number | undefined,
+        eligible_benefits: props.eligible_benefits as string[] | undefined,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Get benefit caps for a jurisdiction
+   */
+  async getBenefitCapsForJurisdiction(jurisdictionId: string): Promise<BenefitCap[]> {
+    this.logger.info({ jurisdictionId }, `${LOG_PREFIX.graph} Getting benefit caps for jurisdiction`);
+
+    const query = `
+      MATCH (cap:BenefitCap)-[:IN_JURISDICTION]->(j:Jurisdiction {id: $jurisdictionId})
+      RETURN cap
+      ORDER BY cap.label
+    `;
+
+    const records = await this.executeCypher(query, { jurisdictionId }) as Array<Record<string, unknown>>;
+
+    const caps: BenefitCap[] = [];
+    for (const record of records) {
+      const cap = record.cap;
+      if (cap && typeof cap === 'object' && 'properties' in cap) {
+        const props = (cap as { properties: Record<string, unknown> }).properties;
+        caps.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Benefit Cap',
+          amount_single: props.amount_single as number | undefined,
+          amount_couple: props.amount_couple as number | undefined,
+          amount_with_children: props.amount_with_children as number | undefined,
+          currency: props.currency as string || 'GBP',
+          frequency: (props.frequency as BenefitCap['frequency']) || 'ANNUAL',
+          exemptions: props.exemptions as string[] | undefined,
+          effective_from: props.effective_from as string | undefined,
+          effective_to: props.effective_to as string | undefined,
+        });
+      }
+    }
+
+    return caps;
+  }
+
+  /**
+   * Get benefits subject to a benefit cap
+   */
+  async getBenefitsSubjectToCap(capId: string): Promise<GraphNode[]> {
+    this.logger.info({ capId }, `${LOG_PREFIX.graph} Getting benefits subject to cap`);
+
+    const query = `
+      MATCH (b:Benefit)-[:SUBJECT_TO_CAP]->(cap:BenefitCap {id: $capId})
+      RETURN b
+    `;
+
+    const records = await this.executeCypher(query, { capId }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+    return context.nodes;
+  }
+
+  /**
+   * Get coordination rules between jurisdictions
+   */
+  async getCoordinationRules(homeJurisdiction: string, hostJurisdiction: string): Promise<CoordinationRule[]> {
+    this.logger.info({ homeJurisdiction, hostJurisdiction }, `${LOG_PREFIX.graph} Getting coordination rules`);
+
+    const query = `
+      MATCH (cr:CoordinationRule)
+      WHERE cr.home_jurisdiction = $homeJurisdiction
+        AND cr.host_jurisdiction = $hostJurisdiction
+      RETURN cr
+      ORDER BY cr.regulation, cr.article
+    `;
+
+    const records = await this.executeCypher(query, { homeJurisdiction, hostJurisdiction }) as Array<Record<string, unknown>>;
+
+    const rules: CoordinationRule[] = [];
+    for (const record of records) {
+      const cr = record.cr;
+      if (cr && typeof cr === 'object' && 'properties' in cr) {
+        const props = (cr as { properties: Record<string, unknown> }).properties;
+        rules.push({
+          id: props.id as string || 'unknown',
+          label: props.label as string || 'Unknown Coordination Rule',
+          regulation: props.regulation as string || '',
+          article: props.article as string | undefined,
+          applies_to: props.applies_to as string || '',
+          home_jurisdiction: props.home_jurisdiction as string | undefined,
+          host_jurisdiction: props.host_jurisdiction as string | undefined,
+          duration_months: props.duration_months as number | undefined,
+          description: props.description as string | undefined,
+        });
+      }
+    }
+
+    return rules;
+  }
+
+  /**
+   * Get posted worker rules for a profile
+   */
+  async getPostedWorkerRules(profileId: string, homeJurisdiction: string, hostJurisdiction: string): Promise<{
+    rules: CoordinationRule[];
+    benefits: GraphNode[];
+  }> {
+    this.logger.info({ profileId, homeJurisdiction, hostJurisdiction }, `${LOG_PREFIX.graph} Getting posted worker rules`);
+
+    // Get coordination rules
+    const rules = await this.getCoordinationRules(homeJurisdiction, hostJurisdiction);
+
+    // Get benefits coordinated under these rules
+    const query = `
+      MATCH (pt:ProfileTag {id: $profileId})-[:APPLIES_TO_PROFILE]->(b:Benefit)
+      MATCH (b)-[:COORDINATED_UNDER]->(cr:CoordinationRule)
+      WHERE cr.home_jurisdiction = $homeJurisdiction
+        AND cr.host_jurisdiction = $hostJurisdiction
+      RETURN b
+    `;
+
+    const records = await this.executeCypher(query, { profileId, homeJurisdiction, hostJurisdiction }) as Array<Record<string, unknown>>;
+    const context = this.parseGraphContext(records);
+
+    return {
+      rules,
+      benefits: context.nodes,
+    };
   }
 
   /**
