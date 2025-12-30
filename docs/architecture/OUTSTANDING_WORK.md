@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
-> **Last Updated**: 2025-12-28
-> **Status**: All architecture features complete except Scenario Engine. Observability stack production-ready.
-> **Document Version**: 5.8
+> **Last Updated**: 2025-12-30
+> **Status**: All architecture features complete except Scenario Engine. Merge compaction strategies identified as gap.
+> **Document Version**: 5.9
 
 ---
 
@@ -706,6 +706,121 @@ This document consolidates all outstanding work identified from reviewing the ar
 
 ---
 
+### 3.6 MEDIUM: Merge Compaction Strategies (Context Bloat Prevention)
+
+**Priority**: MEDIUM (Context Management)
+**Effort**: 1-2 weeks
+**Reference**: `docs/architecture/MESSAGE_PINNING.md`, `packages/reg-intel-conversations/src/conversationConfig.ts`
+**Added**: 2025-12-30
+
+**Description**: When **full merge mode** is used to merge a branch back to the main conversation, ALL messages are copied verbatim with NO compression or summarization. This creates a **high risk of context bloat** that can cause:
+- Exceeded token limits in subsequent LLM calls
+- Degraded response quality from irrelevant context
+- Increased API costs from larger context windows
+
+**Current State**:
+- ✅ AI Merge Summarization works (uses LLM router with 600 token limit) - generates concise summaries
+- ✅ Message pinning fully implemented - allows users to mark important messages
+- ✅ Configuration framework exists in `conversationConfig.ts` (lines 28-50)
+- ⚠️ **Full merge copies ALL messages** - no compression applied
+- ⚠️ **Compaction algorithms documented but NOT implemented** - MESSAGE_PINNING.md Phase 3
+- ⚠️ **Configuration values never used** - `mergeCompressionStrategy`, `pathCompressionStrategy` exist but ignored
+- ❌ **No token counting infrastructure** - cannot measure context size
+- ❌ **No pathCompaction.ts implementation file** - algorithm pseudocode exists, no code
+
+**Architecture Gap Analysis**:
+
+| Feature | Documented | Configured | Implemented |
+|---------|------------|------------|-------------|
+| AI Summary Merge | ✅ | ✅ | ✅ |
+| Full Merge (all messages) | ✅ | ✅ | ✅ (but no compression) |
+| Selective Merge | ✅ | ✅ | ✅ (UI enhanced 2025-12-30) |
+| Message Pinning | ✅ | ✅ | ✅ |
+| Sliding Window Compaction | ✅ (MESSAGE_PINNING.md) | ✅ (config) | ❌ |
+| Semantic Compaction | ✅ (MESSAGE_PINNING.md) | ✅ (config) | ❌ |
+| Hybrid Compaction | ✅ (MESSAGE_PINNING.md) | ✅ (config) | ❌ |
+| Token Counting | ❌ | ❌ | ❌ |
+
+**Compaction Strategies Documented** (from MESSAGE_PINNING.md Phase 3):
+
+1. **Sliding Window** (`sliding_window`):
+   - Keeps recent N messages + all pinned messages
+   - Simple, predictable, low compute cost
+   - Risk: May lose important early context
+
+2. **Semantic** (`semantic`):
+   - LLM-based importance scoring per message
+   - Keeps highest-scored messages + pinned
+   - Higher quality but more expensive
+
+3. **Hybrid** (`hybrid`):
+   - Combines sliding window + semantic scoring
+   - Recent messages always kept
+   - Older messages filtered by semantic importance
+
+**Configuration (exists but unused)**:
+
+```typescript
+// packages/reg-intel-conversations/src/conversationConfig.ts
+interface CompactionStrategy {
+  type: 'none' | 'sliding_window' | 'semantic' | 'hybrid';
+  windowSize?: number;        // For sliding_window
+  semanticThreshold?: number; // For semantic (0-1)
+  maxTokens?: number;         // Target token budget
+}
+
+interface ConversationConfig {
+  mergeCompressionStrategy: CompactionStrategy;  // Applied after full merge
+  pathCompressionStrategy: CompactionStrategy;   // Applied on active path
+  autoCompactEnabled: boolean;
+}
+```
+
+**User Question Addressed**: *"When full merge is selected does a compaction strategy probably need to be run on the new branch to ensure the context is not bloated?"*
+
+**Answer**: **YES**. The current implementation copies all messages verbatim. For large branches (10+ messages), compaction should be:
+1. **Optional post-merge step** - User can trigger compaction after full merge
+2. **Automatic with threshold** - Auto-compact when merged message count exceeds configurable limit (e.g., 20 messages)
+3. **Hybrid by default** - Keep recent messages + semantically important + all pinned
+
+**Tasks**:
+
+- [ ] **Task MC.1**: Implement token counting infrastructure (HIGH - foundational)
+  - Create `packages/reg-intel-core/src/tokens/tokenCounter.ts`
+  - Support tiktoken or equivalent for accurate counts
+  - Add `estimateMessageTokens()` and `estimateContextTokens()` functions
+  - Integrate with message stores for cached token counts
+
+- [ ] **Task MC.2**: Implement pathCompaction.ts (HIGH - core algorithm)
+  - Create `packages/reg-intel-conversations/src/pathCompaction.ts`
+  - Implement `slidingWindowCompaction()` algorithm
+  - Implement `semanticCompaction()` with LLM scoring
+  - Implement `hybridCompaction()` combining both
+  - Respect pinned messages (never remove)
+
+- [ ] **Task MC.3**: Wire compaction to merge flow (MEDIUM)
+  - Modify `mergePath()` in pathStores to call compaction after full merge
+  - Add `applyCompaction` option to MergeRequest interface
+  - Default to `true` when merged message count > threshold (e.g., 15)
+
+- [ ] **Task MC.4**: Add compaction configuration UI (LOW)
+  - Add compaction strategy selector to MergeDialog (for full merge mode)
+  - Show estimated token count before/after compaction
+  - Allow user to preview compaction results
+
+- [ ] **Task MC.5**: Add compaction tests (MEDIUM)
+  - Unit tests for each compaction algorithm
+  - Integration tests for merge + compaction flow
+  - Edge cases: all pinned, empty branch, single message
+
+**Recommended Implementation Order**:
+1. **Phase 1**: Token counting (MC.1) - required for all other tasks
+2. **Phase 2**: Basic sliding window compaction (MC.2 partial)
+3. **Phase 3**: Full compaction suite + merge integration (MC.2 + MC.3)
+4. **Phase 4**: UI and tests (MC.4 + MC.5)
+
+---
+
 ## 4. Outstanding Work - LOW Priority
 
 ### 4.1 LOW: Metrics Dashboard (Deferred)
@@ -1009,6 +1124,7 @@ Branch navigation with preview cards fully functional.
 | ~~3.2 Package Test Coverage~~ | ~~MEDIUM~~ | ~~2-3 days~~ | ✅ **COMPLETED** (reg-intel-next-adapter) |
 | 3.3 Observability Scalability | MEDIUM | 8-16 hours | 🔵 Pending |
 | ~~3.4 UI Path Improvements~~ | ~~MEDIUM~~ | ~~4-6 hours~~ | ✅ **COMPLETED** |
+| 3.6 Merge Compaction Strategies | MEDIUM | 1-2 weeks | 🔵 Pending (NEW 2025-12-30) |
 
 ### Phase C: Polish (Deferred)
 
@@ -1200,12 +1316,12 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 
 ## 10. Summary
 
-**Total Outstanding Effort**: ~2-3 weeks (Scenario Engine only)
+**Total Outstanding Effort**: ~4-5 weeks
 
 | Priority | Items | Effort Range |
 |----------|-------|--------------|
 | HIGH | 1 | 2-3 weeks (Scenario Engine only) |
-| MEDIUM | 1 | 4-8 hours (Observability backends) |
+| MEDIUM | 2 | 1-2 weeks (Observability backends + Merge Compaction Strategies) |
 | LOW | 3 | 1-2 weeks (supabaseEventHub tests, LOW priority tests, UI polish) |
 
 ### Critical Gaps Identified
@@ -1213,6 +1329,10 @@ OPENFGA_AUTHORIZATION_MODEL_ID=your_model_id
 **🔴 HIGH Priority (Immediate Action Required)**:
 
 1. **Scenario Engine** - Fully documented (503 lines spec), zero implementation - **ONLY REMAINING HIGH PRIORITY GAP**
+
+**🟡 MEDIUM Priority (New - 2025-12-30)**:
+
+2. **Merge Compaction Strategies** - Full merge copies ALL messages with no compression. Configuration exists but algorithms not implemented. Risk of context bloat for large branches. See §3.6 for implementation plan.
 
 **✅ RESOLVED** (2025-12-28):
 - ~~Security & Input Validation Gaps~~ - **ALL FIXED** (SEC.1-SEC.4 in PR #204)
