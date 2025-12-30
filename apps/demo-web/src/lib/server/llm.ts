@@ -16,11 +16,23 @@ const logger = createLogger('LlmRouterWiring');
 // ============================================================================
 
 /**
- * Global flag to enable/disable all Redis caching.
- * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging).
- * Defaults to true if Redis credentials are available.
+ * Global kill switch to disable ALL Redis caching across the application.
+ * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
+ * Defaults to true.
+ *
+ * Individual cache flags must ALSO be enabled for caching to work.
+ * Both conditions must be true: ENABLE_REDIS_CACHING=true AND individual flag enabled.
  */
 const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
+
+/**
+ * Individual flag to enable/disable LLM policy caching specifically.
+ * Set ENABLE_LLM_POLICY_CACHE=false to disable this cache.
+ * Defaults to true.
+ *
+ * Requires ENABLE_REDIS_CACHING=true to have any effect.
+ */
+const ENABLE_LLM_POLICY_CACHE = process.env.ENABLE_LLM_POLICY_CACHE !== 'false';
 
 // ============================================================================
 // Supabase Setup
@@ -44,8 +56,9 @@ const supabaseInternalClient =
 const upstashRedisUrl = process.env.UPSTASH_REDIS_REST_URL;
 const upstashRedisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
+// Create Redis client only if global flag AND individual flag are both enabled
 const redisClient =
-  ENABLE_REDIS_CACHING && upstashRedisUrl && upstashRedisToken
+  ENABLE_REDIS_CACHING && ENABLE_LLM_POLICY_CACHE && upstashRedisUrl && upstashRedisToken
     ? new Redis({
         url: upstashRedisUrl,
         token: upstashRedisToken,
@@ -67,12 +80,20 @@ export const policyStore: LlmPolicyStore = createPolicyStore({
 if (supabaseInternalClient) {
   if (redisClient) {
     logger.info(
-      { supabaseUrl, hasRedis: true, cacheTtl: 300, globalCachingEnabled: ENABLE_REDIS_CACHING },
+      {
+        supabaseUrl,
+        hasRedis: true,
+        cacheTtl: 300,
+        globalCachingEnabled: ENABLE_REDIS_CACHING,
+        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE
+      },
       'Using CachingPolicyStore (Supabase + Redis)'
     );
   } else {
     const reason = !ENABLE_REDIS_CACHING
       ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
+      : !ENABLE_LLM_POLICY_CACHE
+      ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
       : 'Redis credentials not configured';
     logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
   }

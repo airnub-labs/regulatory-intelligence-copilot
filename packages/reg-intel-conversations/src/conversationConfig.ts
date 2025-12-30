@@ -433,8 +433,8 @@ export class SupabaseConversationConfigStore implements ConversationConfigStore 
 
 export interface RedisLikeClient {
   get(key: string): Promise<string | null>;
-  setex(key: string, seconds: number, value: string): Promise<void>;
-  del(...keys: string[]): Promise<void>;
+  setex(key: string, seconds: number, value: string): Promise<string | void>;
+  del(...keys: string[]): Promise<number | void>;
 }
 
 export interface CachingConfigStoreOptions {

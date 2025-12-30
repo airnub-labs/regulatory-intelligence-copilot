@@ -34,8 +34,8 @@ export interface SupabaseLikeClient {
 
 export interface RedisLikeClient {
   get(key: string): Promise<string | null>;
-  setex(key: string, seconds: number, value: string): Promise<void>;
-  del(key: string): Promise<void>;
+  setex(key: string, seconds: number, value: string): Promise<string | void>;
+  del(key: string): Promise<number | void>;
 }
 
 interface PolicyRow {

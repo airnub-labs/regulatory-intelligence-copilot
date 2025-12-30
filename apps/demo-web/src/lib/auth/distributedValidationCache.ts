@@ -4,6 +4,11 @@
  * MULTI-INSTANCE SAFE: Uses Redis for distributed caching across multiple app instances.
  * Falls back gracefully to in-memory cache if Redis is unavailable (single-instance mode).
  *
+ * Cache Control:
+ * - ENABLE_REDIS_CACHING: Global kill switch for all Redis caching (default: true)
+ * - ENABLE_AUTH_VALIDATION_CACHE: Individual flag for this cache (default: true)
+ * - Both flags must be true for Redis caching to be enabled
+ *
  * PRODUCTION: Set REDIS_URL environment variable for multi-instance deployments.
  * DEVELOPMENT: Works without Redis (in-memory cache only).
  */
@@ -27,6 +32,22 @@ interface RedisConstructor {
 }
 
 const logger = createLogger('DistributedValidationCache')
+
+/**
+ * Global kill switch to disable ALL Redis caching across the application.
+ * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
+ * Defaults to true.
+ */
+const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
+
+/**
+ * Individual flag to enable/disable auth validation caching specifically.
+ * Set ENABLE_AUTH_VALIDATION_CACHE=false to disable this cache.
+ * Defaults to true.
+ *
+ * Requires ENABLE_REDIS_CACHING=true to have any effect.
+ */
+const ENABLE_AUTH_VALIDATION_CACHE = process.env.ENABLE_AUTH_VALIDATION_CACHE !== 'false';
 
 // Cache TTL: 5 minutes (as requested by user)
 const CACHE_TTL_MS = 5 * 60 * 1000
@@ -272,14 +293,26 @@ class InMemoryCache implements DistributedCache {
 function createDistributedCache(): DistributedCache {
   const redisUrl = process.env.REDIS_URL
 
-  if (redisUrl) {
-    logger.info('Initializing Redis distributed cache for multi-instance deployment')
+  // Check both global flag AND individual flag
+  if (ENABLE_REDIS_CACHING && ENABLE_AUTH_VALIDATION_CACHE && redisUrl) {
+    logger.info(
+      {
+        globalCachingEnabled: ENABLE_REDIS_CACHING,
+        authValidationCacheEnabled: ENABLE_AUTH_VALIDATION_CACHE
+      },
+      'Initializing Redis distributed cache for multi-instance deployment'
+    )
     return new RedisCache(redisUrl)
   } else {
+    const reason = !ENABLE_REDIS_CACHING
+      ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
+      : !ENABLE_AUTH_VALIDATION_CACHE
+      ? 'auth validation cache disabled via ENABLE_AUTH_VALIDATION_CACHE=false'
+      : 'REDIS_URL not configured';
+
     logger.warn(
-      'REDIS_URL not configured - using in-memory cache. ' +
-      'This is NOT suitable for multi-instance deployments. ' +
-      'Set REDIS_URL environment variable for production.'
+      { reason },
+      'Using in-memory cache - NOT suitable for multi-instance deployments'
     )
     return new InMemoryCache()
   }
