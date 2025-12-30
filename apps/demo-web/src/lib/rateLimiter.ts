@@ -2,6 +2,22 @@ import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
 /**
+ * Global kill switch to disable ALL Redis caching across the application.
+ * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
+ * Defaults to true.
+ */
+const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
+
+/**
+ * Individual flag to enable/disable Redis-based rate limiting specifically.
+ * Set ENABLE_RATE_LIMITER_REDIS=false to disable Redis rate limiting (falls back to in-memory).
+ * Defaults to true.
+ *
+ * Requires ENABLE_REDIS_CACHING=true to have any effect.
+ */
+const ENABLE_RATE_LIMITER_REDIS = process.env.ENABLE_RATE_LIMITER_REDIS !== 'false';
+
+/**
  * Rate limiter configuration
  */
 interface RateLimiterConfig {
@@ -145,11 +161,16 @@ class MemoryRateLimiter implements RateLimiter {
 
 /**
  * Create a rate limiter instance
- * Uses Redis if credentials are provided, otherwise falls back to in-memory
+ * Uses Redis if global flag AND individual flag are both enabled and credentials are provided
+ * Otherwise falls back to in-memory
  */
 export function createRateLimiter(config: RateLimiterConfig): RateLimiter {
-  // Use Redis if both URL and token are provided
-  if (config.redisUrl && config.redisToken) {
+  // Use Redis only if global flag AND individual flag AND credentials are all present
+  if (ENABLE_REDIS_CACHING && ENABLE_RATE_LIMITER_REDIS && config.redisUrl && config.redisToken) {
+    console.log(
+      '[RateLimiter] Using Redis rate limiter ' +
+      `(globalCaching=${ENABLE_REDIS_CACHING}, rateLimiterRedis=${ENABLE_RATE_LIMITER_REDIS})`
+    );
     return new RedisRateLimiter({
       redisUrl: config.redisUrl,
       redisToken: config.redisToken,
@@ -159,8 +180,14 @@ export function createRateLimiter(config: RateLimiterConfig): RateLimiter {
   }
 
   // Fall back to in-memory rate limiter
+  const reason = !ENABLE_REDIS_CACHING
+    ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
+    : !ENABLE_RATE_LIMITER_REDIS
+    ? 'rate limiter Redis disabled via ENABLE_RATE_LIMITER_REDIS=false'
+    : 'Redis credentials not provided';
+
   console.warn(
-    '[RateLimiter] Redis credentials not provided. Using in-memory rate limiter. ' +
+    `[RateLimiter] Using in-memory rate limiter (reason: ${reason}). ` +
     'This is not recommended for production deployments with multiple instances.'
   );
 
