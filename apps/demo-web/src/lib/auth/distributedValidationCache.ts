@@ -85,9 +85,9 @@ class RedisCache implements DistributedCache {
     try {
       // Dynamic import to avoid bundling Redis in environments without it
       // ioredis is an optional runtime dependency, not required at build time
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      const { default: Redis } = await import('ioredis') as { default: RedisConstructor }
+      // Use dynamic variable to prevent webpack from trying to resolve at build time
+      const moduleName = 'ioredis'
+      const { default: Redis } = await import(/* webpackIgnore: true */ moduleName) as { default: RedisConstructor }
       this.redis = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
         enableReadyCheck: true,
@@ -111,7 +111,8 @@ class RedisCache implements DistributedCache {
         logger.warn('Redis cache connection closed')
       })
     } catch (error) {
-      logger.error({ error }, 'Failed to initialize Redis cache')
+      // Gracefully handle module not found - this is expected when ioredis is not installed
+      logger.debug({ error }, 'ioredis module not available, using in-memory fallback')
       this.isConnected = false
     }
   }

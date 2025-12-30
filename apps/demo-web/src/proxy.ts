@@ -1,7 +1,7 @@
 /**
- * Next.js Middleware for session validation
+ * Next.js Proxy for session validation
  *
- * SECURITY: This middleware runs on every request to validate user sessions.
+ * SECURITY: This proxy runs on every request to validate user sessions.
  * It ensures that deleted or banned users cannot access protected routes.
  */
 
@@ -41,7 +41,7 @@ function isProtectedApiRoute(pathname: string): boolean {
   return PROTECTED_API_ROUTES.some((route) => pathname.startsWith(route))
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Allow public routes without authentication
@@ -98,7 +98,7 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next()
 }
 
-// Configure which routes to run middleware on
+// Configure which routes to run proxy on
 export const config = {
   matcher: [
     /*

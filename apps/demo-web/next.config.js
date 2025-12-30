@@ -39,6 +39,9 @@ const nextConfig = {
   experimental: {
     turbopackUseSystemTlsCerts: true,
   },
+  turbopack: {
+    root: path.resolve(__dirname, '../..'),
+  },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
