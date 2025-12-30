@@ -7,6 +7,7 @@ import type {
 } from '@reg-copilot/reg-intel-core';
 import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_SQL_TABLE } from '@opentelemetry/semantic-conventions';
+import type { RedisLikeClient } from './conversationConfig.js';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
 export type TenantAccess = 'view' | 'edit';
@@ -1334,4 +1335,153 @@ export class SupabaseConversationContextStore implements ConversationContextStor
       rootSpanId: options?.rootSpanId ?? current.rootSpanId,
     });
   }
+}
+
+// =============================================================================
+// Caching Layer (Optional)
+// =============================================================================
+
+export interface CachingConversationStoreOptions {
+  /** TTL in seconds (default: 60 = 1 minute for active conversations) */
+  ttlSeconds?: number;
+  /** Key prefix (default: 'copilot:conv:conversation') */
+  keyPrefix?: string;
+}
+
+export class CachingConversationStore implements ConversationStore {
+  private readonly ttlSeconds: number;
+  private readonly keyPrefix: string;
+
+  constructor(
+    private readonly backing: ConversationStore,
+    private readonly redis: RedisLikeClient,
+    options: CachingConversationStoreOptions = {}
+  ) {
+    this.ttlSeconds = options.ttlSeconds ?? 60; // Shorter TTL for active data
+    this.keyPrefix = options.keyPrefix ?? 'copilot:conv:conversation';
+  }
+
+  private cacheKey(conversationId: string): string {
+    return `${this.keyPrefix}:${conversationId}`;
+  }
+
+  async getConversation(input: {
+    tenantId: string;
+    conversationId: string;
+    userId?: string | null;
+  }): Promise<ConversationRecord | null> {
+    const key = this.cacheKey(input.conversationId);
+
+    // Try cache first
+    try {
+      const cached = await this.redis.get(key);
+      if (cached) {
+        const record = JSON.parse(cached) as ConversationRecord;
+        // Verify tenant matches (security check)
+        if (record.tenantId === input.tenantId) {
+          // Restore Date objects
+          record.createdAt = new Date(record.createdAt);
+          record.updatedAt = new Date(record.updatedAt);
+          if (record.lastMessageAt) record.lastMessageAt = new Date(record.lastMessageAt);
+          if (record.archivedAt) record.archivedAt = new Date(record.archivedAt);
+          return record;
+        }
+        // Tenant mismatch - invalidate and fetch fresh
+        await this.redis.del(key);
+      }
+    } catch {
+      // Cache error - continue to backing store
+    }
+
+    // Fetch from backing store
+    const record = await this.backing.getConversation(input);
+
+    // Cache the result
+    if (record) {
+      try {
+        await this.redis.setex(key, this.ttlSeconds, JSON.stringify(record));
+      } catch {
+        // Ignore cache write errors
+      }
+    }
+
+    return record;
+  }
+
+  // Write-through methods - invalidate cache after write
+  async appendMessage(input: Parameters<ConversationStore['appendMessage']>[0]): Promise<{ messageId: string }> {
+    const result = await this.backing.appendMessage(input);
+    await this.invalidate(input.conversationId);
+    return result;
+  }
+
+  async updateSharing(input: Parameters<ConversationStore['updateSharing']>[0]): Promise<void> {
+    await this.backing.updateSharing(input);
+    await this.invalidate(input.conversationId);
+  }
+
+  async setArchivedState(input: Parameters<ConversationStore['setArchivedState']>[0]): Promise<void> {
+    await this.backing.setArchivedState(input);
+    await this.invalidate(input.conversationId);
+  }
+
+  async softDeleteMessage(input: Parameters<ConversationStore['softDeleteMessage']>[0]): Promise<void> {
+    await this.backing.softDeleteMessage(input);
+    await this.invalidate(input.conversationId);
+  }
+
+  // Pass-through methods (no caching benefit)
+  async createConversation(input: Parameters<ConversationStore['createConversation']>[0]) {
+    return this.backing.createConversation(input);
+  }
+
+  async getMessages(input: Parameters<ConversationStore['getMessages']>[0]) {
+    return this.backing.getMessages(input);
+  }
+
+  async listConversations(input: Parameters<ConversationStore['listConversations']>[0]) {
+    return this.backing.listConversations(input);
+  }
+
+  private async invalidate(conversationId: string): Promise<void> {
+    try {
+      await this.redis.del(this.cacheKey(conversationId));
+    } catch {
+      // Ignore invalidation errors
+    }
+  }
+}
+
+// =============================================================================
+// Factory
+// =============================================================================
+
+export interface ConversationStoreFactoryOptions {
+  supabase?: SupabaseLikeClient;
+  supabaseInternal?: SupabaseLikeClient;
+  redis?: RedisLikeClient;
+  cacheTtlSeconds?: number;
+  enableCaching?: boolean; // Default: false (opt-in)
+}
+
+export function createConversationStore(
+  options: ConversationStoreFactoryOptions
+): ConversationStore {
+  if (!options.supabase) {
+    return new InMemoryConversationStore();
+  }
+
+  const supabaseStore = new SupabaseConversationStore(
+    options.supabase,
+    options.supabaseInternal
+  );
+
+  // Caching is opt-in for ConversationStore
+  if (options.enableCaching && options.redis) {
+    return new CachingConversationStore(supabaseStore, options.redis, {
+      ttlSeconds: options.cacheTtlSeconds ?? 60,
+    });
+  }
+
+  return supabaseStore;
 }

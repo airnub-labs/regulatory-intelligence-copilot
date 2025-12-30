@@ -43,9 +43,21 @@ export {
   GeminiProviderClient,
 } from './llmRouter.js';
 
+// Policy Stores
+export {
+  SupabasePolicyStore,
+  CachingPolicyStore,
+  createPolicyStore,
+  type SupabaseLikeClient,
+  type RedisLikeClient,
+  type CachingPolicyStoreOptions,
+  type PolicyStoreConfig,
+} from './policyStores.js';
+
 // Factory
 export {
   createDefaultLlmRouter,
+  type CreateDefaultLlmRouterOptions,
 } from './llmRouterFactory.js';
 
 // Egress Client

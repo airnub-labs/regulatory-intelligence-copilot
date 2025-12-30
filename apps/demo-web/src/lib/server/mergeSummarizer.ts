@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createDefaultLlmRouter } from '@reg-copilot/reg-intel-core';
+import { getLlmRouter, isLlmRouterAvailable } from './llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { PathAwareMessage, ConversationPath } from '@reg-copilot/reg-intel-conversations';
 
@@ -106,10 +106,10 @@ export async function generateMergeSummary(
     };
   }
 
-  // Try to create LLM router - may fail if no API keys configured
+  // Try to get LLM router - may fail if no API keys configured
   let router;
   try {
-    router = createDefaultLlmRouter();
+    router = getLlmRouter();
   } catch (error) {
     logger.warn({ err: error }, 'LLM router not available');
     return {
@@ -179,10 +179,5 @@ ${branchContent}
  * Check if LLM is available for merge summarization
  */
 export function isMergeSummarizerAvailable(): boolean {
-  try {
-    createDefaultLlmRouter();
-    return true;
-  } catch {
-    return false;
-  }
+  return isLlmRouterAvailable();
 }
