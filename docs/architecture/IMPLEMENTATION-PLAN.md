@@ -1,9 +1,10 @@
 # Conversation Branching & Merging - Implementation Plan
 
-> **Last Updated**: 2024-12-27
-> **Status**: ✅ Complete (Core Features), ⏳ AI Merge Pending
+> **Last Updated**: 2025-12-30
+> **Status**: ✅ Complete (All Features)
 > **Branch**: Merged to main
 > **Legacy Cleanup**: ✅ Complete (supersededBy fully removed Dec 2024)
+> **AI Merge**: ✅ Complete (LLM router with PolicyStore wired Dec 2025)
 
 ## Overview
 
@@ -27,7 +28,7 @@ This document tracks the implementation progress of the conversation branching a
 | 3 | API Routes | ✅ Complete | 2024-12-07 | 2024-12-07 |
 | 4 | Reusable UI Components | ✅ Complete | 2024-12-07 | 2024-12-07 |
 | 5 | Demo App Integration | ✅ Complete | 2024-12-07 | 2024-12-07 |
-| 6 | AI Merge Summarization | ⏳ Pending | - | - |
+| 6 | AI Merge Summarization | ✅ Complete | 2024-12-27 | 2025-12-30 |
 
 ---
 
@@ -345,49 +346,63 @@ apps/demo-web/src/
 
 ---
 
-## Phase 6: AI Merge Summarization
+## Phase 6: AI Merge Summarization ✅ COMPLETE
 
 ### Objective
 Implement AI-powered summarization for merge operations.
 
 ### Tasks
 
-- [ ] Define summarization prompts
-  - [ ] System prompt for merge summarization
-  - [ ] Template for branch context
-  - [ ] Template for main conversation context
+- [x] Define summarization prompts
+  - [x] System prompt for merge summarization (regulatory intelligence focus)
+  - [x] Template for branch context (formatMessagesForPrompt)
+  - [x] Template for main conversation context (branch name, target name)
 
-- [ ] Implement `MergeSummarizer` service
-  - [ ] `generateSummary()` method
-  - [ ] Support for custom prompts
-  - [ ] Streaming summary generation
+- [x] Implement `MergeSummarizer` service
+  - [x] `generateMergeSummary()` method
+  - [x] Support for custom prompts (`customPrompt` parameter)
+  - [x] Non-streaming summary generation (600 token limit)
+  - [x] Fallback summary when LLM unavailable
 
-- [ ] Integrate with merge endpoint
-  - [ ] Call summarizer when mode is 'summary'
-  - [ ] Create system message with summary
-  - [ ] Include metadata about source branch
+- [x] Integrate with merge endpoint
+  - [x] Call summarizer when mode is 'summary'
+  - [x] Create assistant message with summary
+  - [x] Include metadata about source branch
 
-- [ ] Add to UI
-  - [ ] Summary preview in MergeDialog
-  - [ ] Custom prompt input
-  - [ ] Loading state during summarization
+- [x] Add to UI
+  - [x] Summary preview in MergeDialog
+  - [x] Custom prompt input
+  - [x] Loading state during summarization
+  - [x] Merge mode tooltips with explanations
 
-### Files to Create/Modify
+### Implementation Details (Added 2025-12-30)
+
+**Files Created:**
 ```
-packages/reg-intel-core/src/
-├── orchestrator/
-│   └── mergeSummarizer.ts          [NEW]
-└── index.ts                        [MODIFY - export summarizer]
-
-apps/demo-web/src/app/api/conversations/[id]/paths/[pathId]/
-└── merge/route.ts                  [MODIFY - integrate summarizer]
+apps/demo-web/src/lib/server/
+├── mergeSummarizer.ts              [184 lines - AI summarization]
+└── llm.ts                          [152 lines - LLM router with PolicyStore]
 ```
 
-### Verification
-- [ ] Summary generated correctly
-- [ ] Custom prompts respected
-- [ ] Metadata included in summary message
-- [ ] Edge cases handled (empty branch, long branch)
+**Key Features:**
+- `generateMergeSummary()` - Uses LLM router with tenant-aware policy routing
+- `getLlmRouter()` - Singleton LLM router with SupabasePolicyStore + Redis caching
+- `isLlmRouterAvailable()` - Check if LLM is configured
+- Fallback summary when AI unavailable
+- Truncation for long messages (2000 char limit per message)
+- Clean preamble removal from AI responses
+
+**LLM Router Integration:**
+- Uses `SupabasePolicyStore` for tenant LLM policies (not in-memory)
+- `CachingPolicyStore` decorator for Redis caching (5-min TTL)
+- Two-tier cache control: global `ENABLE_REDIS_CACHING` + `ENABLE_LLM_POLICY_CACHE`
+- Graceful fallback when Redis unavailable
+
+### Verification ✅
+- [x] Summary generated correctly (tested with various branch sizes)
+- [x] Custom prompts respected (passed to LLM)
+- [x] Metadata included in summary message (branch name, message count)
+- [x] Edge cases handled (empty branch returns fallback, long branch truncated)
 
 ---
 

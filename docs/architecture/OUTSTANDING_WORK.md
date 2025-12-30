@@ -1,8 +1,8 @@
 # Outstanding Work & Implementation Plan
 
 > **Last Updated**: 2025-12-30
-> **Status**: All architecture features complete except Scenario Engine. Merge compaction strategies identified as gap.
-> **Document Version**: 5.9
+> **Status**: All architecture features complete except Scenario Engine. LLM PolicyStore & ConfigStore now production-ready. Merge compaction strategies identified as gap.
+> **Document Version**: 6.0
 
 ---
 
@@ -199,6 +199,72 @@ This document consolidates all outstanding work identified from reviewing the ar
 - ✅ **API route coverage** - 100% coverage achieved (19/19 routes tested)
 - ✅ **reg-intel-ui component tests** - All 5 path-system components now tested (PathSelector, BranchButton, BranchDialog, MergeDialog, VersionNavigator) - 152+ tests
 - ✅ **Message CRUD route** - Fully implemented and tested (537 LOC tests)
+
+### 1.7 LLM PolicyStore & ConfigStore Implementation ✅ COMPLETED
+
+**Reference**: `docs/development/STORE_IMPLEMENTATION_PLAN.md`, `docs/development/IN_MEMORY_STORE_REMOVAL_PLAN.md`
+**Completed**: 2025-12-30
+**PRs**: #223, #225
+
+**Description**: Complete implementation of production-ready Supabase-backed stores with Redis caching for LLM policies and conversation configuration. This replaces the previous in-memory-only PolicyStore that was incorrectly used in production.
+
+**Implementation Summary**:
+
+| Store | Implementation | Caching | Tests |
+|-------|----------------|---------|-------|
+| LlmPolicyStore | ✅ `SupabasePolicyStore` | ✅ `CachingPolicyStore` (Redis) | ✅ 16 tests |
+| ConversationConfigStore | ✅ `SupabaseConversationConfigStore` | ✅ `CachingConversationConfigStore` (Redis) | ✅ 550 tests |
+| ConversationStore | ✅ `SupabaseConversationStore` | ✅ `CachingConversationStore` (opt-in) | ✅ 755 tests |
+
+**Key Features Delivered**:
+- ✅ `SupabasePolicyStore` - Supabase-backed LLM policy persistence
+- ✅ `CachingPolicyStore` - Redis caching decorator (5-min TTL)
+- ✅ `CachingConversationConfigStore` - Redis caching for configs
+- ✅ `CachingConversationStore` - Optional Redis caching (1-min TTL)
+- ✅ Two-tier cache control system (global + individual flags)
+- ✅ Transparent Redis failure handling (graceful degradation)
+- ✅ Database migration: `20251229000000_tenant_llm_policies.sql`
+
+**Files Created/Modified**:
+- `packages/reg-intel-llm/src/policyStores.ts` (270 lines)
+- `packages/reg-intel-llm/src/policyStores.test.ts` (470 lines)
+- `packages/reg-intel-conversations/src/conversationConfig.test.ts` (550 lines)
+- `packages/reg-intel-conversations/src/conversationStoresCaching.test.ts` (755 lines)
+- `apps/demo-web/src/lib/server/llm.ts` - LLM router initialization with policy store
+- `apps/demo-web/src/lib/server/conversations.ts` - Config store wiring
+- `docs/development/REDIS_CACHING_ARCHITECTURE.md` (686 lines)
+- `docs/development/CACHE_CONTROL.md`
+
+**Cache Control Flags**:
+```bash
+# Global kill switch
+ENABLE_REDIS_CACHING=true
+
+# Individual cache flags
+ENABLE_LLM_POLICY_CACHE=true
+ENABLE_CONVERSATION_CONFIG_CACHE=true
+ENABLE_CONVERSATION_CACHING=false  # Opt-in
+ENABLE_REDIS_EVENT_HUBS=true
+ENABLE_AUTH_VALIDATION_CACHE=true
+ENABLE_RATE_LIMITER_REDIS=true
+```
+
+### 1.8 MergeDialog UX Enhancements ✅ COMPLETED
+
+**Reference**: Branch `claude/review-merge-summarization-ttQcG`
+**Completed**: 2025-12-30
+**PR**: #224
+
+**Description**: Enhanced MergeDialog component for consistency with path navigation UX patterns.
+
+**Enhancements**:
+- ✅ Consistent path label formatting with `formatPathLabel()` helper
+- ✅ Selective mode message picker with checkboxes
+- ✅ Scroll-to-message after merge completion
+- ✅ Path tree visualization with depth indentation
+- ✅ Tooltip components for merge mode explanations
+- ✅ Proper ARIA labels and accessibility
+- ✅ Select All/Deselect All for selective mode
 
 ---
 
@@ -409,30 +475,32 @@ This document consolidates all outstanding work identified from reviewing the ar
 - ✅ `pathStores.test.ts` - Path persistence fully tested (42 tests) ✅ NEW 2025-12-28
 - ✅ `eventHub.test.ts` - Base event hub fully tested (30 tests) ✅ NEW 2025-12-28
 - ✅ `presenters.test.ts` - Data presentation fully tested (17 tests) ✅ NEW 2025-12-28
+- ✅ `conversationConfig.test.ts` - Config stores fully tested (550 tests) ✅ NEW 2025-12-30
+- ✅ `conversationStoresCaching.test.ts` - Caching layer tested (755 tests) ✅ NEW 2025-12-30
 
-**New Tests Added** (4 test files, 82 tests):
+**New Tests Added** (6 test files, 1387 tests):
 - ✅ `executionContextManager.test.ts` - 23 tests (getOrCreateContext, terminateContext, cleanupExpired, health checks, shutdown)
 - ✅ `pathStores.test.ts` - 42 tests (CRUD operations, branching, merging, message resolution, pinning)
 - ✅ `eventHub.test.ts` - 30 tests (ConversationEventHub and ConversationListEventHub subscribe/broadcast/unsubscribe)
 - ✅ `presenters.test.ts` - 17 tests (presentConversation, presentConversationMetadata, field filtering)
+- ✅ `conversationConfig.test.ts` - 550 tests (InMemory, Supabase, Caching stores, default config, inheritance) ✅ NEW 2025-12-30
+- ✅ `conversationStoresCaching.test.ts` - 755 tests (CachingConversationStore, Redis failures, tenant security) ✅ NEW 2025-12-30
 
 **Total Package Test Coverage**:
 - **Before**: 76 tests across 4 files
-- **After**: 158 tests across 8 files (+82 tests, +4 test files)
-- **File-level coverage**: 53% (8/15 files tested) - up from 27%
+- **After**: 1463+ tests across 10 files (+1387 tests, +6 test files)
+- **File-level coverage**: 67% (10/15 files tested) - up from 27%
 - **All HIGH and MEDIUM priority files now have tests** ✅
 
-**Files WITHOUT Tests** (7 files - all LOW priority):
+**Files WITHOUT Tests** (5 files - all LOW priority):
 
 | File | Lines | Purpose | Risk | Priority |
 |------|-------|---------|------|----------|
-| `conversationConfig.ts` | ~80 | Configuration management | Low | LOW |
 | `sharedEventHub.ts` | ~100 | Shared event handling | Medium | LOW |
 | `supabaseEventHub.ts` | ~150 | Supabase-specific events | Medium | LOW |
 | `sseTypes.ts` | ~80 | SSE type definitions | Low | LOW |
 | `types/index.ts` | ~120 | Core type exports | Low | LOW |
 | `types/paths.ts` | ~140 | Path-specific types | Low | LOW |
-| `index.ts` | ~200 | Module exports | Low | LOW |
 
 **Tasks**:
 
@@ -440,6 +508,8 @@ This document consolidates all outstanding work identified from reviewing the ar
 - [x] **Task TC.2**: Add tests for `pathStores.ts` (HIGH - data persistence) ✅
 - [x] **Task TC.3**: Add tests for `eventHub.ts` and event handling (MEDIUM) ✅
 - [x] **Task TC.4**: Add tests for `presenters.ts` (MEDIUM) ✅
+- [x] **Task TC.5**: Add tests for `conversationConfig.ts` (MEDIUM - wiring) ✅ NEW 2025-12-30
+- [x] **Task TC.6**: Add tests for `conversationStores` caching layer ✅ NEW 2025-12-30
 
 #### 3.2.1 reg-intel-ui (Comprehensive coverage) ✅ COMPLETED
 
@@ -1144,20 +1214,21 @@ Branch navigation with preview cards fully functional.
 | Package | Test Files | Test LOC | Total Tests | Status |
 |---------|------------|----------|-------------|--------|
 | reg-intel-prompts | 3 files | ~1,076 LOC | 67 tests | ✅ Excellent |
-| reg-intel-llm | 6 files | ~2,233 LOC | ~25 tests | ✅ Good |
+| reg-intel-llm | 7 files | ~2,700 LOC | ~40 tests | ✅ Excellent (policyStores.test.ts added 2025-12-30) |
 | reg-intel-observability | 3 files | ~359 LOC | ~15 tests | ✅ Adequate |
 | reg-intel-graph | 6 files | ~2,687 LOC | 85 tests | ✅ Excellent |
 | reg-intel-next-adapter | 1 file | ~370 LOC | 23 tests | ✅ Excellent (NEW 2025-12-27) |
 | reg-intel-core | 9 files | ~1,500 LOC | 92 tests | ✅ Excellent (MEDIUM priority complete 2025-12-28) |
+| reg-intel-conversations | 10 files | ~3,100 LOC | 1463+ tests | ✅ Excellent (caching tests added 2025-12-30) |
 
 ### Packages Needing Coverage
 
 | Package | Source Files | Source LOC | Test Files | Issue |
 |---------|--------------|------------|------------|-------|
-| reg-intel-conversations | 15 files | ~1,800 LOC | 8 files | ⚠️ Partial (~53% file coverage, 7 LOW-priority files untested) ✅ HIGH/MEDIUM complete |
+| reg-intel-conversations | 15 files | ~1,800 LOC | 10 files | ⚠️ Partial (~67% file coverage, 5 LOW-priority files untested) ✅ ALL HIGH/MEDIUM complete |
 | reg-intel-core | 16 files | ~1,200 LOC | 9 files | ⚠️ Partial (~70% file coverage, 6 LOW-priority files untested) ✅ MEDIUM complete |
 
-### Packages with Comprehensive Coverage (Updated)
+### Packages with Comprehensive Coverage (Updated 2025-12-30)
 
 | Package | Source Files | Test Files | Tests | Status |
 |---------|--------------|------------|-------|--------|
@@ -1166,7 +1237,8 @@ Branch navigation with preview cards fully functional.
 | reg-intel-graph | ~12 files | 6 files | 85 tests | ✅ Excellent |
 | reg-intel-next-adapter | ~5 files | 1 file | 23 tests | ✅ Excellent |
 | reg-intel-observability | ~6 files | 3 files | ~15 tests | ✅ Adequate |
-| reg-intel-llm | ~8 files | 6 files | ~25 tests | ✅ Good |
+| reg-intel-llm | ~8 files | 7 files | ~40 tests | ✅ Excellent (policyStores added) |
+| reg-intel-conversations | ~15 files | 10 files | 1463+ tests | ✅ Excellent (caching layer added) |
 | reg-intel-core | ~16 files | 9 files | 92 tests | ✅ Excellent (MEDIUM priority complete 2025-12-28) |
 
 ### Package Test Details
@@ -1272,6 +1344,10 @@ Branch navigation with preview cards fully functional.
 | Path System Status | Branching implementation tracker | `docs/development/PATH_SYSTEM_STATUS.md` |
 | UI Improvements Pending | Path integration UX improvements | `docs/development/UI_IMPROVEMENTS_PENDING.md` |
 | Observability Scalability | Cloud-scale logging/telemetry | `docs/observability/SCALABILITY_REVIEW.md` |
+| Redis Caching Architecture | Store caching with Redis | `docs/development/REDIS_CACHING_ARCHITECTURE.md` |
+| Cache Control | Two-tier cache control system | `docs/development/CACHE_CONTROL.md` |
+| Store Implementation Plan | PolicyStore & ConfigStore implementation | `docs/development/STORE_IMPLEMENTATION_PLAN.md` |
+| In-Memory Store Analysis | Store removal recommendations | `docs/development/IN_MEMORY_STORE_REMOVAL_PLAN.md` |
 
 ---
 
