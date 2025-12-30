@@ -73,7 +73,17 @@ export interface GraphNode {
     | 'Rate'
     | 'Form'
     | 'PRSIClass'
-    | 'LifeEvent';
+    | 'LifeEvent'
+    | 'Penalty'
+    | 'LegalEntity'
+    | 'TaxCredit'
+    | 'RegulatoryBody'
+    | 'AssetClass'
+    | 'MeansTest'
+    | 'TaxYear'
+    | 'NIClass'
+    | 'BenefitCap'
+    | 'CoordinationRule';
   properties: Record<string, unknown>;
 }
 

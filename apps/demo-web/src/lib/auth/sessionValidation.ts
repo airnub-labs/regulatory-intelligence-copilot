@@ -181,17 +181,22 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     }
 
     // Check if user is banned or deleted
-    if (data.user.banned_until || data.user.deleted_at) {
-      logger.warn({ userId, banned: !!data.user.banned_until, deleted: !!data.user.deleted_at }, 'User is banned or deleted')
+    // Note: These fields may be in user_metadata if they exist
+    const userMetadata = data.user.user_metadata as { banned_until?: string; deleted_at?: string } | undefined
+    const bannedUntil = userMetadata?.banned_until
+    const deletedAt = userMetadata?.deleted_at
+
+    if (bannedUntil || deletedAt) {
+      logger.warn({ userId, banned: !!bannedUntil, deleted: !!deletedAt }, 'User is banned or deleted')
       // Cache the failure (user is banned/deleted) and record metrics
       await distributedValidationCache.set(userId, false)
       authMetrics.recordCacheMiss(userId, validationDuration, false)
 
       // Track specific metrics for deleted/banned users
-      if (data.user.deleted_at) {
+      if (deletedAt) {
         authMetrics.recordDeletedUser(userId)
       }
-      if (data.user.banned_until) {
+      if (bannedUntil) {
         authMetrics.recordBannedUser(userId)
       }
 

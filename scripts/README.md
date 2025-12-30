@@ -5,6 +5,9 @@ This directory contains utility scripts for the Regulatory Intelligence Copilot.
 ## Quick Start
 
 ```bash
+# Setup Memgraph indices (run this first for optimal performance)
+pnpm setup:indices
+
 # Seed basic Irish regulatory data
 pnpm seed:graph
 
@@ -14,6 +17,14 @@ pnpm seed:jurisdictions
 # Seed everything
 pnpm seed:all
 ```
+
+## Recommended Setup Order
+
+For a new Memgraph instance:
+
+1. **Create indices** - `pnpm setup:indices` (optimal query performance)
+2. **Seed graph data** - `pnpm seed:all` (regulatory data)
+3. **Verify** - Check Memgraph Lab at http://localhost:7444
 
 ## Graph Seeding (`seed-graph.ts`)
 
@@ -295,3 +306,176 @@ pnpm seed:all
 ```
 
 This runs `seed-graph.ts` first (Irish benefits/conditions), then `seed-special-jurisdictions.ts` (cross-border framework).
+
+---
+
+## Memgraph Index Setup (`setup-memgraph-indices.ts`)
+
+Creates comprehensive indices in Memgraph for optimal query performance. This script implements the indexing strategy documented in `docs/architecture/GRAPH_ID_RESOLUTION_IMPLEMENTATION.md` (Phase 4).
+
+### Why Indices Matter
+
+Indices provide **10-1000x performance improvements** for graph queries:
+
+| Query Type | Without Indices | With Indices | Improvement |
+|------------|----------------|--------------|-------------|
+| ID lookup | O(n) scan | O(1) hash | 100-1000x |
+| Timestamp filter | O(n) scan | O(log n) index | 10-100x |
+| Property filter | O(n) scan | O(log n) index | 10-100x |
+| Keyword search | O(n) scan | O(log n) index | 10-100x |
+
+### Usage
+
+```bash
+# Using default connection (bolt://localhost:7687)
+pnpm setup:indices
+
+# With custom connection
+MEMGRAPH_URI=bolt://your-host:7687 pnpm setup:indices
+
+# With authentication
+MEMGRAPH_URI=bolt://your-host:7687 \
+MEMGRAPH_USERNAME=admin \
+MEMGRAPH_PASSWORD=secret \
+pnpm setup:indices
+```
+
+### What Gets Created
+
+The script creates **41 indices** across 4 categories:
+
+#### 1. Primary ID Indices (24 indices)
+Enables O(1) ID-based lookups for all node types:
+```cypher
+CREATE INDEX ON :Benefit(id);
+CREATE INDEX ON :Relief(id);
+CREATE INDEX ON :Section(id);
+CREATE INDEX ON :Jurisdiction(id);
+CREATE INDEX ON :ProfileTag(id);
+...
+```
+
+#### 2. Timestamp Indices (4 indices)
+Critical for GraphChangeDetector timestamp-based queries:
+```cypher
+CREATE INDEX ON :Benefit(updated_at);
+CREATE INDEX ON :Relief(updated_at);
+CREATE INDEX ON :Section(updated_at);
+CREATE INDEX ON :Obligation(updated_at);
+```
+
+#### 3. Property Indices (7 indices)
+Speeds up common filter operations:
+```cypher
+CREATE INDEX ON :TaxYear(year);
+CREATE INDEX ON :TaxYear(jurisdiction);
+CREATE INDEX ON :Rate(category);
+CREATE INDEX ON :Threshold(unit);
+...
+```
+
+#### 4. Search Indices (6 indices)
+Optimizes keyword searches:
+```cypher
+CREATE INDEX ON :Benefit(label);
+CREATE INDEX ON :Benefit(name);
+CREATE INDEX ON :Relief(label);
+CREATE INDEX ON :Relief(name);
+...
+```
+
+### Output
+
+The script provides detailed progress logging:
+
+```
+========================================
+Memgraph Index Setup
+========================================
+Connecting to: bolt://localhost:7687
+
+✓ Connected to Memgraph successfully
+
+Creating Primary ID Indices...
+✓ CREATE INDEX ON :Benefit(id)
+✓ CREATE INDEX ON :Relief(id)
+...
+
+Creating Timestamp Indices...
+✓ CREATE INDEX ON :Benefit(updated_at)
+...
+
+Creating Property Indices...
+✓ CREATE INDEX ON :TaxYear(year)
+...
+
+Creating Search Indices...
+✓ CREATE INDEX ON :Benefit(label)
+...
+
+========================================
+✓ Index setup complete!
+  Total indices: 41
+========================================
+```
+
+### Idempotence
+
+The script is **idempotent** - safe to run multiple times. If an index already exists, it will be skipped with a warning:
+
+```
+⚠ CREATE INDEX ON :Benefit(id) - already exists (skipped)
+```
+
+### Verification
+
+After running the script, verify indices were created in Memgraph Lab:
+
+```cypher
+SHOW INDEX INFO;
+```
+
+You should see all 41 indices listed.
+
+### Alternative: Direct Cypher Script
+
+You can also run the raw Cypher script directly:
+
+```bash
+# Using mgconsole
+mgconsole < scripts/memgraph-indices.cypher
+
+# Or copy-paste into Memgraph Lab query editor at http://localhost:7444
+```
+
+### Troubleshooting
+
+**Connection Failed**
+```
+Error: Could not connect to Memgraph
+```
+**Solution**: Ensure Memgraph is running:
+```bash
+docker ps | grep memgraph
+```
+
+**Index Already Exists**
+```
+⚠ CREATE INDEX ON :Benefit(id) - already exists (skipped)
+```
+**Solution**: This is normal and safe. The index already exists.
+
+### Performance Impact
+
+Expected performance improvements after creating indices:
+
+- **Initial Graph Load** (`/api/graph`): 10-100x faster ID lookups
+- **Change Detection** (SSE): 10-100x faster timestamp queries
+- **Keyword Search**: 10-100x faster text searches
+- **Filtered Queries**: 10-100x faster WHERE clause evaluation
+
+### See Also
+
+- **Full Documentation**: `scripts/README-INDICES.md`
+- **Implementation Plan**: `docs/architecture/GRAPH_ID_RESOLUTION_IMPLEMENTATION.md`
+- **Memgraph Docs**: https://memgraph.com/docs/fundamentals/indexes

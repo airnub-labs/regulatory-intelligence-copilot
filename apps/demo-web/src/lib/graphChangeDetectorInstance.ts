@@ -19,6 +19,31 @@ import { createLogger } from '@reg-copilot/reg-intel-observability';
 const logger = createLogger('GraphChangeDetectorInstance');
 
 let detectorInstance: GraphChangeDetector | null = null;
+
+/**
+ * Parse a node object into GraphNode
+ */
+function parseNode(node: unknown): GraphContext['nodes'][0] | null {
+  if (!node || typeof node !== 'object') return null;
+
+  const n = node as {
+    id?: unknown;
+    labels?: unknown[];
+    properties?: Record<string, unknown>;
+  };
+
+  if (!n.labels || !Array.isArray(n.labels) || n.labels.length === 0) return null;
+
+  const props = n.properties || {};
+  const semanticId = props.id as string || String(n.id);
+
+  return {
+    id: semanticId,
+    label: props.label as string || props.name as string || String(n.labels[0]),
+    type: n.labels[0] as GraphContext['nodes'][0]['type'],
+    properties: props,
+  };
+}
 const MAX_PATCH_NODE_CHANGES = 250;
 const MAX_PATCH_EDGE_CHANGES = 500;
 const MAX_PATCH_TOTAL_CHANGES = 700;
@@ -89,6 +114,7 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
 /**
  * Timestamp-based query function for efficient change detection
  * Only fetches nodes that have been updated since the given timestamp
+ * Uses Option A: Returns enriched relationships with semantic IDs
  */
 async function queryGraphByTimestamp(
   filter: ChangeFilter,
@@ -113,7 +139,7 @@ async function queryGraphByTimestamp(
     // Build jurisdiction filter
     const jurisdictionList = jurisdictions.map(j => `'${j}'`).join(', ');
 
-    // Query nodes updated since timestamp
+    // Query nodes updated since timestamp with enriched relationships
     const query = `
       MATCH (p:ProfileTag {id: '${profileType}'})
       MATCH (j:Jurisdiction)
@@ -126,12 +152,18 @@ async function queryGraphByTimestamp(
           AND datetime(n.updated_at) >= datetime('${sinceIso}')
         )
       OPTIONAL MATCH (n)-[r:CITES|REQUIRES|LIMITED_BY|EXCLUDES|MUTUALLY_EXCLUSIVE_WITH|LOOKBACK_WINDOW|LOCKS_IN_FOR_PERIOD]->(m)
-      RETURN n, collect(r) AS rels, collect(m) AS neighbours
+      WITH n,
+           CASE WHEN r IS NOT NULL AND m IS NOT NULL
+                THEN {sourceId: n.id, targetId: m.id, type: type(r), properties: properties(r)}
+                ELSE NULL
+           END AS enrichedRel,
+           m
+      RETURN n, collect(enrichedRel) AS enrichedRels, collect(m) AS neighbours
     `;
 
     const result = await graphClient.executeCypher(query);
 
-    // Parse result into GraphContext format
+    // Parse result into GraphContext format with enriched relationships
     const nodes: GraphContext['nodes'] = [];
     const edges: GraphContext['edges'] = [];
     const seenNodes = new Set<string>();
@@ -139,37 +171,44 @@ async function queryGraphByTimestamp(
 
     if (result && Array.isArray(result)) {
       for (const row of result) {
-        // Process nodes - iterate over values only
-        for (const value of Object.values(row)) {
-          if (value && typeof value === 'object') {
-            const v = value as Record<string, unknown>;
+        // Parse node
+        const n = row.n;
+        if (n && typeof n === 'object') {
+          const node = parseNode(n);
+          if (node && !seenNodes.has(node.id)) {
+            seenNodes.add(node.id);
+            nodes.push(node);
+          }
+        }
 
-            // Check if it's a node
-            if (v.id && v.labels && Array.isArray(v.labels)) {
-              const nodeId = String(v.id);
-              if (!seenNodes.has(nodeId)) {
-                seenNodes.add(nodeId);
-                const props = (v.properties || {}) as Record<string, unknown>;
-                nodes.push({
-                  id: props.id as string || nodeId,
-                  label: props.label as string || props.name as string || String(v.labels[0]),
-                  type: v.labels[0] as GraphContext['nodes'][0]['type'],
-                  properties: props,
-                });
-              }
-            }
-
-            // Check if it's an edge/relationship
-            if (v.type && v.start && v.end) {
-              const edgeKey = `${v.start}-${v.type}-${v.end}`;
+        // Parse enriched relationships
+        const enrichedRels = row.enrichedRels;
+        if (Array.isArray(enrichedRels)) {
+          for (const enriched of enrichedRels) {
+            if (enriched && enriched.sourceId && enriched.targetId && enriched.type) {
+              const edgeKey = `${enriched.sourceId}-${enriched.type}-${enriched.targetId}`;
               if (!seenEdges.has(edgeKey)) {
                 seenEdges.add(edgeKey);
                 edges.push({
-                  source: String(v.start),
-                  target: String(v.end),
-                  type: String(v.type),
-                  properties: (v.properties || {}) as Record<string, unknown>,
+                  source: enriched.sourceId,
+                  target: enriched.targetId,
+                  type: enriched.type,
+                  properties: enriched.properties || {},
                 });
+              }
+            }
+          }
+        }
+
+        // Parse neighbour nodes
+        const neighbours = row.neighbours;
+        if (Array.isArray(neighbours)) {
+          for (const neighbour of neighbours) {
+            if (neighbour) {
+              const node = parseNode(neighbour);
+              if (node && !seenNodes.has(node.id)) {
+                seenNodes.add(node.id);
+                nodes.push(node);
               }
             }
           }
