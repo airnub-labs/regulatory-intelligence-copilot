@@ -11,9 +11,12 @@ import {
   SupabaseConversationContextStore,
   SupabaseConversationStore,
   SupabaseConversationPathStore,
+  createConversationConfigStore,
+  type ConversationConfigStore,
 } from '@reg-copilot/reg-intel-conversations';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
+import { Redis } from '@upstash/redis';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
@@ -125,9 +128,42 @@ export const conversationPathStore = supabaseClient
   ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationPathStore();
 
-// Configure event hubs with Redis support for distributed SSE
+// Configure Redis for caching (shared with event hubs)
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
+
+// Create Redis client for config caching
+const redisClient =
+  redisUrl && redisToken
+    ? new Redis({
+        url: redisUrl,
+        token: redisToken,
+      })
+    : null;
+
+// Create conversation config store with caching
+export const conversationConfigStore: ConversationConfigStore = createConversationConfigStore({
+  supabase: supabaseInternalClient ?? undefined,
+  redis: redisClient ?? undefined,
+  cacheTtlSeconds: 300, // 5 minutes
+  logger,
+});
+
+// Log which config store implementation is being used
+if (supabaseInternalClient) {
+  if (redisClient) {
+    logger.info(
+      { hasRedis: true, cacheTtl: 300 },
+      'Using CachingConversationConfigStore (Supabase + Redis)'
+    );
+  } else {
+    logger.info({ hasRedis: false }, 'Using SupabaseConversationConfigStore (no caching)');
+  }
+} else {
+  logger.warn('Using InMemoryConversationConfigStore (not suitable for production)');
+}
+
+// Configure event hubs with Redis support for distributed SSE
 
 let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
 let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
