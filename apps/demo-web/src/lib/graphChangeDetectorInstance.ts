@@ -21,86 +21,28 @@ const logger = createLogger('GraphChangeDetectorInstance');
 let detectorInstance: GraphChangeDetector | null = null;
 
 /**
- * Recursively collect nodes from a value and build ID mapping
+ * Parse a node object into GraphNode
  */
-function collectNodesRecursively(
-  value: unknown,
-  nodes: GraphContext['nodes'],
-  seenNodes: Set<string>,
-  internalToSemanticId: Map<string, string>
-): void {
-  if (!value || typeof value !== 'object') return;
+function parseNode(node: unknown): GraphContext['nodes'][0] | null {
+  if (!node || typeof node !== 'object') return null;
 
-  const v = value as Record<string, unknown>;
+  const n = node as {
+    id?: unknown;
+    labels?: unknown[];
+    properties?: Record<string, unknown>;
+  };
 
-  // Check if it's a node (has id and labels)
-  if (v.id && v.labels && Array.isArray(v.labels)) {
-    const internalId = String(v.id);
-    const props = (v.properties || {}) as Record<string, unknown>;
-    const semanticId = props.id as string || internalId;
+  if (!n.labels || !Array.isArray(n.labels) || n.labels.length === 0) return null;
 
-    if (!seenNodes.has(semanticId)) {
-      seenNodes.add(semanticId);
-      nodes.push({
-        id: semanticId,
-        label: props.label as string || props.name as string || String(v.labels[0]),
-        type: v.labels[0] as GraphContext['nodes'][0]['type'],
-        properties: props,
-      });
+  const props = n.properties || {};
+  const semanticId = props.id as string || String(n.id);
 
-      // Build mapping from internal ID to semantic ID for relationship resolution
-      internalToSemanticId.set(internalId, semanticId);
-    }
-  }
-
-  // Handle arrays (collected nodes, neighbours, etc.)
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectNodesRecursively(item, nodes, seenNodes, internalToSemanticId);
-    }
-  }
-}
-
-/**
- * Recursively collect edges from a value, resolving internal IDs to semantic IDs
- */
-function collectEdgesRecursively(
-  value: unknown,
-  edges: GraphContext['edges'],
-  seenEdges: Set<string>,
-  internalToSemanticId: Map<string, string>
-): void {
-  if (!value || typeof value !== 'object') return;
-
-  const v = value as Record<string, unknown>;
-
-  // Check if it's an edge/relationship (has type, start, end but no labels)
-  if (v.type && v.start && v.end && !v.labels) {
-    const internalStart = String(v.start);
-    const internalEnd = String(v.end);
-
-    // Resolve internal IDs to semantic IDs
-    const sourceId = internalToSemanticId.get(internalStart) ?? internalStart;
-    const targetId = internalToSemanticId.get(internalEnd) ?? internalEnd;
-
-    const edgeKey = `${sourceId}-${v.type}-${targetId}`;
-    if (!seenEdges.has(edgeKey)) {
-      seenEdges.add(edgeKey);
-      edges.push({
-        source: sourceId,
-        target: targetId,
-        type: String(v.type),
-        properties: (v.properties || {}) as Record<string, unknown>,
-      });
-    }
-  }
-
-  // Handle arrays (collected relationships, etc.)
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectEdgesRecursively(item, edges, seenEdges, internalToSemanticId);
-    }
-  }
+  return {
+    id: semanticId,
+    label: props.label as string || props.name as string || String(n.labels[0]),
+    type: n.labels[0] as GraphContext['nodes'][0]['type'],
+    properties: props,
+  };
 }
 const MAX_PATCH_NODE_CHANGES = 250;
 const MAX_PATCH_EDGE_CHANGES = 500;
@@ -172,6 +114,7 @@ async function queryGraphByFilter(filter: ChangeFilter): Promise<GraphContext> {
 /**
  * Timestamp-based query function for efficient change detection
  * Only fetches nodes that have been updated since the given timestamp
+ * Uses Option A: Returns enriched relationships with semantic IDs
  */
 async function queryGraphByTimestamp(
   filter: ChangeFilter,
@@ -196,7 +139,7 @@ async function queryGraphByTimestamp(
     // Build jurisdiction filter
     const jurisdictionList = jurisdictions.map(j => `'${j}'`).join(', ');
 
-    // Query nodes updated since timestamp
+    // Query nodes updated since timestamp with enriched relationships
     const query = `
       MATCH (p:ProfileTag {id: '${profileType}'})
       MATCH (j:Jurisdiction)
@@ -209,32 +152,66 @@ async function queryGraphByTimestamp(
           AND datetime(n.updated_at) >= datetime('${sinceIso}')
         )
       OPTIONAL MATCH (n)-[r:CITES|REQUIRES|LIMITED_BY|EXCLUDES|MUTUALLY_EXCLUSIVE_WITH|LOOKBACK_WINDOW|LOCKS_IN_FOR_PERIOD]->(m)
-      RETURN n, collect(r) AS rels, collect(m) AS neighbours
+      WITH n,
+           CASE WHEN r IS NOT NULL AND m IS NOT NULL
+                THEN {sourceId: n.id, targetId: m.id, type: type(r), properties: properties(r)}
+                ELSE NULL
+           END AS enrichedRel,
+           m
+      RETURN n, collect(enrichedRel) AS enrichedRels, collect(m) AS neighbours
     `;
 
     const result = await graphClient.executeCypher(query);
 
-    // Parse result into GraphContext format
-    // IMPORTANT: We must track a mapping from internal ID to semantic ID
-    // because relationships reference nodes by internal ID, but we use semantic IDs.
+    // Parse result into GraphContext format with enriched relationships
     const nodes: GraphContext['nodes'] = [];
     const edges: GraphContext['edges'] = [];
     const seenNodes = new Set<string>();
     const seenEdges = new Set<string>();
-    const internalToSemanticId = new Map<string, string>();
 
     if (result && Array.isArray(result)) {
-      // First pass: collect all nodes and build ID mapping
       for (const row of result) {
-        for (const value of Object.values(row)) {
-          collectNodesRecursively(value, nodes, seenNodes, internalToSemanticId);
+        // Parse node
+        const n = row.n;
+        if (n && typeof n === 'object') {
+          const node = parseNode(n);
+          if (node && !seenNodes.has(node.id)) {
+            seenNodes.add(node.id);
+            nodes.push(node);
+          }
         }
-      }
 
-      // Second pass: collect all relationships using the ID mapping
-      for (const row of result) {
-        for (const value of Object.values(row)) {
-          collectEdgesRecursively(value, edges, seenEdges, internalToSemanticId);
+        // Parse enriched relationships
+        const enrichedRels = row.enrichedRels;
+        if (Array.isArray(enrichedRels)) {
+          for (const enriched of enrichedRels) {
+            if (enriched && enriched.sourceId && enriched.targetId && enriched.type) {
+              const edgeKey = `${enriched.sourceId}-${enriched.type}-${enriched.targetId}`;
+              if (!seenEdges.has(edgeKey)) {
+                seenEdges.add(edgeKey);
+                edges.push({
+                  source: enriched.sourceId,
+                  target: enriched.targetId,
+                  type: enriched.type,
+                  properties: enriched.properties || {},
+                });
+              }
+            }
+          }
+        }
+
+        // Parse neighbour nodes
+        const neighbours = row.neighbours;
+        if (Array.isArray(neighbours)) {
+          for (const neighbour of neighbours) {
+            if (neighbour) {
+              const node = parseNode(neighbour);
+              if (node && !seenNodes.has(node.id)) {
+                seenNodes.add(node.id);
+                nodes.push(node);
+              }
+            }
+          }
         }
       }
     }
