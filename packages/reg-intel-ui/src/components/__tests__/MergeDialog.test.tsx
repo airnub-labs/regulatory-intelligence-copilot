@@ -150,7 +150,8 @@ describe('MergeDialog', () => {
         />
       );
 
-      expect(screen.getByText(/Unnamed Branch/)).toBeInTheDocument();
+      // Updated to match new label format: "Branch {id.slice(0,6)}"
+      expect(screen.getByText(/Branch path-s/)).toBeInTheDocument();
     });
   });
 
@@ -165,7 +166,7 @@ describe('MergeDialog', () => {
       );
 
       expect(screen.getByText('Merge into')).toBeInTheDocument();
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
 
     it('should show available target paths (excluding source)', async () => {
@@ -177,13 +178,14 @@ describe('MergeDialog', () => {
         />
       );
 
-      const select = screen.getByRole('combobox');
-      expect(select).toBeInTheDocument();
+      const listbox = screen.getByRole('listbox');
+      expect(listbox).toBeInTheDocument();
 
       // Should have options for primary and another branch (not the source)
+      // Updated to match new label format: "Primary" with separate badge
       await waitFor(() => {
-        expect(screen.getByText('Main (primary)')).toBeInTheDocument();
-        expect(screen.getByText('Another Branch')).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: /Primary/i })).toBeInTheDocument();
+        expect(screen.getByRole('option', { name: /Another Branch/i })).toBeInTheDocument();
       });
     });
 
@@ -197,8 +199,8 @@ describe('MergeDialog', () => {
       );
 
       await waitFor(() => {
-        const select = screen.getByRole('combobox') as HTMLSelectElement;
-        expect(select.value).toBe('path-primary');
+        const primaryOption = screen.getByRole('option', { name: /Primary/i });
+        expect(primaryOption).toHaveAttribute('aria-selected', 'true');
       });
     });
   });
@@ -679,8 +681,12 @@ describe('MergeDialog', () => {
         />
       );
 
-      expect(screen.getByRole('combobox')).toBeDisabled();
-      expect(screen.getByRole('checkbox')).toBeDisabled();
+      // Path options should be disabled when merging
+      const pathOptions = screen.getAllByRole('option');
+      pathOptions.forEach((option) => {
+        expect(option).toBeDisabled();
+      });
+      expect(screen.getByRole('checkbox', { name: /Archive/i })).toBeDisabled();
       // Radio buttons should also be disabled
       const radios = screen.getAllByRole('radio');
       radios.forEach((radio) => {
