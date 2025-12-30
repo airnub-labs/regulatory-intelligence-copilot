@@ -12,7 +12,9 @@ import {
   SupabaseConversationStore,
   SupabaseConversationPathStore,
   createConversationConfigStore,
+  createConversationStore,
   type ConversationConfigStore,
+  type ConversationStore,
 } from '@reg-copilot/reg-intel-conversations';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
@@ -116,9 +118,44 @@ if (supabaseClient) {
   logger.info({ mode: normalizeConversationStoreMode }, 'Using in-memory conversation store');
 }
 
-export const conversationStore = supabaseClient
-  ? new SupabaseConversationStore(supabaseClient, supabaseInternalClient ?? undefined)
-  : new InMemoryConversationStore();
+// Configure Redis for caching (shared with event hubs and config store)
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
+
+// Create Redis client for caching
+const redisClient =
+  redisUrl && redisToken
+    ? new Redis({
+        url: redisUrl,
+        token: redisToken,
+      })
+    : null;
+
+// Optional: Enable conversation caching for high-traffic scenarios
+const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING === 'true';
+
+// Create conversation store with optional caching
+export const conversationStore: ConversationStore = createConversationStore({
+  supabase: supabaseClient ?? undefined,
+  supabaseInternal: supabaseInternalClient ?? undefined,
+  redis: ENABLE_CONVERSATION_CACHING ? redisClient ?? undefined : undefined,
+  enableCaching: ENABLE_CONVERSATION_CACHING,
+  cacheTtlSeconds: 60, // 1 minute for active conversations
+});
+
+// Log which conversation store implementation is being used
+if (supabaseClient) {
+  if (ENABLE_CONVERSATION_CACHING && redisClient) {
+    logger.info(
+      { hasRedis: true, cacheTtl: 60 },
+      'Using CachingConversationStore (Supabase + Redis)'
+    );
+  } else {
+    logger.info({ hasRedis: false }, 'Using SupabaseConversationStore (no caching)');
+  }
+} else {
+  logger.warn('Using InMemoryConversationStore (not suitable for production)');
+}
 
 export const conversationContextStore = supabaseClient
   ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient ?? undefined)
@@ -127,19 +164,6 @@ export const conversationContextStore = supabaseClient
 export const conversationPathStore = supabaseClient
   ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient ?? undefined)
   : new InMemoryConversationPathStore();
-
-// Configure Redis for caching (shared with event hubs)
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
-
-// Create Redis client for config caching
-const redisClient =
-  redisUrl && redisToken
-    ? new Redis({
-        url: redisUrl,
-        token: redisToken,
-      })
-    : null;
 
 // Create conversation config store with caching
 export const conversationConfigStore: ConversationConfigStore = createConversationConfigStore({
