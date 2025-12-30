@@ -146,7 +146,6 @@ export class BoltGraphClient implements GraphClient {
             queryType: 'cypher',
             success,
             nodeCount: recordCount,
-            queryHash,
           });
         }
       }
