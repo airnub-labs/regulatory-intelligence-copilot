@@ -24,6 +24,17 @@ import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapt
 
 const logger = createLogger('ConversationStoreWiring');
 
+// ============================================================================
+// Global Cache Control
+// ============================================================================
+
+/**
+ * Global flag to enable/disable all Redis caching.
+ * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging).
+ * Defaults to true if Redis credentials are available.
+ */
+const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
+
 const normalizeConversationStoreMode = (
   process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
 )
@@ -122,16 +133,20 @@ if (supabaseClient) {
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
 
-// Create Redis client for caching
+// Create Redis client for caching (respects global flag)
 const redisClient =
-  redisUrl && redisToken
+  ENABLE_REDIS_CACHING && redisUrl && redisToken
     ? new Redis({
         url: redisUrl,
         token: redisToken,
       })
     : null;
 
-// Optional: Enable conversation caching for high-traffic scenarios
+/**
+ * Optional: Enable conversation caching for high-traffic scenarios.
+ * This is an additional opt-in on top of the global ENABLE_REDIS_CACHING flag.
+ * Both flags must be true for conversation caching to be enabled.
+ */
 const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING === 'true';
 
 // Create conversation store with optional caching
@@ -147,11 +162,16 @@ export const conversationStore: ConversationStore = createConversationStore({
 if (supabaseClient) {
   if (ENABLE_CONVERSATION_CACHING && redisClient) {
     logger.info(
-      { hasRedis: true, cacheTtl: 60 },
+      { hasRedis: true, cacheTtl: 60, globalCachingEnabled: ENABLE_REDIS_CACHING, conversationCachingEnabled: ENABLE_CONVERSATION_CACHING },
       'Using CachingConversationStore (Supabase + Redis)'
     );
   } else {
-    logger.info({ hasRedis: false }, 'Using SupabaseConversationStore (no caching)');
+    const reason = !ENABLE_REDIS_CACHING
+      ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
+      : !ENABLE_CONVERSATION_CACHING
+      ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
+      : 'Redis credentials not configured';
+    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
   }
 } else {
   logger.warn('Using InMemoryConversationStore (not suitable for production)');
@@ -177,21 +197,28 @@ export const conversationConfigStore: ConversationConfigStore = createConversati
 if (supabaseInternalClient) {
   if (redisClient) {
     logger.info(
-      { hasRedis: true, cacheTtl: 300 },
+      { hasRedis: true, cacheTtl: 300, globalCachingEnabled: ENABLE_REDIS_CACHING },
       'Using CachingConversationConfigStore (Supabase + Redis)'
     );
   } else {
-    logger.info({ hasRedis: false }, 'Using SupabaseConversationConfigStore (no caching)');
+    const reason = !ENABLE_REDIS_CACHING
+      ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
+      : 'Redis credentials not configured';
+    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
   }
 } else {
   logger.warn('Using InMemoryConversationConfigStore (not suitable for production)');
 }
 
 // Configure event hubs with Redis support for distributed SSE
+// Note: Event hubs are NOT controlled by ENABLE_REDIS_CACHING flag.
+// They serve a different purpose (SSE distribution) and should remain active
+// even when caching is disabled.
 
 let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
 let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 
+// Use original redisUrl/redisToken checks (not the redisClient variable which respects global flag)
 if (redisUrl && redisToken) {
   logger.info(
     { redisUrl, mode: normalizeConversationStoreMode },
