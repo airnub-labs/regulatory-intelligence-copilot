@@ -6,10 +6,8 @@ import {
   SupabaseRealtimeConversationEventHub,
   SupabaseRealtimeConversationListEventHub,
   InMemoryConversationContextStore,
-  InMemoryConversationStore,
   InMemoryConversationPathStore,
   SupabaseConversationContextStore,
-  SupabaseConversationStore,
   SupabaseConversationPathStore,
   createConversationConfigStore,
   createConversationStore,
@@ -323,8 +321,23 @@ if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
 } else {
   const message =
     'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.';
-  logger.error({ mode: normalizeConversationStoreMode }, message);
-  throw new Error(message);
+
+  if (isDevLike) {
+    logger.warn({ mode: normalizeConversationStoreMode }, message);
+    // Provide stub event hubs for build/dev mode
+    // Type assertion needed for stub implementations during build
+    conversationEventHub = {
+      healthCheck: async () => ({ healthy: false, error: 'No credentials configured' }),
+      publish: async () => {},
+    } as unknown as typeof conversationEventHub;
+    conversationListEventHub = {
+      healthCheck: async () => ({ healthy: false, error: 'No credentials configured' }),
+      publish: async () => {},
+    } as unknown as typeof conversationListEventHub;
+  } else {
+    logger.error({ mode: normalizeConversationStoreMode }, message);
+    throw new Error(message);
+  }
 }
 
 export { conversationEventHub, conversationListEventHub };

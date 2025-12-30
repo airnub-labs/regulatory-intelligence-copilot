@@ -145,7 +145,7 @@ export const authOptions: NextAuthOptions = {
             )
             // Return an empty token to force logout
             // NextAuth will handle this by ending the session
-            return {} as ExtendedJWT
+            return {} as typeof token
           }
 
           // Update token with fresh data from database

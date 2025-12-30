@@ -3,7 +3,6 @@ import 'server-only';
 import {
   createDefaultLlmRouter,
   createPolicyStore,
-  type LlmPolicyStore,
 } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
@@ -69,12 +68,13 @@ const redisClient =
 // Policy Store Configuration
 // ============================================================================
 
-export const policyStore: LlmPolicyStore = createPolicyStore({
+// Type assertion to work around "Type instantiation is excessively deep" error
+export const policyStore = createPolicyStore({
   supabase: supabaseInternalClient ?? undefined,
   redis: redisClient ?? undefined,
   cacheTtlSeconds: 300, // 5 minutes
   schema: 'copilot_internal',
-});
+} as Parameters<typeof createPolicyStore>[0]);
 
 // Log which store implementation is being used
 if (supabaseInternalClient) {
