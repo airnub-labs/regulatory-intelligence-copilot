@@ -3,12 +3,17 @@
  *
  * Provides direct connection to Memgraph using the Bolt protocol (via neo4j-driver).
  * This bypasses MCP for core graph operations, improving performance and reliability.
+ *
+ * ARCHITECTURE NOTE (Option A - Query-Level ID Resolution):
+ * Queries return enriched relationship data with semantic IDs directly,
+ * eliminating the need for two-pass parsing and identity mapping.
+ * This provides O(n) single-pass parsing with optimal memory usage.
  */
 
 import { createHash } from 'node:crypto';
-import neo4j, { Driver, Session } from 'neo4j-driver';
+import neo4j, { Driver } from 'neo4j-driver';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_STATEMENT } from '@opentelemetry/semantic-conventions';
-import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import { createLogger, withSpan, recordGraphQuery } from '@reg-copilot/reg-intel-observability';
 import type {
   GraphClient,
   GraphContext,
@@ -45,7 +50,20 @@ export interface BoltGraphClientConfig {
 }
 
 /**
+ * Enriched relationship returned from queries with semantic IDs
+ */
+interface EnrichedRelationship {
+  sourceId: string;
+  targetId: string;
+  type: string;
+  properties: Record<string, unknown>;
+}
+
+/**
  * Direct Bolt-based Memgraph GraphClient
+ *
+ * Uses Option A architecture: Query-level ID resolution for optimal performance.
+ * All queries return relationships with semantic IDs, enabling single-pass parsing.
  */
 export class BoltGraphClient implements GraphClient {
   private driver: Driver;
@@ -68,10 +86,13 @@ export class BoltGraphClient implements GraphClient {
   }
 
   /**
-   * Execute a Cypher query and return raw results
+   * Execute a Cypher query and return raw results with comprehensive metrics
    */
   async executeCypher(query: string, params?: Record<string, unknown>): Promise<unknown> {
-    const queryHash = createHash('sha256').update(query).digest('hex');
+    const queryHash = createHash('sha256').update(query).digest('hex').substring(0, 16);
+    const startTime = Date.now();
+    let success = true;
+    let recordCount = 0;
 
     return withSpan(
       'db.memgraph.query',
@@ -79,7 +100,8 @@ export class BoltGraphClient implements GraphClient {
         [SEMATTRS_DB_SYSTEM]: 'memgraph',
         [SEMATTRS_DB_NAME]: this.database,
         [SEMATTRS_DB_OPERATION]: 'query',
-        [SEMATTRS_DB_STATEMENT]: `hash:sha256:${queryHash}`,
+        [SEMATTRS_DB_STATEMENT]: `hash:${queryHash}`,
+        'db.query.hash': queryHash,
       },
       async () => {
         const session = this.driver.session({ database: this.database });
@@ -95,24 +117,37 @@ export class BoltGraphClient implements GraphClient {
 
         try {
           const result = await session.run(query, params || {});
-          const recordCount = result.records.length;
+          recordCount = result.records.length;
 
           this.logger.debug({
             queryHash,
             recordCount,
+            durationMs: Date.now() - startTime,
           }, `${LOG_PREFIX.graph} Cypher query completed`);
 
           return result.records.map(record => record.toObject());
         } catch (error) {
+          success = false;
           this.logger.error({
             error,
             queryHash,
+            durationMs: Date.now() - startTime,
           }, `${LOG_PREFIX.graph} Cypher execution error`);
           throw new GraphError(
             `Failed to execute Cypher query: ${error instanceof Error ? error.message : 'Unknown error'}`
           );
         } finally {
           await session.close();
+
+          // Record comprehensive metrics
+          const durationMs = Date.now() - startTime;
+          recordGraphQuery(durationMs, {
+            operation: 'query',
+            queryType: 'cypher',
+            success,
+            nodeCount: recordCount,
+            queryHash,
+          });
         }
       }
     );
@@ -144,53 +179,70 @@ export class BoltGraphClient implements GraphClient {
   }
 
   /**
-   * Parse Neo4j relationship to GraphEdge
+   * Parse enriched relationship (from Option A query format) to GraphEdge
    */
-  private parseRelationship(rel: unknown): GraphEdge | null {
-    if (!rel || typeof rel !== 'object') return null;
+  private parseEnrichedRelationship(enriched: unknown): GraphEdge | null {
+    if (!enriched || typeof enriched !== 'object') return null;
 
-    const r = rel as {
-      start?: { low: number; high: number };
-      end?: { low: number; high: number };
-      type?: string;
-      properties?: Record<string, unknown>;
-    };
-
-    if (!r.type || !r.start || !r.end) return null;
+    const e = enriched as EnrichedRelationship;
+    if (!e.sourceId || !e.targetId || !e.type) return null;
 
     return {
-      source: `node_${r.start.low}`,
-      target: `node_${r.end.low}`,
-      type: r.type,
-      properties: r.properties || {},
+      source: e.sourceId,
+      target: e.targetId,
+      type: e.type,
+      properties: e.properties || {},
     };
   }
 
   /**
-   * Parse query results into GraphContext
+   * Parse query results into GraphContext using Option A (single-pass with enriched relationships)
    *
-   * IMPORTANT: We must track a mapping from neo4j internal identity to semantic ID
-   * because relationships reference nodes by internal identity, but we use semantic IDs.
+   * This method handles both:
+   * 1. Enriched relationship format (preferred): { sourceId, targetId, type, properties }
+   * 2. Legacy format with identity mapping (fallback for raw relationship objects)
    */
   private parseGraphContext(records: Array<Record<string, unknown>>): GraphContext {
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];
     const seenNodes = new Set<string>();
     const seenEdges = new Set<string>();
-    // Map from neo4j internal identity (low value) to semantic node ID
+    // Fallback identity mapping for legacy query formats
     const identityToSemanticId = new Map<number, string>();
 
-    // First pass: collect all nodes and build identity mapping
     for (const record of records) {
-      for (const [, value] of Object.entries(record)) {
-        this.collectNodes(value, nodes, seenNodes, identityToSemanticId);
-      }
-    }
+      for (const [key, value] of Object.entries(record)) {
+        // Handle enriched relationships (Option A format)
+        if (key === 'enrichedRels' && Array.isArray(value)) {
+          for (const enriched of value) {
+            if (enriched) {
+              const edge = this.parseEnrichedRelationship(enriched);
+              if (edge) {
+                const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
+                if (!seenEdges.has(edgeKey)) {
+                  seenEdges.add(edgeKey);
+                  edges.push(edge);
+                }
+              }
+            }
+          }
+          continue;
+        }
 
-    // Second pass: collect all relationships using the identity mapping
-    for (const record of records) {
-      for (const [, value] of Object.entries(record)) {
-        this.collectEdges(value, edges, seenEdges, identityToSemanticId);
+        // Handle single enriched relationship
+        if (key === 'enrichedRel' && value && typeof value === 'object') {
+          const edge = this.parseEnrichedRelationship(value);
+          if (edge) {
+            const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
+            if (!seenEdges.has(edgeKey)) {
+              seenEdges.add(edgeKey);
+              edges.push(edge);
+            }
+          }
+          continue;
+        }
+
+        this.collectValue(value, nodes, edges, seenNodes, seenEdges, identityToSemanticId);
       }
     }
 
@@ -198,103 +250,74 @@ export class BoltGraphClient implements GraphClient {
   }
 
   /**
-   * Recursively collect nodes from a value and build identity mapping
+   * Recursively collect nodes and edges from a value
+   * Uses identity mapping as fallback for legacy query formats
    */
-  private collectNodes(
+  private collectValue(
     value: unknown,
     nodes: GraphNode[],
-    seenNodes: Set<string>,
-    identityToSemanticId: Map<number, string>
-  ): void {
-    if (!value || typeof value !== 'object') return;
-
-    // Check if it's a node
-    if ('labels' in value) {
-      const node = this.parseNode(value);
-      if (node && !seenNodes.has(node.id)) {
-        seenNodes.add(node.id);
-        nodes.push(node);
-
-        // Build identity mapping for relationship resolution
-        const n = value as { identity?: { low: number; high: number } };
-        if (n.identity?.low !== undefined) {
-          identityToSemanticId.set(n.identity.low, node.id);
-        }
-      }
-    }
-
-    // Handle arrays (path results, collected nodes, etc.)
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        this.collectNodes(item, nodes, seenNodes, identityToSemanticId);
-      }
-    }
-  }
-
-  /**
-   * Recursively collect edges from a value, resolving internal IDs to semantic IDs
-   */
-  private collectEdges(
-    value: unknown,
     edges: GraphEdge[],
+    seenNodes: Set<string>,
     seenEdges: Set<string>,
     identityToSemanticId: Map<number, string>
   ): void {
     if (!value || typeof value !== 'object') return;
 
-    // Check if it's a relationship
-    if ('type' in value && 'start' in value) {
-      const edge = this.parseRelationshipWithMapping(value, identityToSemanticId);
-      if (edge) {
-        const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
-        if (!seenEdges.has(edgeKey)) {
-          seenEdges.add(edgeKey);
-          edges.push(edge);
+    // Check if it's a node (has labels)
+    if ('labels' in value && Array.isArray((value as { labels?: unknown }).labels)) {
+      const node = this.parseNode(value);
+      if (node && !seenNodes.has(node.id)) {
+        seenNodes.add(node.id);
+        nodes.push(node);
+
+        // Build identity mapping for fallback relationship resolution
+        const n = value as { identity?: { low: number; high: number } };
+        if (n.identity?.low !== undefined) {
+          identityToSemanticId.set(n.identity.low, node.id);
         }
       }
+      return;
     }
 
-    // Handle arrays (path results, collected relationships, etc.)
+    // Check if it's a raw relationship (fallback path)
+    if ('type' in value && 'start' in value && 'end' in value) {
+      const r = value as {
+        start?: { low: number; high: number };
+        end?: { low: number; high: number };
+        type?: string;
+        properties?: Record<string, unknown>;
+      };
+
+      if (r.type && r.start && r.end) {
+        // Resolve internal identity to semantic ID using mapping
+        const sourceId = identityToSemanticId.get(r.start.low) ?? `node_${r.start.low}`;
+        const targetId = identityToSemanticId.get(r.end.low) ?? `node_${r.end.low}`;
+
+        const edgeKey = `${sourceId}-${r.type}-${targetId}`;
+        if (!seenEdges.has(edgeKey)) {
+          seenEdges.add(edgeKey);
+          edges.push({
+            source: sourceId,
+            target: targetId,
+            type: r.type,
+            properties: r.properties || {},
+          });
+        }
+      }
+      return;
+    }
+
+    // Handle arrays (path results, collected nodes, etc.)
     if (Array.isArray(value)) {
       for (const item of value) {
-        this.collectEdges(item, edges, seenEdges, identityToSemanticId);
+        this.collectValue(item, nodes, edges, seenNodes, seenEdges, identityToSemanticId);
       }
     }
-  }
-
-  /**
-   * Parse Neo4j relationship to GraphEdge, resolving internal IDs to semantic IDs
-   */
-  private parseRelationshipWithMapping(
-    rel: unknown,
-    identityToSemanticId: Map<number, string>
-  ): GraphEdge | null {
-    if (!rel || typeof rel !== 'object') return null;
-
-    const r = rel as {
-      start?: { low: number; high: number };
-      end?: { low: number; high: number };
-      type?: string;
-      properties?: Record<string, unknown>;
-    };
-
-    if (!r.type || !r.start || !r.end) return null;
-
-    // Resolve internal identity to semantic ID
-    // Fall back to node_X format only if we don't have the mapping
-    const sourceId = identityToSemanticId.get(r.start.low) ?? `node_${r.start.low}`;
-    const targetId = identityToSemanticId.get(r.end.low) ?? `node_${r.end.low}`;
-
-    return {
-      source: sourceId,
-      target: targetId,
-      type: r.type,
-      properties: r.properties || {},
-    };
   }
 
   /**
    * Get rules matching profile and jurisdiction with optional keyword
+   * Uses Option A: Returns enriched relationships with semantic IDs
    */
   async getRulesForProfileAndJurisdiction(
     profileId: string,
@@ -322,9 +345,16 @@ export class BoltGraphClient implements GraphClient {
       `;
     }
 
+    // Option A: Return enriched relationships with semantic IDs
     query += `
       OPTIONAL MATCH (rule)-[r]->(related)
-      RETURN rule, r, related
+      WITH rule,
+           CASE WHEN r IS NOT NULL AND related IS NOT NULL
+                THEN {sourceId: rule.id, targetId: related.id, type: type(r), properties: properties(r)}
+                ELSE NULL
+           END AS enrichedRel,
+           related
+      RETURN rule, collect(enrichedRel) AS enrichedRels, collect(related) AS related
       LIMIT 50
     `;
 
@@ -339,21 +369,91 @@ export class BoltGraphClient implements GraphClient {
 
   /**
    * Get neighbourhood of a node (1-2 hops)
+   * Uses Option A: Returns enriched relationships with semantic IDs
    */
   async getNeighbourhood(nodeId: string): Promise<GraphContext> {
     this.logger.info({ nodeId }, `${LOG_PREFIX.graph} Getting neighbourhood`);
 
+    // Option A: Return enriched relationships with semantic IDs
     const query = `
       MATCH (n {id: $nodeId})
-      OPTIONAL MATCH path = (n)-[r1]-(n1)
-      OPTIONAL MATCH path2 = (n1)-[r2]-(n2)
-      WHERE n2.id <> $nodeId
-      RETURN n, r1, n1, r2, n2
+      OPTIONAL MATCH (n)-[r1]-(n1)
+      OPTIONAL MATCH (n1)-[r2]-(n2)
+      WHERE n2 IS NULL OR n2.id <> $nodeId
+      WITH n, r1, n1, r2, n2
+      WITH n, n1, n2,
+           CASE WHEN r1 IS NOT NULL AND n1 IS NOT NULL
+                THEN {sourceId: CASE WHEN startNode(r1) = n THEN n.id ELSE n1.id END,
+                      targetId: CASE WHEN endNode(r1) = n THEN n.id ELSE n1.id END,
+                      type: type(r1), properties: properties(r1)}
+                ELSE NULL
+           END AS rel1,
+           CASE WHEN r2 IS NOT NULL AND n2 IS NOT NULL
+                THEN {sourceId: CASE WHEN startNode(r2) = n1 THEN n1.id ELSE n2.id END,
+                      targetId: CASE WHEN endNode(r2) = n1 THEN n1.id ELSE n2.id END,
+                      type: type(r2), properties: properties(r2)}
+                ELSE NULL
+           END AS rel2
+      RETURN n, collect(DISTINCT n1) AS neighbours1, collect(DISTINCT n2) AS neighbours2,
+             collect(DISTINCT rel1) AS enrichedRels1, collect(DISTINCT rel2) AS enrichedRels2
       LIMIT 100
     `;
 
     const records = await this.executeCypher(query, { nodeId }) as Array<Record<string, unknown>>;
-    return this.parseGraphContext(records);
+
+    // Parse with support for multiple enriched relationship arrays
+    const nodes: GraphNode[] = [];
+    const edges: GraphEdge[] = [];
+    const seenNodes = new Set<string>();
+    const seenEdges = new Set<string>();
+
+    for (const record of records) {
+      // Parse center node
+      if (record.n) {
+        const node = this.parseNode(record.n);
+        if (node && !seenNodes.has(node.id)) {
+          seenNodes.add(node.id);
+          nodes.push(node);
+        }
+      }
+
+      // Parse neighbour nodes
+      for (const key of ['neighbours1', 'neighbours2']) {
+        const neighbours = record[key];
+        if (Array.isArray(neighbours)) {
+          for (const n of neighbours) {
+            if (n) {
+              const node = this.parseNode(n);
+              if (node && !seenNodes.has(node.id)) {
+                seenNodes.add(node.id);
+                nodes.push(node);
+              }
+            }
+          }
+        }
+      }
+
+      // Parse enriched relationships
+      for (const key of ['enrichedRels1', 'enrichedRels2']) {
+        const rels = record[key];
+        if (Array.isArray(rels)) {
+          for (const enriched of rels) {
+            if (enriched) {
+              const edge = this.parseEnrichedRelationship(enriched);
+              if (edge) {
+                const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
+                if (!seenEdges.has(edgeKey)) {
+                  seenEdges.add(edgeKey);
+                  edges.push(edge);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return { nodes, edges };
   }
 
   /**
@@ -406,16 +506,26 @@ export class BoltGraphClient implements GraphClient {
 
   /**
    * Get cross-border slice for multiple jurisdictions
+   * Uses Option A: Returns enriched relationships with semantic IDs
    */
   async getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext> {
     this.logger.info({ jurisdictions: jurisdictionIds }, `${LOG_PREFIX.graph} Getting cross-border slice`);
 
+    // Option A: Return enriched relationships with semantic IDs
     const query = `
       MATCH (j:Jurisdiction)
       WHERE j.id IN $jurisdictionIds
       MATCH (rule)-[:IN_JURISDICTION]->(j)
       OPTIONAL MATCH (rule)-[r:COORDINATED_WITH|TREATY_LINKED_TO|EQUIVALENT_TO]-(related)
-      RETURN rule, r, related, j
+      WITH rule, j,
+           CASE WHEN r IS NOT NULL AND related IS NOT NULL
+                THEN {sourceId: CASE WHEN startNode(r) = rule THEN rule.id ELSE related.id END,
+                      targetId: CASE WHEN endNode(r) = rule THEN rule.id ELSE related.id END,
+                      type: type(r), properties: properties(r)}
+                ELSE NULL
+           END AS enrichedRel,
+           related
+      RETURN rule, j, collect(enrichedRel) AS enrichedRels, collect(related) AS related
       LIMIT 100
     `;
 
@@ -625,6 +735,7 @@ export class BoltGraphClient implements GraphClient {
 
   /**
    * Get concept hierarchy (broader/narrower concepts)
+   * Uses Option A: Returns enriched relationships with semantic IDs
    */
   async getConceptHierarchy(conceptId: string): Promise<{
     broader: GraphNode[];
@@ -633,29 +744,45 @@ export class BoltGraphClient implements GraphClient {
   }> {
     this.logger.info({ conceptId }, `${LOG_PREFIX.graph} Getting concept hierarchy`);
 
+    // Option A: Return categorized nodes with relationship type
     const query = `
       MATCH (c:Concept {id: $conceptId})
       OPTIONAL MATCH (c)-[:BROADER]->(broader)
       OPTIONAL MATCH (c)-[:NARROWER]->(narrower)
       OPTIONAL MATCH (c)-[:RELATED]->(related)
-      RETURN broader, narrower, related
+      RETURN c, collect(DISTINCT broader) AS broaderNodes,
+             collect(DISTINCT narrower) AS narrowerNodes,
+             collect(DISTINCT related) AS relatedNodes
     `;
 
     const records = await this.executeCypher(query, { conceptId }) as Array<Record<string, unknown>>;
-    const context = this.parseGraphContext(records);
 
-    // Separate nodes by relationship type
     const broader: GraphNode[] = [];
     const narrower: GraphNode[] = [];
     const related: GraphNode[] = [];
 
-    // This is a simplified approach - ideally we'd track which edge type each node came from
-    // For now, we'll just return all nodes in each category
-    for (const node of context.nodes) {
-      if (node.id !== conceptId) {
-        // We'd need to check the relationship type to categorize properly
-        // For now, we'll just put them all in related
-        related.push(node);
+    if (records.length > 0) {
+      const record = records[0];
+
+      for (const n of (record.broaderNodes as unknown[]) || []) {
+        if (n) {
+          const node = this.parseNode(n);
+          if (node) broader.push(node);
+        }
+      }
+
+      for (const n of (record.narrowerNodes as unknown[]) || []) {
+        if (n) {
+          const node = this.parseNode(n);
+          if (node) narrower.push(node);
+        }
+      }
+
+      for (const n of (record.relatedNodes as unknown[]) || []) {
+        if (n) {
+          const node = this.parseNode(n);
+          if (node) related.push(node);
+        }
       }
     }
 
@@ -763,20 +890,29 @@ export class BoltGraphClient implements GraphClient {
       MATCH (j:Jurisdiction {id: $jurisdictionId})
       OPTIONAL MATCH (e)-[:TRIGGERS]->(b:Benefit)-[:IN_JURISDICTION]->(j)
       OPTIONAL MATCH (e)-[:TRIGGERS]->(o:Obligation)-[:IN_JURISDICTION]->(j)
-      RETURN b, o
+      RETURN collect(DISTINCT b) AS benefits, collect(DISTINCT o) AS obligations
     `;
 
     const records = await this.executeCypher(query, { lifeEventId, jurisdictionId }) as Array<Record<string, unknown>>;
-    const context = this.parseGraphContext(records);
 
     const benefits: GraphNode[] = [];
     const obligations: GraphNode[] = [];
 
-    for (const node of context.nodes) {
-      if (node.type === 'Benefit') {
-        benefits.push(node);
-      } else if (node.type === 'Obligation') {
-        obligations.push(node);
+    if (records.length > 0) {
+      const record = records[0];
+
+      for (const b of (record.benefits as unknown[]) || []) {
+        if (b) {
+          const node = this.parseNode(b);
+          if (node) benefits.push(node);
+        }
+      }
+
+      for (const o of (record.obligations as unknown[]) || []) {
+        if (o) {
+          const node = this.parseNode(o);
+          if (node) obligations.push(node);
+        }
       }
     }
 
