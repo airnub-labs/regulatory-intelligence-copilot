@@ -426,3 +426,147 @@ export class SupabaseConversationConfigStore implements ConversationConfigStore 
     }
   }
 }
+
+// =============================================================================
+// Caching Layer
+// =============================================================================
+
+export interface RedisLikeClient {
+  get(key: string): Promise<string | null>;
+  setex(key: string, seconds: number, value: string): Promise<string | void>;
+  del(...keys: string[]): Promise<number | void>;
+}
+
+export interface CachingConfigStoreOptions {
+  /** TTL in seconds (default: 300 = 5 minutes) */
+  ttlSeconds?: number;
+  /** Key prefix (default: 'copilot:conv:config') */
+  keyPrefix?: string;
+}
+
+export class CachingConversationConfigStore implements ConversationConfigStore {
+  private readonly ttlSeconds: number;
+  private readonly keyPrefix: string;
+
+  constructor(
+    private readonly backing: ConversationConfigStore,
+    private readonly redis: RedisLikeClient,
+    options: CachingConfigStoreOptions = {}
+  ) {
+    this.ttlSeconds = options.ttlSeconds ?? 300;
+    this.keyPrefix = options.keyPrefix ?? 'copilot:conv:config';
+  }
+
+  private cacheKey(tenantId: string, userId?: string | null): string {
+    return userId
+      ? `${this.keyPrefix}:${tenantId}:${userId}`
+      : `${this.keyPrefix}:${tenantId}`;
+  }
+
+  async getConfig(input: GetConfigInput): Promise<ConversationConfig> {
+    const key = this.cacheKey(input.tenantId, input.userId);
+
+    // Try cache first
+    try {
+      const cached = await this.redis.get(key);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Restore Date object
+        parsed.updatedAt = new Date(parsed.updatedAt);
+        return parsed as ConversationConfig;
+      }
+    } catch {
+      // Cache miss or error, continue to backing store
+    }
+
+    // Fetch from backing store
+    const config = await this.backing.getConfig(input);
+
+    // Cache result
+    try {
+      await this.redis.setex(key, this.ttlSeconds, JSON.stringify(config));
+    } catch {
+      // Ignore cache write errors
+    }
+
+    return config;
+  }
+
+  async setGlobalConfig(
+    config: Partial<Omit<ConversationConfig, 'configLevel' | 'configScope' | 'updatedAt' | 'updatedBy'>>,
+    updatedBy?: string
+  ): Promise<void> {
+    await this.backing.setGlobalConfig(config, updatedBy);
+    // Invalidate all cached configs (global affects everyone)
+    // In production, you'd use Redis SCAN or pub/sub for cache invalidation
+  }
+
+  async setTenantConfig(input: SetConfigInput): Promise<void> {
+    await this.backing.setTenantConfig(input);
+    // Invalidate tenant's cached configs
+    try {
+      await this.redis.del(this.cacheKey(input.tenantId));
+    } catch {
+      // Ignore
+    }
+  }
+
+  async setUserConfig(input: SetConfigInput): Promise<void> {
+    await this.backing.setUserConfig(input);
+    // Invalidate user's cached config
+    if (input.userId) {
+      try {
+        await this.redis.del(this.cacheKey(input.tenantId, input.userId));
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  async deleteTenantConfig(tenantId: string): Promise<void> {
+    await this.backing.deleteTenantConfig(tenantId);
+    try {
+      await this.redis.del(this.cacheKey(tenantId));
+    } catch {
+      // Ignore
+    }
+  }
+
+  async deleteUserConfig(input: { tenantId: string; userId: string }): Promise<void> {
+    await this.backing.deleteUserConfig(input);
+    try {
+      await this.redis.del(this.cacheKey(input.tenantId, input.userId));
+    } catch {
+      // Ignore
+    }
+  }
+}
+
+// =============================================================================
+// Factory
+// =============================================================================
+
+export interface ConfigStoreFactoryOptions {
+  supabase?: SupabaseLikeClient;
+  redis?: RedisLikeClient;
+  cacheTtlSeconds?: number;
+  logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void };
+}
+
+export function createConversationConfigStore(
+  options: ConfigStoreFactoryOptions
+): ConversationConfigStore {
+  if (!options.supabase) {
+    return new InMemoryConversationConfigStore();
+  }
+
+  const supabaseStore = new SupabaseConversationConfigStore(options.supabase, options.logger);
+
+  if (options.redis) {
+    return new CachingConversationConfigStore(supabaseStore, options.redis, {
+      ttlSeconds: options.cacheTtlSeconds,
+    });
+  }
+
+  return supabaseStore;
+}

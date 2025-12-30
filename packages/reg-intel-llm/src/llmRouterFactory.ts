@@ -2,15 +2,25 @@
  * Factory for creating pre-configured LLM router instances
  */
 
-import { createLlmRouter, InMemoryPolicyStore, type TenantLlmPolicy, type ProviderConfig, type LocalProviderConfig } from './llmRouter.js';
+import { createLlmRouter, InMemoryPolicyStore, type LlmPolicyStore, type TenantLlmPolicy, type ProviderConfig, type LocalProviderConfig } from './llmRouter.js';
+
+export interface CreateDefaultLlmRouterOptions {
+  /**
+   * Optional policy store for multi-instance deployments.
+   * If not provided, uses InMemoryPolicyStore (suitable for dev/single-instance only).
+   */
+  policyStore?: LlmPolicyStore;
+}
 
 /**
  * Create default LLM router with sensible defaults
  *
  * Reads API keys from environment and sets up a basic policy.
  * Supports: OpenAI, Groq, Anthropic, Google Gemini, and local models.
+ *
+ * @param options - Optional configuration including custom policy store
  */
-export function createDefaultLlmRouter() {
+export function createDefaultLlmRouter(options?: CreateDefaultLlmRouterOptions) {
   const groqApiKey = process.env.GROQ_API_KEY;
   const openaiApiKey = process.env.OPENAI_API_KEY;
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
@@ -65,14 +75,8 @@ export function createDefaultLlmRouter() {
     ? 'gpt-4o'
     : 'llama-3-8b';
 
-  const router = createLlmRouter({
-    providerConfigs,
-    defaultProvider,
-    defaultModel,
-  });
-
-  // Set up default tenant policy
-  const policyStore = new InMemoryPolicyStore();
+  // Use provided policy store or create in-memory one
+  const policyStore = options?.policyStore ?? new InMemoryPolicyStore();
   const defaultPolicy: TenantLlmPolicy = {
     tenantId: 'default',
     defaultModel,
@@ -106,8 +110,17 @@ export function createDefaultLlmRouter() {
     ],
   };
 
-  // Store the default policy
-  policyStore.setPolicy(defaultPolicy);
+  // Store the default policy (async but we don't await - router can still be used)
+  // This ensures the default policy is available for the 'default' tenant
+  void policyStore.setPolicy(defaultPolicy);
+
+  // Create router with policy store
+  const router = createLlmRouter({
+    providerConfigs,
+    defaultProvider,
+    defaultModel,
+    policyStore,
+  });
 
   return router;
 }
