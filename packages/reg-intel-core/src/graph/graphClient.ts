@@ -19,6 +19,17 @@ import { createLogger, recordGraphQuery } from '@reg-copilot/reg-intel-observabi
 const logger = createLogger('GraphClient', { component: 'Graph' });
 
 /**
+ * Enriched relationship returned from queries with semantic IDs
+ * (Option A: Query-Level ID Resolution)
+ */
+interface EnrichedRelationship {
+  sourceId: string;
+  targetId: string;
+  type: string;
+  properties: Record<string, unknown>;
+}
+
+/**
  * Escape string for Cypher query
  */
 function escapeCypher(value: string | undefined | null): string {
@@ -31,32 +42,45 @@ function escapeCypher(value: string | undefined | null): string {
 /**
  * Parse Memgraph query result into GraphContext
  *
- * IMPORTANT: We must track a mapping from internal ID to semantic ID
- * because relationships reference nodes by internal ID, but we use semantic IDs.
+ * Handles enriched relationship format (Option A) with semantic IDs.
+ * Single-pass parsing for optimal performance.
  */
 function parseGraphResult(result: unknown): GraphContext {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenNodes = new Set<string>();
   const seenEdges = new Set<string>();
-  // Map from internal ID to semantic node ID
-  const internalToSemanticId = new Map<string, string>();
 
   if (!result || !Array.isArray(result)) {
     return { nodes, edges };
   }
 
-  // First pass: collect all nodes and build ID mapping
   for (const row of result) {
-    for (const [, value] of Object.entries(row)) {
-      collectNodesFromValue(value, nodes, seenNodes, internalToSemanticId);
-    }
-  }
+    for (const [key, value] of Object.entries(row)) {
+      // Handle enriched relationships (Option A format)
+      if ((key === 'enrichedRels' || key === 'enrichedRels1' || key === 'enrichedRels2') && Array.isArray(value)) {
+        for (const enriched of value) {
+          if (enriched && typeof enriched === 'object') {
+            const e = enriched as { sourceId?: string; targetId?: string; type?: string; properties?: Record<string, unknown> };
+            if (e.sourceId && e.targetId && e.type) {
+              const edgeKey = `${e.sourceId}-${e.type}-${e.targetId}`;
+              if (!seenEdges.has(edgeKey)) {
+                seenEdges.add(edgeKey);
+                edges.push({
+                  source: e.sourceId,
+                  target: e.targetId,
+                  type: e.type,
+                  properties: e.properties || {},
+                });
+              }
+            }
+          }
+        }
+        continue;
+      }
 
-  // Second pass: collect all relationships using the ID mapping
-  for (const row of result) {
-    for (const [, value] of Object.entries(row)) {
-      collectEdgesFromValue(value, edges, seenEdges, internalToSemanticId);
+      // Handle nodes
+      collectNodesFromValue(value, nodes, seenNodes);
     }
   }
 
@@ -64,13 +88,12 @@ function parseGraphResult(result: unknown): GraphContext {
 }
 
 /**
- * Recursively collect nodes from a value and build ID mapping
+ * Recursively collect nodes from a value
  */
 function collectNodesFromValue(
   value: unknown,
   nodes: GraphNode[],
-  seenNodes: Set<string>,
-  internalToSemanticId: Map<string, string>
+  seenNodes: Set<string>
 ): void {
   if (!value || typeof value !== 'object') return;
 
@@ -78,9 +101,8 @@ function collectNodesFromValue(
 
   // Check if it's a node (has id and labels)
   if (v.id && v.labels && Array.isArray(v.labels)) {
-    const internalId = String(v.id);
     const props = (v.properties || {}) as Record<string, unknown>;
-    const semanticId = props.id as string || internalId;
+    const semanticId = props.id as string || String(v.id);
 
     if (!seenNodes.has(semanticId)) {
       seenNodes.add(semanticId);
@@ -90,58 +112,13 @@ function collectNodesFromValue(
         type: v.labels[0] as GraphNode['type'],
         properties: props,
       });
-
-      // Build mapping from internal ID to semantic ID for relationship resolution
-      internalToSemanticId.set(internalId, semanticId);
     }
   }
 
   // Handle arrays (collected nodes, neighbours, etc.)
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectNodesFromValue(item, nodes, seenNodes, internalToSemanticId);
-    }
-  }
-}
-
-/**
- * Recursively collect edges from a value, resolving internal IDs to semantic IDs
- */
-function collectEdgesFromValue(
-  value: unknown,
-  edges: GraphEdge[],
-  seenEdges: Set<string>,
-  internalToSemanticId: Map<string, string>
-): void {
-  if (!value || typeof value !== 'object') return;
-
-  const v = value as Record<string, unknown>;
-
-  // Check if it's an edge/relationship (has type, start, end but no labels)
-  if (v.type && v.start && v.end && !v.labels) {
-    const internalStart = String(v.start);
-    const internalEnd = String(v.end);
-
-    // Resolve internal IDs to semantic IDs
-    const sourceId = internalToSemanticId.get(internalStart) ?? internalStart;
-    const targetId = internalToSemanticId.get(internalEnd) ?? internalEnd;
-
-    const edgeKey = `${sourceId}-${v.type}-${targetId}`;
-    if (!seenEdges.has(edgeKey)) {
-      seenEdges.add(edgeKey);
-      edges.push({
-        source: sourceId,
-        target: targetId,
-        type: String(v.type),
-        properties: (v.properties || {}) as Record<string, unknown>,
-      });
-    }
-  }
-
-  // Handle arrays (collected relationships, etc.)
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectEdgesFromValue(item, edges, seenEdges, internalToSemanticId);
+      collectNodesFromValue(item, nodes, seenNodes);
     }
   }
 }
@@ -217,6 +194,7 @@ export function createGraphClient(): GraphClient {
   return {
     /**
      * Get rules matching profile and jurisdiction with optional keyword
+     * Uses Option A: Returns enriched relationships with semantic IDs
      */
     async getRulesForProfileAndJurisdiction(
       profileId: string,
@@ -235,7 +213,13 @@ export function createGraphClient(): GraphClient {
         ${keywordFilter}
         MATCH (n)-[:APPLIES_TO]->(p)
         OPTIONAL MATCH (n)-[r:CITES|REQUIRES|LIMITED_BY|EXCLUDES|MUTUALLY_EXCLUSIVE_WITH|LOOKBACK_WINDOW|LOCKS_IN_FOR_PERIOD]->(m)
-        RETURN n, collect(r) AS rels, collect(m) AS neighbours
+        WITH n,
+             CASE WHEN r IS NOT NULL AND m IS NOT NULL
+                  THEN {sourceId: n.id, targetId: m.id, type: type(r), properties: properties(r)}
+                  ELSE NULL
+             END AS enrichedRel,
+             m
+        RETURN n, collect(enrichedRel) AS enrichedRels, collect(m) AS neighbours
         LIMIT 100
       `;
 
@@ -251,13 +235,29 @@ export function createGraphClient(): GraphClient {
 
     /**
      * Get neighbourhood of a node (1-2 hops)
+     * Uses Option A: Returns enriched relationships with semantic IDs
      */
     async getNeighbourhood(nodeId: string): Promise<GraphContext> {
       const query = `
         MATCH (n {id: '${escapeCypher(nodeId)}'})
-        OPTIONAL MATCH (n)-[r1]->(m1)
-        OPTIONAL MATCH (m1)-[r2]->(m2)
-        RETURN n, r1, m1, r2, m2
+        OPTIONAL MATCH (n)-[r1]-(n1)
+        OPTIONAL MATCH (n1)-[r2]-(n2)
+        WHERE n2 IS NULL OR n2.id <> '${escapeCypher(nodeId)}'
+        WITH n, n1, n2,
+             CASE WHEN r1 IS NOT NULL AND n1 IS NOT NULL
+                  THEN {sourceId: CASE WHEN startNode(r1) = n THEN n.id ELSE n1.id END,
+                        targetId: CASE WHEN endNode(r1) = n THEN n.id ELSE n1.id END,
+                        type: type(r1), properties: properties(r1)}
+                  ELSE NULL
+             END AS rel1,
+             CASE WHEN r2 IS NOT NULL AND n2 IS NOT NULL
+                  THEN {sourceId: CASE WHEN startNode(r2) = n1 THEN n1.id ELSE n2.id END,
+                        targetId: CASE WHEN endNode(r2) = n1 THEN n1.id ELSE n2.id END,
+                        type: type(r2), properties: properties(r2)}
+                  ELSE NULL
+             END AS rel2
+        RETURN n, collect(DISTINCT n1) AS neighbours1, collect(DISTINCT n2) AS neighbours2,
+               collect(DISTINCT rel1) AS enrichedRels1, collect(DISTINCT rel2) AS enrichedRels2
         LIMIT 500
       `;
 
@@ -299,6 +299,7 @@ export function createGraphClient(): GraphClient {
 
     /**
      * Get cross-border slice for multiple jurisdictions
+     * Uses Option A: Returns enriched relationships with semantic IDs
      */
     async getCrossBorderSlice(jurisdictionIds: string[]): Promise<GraphContext> {
       const jurisdictionList = jurisdictionIds.map(j => `'${escapeCypher(j)}'`).join(', ');
@@ -308,10 +309,17 @@ export function createGraphClient(): GraphClient {
         WHERE j.id IN [${jurisdictionList}]
         MATCH (n)-[:IN_JURISDICTION]->(j)
         WHERE n:Benefit OR n:Relief OR n:Section
-        OPTIONAL MATCH (n)-[r:COORDINATED_WITH|TREATY_LINKED_TO|EXCLUDES|MUTUALLY_EXCLUSIVE_WITH|EQUIVALENT_TO]->(m)
+        OPTIONAL MATCH (n)-[r:COORDINATED_WITH|TREATY_LINKED_TO|EXCLUDES|MUTUALLY_EXCLUSIVE_WITH|EQUIVALENT_TO]-(m)
         OPTIONAL MATCH (m)-[:IN_JURISDICTION]->(j2:Jurisdiction)
         WHERE j2.id IN [${jurisdictionList}]
-        RETURN n, r, m
+        WITH n, m,
+             CASE WHEN r IS NOT NULL AND m IS NOT NULL
+                  THEN {sourceId: CASE WHEN startNode(r) = n THEN n.id ELSE m.id END,
+                        targetId: CASE WHEN endNode(r) = n THEN n.id ELSE m.id END,
+                        type: type(r), properties: properties(r)}
+                  ELSE NULL
+             END AS enrichedRel
+        RETURN n, collect(enrichedRel) AS enrichedRels, collect(m) AS related
       `;
 
       logger.info({ event: 'graph.query.crossBorderSlice', jurisdictions: jurisdictionIds });
