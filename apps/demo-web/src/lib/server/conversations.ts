@@ -17,7 +17,7 @@ import {
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
-import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST, PHASE_PRODUCTION_BUILD } from 'next/constants';
+import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
 const logger = createLogger('ConversationStoreWiring');
@@ -65,10 +65,10 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.
 const supabaseRealtimeKey =
   supabaseServiceKey ?? process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const nextPhase = process.env.NEXT_PHASE;
-// Only allow dev-like behavior in actual dev/test phases or during builds.
-// This ensures production runtime fails if database credentials are missing, preventing
-// accidental deployments with an in-memory store, but allows builds to proceed.
-const isDevPhase = nextPhase === PHASE_DEVELOPMENT_SERVER || nextPhase === PHASE_TEST || nextPhase === PHASE_PRODUCTION_BUILD;
+// Only allow dev-like behavior in actual dev/test phases, not during production builds.
+// This ensures production builds fail if database credentials are missing, preventing
+// accidental deployments with an in-memory store.
+const isDevPhase = nextPhase === PHASE_DEVELOPMENT_SERVER || nextPhase === PHASE_TEST;
 const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || isDevPhase;
 const tracingFetch = createTracingFetch();
 
