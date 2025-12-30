@@ -168,64 +168,129 @@ export class BoltGraphClient implements GraphClient {
 
   /**
    * Parse query results into GraphContext
+   *
+   * IMPORTANT: We must track a mapping from neo4j internal identity to semantic ID
+   * because relationships reference nodes by internal identity, but we use semantic IDs.
    */
   private parseGraphContext(records: Array<Record<string, unknown>>): GraphContext {
     const nodes: GraphNode[] = [];
     const edges: GraphEdge[] = [];
     const seenNodes = new Set<string>();
     const seenEdges = new Set<string>();
+    // Map from neo4j internal identity (low value) to semantic node ID
+    const identityToSemanticId = new Map<number, string>();
 
+    // First pass: collect all nodes and build identity mapping
     for (const record of records) {
       for (const [, value] of Object.entries(record)) {
-        // Check if it's a node
-        if (value && typeof value === 'object' && 'labels' in value) {
-          const node = this.parseNode(value);
-          if (node && !seenNodes.has(node.id)) {
-            seenNodes.add(node.id);
-            nodes.push(node);
-          }
-        }
+        this.collectNodes(value, nodes, seenNodes, identityToSemanticId);
+      }
+    }
 
-        // Check if it's a relationship
-        if (value && typeof value === 'object' && 'type' in value && 'start' in value) {
-          const edge = this.parseRelationship(value);
-          if (edge) {
-            const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
-            if (!seenEdges.has(edgeKey)) {
-              seenEdges.add(edgeKey);
-              edges.push(edge);
-            }
-          }
-        }
-
-        // Handle arrays (path results, etc.)
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            if (item && typeof item === 'object') {
-              if ('labels' in item) {
-                const node = this.parseNode(item);
-                if (node && !seenNodes.has(node.id)) {
-                  seenNodes.add(node.id);
-                  nodes.push(node);
-                }
-              }
-              if ('type' in item && 'start' in item) {
-                const edge = this.parseRelationship(item);
-                if (edge) {
-                  const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
-                  if (!seenEdges.has(edgeKey)) {
-                    seenEdges.add(edgeKey);
-                    edges.push(edge);
-                  }
-                }
-              }
-            }
-          }
-        }
+    // Second pass: collect all relationships using the identity mapping
+    for (const record of records) {
+      for (const [, value] of Object.entries(record)) {
+        this.collectEdges(value, edges, seenEdges, identityToSemanticId);
       }
     }
 
     return { nodes, edges };
+  }
+
+  /**
+   * Recursively collect nodes from a value and build identity mapping
+   */
+  private collectNodes(
+    value: unknown,
+    nodes: GraphNode[],
+    seenNodes: Set<string>,
+    identityToSemanticId: Map<number, string>
+  ): void {
+    if (!value || typeof value !== 'object') return;
+
+    // Check if it's a node
+    if ('labels' in value) {
+      const node = this.parseNode(value);
+      if (node && !seenNodes.has(node.id)) {
+        seenNodes.add(node.id);
+        nodes.push(node);
+
+        // Build identity mapping for relationship resolution
+        const n = value as { identity?: { low: number; high: number } };
+        if (n.identity?.low !== undefined) {
+          identityToSemanticId.set(n.identity.low, node.id);
+        }
+      }
+    }
+
+    // Handle arrays (path results, collected nodes, etc.)
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        this.collectNodes(item, nodes, seenNodes, identityToSemanticId);
+      }
+    }
+  }
+
+  /**
+   * Recursively collect edges from a value, resolving internal IDs to semantic IDs
+   */
+  private collectEdges(
+    value: unknown,
+    edges: GraphEdge[],
+    seenEdges: Set<string>,
+    identityToSemanticId: Map<number, string>
+  ): void {
+    if (!value || typeof value !== 'object') return;
+
+    // Check if it's a relationship
+    if ('type' in value && 'start' in value) {
+      const edge = this.parseRelationshipWithMapping(value, identityToSemanticId);
+      if (edge) {
+        const edgeKey = `${edge.source}-${edge.type}-${edge.target}`;
+        if (!seenEdges.has(edgeKey)) {
+          seenEdges.add(edgeKey);
+          edges.push(edge);
+        }
+      }
+    }
+
+    // Handle arrays (path results, collected relationships, etc.)
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        this.collectEdges(item, edges, seenEdges, identityToSemanticId);
+      }
+    }
+  }
+
+  /**
+   * Parse Neo4j relationship to GraphEdge, resolving internal IDs to semantic IDs
+   */
+  private parseRelationshipWithMapping(
+    rel: unknown,
+    identityToSemanticId: Map<number, string>
+  ): GraphEdge | null {
+    if (!rel || typeof rel !== 'object') return null;
+
+    const r = rel as {
+      start?: { low: number; high: number };
+      end?: { low: number; high: number };
+      type?: string;
+      properties?: Record<string, unknown>;
+    };
+
+    if (!r.type || !r.start || !r.end) return null;
+
+    // Resolve internal identity to semantic ID
+    // Fall back to node_X format only if we don't have the mapping
+    const sourceId = identityToSemanticId.get(r.start.low) ?? `node_${r.start.low}`;
+    const targetId = identityToSemanticId.get(r.end.low) ?? `node_${r.end.low}`;
+
+    return {
+      source: sourceId,
+      target: targetId,
+      type: r.type,
+      properties: r.properties || {},
+    };
   }
 
   /**

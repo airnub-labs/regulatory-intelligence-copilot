@@ -30,56 +30,120 @@ function escapeCypher(value: string | undefined | null): string {
 
 /**
  * Parse Memgraph query result into GraphContext
+ *
+ * IMPORTANT: We must track a mapping from internal ID to semantic ID
+ * because relationships reference nodes by internal ID, but we use semantic IDs.
  */
 function parseGraphResult(result: unknown): GraphContext {
   const nodes: GraphNode[] = [];
   const edges: GraphEdge[] = [];
   const seenNodes = new Set<string>();
   const seenEdges = new Set<string>();
+  // Map from internal ID to semantic node ID
+  const internalToSemanticId = new Map<string, string>();
 
   if (!result || !Array.isArray(result)) {
     return { nodes, edges };
   }
 
+  // First pass: collect all nodes and build ID mapping
   for (const row of result) {
-    // Process nodes
     for (const [, value] of Object.entries(row)) {
-      if (value && typeof value === 'object') {
-        const v = value as Record<string, unknown>;
+      collectNodesFromValue(value, nodes, seenNodes, internalToSemanticId);
+    }
+  }
 
-        // Check if it's a node
-        if (v.id && v.labels && Array.isArray(v.labels)) {
-          const nodeId = String(v.id);
-          if (!seenNodes.has(nodeId)) {
-            seenNodes.add(nodeId);
-            const props = (v.properties || {}) as Record<string, unknown>;
-            nodes.push({
-              id: props.id as string || nodeId,
-              label: props.label as string || props.name as string || String(v.labels[0]),
-              type: v.labels[0] as GraphNode['type'],
-              properties: props,
-            });
-          }
-        }
-
-        // Check if it's an edge/relationship
-        if (v.type && v.start && v.end) {
-          const edgeKey = `${v.start}-${v.type}-${v.end}`;
-          if (!seenEdges.has(edgeKey)) {
-            seenEdges.add(edgeKey);
-            edges.push({
-              source: String(v.start),
-              target: String(v.end),
-              type: String(v.type),
-              properties: (v.properties || {}) as Record<string, unknown>,
-            });
-          }
-        }
-      }
+  // Second pass: collect all relationships using the ID mapping
+  for (const row of result) {
+    for (const [, value] of Object.entries(row)) {
+      collectEdgesFromValue(value, edges, seenEdges, internalToSemanticId);
     }
   }
 
   return { nodes, edges };
+}
+
+/**
+ * Recursively collect nodes from a value and build ID mapping
+ */
+function collectNodesFromValue(
+  value: unknown,
+  nodes: GraphNode[],
+  seenNodes: Set<string>,
+  internalToSemanticId: Map<string, string>
+): void {
+  if (!value || typeof value !== 'object') return;
+
+  const v = value as Record<string, unknown>;
+
+  // Check if it's a node (has id and labels)
+  if (v.id && v.labels && Array.isArray(v.labels)) {
+    const internalId = String(v.id);
+    const props = (v.properties || {}) as Record<string, unknown>;
+    const semanticId = props.id as string || internalId;
+
+    if (!seenNodes.has(semanticId)) {
+      seenNodes.add(semanticId);
+      nodes.push({
+        id: semanticId,
+        label: props.label as string || props.name as string || String(v.labels[0]),
+        type: v.labels[0] as GraphNode['type'],
+        properties: props,
+      });
+
+      // Build mapping from internal ID to semantic ID for relationship resolution
+      internalToSemanticId.set(internalId, semanticId);
+    }
+  }
+
+  // Handle arrays (collected nodes, neighbours, etc.)
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectNodesFromValue(item, nodes, seenNodes, internalToSemanticId);
+    }
+  }
+}
+
+/**
+ * Recursively collect edges from a value, resolving internal IDs to semantic IDs
+ */
+function collectEdgesFromValue(
+  value: unknown,
+  edges: GraphEdge[],
+  seenEdges: Set<string>,
+  internalToSemanticId: Map<string, string>
+): void {
+  if (!value || typeof value !== 'object') return;
+
+  const v = value as Record<string, unknown>;
+
+  // Check if it's an edge/relationship (has type, start, end but no labels)
+  if (v.type && v.start && v.end && !v.labels) {
+    const internalStart = String(v.start);
+    const internalEnd = String(v.end);
+
+    // Resolve internal IDs to semantic IDs
+    const sourceId = internalToSemanticId.get(internalStart) ?? internalStart;
+    const targetId = internalToSemanticId.get(internalEnd) ?? internalEnd;
+
+    const edgeKey = `${sourceId}-${v.type}-${targetId}`;
+    if (!seenEdges.has(edgeKey)) {
+      seenEdges.add(edgeKey);
+      edges.push({
+        source: sourceId,
+        target: targetId,
+        type: String(v.type),
+        properties: (v.properties || {}) as Record<string, unknown>,
+      });
+    }
+  }
+
+  // Handle arrays (collected relationships, etc.)
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectEdgesFromValue(item, edges, seenEdges, internalToSemanticId);
+    }
+  }
 }
 
 /**
