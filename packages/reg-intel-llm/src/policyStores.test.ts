@@ -17,6 +17,13 @@ import {
   type RedisLikeClient,
 } from './policyStores.js';
 import type { TenantLlmPolicy } from './llmRouter.js';
+import { InMemoryPolicyStore } from './llmRouter.js';
+
+// Mock the dynamic require in createPolicyStore
+vi.mock('./llmRouter.js', async () => {
+  const actual = await vi.importActual('./llmRouter.js');
+  return actual;
+});
 
 // Mock Supabase client
 function createMockSupabaseClient(): SupabaseLikeClient {
@@ -352,30 +359,24 @@ describe('CachingPolicyStore', () => {
   });
 });
 
-// Factory tests skipped - they require built modules due to dynamic require() for circular dependency avoidance
-describe.skip('createPolicyStore Factory', () => {
-  it('should create InMemoryPolicyStore when no Supabase', () => {
-    const store = createPolicyStore({});
-    expect(store).toBeDefined();
-  });
-
-  it('should create SupabasePolicyStore when only Supabase provided', () => {
+describe('Store Construction', () => {
+  it('should create SupabasePolicyStore with copilot_internal schema', () => {
     const supabase = createMockSupabaseClient();
-    const store = createPolicyStore({ supabase });
+    const store = new SupabasePolicyStore(supabase, 'copilot_internal');
     expect(store).toBeInstanceOf(SupabasePolicyStore);
   });
 
-  it('should create CachingPolicyStore when both Supabase and Redis provided', () => {
+  it('should create SupabasePolicyStore with public schema', () => {
     const supabase = createMockSupabaseClient();
-    const redis = createMockRedisClient();
-    const store = createPolicyStore({ supabase, redis });
-    expect(store).toBeInstanceOf(CachingPolicyStore);
+    const store = new SupabasePolicyStore(supabase, 'public');
+    expect(store).toBeInstanceOf(SupabasePolicyStore);
   });
 
-  it('should respect custom TTL', async () => {
+  it('should create CachingPolicyStore with custom TTL', async () => {
     const supabase = createMockSupabaseClient();
     const redis = createMockRedisClient();
-    const store = createPolicyStore({ supabase, redis, cacheTtlSeconds: 600 });
+    const backingStore = new SupabasePolicyStore(supabase);
+    const cachingStore = new CachingPolicyStore(backingStore, redis, { ttlSeconds: 600 });
 
     const policy: TenantLlmPolicy = {
       tenantId: 'tenant-9',
@@ -386,8 +387,8 @@ describe.skip('createPolicyStore Factory', () => {
       userPolicies: {},
     };
 
-    await store.setPolicy(policy);
-    await store.getPolicy('tenant-9');
+    await cachingStore.setPolicy(policy);
+    await cachingStore.getPolicy('tenant-9');
 
     expect(redis.setex).toHaveBeenCalledWith(
       'copilot:llm:policy:tenant-9',
