@@ -269,6 +269,9 @@ importers:
 
   packages/reg-intel-core:
     dependencies:
+      '@dqbd/tiktoken':
+        specifier: ^1.0.15
+        version: 1.0.22
       '@e2b/code-interpreter':
         specifier: ^2.2.0
         version: 2.2.0
@@ -908,6 +911,10 @@ packages:
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
     dev: true
+
+  /@dqbd/tiktoken@1.0.22:
+    resolution: {integrity: sha512-RYhO8xeHkMNX5Ixqf4M1Ve3siCYJY/dI0yLnlX4M4oIEDOvjMIQ+E+3OUpAaZcWTaMtQJzGcDAghYfllpx3i/w==}
+    dev: false
 
   /@e2b/code-interpreter@2.2.0:
     resolution: {integrity: sha512-j2XIhuuV+MvjCMJbwRCL3hZjkOTv4Jk1FygI4dCwaU9PggtAW+TXhyaVzzVPZroE9fqxLfrXGqY08P06Ei7MQA==}
