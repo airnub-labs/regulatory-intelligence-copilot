@@ -4,16 +4,68 @@ This guide provides comprehensive instructions for setting up and running the Re
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Initial Setup](#initial-setup)
-3. [Memgraph Setup](#memgraph-setup)
-4. [Supabase Setup](#supabase-setup)
-5. [Environment Configuration](#environment-configuration)
-6. [Running the Application](#running-the-application)
-7. [Development Workflow](#development-workflow)
-8. [Database Migrations](#database-migrations)
-9. [Troubleshooting](#troubleshooting)
-10. [Advanced Topics](#advanced-topics)
+1. [Quick Start (Minimal Setup)](#quick-start-minimal-setup)
+2. [Prerequisites](#prerequisites)
+3. [Initial Setup](#initial-setup)
+4. [Memgraph Setup](#memgraph-setup)
+5. [Supabase Setup](#supabase-setup)
+6. [Environment Configuration](#environment-configuration)
+7. [Running the Application](#running-the-application)
+8. [Development Workflow](#development-workflow)
+9. [Database Migrations](#database-migrations)
+10. [Troubleshooting](#troubleshooting)
+11. [Advanced Topics](#advanced-topics)
+
+---
+
+## Quick Start (Minimal Setup)
+
+**For first-time setup, follow these steps in order:**
+
+```bash
+# 1. Install dependencies
+pnpm install
+
+# 2. Start required Docker services (Memgraph only)
+docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
+
+# 3. Start Supabase (first run takes 5-10 minutes)
+supabase start
+
+# 4. Seed Supabase database and get demo user credentials
+supabase db reset
+
+# 5. Get demo user and tenant IDs
+PGPASSWORD=postgres psql "postgresql://postgres@localhost:54322/postgres" \
+  -c "SELECT id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id FROM auth.users WHERE email='demo.user@example.com';"
+
+# 6. Create environment file for web app
+cd apps/demo-web
+cp .env.local.example .env.local
+# Edit .env.local with:
+# - Your LLM API keys (at least one: GROQ_API_KEY or OPENAI_API_KEY)
+# - PERPLEXITY_API_KEY for web search
+# - Supabase credentials from `supabase start` output
+# - Demo user/tenant IDs from step 5
+# - NEXTAUTH_SECRET (generate with: openssl rand -base64 32)
+
+# 7. Setup Memgraph indices (recommended for performance)
+cd ../..  # Back to repository root
+pnpm setup:indices
+
+# 8. Seed Memgraph with demo data
+pnpm seed:all
+
+# 9. Start the development server
+pnpm dev
+
+# 10. Open the application
+# Chat UI: http://localhost:3000
+# Memgraph Lab: http://localhost:7444
+# Supabase Studio: http://localhost:54323
+```
+
+**That's it!** For detailed explanations and advanced features, continue reading below.
 
 ---
 
@@ -111,9 +163,14 @@ Memgraph is the core knowledge graph database. The project uses **Memgraph Platf
 Using the provided Docker Compose configuration:
 
 ```bash
-# Start Memgraph and Memgraph MCP server
+# Start Memgraph and Memgraph MCP server (required)
 docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
+
+# Optional: Start observability stack (for production or advanced debugging)
+# docker compose -f docker/docker-compose.yml up -d otel-collector jaeger prometheus loki grafana redis
 ```
+
+**Note:** The observability stack (OpenTelemetry, Jaeger, Prometheus, Loki, Grafana, Redis) is **optional** for basic development. It provides advanced monitoring, tracing, and caching capabilities useful for production deployments.
 
 ### Seed the graph for local testing
 
@@ -280,33 +337,44 @@ service_role key: <key>
 
 Save these for your `.env` file.
 
-### Seed demo data and configure the app
+### Seed Demo Data and Configure the App
 
 1. **Reset and seed** the local database so the demo tenant, user, personas, and quick prompts exist:
 
    ```bash
-   supabase db reset --use-mig --seed supabase/seed/demo_seed.sql
+   supabase db reset
    ```
 
-   The seed will **generate IDs** for the demo tenant/user (so database sequences remain untouched). Capture them with:
+   This command:
+   - Drops and recreates the database
+   - Runs all migrations from `supabase/migrations/`
+   - Runs the seed file `supabase/seed/demo_seed.sql`
+
+2. **Extract demo user credentials** (the seed generates random IDs):
 
    ```bash
    # Uses the default local Supabase Postgres port and password
    PGPASSWORD=postgres psql "postgresql://postgres@localhost:54322/postgres" \
-     -c "select id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id from auth.users where email='demo.user@example.com';"
+     -c "SELECT id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id FROM auth.users WHERE email='demo.user@example.com';"
    ```
 
-2. **Expose Supabase to the platform** by adding these values to `.env.local` (use the URLs/keys printed by `supabase start`):
+   **Save these IDs** - you'll need them for `.env.local`.
+
+3. **Configure the web app** by adding these values to `apps/demo-web/.env.local`:
 
    ```bash
+   # Supabase connection (from `supabase start` output)
    NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
    NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
    SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
-   SUPABASE_DEMO_TENANT_ID=<demo_tenant_id-from-query-above>
-   NEXT_PUBLIC_SUPABASE_DEMO_USER_ID=<demo_user_id-from-query-above>
+
+   # Demo user credentials (from query above)
+   SUPABASE_DEMO_TENANT_ID=<demo_tenant_id-from-query>
+   NEXT_PUBLIC_SUPABASE_DEMO_USER_ID=<demo_user_id-from-query>
+   NEXT_PUBLIC_SUPABASE_DEMO_EMAIL=demo.user@example.com
    ```
 
-   The demo web app reads these values to call the API with the seeded Supabase user instead of the previous hardcoded demo header.
+   The demo web app uses these values to authenticate as the seeded demo user.
 
 ### Stop Supabase
 
@@ -447,12 +515,14 @@ pnpm --filter @regulatory-copilot/demo-web dev --help
 
 ### Start All Services
 
-1. **Start Memgraph**:
+**Minimal setup (required services only):**
+
+1. **Start Memgraph** (graph database):
    ```bash
    docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
    ```
 
-2. **Start Supabase**:
+2. **Start Supabase** (authentication and conversations):
    ```bash
    supabase start
    ```
@@ -462,10 +532,31 @@ pnpm --filter @regulatory-copilot/demo-web dev --help
    pnpm dev
    ```
 
-4. **Open the application**:
-   - Chat UI: `http://localhost:3000`
-   - Memgraph Lab: `http://localhost:7444`
-   - Supabase Studio: `http://localhost:54323`
+**Full setup (with observability):**
+
+```bash
+# Start all Docker services including observability stack
+docker compose -f docker/docker-compose.yml up -d
+
+# Start Supabase
+supabase start
+
+# Start Next.js dev server
+pnpm dev
+```
+
+### Access the Application
+
+Once all services are running, access:
+
+- **Chat UI**: `http://localhost:3000`
+- **Memgraph Lab**: `http://localhost:7444`
+- **Supabase Studio**: `http://localhost:54323`
+
+**Optional (if observability stack is running):**
+- **Grafana Dashboard**: `http://localhost:3200` (admin/admin)
+- **Jaeger Tracing**: `http://localhost:16686`
+- **Prometheus Metrics**: `http://localhost:9090`
 
 ### Development Scripts
 
