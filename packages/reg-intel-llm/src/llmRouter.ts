@@ -20,7 +20,7 @@
  * - Egress control settings
  */
 
-import { createLogger, recordLlmTokenUsage, recordLlmRequest } from '@reg-copilot/reg-intel-observability';
+import { createLogger, recordLlmTokenUsage, recordLlmRequest, recordLlmCost } from '@reg-copilot/reg-intel-observability';
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
 import {
@@ -353,6 +353,17 @@ export class OpenAiProviderClient implements LlmProviderClient {
             ...attribution,
           });
         }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'openai',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
+        }
       }
 
       return result.text;
@@ -455,6 +466,17 @@ export class OpenAiProviderClient implements LlmProviderClient {
             tokens: usage.totalTokens,
             ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'openai',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -575,6 +597,17 @@ export class GroqProviderClient implements LlmProviderClient {
             ...attribution,
           });
         }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'groq',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
+        }
       }
 
       return result.text;
@@ -673,6 +706,17 @@ export class GroqProviderClient implements LlmProviderClient {
             tokens: usage.totalTokens,
             ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'groq',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -793,6 +837,17 @@ export class AnthropicProviderClient implements LlmProviderClient {
             ...attribution,
           });
         }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'anthropic',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
+        }
       }
 
       return result.text;
@@ -891,6 +946,17 @@ export class AnthropicProviderClient implements LlmProviderClient {
             tokens: usage.totalTokens,
             ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'anthropic',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -1011,6 +1077,17 @@ export class GeminiProviderClient implements LlmProviderClient {
             ...attribution,
           });
         }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'google',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
+        }
       }
 
       return result.text;
@@ -1109,6 +1186,17 @@ export class GeminiProviderClient implements LlmProviderClient {
             tokens: usage.totalTokens,
             ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'google',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {

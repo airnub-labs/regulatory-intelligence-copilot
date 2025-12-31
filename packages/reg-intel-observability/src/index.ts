@@ -10,6 +10,7 @@ export {
   recordGraphQuery,
   recordLlmTokenUsage,
   recordLlmRequest,
+  recordLlmCost,
   recordEgressGuardScan,
   withMetricTiming,
   // UI/UX metrics
