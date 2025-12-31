@@ -20,6 +20,11 @@ import type {
 
 const logger = createLogger('BusinessMetrics')
 
+// Constants to prevent unbounded growth and memory leaks
+const MAX_HOUR_KEYS = 168 // Keep last 7 days (24 hours × 7 days)
+const MAX_USER_ENTRIES = 10000 // Limit concurrent active users tracked
+const MAX_ENDPOINT_ENTRIES = 500 // Limit number of unique endpoints tracked
+
 interface ApiCallRecord {
   calls: number
   totalResponseTime: number
@@ -48,6 +53,35 @@ class BusinessMetricsCollectorImpl implements BusinessMetricsCollector {
   private peakHours: Record<string, number> = {}
 
   /**
+   * Prune old hour keys to prevent unbounded growth
+   */
+  private pruneHourKeys(hourMap: Record<string, number>): void {
+    const hours = Object.keys(hourMap).sort()
+    if (hours.length > MAX_HOUR_KEYS) {
+      const toDelete = hours.slice(0, hours.length - MAX_HOUR_KEYS)
+      toDelete.forEach(h => delete hourMap[h])
+      logger.debug({ prunedCount: toDelete.length }, 'Pruned old hour keys')
+    }
+  }
+
+  /**
+   * Prune least-used endpoints to prevent unbounded growth
+   */
+  private pruneEndpoints(): void {
+    const endpointCount = Object.keys(this.apiCalls).length
+    if (endpointCount > MAX_ENDPOINT_ENTRIES) {
+      // Sort by call count and remove least-used endpoints
+      const sortedEndpoints = Object.entries(this.apiCalls)
+        .sort((a, b) => a[1].calls - b[1].calls)
+
+      const toDelete = sortedEndpoints.slice(0, endpointCount - MAX_ENDPOINT_ENTRIES)
+      toDelete.forEach(([endpoint]) => delete this.apiCalls[endpoint])
+
+      logger.debug({ prunedCount: toDelete.length }, 'Pruned least-used endpoints')
+    }
+  }
+
+  /**
    * Record an API call with response time
    */
   recordApiCall(endpoint: string, responseTime: number, success: boolean): void {
@@ -69,9 +103,17 @@ class BusinessMetricsCollectorImpl implements BusinessMetricsCollector {
       record.errors++
     }
 
+    // Prune endpoints periodically (every 1000 calls)
+    if (this.totalApiCalls % 1000 === 0) {
+      this.pruneEndpoints()
+    }
+
     // Track by hour
     const hourKey = new Date().toISOString().slice(0, 13)
     this.apiCallsByHour[hourKey] = (this.apiCallsByHour[hourKey] || 0) + 1
+
+    // Prune old hour keys
+    this.pruneHourKeys(this.apiCallsByHour)
 
     logger.debug({
       endpoint,
@@ -101,6 +143,22 @@ class BusinessMetricsCollectorImpl implements BusinessMetricsCollector {
   }
 
   /**
+   * Prune inactive users using LRU strategy to prevent unbounded growth
+   */
+  private pruneInactiveUsers(): void {
+    if (this.userActivity.size > MAX_USER_ENTRIES) {
+      // Sort by lastSeen and remove oldest users
+      const sortedUsers = Array.from(this.userActivity.entries())
+        .sort((a, b) => a[1].lastSeen - b[1].lastSeen)
+
+      const toDelete = sortedUsers.slice(0, this.userActivity.size - MAX_USER_ENTRIES)
+      toDelete.forEach(([userId]) => this.userActivity.delete(userId))
+
+      logger.debug({ prunedCount: toDelete.length }, 'Pruned inactive users')
+    }
+  }
+
+  /**
    * Record user activity
    */
   recordUserActivity(userId: string, action: string): void {
@@ -121,9 +179,17 @@ class BusinessMetricsCollectorImpl implements BusinessMetricsCollector {
 
     this.userActivity.set(userId, activity)
 
+    // Prune inactive users periodically (every 100 activity records)
+    if (this.userActivity.size % 100 === 0) {
+      this.pruneInactiveUsers()
+    }
+
     // Track peak hours
     const hourKey = new Date().toISOString().slice(0, 13)
     this.peakHours[hourKey] = (this.peakHours[hourKey] || 0) + 1
+
+    // Prune old peak hour keys
+    this.pruneHourKeys(this.peakHours)
 
     logger.debug({ userId, action }, 'User activity recorded')
   }

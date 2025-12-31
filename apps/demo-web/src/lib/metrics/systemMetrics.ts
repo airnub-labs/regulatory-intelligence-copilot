@@ -24,6 +24,11 @@ import type {
 
 const logger = createLogger('SystemMetrics')
 
+// Constants to prevent unbounded growth and memory leaks
+const MAX_HOUR_KEYS = 168 // Keep last 7 days (24 hours × 7 days)
+const MAX_ENDPOINT_ENTRIES = 500 // Limit number of unique endpoints tracked
+const MAX_ERROR_TYPE_ENTRIES = 100 // Limit number of unique error types tracked
+
 interface RequestCount {
   total: number
   byEndpoint: Record<string, number>
@@ -56,15 +61,69 @@ class SystemMetricsCollectorImpl implements SystemMetricsCollector {
   }
 
   /**
+   * Prune old hour keys to prevent unbounded growth
+   */
+  private pruneHourKeys(hourMap: Record<string, number>): void {
+    const hours = Object.keys(hourMap).sort()
+    if (hours.length > MAX_HOUR_KEYS) {
+      const toDelete = hours.slice(0, hours.length - MAX_HOUR_KEYS)
+      toDelete.forEach(h => delete hourMap[h])
+      logger.debug({ prunedCount: toDelete.length }, 'Pruned old hour keys')
+    }
+  }
+
+  /**
+   * Prune least-used endpoints to prevent unbounded growth
+   */
+  private pruneEndpoints(): void {
+    const endpointCount = Object.keys(this.requests.byEndpoint).length
+    if (endpointCount > MAX_ENDPOINT_ENTRIES) {
+      // Sort by request count and remove least-used endpoints
+      const sortedEndpoints = Object.entries(this.requests.byEndpoint)
+        .sort((a, b) => a[1] - b[1])
+
+      const toDelete = sortedEndpoints.slice(0, endpointCount - MAX_ENDPOINT_ENTRIES)
+      toDelete.forEach(([endpoint]) => delete this.requests.byEndpoint[endpoint])
+
+      logger.debug({ prunedCount: toDelete.length }, 'Pruned least-used endpoints')
+    }
+  }
+
+  /**
+   * Prune least-common error types to prevent unbounded growth
+   */
+  private pruneErrorTypes(): void {
+    const errorTypeCount = Object.keys(this.errorsByType).length
+    if (errorTypeCount > MAX_ERROR_TYPE_ENTRIES) {
+      // Sort by count and remove least-common error types
+      const sortedTypes = Object.entries(this.errorsByType)
+        .sort((a, b) => a[1] - b[1])
+
+      const toDelete = sortedTypes.slice(0, errorTypeCount - MAX_ERROR_TYPE_ENTRIES)
+      toDelete.forEach(([type]) => delete this.errorsByType[type])
+
+      logger.debug({ prunedCount: toDelete.length }, 'Pruned least-common error types')
+    }
+  }
+
+  /**
    * Record an HTTP request
    */
   recordRequest(endpoint: string): void {
     this.requests.total++
     this.requests.byEndpoint[endpoint] = (this.requests.byEndpoint[endpoint] || 0) + 1
 
+    // Prune endpoints periodically (every 1000 requests)
+    if (this.requests.total % 1000 === 0) {
+      this.pruneEndpoints()
+    }
+
     // Track requests by hour for pattern analysis
     const hourKey = new Date().toISOString().slice(0, 13) // YYYY-MM-DDTHH
     this.requests.byHour[hourKey] = (this.requests.byHour[hourKey] || 0) + 1
+
+    // Prune old hour keys
+    this.pruneHourKeys(this.requests.byHour)
 
     logger.debug({ endpoint, total: this.requests.total }, 'Request recorded')
   }
@@ -85,6 +144,11 @@ class SystemMetricsCollectorImpl implements SystemMetricsCollector {
     // Keep only last 100 errors
     if (this.errors.length > 100) {
       this.errors.shift()
+    }
+
+    // Prune error types periodically (every 100 errors)
+    if (this.errors.length % 100 === 0) {
+      this.pruneErrorTypes()
     }
 
     logger.warn({ type, message: error.message }, 'Error recorded')

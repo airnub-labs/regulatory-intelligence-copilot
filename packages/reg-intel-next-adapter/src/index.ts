@@ -492,8 +492,9 @@ class SseStreamWriter {
   close() {
     try {
       this.controller.close();
-    } catch {
-      // Controller may already be closed
+    } catch (error) {
+      // Controller may already be closed (non-critical)
+      console.debug('Failed to close SSE controller (non-critical):', error);
     }
   }
 }
@@ -890,8 +891,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             unsubscribe();
             try {
               controller.close();
-            } catch {
-              // Controller may already be closed
+            } catch (error) {
+              // Controller may already be closed (non-critical)
+              console.debug('Failed to close controller on abort (non-critical):', error);
             }
           };
           request.signal.addEventListener('abort', abortHandler);

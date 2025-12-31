@@ -115,6 +115,7 @@ class TelemetryBatchQueue {
   private readonly endpoint: string;
   private readonly maxBatchSize: number;
   private readonly flushIntervalMs: number;
+  public lastUsed: number = Date.now(); // Track last usage for cleanup
 
   constructor(endpoint: string, maxBatchSize: number, flushIntervalMs: number) {
     this.endpoint = endpoint;
@@ -137,9 +138,20 @@ class TelemetryBatchQueue {
   }
 
   /**
+   * Cleanup resources (clear timers)
+   */
+  cleanup(): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer as number);
+      this.flushTimer = null;
+    }
+  }
+
+  /**
    * Add event to queue and potentially trigger flush
    */
   enqueue(event: TelemetryEvent): void {
+    this.lastUsed = Date.now(); // Update last used timestamp
     this.queue.push(event);
 
     // Flush immediately if batch size reached
@@ -178,9 +190,10 @@ class TelemetryBatchQueue {
 
     try {
       await this.sendBatch(events);
-    } catch {
+    } catch (error) {
       // Swallow errors to avoid impacting UX
       // Events are lost, but this is acceptable for client telemetry
+      console.debug('[ClientTelemetry] Failed to send batch (non-critical):', error);
     } finally {
       this.isFlushing = false;
     }
@@ -233,8 +246,9 @@ class TelemetryBatchQueue {
         body,
         keepalive: true,
       });
-    } catch {
-      // Swallow errors
+    } catch (error) {
+      // Swallow errors - acceptable for client telemetry
+      console.debug('[ClientTelemetry] Failed to send via fetch (non-critical):', error);
     }
   }
 }
@@ -243,6 +257,59 @@ class TelemetryBatchQueue {
  * Global batching queue singleton per endpoint
  */
 const batchQueues = new Map<string, TelemetryBatchQueue>();
+
+/**
+ * Maximum number of unique endpoints to track (prevents unbounded Map growth)
+ */
+const MAX_ENDPOINT_QUEUES = 50;
+
+/**
+ * Idle timeout for cleanup (1 hour)
+ */
+const ENDPOINT_IDLE_TIMEOUT_MS = 3600000;
+
+/**
+ * Cleanup interval (10 minutes)
+ */
+const CLEANUP_INTERVAL_MS = 600000;
+
+/**
+ * Prune idle batch queues to prevent unbounded Map growth and timer leaks
+ */
+const pruneIdleQueues = (): void => {
+  const now = Date.now();
+  let prunedCount = 0;
+
+  for (const [endpoint, queue] of batchQueues.entries()) {
+    if (now - queue.lastUsed > ENDPOINT_IDLE_TIMEOUT_MS) {
+      queue.cleanup(); // Clear timer
+      batchQueues.delete(endpoint);
+      prunedCount++;
+    }
+  }
+
+  // If still over limit, remove least recently used
+  if (batchQueues.size > MAX_ENDPOINT_QUEUES) {
+    const sortedQueues = Array.from(batchQueues.entries())
+      .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+
+    const toDelete = sortedQueues.slice(0, batchQueues.size - MAX_ENDPOINT_QUEUES);
+    toDelete.forEach(([endpoint, queue]) => {
+      queue.cleanup();
+      batchQueues.delete(endpoint);
+      prunedCount++;
+    });
+  }
+
+  if (prunedCount > 0) {
+    console.debug(`[ClientTelemetry] Pruned ${prunedCount} idle batch queues`);
+  }
+};
+
+// Run cleanup periodically (only in browser environment)
+if (typeof window !== 'undefined') {
+  setInterval(pruneIdleQueues, CLEANUP_INTERVAL_MS);
+}
 
 /**
  * Get or create batch queue for endpoint

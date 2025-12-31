@@ -398,7 +398,7 @@ Examples:
         if (!args[1] || !args[2]) {
           fail('Passed and failed counts required');
         }
-        updateTests(state, 'unit', parseInt(args[1]), parseInt(args[2]), args[3]);
+        updateTests(state, 'unit', parseInt(args[1], 10), parseInt(args[2], 10), args[3]);
         saveState(state);
         break;
 
@@ -406,7 +406,7 @@ Examples:
         if (!args[1] || !args[2]) {
           fail('Passed and failed counts required');
         }
-        updateTests(state, 'integration', parseInt(args[1]), parseInt(args[2]));
+        updateTests(state, 'integration', parseInt(args[1], 10), parseInt(args[2], 10));
         saveState(state);
         break;
 

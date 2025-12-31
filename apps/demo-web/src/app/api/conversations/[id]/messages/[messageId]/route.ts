@@ -190,13 +190,34 @@ export async function PATCH(
               return NextResponse.json({ error: 'Message not found' }, { status: 404 });
             }
 
-            // Merge new metadata with existing
+            // Merge new metadata with existing (with validation)
             const existingMetadata = (existingMessage.metadata as Record<string, unknown>) ?? {};
+
+            // Whitelist of allowed metadata keys to prevent injection
+            const ALLOWED_METADATA_KEYS = [
+              'agentUsed',
+              'jurisdictions',
+              'uncertaintyLevel',
+              'referencedNodes',
+              'customTags',
+              'priority',
+            ];
+
+            // Validate and filter metadata
+            const validatedMetadata: Record<string, unknown> = {};
+            if (body.metadata && typeof body.metadata === 'object') {
+              for (const key of Object.keys(body.metadata)) {
+                if (ALLOWED_METADATA_KEYS.includes(key)) {
+                  validatedMetadata[key] = body.metadata[key];
+                }
+              }
+            }
+
             const updatedMetadata = {
               ...existingMetadata,
-              ...body.metadata,
+              ...validatedMetadata,
               updatedAt: new Date().toISOString(),
-              updatedBy: userId,
+              updatedBy: userId, // Always last to prevent override
             };
 
             // Update the message metadata
