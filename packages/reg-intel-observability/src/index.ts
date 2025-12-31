@@ -48,3 +48,23 @@ export {
   ALL_PRICING,
   DEFAULT_PRICING,
 } from './pricing/index.js';
+
+// Cost Storage & Quota Management
+export {
+  type LlmCostRecord,
+  type CostAggregate,
+  type CostAggregateQuery,
+  type CostQuota,
+  type QuotaCheckRequest,
+  type QuotaCheckResult,
+  type CostStorageProvider,
+  type QuotaProvider,
+  type CostTrackingOptions,
+  type RecordCostRequest,
+  CostTrackingService,
+  initCostTracking,
+  getCostTrackingService,
+  getCostTrackingServiceIfInitialized,
+  InMemoryCostStorage,
+  InMemoryQuotaProvider,
+} from './costTracking/index.js';

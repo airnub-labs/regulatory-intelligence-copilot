@@ -203,10 +203,15 @@ export const recordLlmCost = async (attributes: {
   userId?: string;
   task?: string;
   conversationId?: string;
+  cached?: boolean;
+  streaming?: boolean;
+  durationMs?: number;
+  success?: boolean;
 }): Promise<void> => {
   try {
-    // Import pricing service dynamically to avoid circular dependencies
+    // Import dynamically to avoid circular dependencies
     const { calculateLlmCost } = await import('./pricing/index.js');
+    const { getCostTrackingServiceIfInitialized } = await import('./costTracking/index.js');
 
     const costCalculation = await calculateLlmCost(
       attributes.provider,
@@ -215,7 +220,7 @@ export const recordLlmCost = async (attributes: {
       attributes.outputTokens
     );
 
-    // Record total cost with attribution
+    // Record to OpenTelemetry metrics (real-time observability)
     llmCostCounter?.add(costCalculation.totalCostUsd, {
       provider: attributes.provider,
       model: attributes.model,
@@ -251,6 +256,29 @@ export const recordLlmCost = async (attributes: {
         conversationId: attributes.conversationId,
         isEstimated: costCalculation.isEstimated,
       } as Attributes);
+    }
+
+    // Record to cost tracking service (storage & quota management)
+    const costTrackingService = getCostTrackingServiceIfInitialized();
+    if (costTrackingService) {
+      await costTrackingService.recordCost({
+        provider: attributes.provider,
+        model: attributes.model,
+        inputTokens: attributes.inputTokens,
+        outputTokens: attributes.outputTokens,
+        inputCostUsd: costCalculation.inputCostUsd,
+        outputCostUsd: costCalculation.outputCostUsd,
+        totalCostUsd: costCalculation.totalCostUsd,
+        isEstimated: costCalculation.isEstimated,
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        task: attributes.task,
+        conversationId: attributes.conversationId,
+        cached: attributes.cached,
+        streaming: attributes.streaming,
+        durationMs: attributes.durationMs,
+        success: attributes.success,
+      });
     }
   } catch (error) {
     // Silently fail if pricing service is unavailable
