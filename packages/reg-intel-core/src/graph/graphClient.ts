@@ -320,6 +320,7 @@ export function createGraphClient(): GraphClient {
                   ELSE NULL
              END AS enrichedRel
         RETURN n, collect(enrichedRel) AS enrichedRels, collect(m) AS related
+        LIMIT 1000
       `;
 
       logger.info({ event: 'graph.query.crossBorderSlice', jurisdictions: jurisdictionIds });

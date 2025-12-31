@@ -873,6 +873,19 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           const writer = new SseStreamWriter(controller);
             subscriber.send = (event: ConversationEventType, data: unknown) => writer.send(event, data);
 
+          // Set up abort signal handler to interrupt async iteration on request cancellation
+          let aborted = false;
+          const abortHandler = () => {
+            aborted = true;
+            unsubscribe();
+            try {
+              controller.close();
+            } catch {
+              // Controller may already be closed
+            }
+          };
+          request.signal.addEventListener('abort', abortHandler);
+
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
             conversationId,
@@ -910,6 +923,11 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               executionTools,
               forceTool: validatedForceTool,
             })) {
+              // Break out of async iteration if request was aborted
+              if (aborted) {
+                break;
+              }
+
               if (chunk.type === 'metadata') {
                 // Send metadata with agent info, jurisdictions, and referenced nodes
                 requestContext.set({ agentId: chunk.metadata!.agentUsed });
