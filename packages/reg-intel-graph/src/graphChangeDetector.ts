@@ -92,6 +92,8 @@ export interface ChangeSubscription {
 export interface GraphChangeDetectorConfig {
   /** Polling interval in milliseconds (default: 5000) */
   pollIntervalMs?: number;
+  /** Poll timeout in milliseconds (default: 60000) */
+  pollTimeoutMs?: number;
   /** Enable timestamp-based queries (default: true) */
   useTimestamps?: boolean;
   /** Change batching window in milliseconds (default: 1000) */
@@ -159,6 +161,7 @@ export class GraphChangeDetector {
     this.timestampQueryFn = timestampQueryFn;
     this.config = {
       pollIntervalMs: config?.pollIntervalMs ?? 5000,
+      pollTimeoutMs: config?.pollTimeoutMs ?? 60000,
       useTimestamps: config?.useTimestamps ?? true,
       batchWindowMs: config?.batchWindowMs ?? 1000,
       enableBatching: config?.enableBatching ?? true,
@@ -273,10 +276,30 @@ export class GraphChangeDetector {
       return; // No active subscriptions
     }
 
+    // Poll all filters with individual timeout protection
     await Promise.all(
-      filterKeys.map((filterKey) => {
+      filterKeys.map(async (filterKey) => {
         const filter = this.parseFilterKey(filterKey);
-        return this.pollFilter(filter);
+        try {
+          // Add timeout to each individual poll to prevent hanging
+          await Promise.race([
+            this.pollFilter(filter),
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error(`Poll timeout for filter: ${filterKey}`)),
+                this.config.pollTimeoutMs
+              )
+            ),
+          ]);
+        } catch (error) {
+          this.logger.warn(
+            {
+              filterKey,
+              error: error instanceof Error ? error.message : String(error),
+            },
+            `${LOG_PREFIX.graph} Poll filter failed or timed out`
+          );
+        }
       })
     );
   }
@@ -545,11 +568,22 @@ export class GraphChangeDetector {
 
     // Set new timeout to emit batched patch
     batch.timeoutId = setTimeout(() => {
-      const batchedPatch = this.mergePatchBatch(batch!.patches);
-      this.emitPatch(filterKey, batchedPatch);
-
-      // Clear batch
-      this.pendingBatches.delete(filterKey);
+      try {
+        const batchedPatch = this.mergePatchBatch(batch!.patches);
+        this.emitPatch(filterKey, batchedPatch);
+      } catch (error) {
+        this.logger.error(
+          {
+            err: error,
+            filterKey,
+            patchCount: batch!.patches.length,
+          },
+          `${LOG_PREFIX.graph} Error merging or emitting batch`
+        );
+      } finally {
+        // Always clear batch to prevent memory leaks
+        this.pendingBatches.delete(filterKey);
+      }
     }, this.config.batchWindowMs);
   }
 
