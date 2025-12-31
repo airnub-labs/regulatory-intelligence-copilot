@@ -197,9 +197,11 @@ Keep all secrets **out of source control**.
   - `memgraph` – require Memgraph write connectivity; concept capture is blocked with a warning if unavailable.
   - `memory` – never attempt graph writes; concept capture remains in memory only (useful for tests without Memgraph).
 
-### 4. Start Infra (Memgraph + MCP Gateway)
+### 4. Start Required Infrastructure
 
-With Docker installed, bring up the graph DB and MCP gateway stack:
+With Docker installed, bring up the required services:
+
+#### Required Services
 
 ```bash
 # Start Memgraph (with Lab UI and MAGE included) and Memgraph MCP server
@@ -210,23 +212,42 @@ The `memgraph` service uses `memgraph/memgraph-platform:latest` which includes t
 
 Ensure:
 
-- Memgraph is reachable at the configured `MEMGRAPH_URI` (default: `bolt://localhost:7687`).  
-- Memgraph Lab UI is available at `http://localhost:7444`.  
+- Memgraph is reachable at the configured `MEMGRAPH_URI` (default: `bolt://localhost:7687`).
+- Memgraph Lab UI is available at `http://localhost:7444`.
 - The Memgraph MCP server exposes tools at `http://localhost:8001`.
+
+#### Optional Services (Observability Stack)
+
+For production deployments or advanced development, you can also start the observability stack:
+
+```bash
+# Start full observability stack (optional)
+docker compose -f docker/docker-compose.yml up -d otel-collector jaeger prometheus loki grafana redis
+```
+
+This provides:
+- **OpenTelemetry Collector** - Traces, metrics, and logs collection (port 4318)
+- **Jaeger** - Trace visualization UI (port 16686)
+- **Prometheus** - Metrics storage (port 9090)
+- **Loki** - Log aggregation (port 3100)
+- **Grafana** - Unified observability dashboard (port 3200)
+- **Redis** - Caching and rate limiting (port 6379)
+
+For basic development, these are **not required** and can be skipped.
 
 ### 5. Start Supabase / Postgres (for conversations)
 
 For local development you can either:
 
-- Use the **Supabase CLI / docker stack** for a full local Supabase instance, or  
+- Use the **Supabase CLI / docker stack** for a full local Supabase instance, or
 - Point `DATABASE_URL` at a local Postgres instance.
 
-The recommended path is described in **`docs/local_development.md`**, which covers:
+The recommended path is described in **`docs/development/local/LOCAL_DEVELOPMENT.md`**, which covers:
 
-- Starting Supabase locally.
-- Running database migrations.
-- Applying seed data for demo conversations and tenants.
-- Reading the first‑run Supabase notice that prints the **seeded demo user ID and tenant ID**; copy those values into the **repo root** `.env.local` (used by the demo web app) so the UI can authenticate as the seeded demo user.
+- Starting Supabase locally with `supabase start`.
+- Running database migrations automatically on first start.
+- Applying seed data for demo conversations and tenants using `supabase db reset`.
+- Extracting the **seeded demo user ID and tenant ID** via a psql query and copying those values into `apps/demo-web/.env.local` so the UI can authenticate as the seeded demo user.
 
 ### 6. Setup Memgraph Indices (Recommended)
 
@@ -250,28 +271,32 @@ SHOW INDEX INFO;
 
 See `scripts/README.md` for full documentation.
 
-### 7. Seed Memgraph with demo data
+### 7. Seed Memgraph with Demo Data
 
-Seed scripts and example Cypher files live under `scripts/` and `docs/specs/graph-seed/` (see `docs/architecture/README.md` for pointers).
+Seed scripts live under `scripts/`. See `scripts/README.md` for detailed documentation.
 
-A typical flow looks like:
+**Recommended seeding order:**
 
 ```bash
-# Seed Irish regulatory data
+# 1. Create indices for optimal performance (10-1000x faster queries)
+pnpm setup:indices
+
+# 2. Seed Irish regulatory data
 pnpm seed:graph
 
-# Seed special jurisdictions (IE/UK/NI/IM/EU, CTA, NI Protocol)
+# 3. Seed special jurisdictions (IE/UK/NI/IM/EU, CTA, NI Protocol)
 pnpm seed:jurisdictions
 
-# Or seed everything at once
+# Or run steps 2-3 together:
 pnpm seed:all
 ```
 
-Check the Memgraph Lab UI after seeding to confirm:
+Check the Memgraph Lab UI after seeding (`http://localhost:7444`) to confirm:
 
 - Core jurisdiction nodes (IE / UK / EU / NI / IM / etc.) exist.
 - Initial rule/benefit/timeline nodes are visible.
-- Indices are being used (run `EXPLAIN` on queries to verify)
+- Indices are created (run `SHOW INDEX INFO;` to verify).
+- Queries use indices (run `EXPLAIN` on queries to verify).
 
 ### 8. Run the Dev Server
 
