@@ -27,3 +27,23 @@ export type {
   ObservabilityOptions,
   TraceSamplingOptions,
 } from './tracing.js';
+
+// Model Pricing & Cost Tracking
+export {
+  type ModelPricing,
+  type CostCalculation,
+  type CostEstimateRequest,
+  type LlmCostMetrics,
+  type PricingService,
+  InMemoryPricingService,
+  createPricingService,
+  getDefaultPricingService,
+  calculateLlmCost,
+  OPENAI_PRICING,
+  ANTHROPIC_PRICING,
+  GOOGLE_PRICING,
+  GROQ_PRICING,
+  LOCAL_PRICING,
+  ALL_PRICING,
+  DEFAULT_PRICING,
+} from './pricing/index.js';
