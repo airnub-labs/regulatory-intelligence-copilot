@@ -295,8 +295,13 @@ export async function POST(request: Request) {
 
     // Forward to OTEL collector (async, non-blocking)
     if (OTEL_COLLECTOR_ENDPOINT) {
-      // Don't await - fire and forget
-      void forwardToOTELCollector(events);
+      // Fire and forget with error logging
+      void forwardToOTELCollector(events).catch((error) => {
+        logger.warn(
+          { err: error instanceof Error ? error : new Error(String(error)) },
+          'Failed to forward telemetry to OTEL collector (non-critical)'
+        );
+      });
     }
 
     return new Response(null, { status: 204 });

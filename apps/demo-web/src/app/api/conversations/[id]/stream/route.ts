@@ -66,6 +66,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
               cleanup();
             };
 
+            // Register abort listener FIRST to prevent race condition
+            request.signal.addEventListener('abort', abortHandler);
+
             const subscriber: SseSubscriber<ConversationEventType> = {
               send(event: ConversationEventType, data: unknown) {
                 controller.enqueue(sseChunk(event, data));
@@ -85,8 +88,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
               jurisdictions: safeConversation.jurisdictions,
               archivedAt: safeConversation.archivedAt,
             });
-
-            request.signal.addEventListener('abort', abortHandler);
           },
         });
 

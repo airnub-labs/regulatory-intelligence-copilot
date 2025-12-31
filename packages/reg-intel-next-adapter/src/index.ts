@@ -475,16 +475,27 @@ class SseStreamWriter {
    * @param data - Event payload (will be JSON stringified if not a string)
    */
   send(event: ConversationEventType, data: unknown) {
-    const payload = typeof data === 'string' ? data : JSON.stringify(data);
-    const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
-    this.controller.enqueue(this.encoder.encode(chunk));
+    try {
+      const payload = typeof data === 'string' ? data : JSON.stringify(data);
+      const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
+      this.controller.enqueue(this.encoder.encode(chunk));
+    } catch (error) {
+      // Controller may be closed or in error state
+      // Don't propagate error - just log it
+      console.warn(`Failed to send SSE event '${event}':`, error);
+    }
   }
 
   /**
    * Close the SSE stream
    */
   close() {
-    this.controller.close();
+    try {
+      this.controller.close();
+    } catch (error) {
+      // Controller may already be closed (non-critical)
+      console.debug('Failed to close SSE controller (non-critical):', error);
+    }
   }
 }
 
@@ -873,6 +884,20 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
           const writer = new SseStreamWriter(controller);
             subscriber.send = (event: ConversationEventType, data: unknown) => writer.send(event, data);
 
+          // Set up abort signal handler to interrupt async iteration on request cancellation
+          let aborted = false;
+          const abortHandler = () => {
+            aborted = true;
+            unsubscribe();
+            try {
+              controller.close();
+            } catch (error) {
+              // Controller may already be closed (non-critical)
+              console.debug('Failed to close controller on abort (non-critical):', error);
+            }
+          };
+          request.signal.addEventListener('abort', abortHandler);
+
           // ensure every subscriber for this conversation knows the identifier and sharing flag before streaming starts
           eventHub.broadcast(tenantId, conversationId, 'metadata', {
             conversationId,
@@ -910,6 +935,11 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
               executionTools,
               forceTool: validatedForceTool,
             })) {
+              // Break out of async iteration if request was aborted
+              if (aborted) {
+                break;
+              }
+
               if (chunk.type === 'metadata') {
                 // Send metadata with agent info, jurisdictions, and referenced nodes
                 requestContext.set({ agentId: chunk.metadata!.agentUsed });

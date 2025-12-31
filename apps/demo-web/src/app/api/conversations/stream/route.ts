@@ -59,6 +59,9 @@ export async function GET(request: NextRequest) {
               cleanup()
             }
 
+            // Register abort listener FIRST to prevent race condition
+            request.signal.addEventListener('abort', abortHandler)
+
             const subscriber: SseSubscriber<ConversationListEventType> = {
               send(event: ConversationListEventType, data: unknown) {
                 controller.enqueue(sseChunk(event, data))
@@ -75,8 +78,6 @@ export async function GET(request: NextRequest) {
               conversations: initialConversations.conversations.map(toClientConversation),
             }
             subscriber.send('snapshot', snapshotPayload)
-
-            request.signal.addEventListener('abort', abortHandler)
           },
         })
 

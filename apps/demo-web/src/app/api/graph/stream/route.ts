@@ -98,6 +98,20 @@ function handleSse(
 
   const stream = new ReadableStream({
     async start(controller) {
+      let keepAliveInterval: NodeJS.Timeout | null = null;
+      let subscription: { unsubscribe: () => void } | null = null;
+
+      // Register abort listener FIRST to prevent race condition
+      request.signal.addEventListener('abort', () => {
+        if (keepAliveInterval) clearInterval(keepAliveInterval);
+        subscription?.unsubscribe();
+        try {
+          controller.close();
+        } catch {
+          // Controller may already be closed
+        }
+      });
+
       const connectionMessage: ConnectionMessage = {
         type: 'connected',
         timestamp: new Date().toISOString(),
@@ -107,17 +121,15 @@ function handleSse(
         encoder.encode(`data: ${JSON.stringify(connectionMessage)}\n\n`)
       );
 
-      const keepAliveInterval = setInterval(() => {
+      keepAliveInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': keepalive\n\n'));
         } catch {
-          clearInterval(keepAliveInterval);
+          if (keepAliveInterval) clearInterval(keepAliveInterval);
         }
       }, 30000);
 
       // Only subscribe to patches if sandbox is active
-      let subscription: { unsubscribe: () => void } | null = null;
-
       if (hasActiveSandbox() && getMcpGatewayUrl()) {
         subscription = subscribeToGraphPatches(filter, (patch: GraphPatch) => {
           try {
@@ -125,17 +137,13 @@ function handleSse(
             logger.info({ meta: patch.meta, tenantId, userId }, 'Sent patch to SSE client');
           } catch (error) {
             logger.error({ err: error, tenantId, userId }, 'Error sending patch to SSE client');
+            // Unsubscribe on error to prevent further attempts
+            subscription?.unsubscribe();
           }
         });
       } else {
         logger.info({ tenantId, userId }, 'No active sandbox - streaming keepalive only');
       }
-
-      request.signal.addEventListener('abort', () => {
-        clearInterval(keepAliveInterval);
-        subscription?.unsubscribe();
-        controller.close();
-      });
     },
   });
 
@@ -168,6 +176,8 @@ function handleWebSocket(filter: ChangeFilter, tenantId: string, userId: string)
         server.send(JSON.stringify(patch));
       } catch (error) {
         logger.error({ err: error, tenantId, userId }, 'WebSocket send failed');
+        // Unsubscribe immediately to prevent further patch delivery
+        subscription?.unsubscribe();
         server.close();
       }
     });

@@ -96,6 +96,19 @@ export class InMemoryConversationPathStore implements ConversationPathStore {
   private activePaths = new Map<string, string>(); // conversationId -> pathId
 
   async createPath(input: CreatePathInput): Promise<{ pathId: string }> {
+    // Check if creating a primary path - prevent race condition
+    if (input.isPrimary) {
+      const existingPrimary = await this.getPrimaryPath({
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+      });
+      if (existingPrimary) {
+        throw new Error(
+          `Primary path already exists for conversation: ${input.conversationId} (pathId: ${existingPrimary.id})`
+        );
+      }
+    }
+
     const id = randomUUID();
     const now = new Date();
 
@@ -845,6 +858,19 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
     return this.wrapOperation(
       { operation: 'insert', table: 'conversation_paths', tenantId: input.tenantId },
       async () => {
+        // Check if creating a primary path - prevent race condition
+        if (input.isPrimary) {
+          const existingPrimary = await this.getPrimaryPath({
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+          });
+          if (existingPrimary) {
+            throw new Error(
+              `Primary path already exists for conversation: ${input.conversationId} (pathId: ${existingPrimary.id})`
+            );
+          }
+        }
+
         const now = new Date().toISOString();
 
         const { data, error } = await this.internalClient

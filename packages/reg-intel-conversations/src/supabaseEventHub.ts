@@ -16,15 +16,47 @@ export interface SupabaseRealtimeEventHubConfig {
   instanceId?: string;
 }
 
+/** Default timeout for channel subscription (30 seconds) */
+const CHANNEL_SUBSCRIBE_TIMEOUT_MS = 30000;
+
 async function subscribeToChannel(channel: RealtimeChannel): Promise<RealtimeChannel> {
   return await new Promise<RealtimeChannel>((resolve, reject) => {
+    let settled = false;
+
+    // Set up a timeout to prevent hanging indefinitely
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(`Realtime channel subscribe timeout after ${CHANNEL_SUBSCRIBE_TIMEOUT_MS}ms`));
+      }
+    }, CHANNEL_SUBSCRIBE_TIMEOUT_MS);
+
     channel.subscribe(status => {
+      if (settled) {
+        return;
+      }
+
       if (status === 'SUBSCRIBED') {
+        settled = true;
+        clearTimeout(timeoutId);
         resolve(channel);
       } else if (status === 'CHANNEL_ERROR') {
+        settled = true;
+        clearTimeout(timeoutId);
         reject(new Error('Realtime channel error'));
       } else if (status === 'TIMED_OUT') {
+        settled = true;
+        clearTimeout(timeoutId);
         reject(new Error('Realtime channel subscribe timeout'));
+      } else if (status === 'CLOSED') {
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(new Error('Realtime channel closed before subscription completed'));
+      } else {
+        // Handle unexpected status values to prevent silent hangs
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(new Error(`Unexpected Realtime channel status: ${status}`));
       }
     });
   });

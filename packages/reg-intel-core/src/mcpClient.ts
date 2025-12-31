@@ -17,6 +17,9 @@ import { SEMATTRS_HTTP_METHOD, SEMATTRS_HTTP_URL } from '@opentelemetry/semantic
 
 const logger = createLogger('McpClient', { component: 'mcp' });
 
+/** Timeout for MCP gateway fetch requests (30 seconds) */
+const MCP_CALL_TIMEOUT_MS = 30000;
+
 // MCP Gateway configuration - set once from the active sandbox
 let mcpGatewayUrl = '';
 let mcpGatewayToken = '';
@@ -118,92 +121,118 @@ async function baseMcpCall(params: MCPCallParams): Promise<MCPCallResponse> {
         hasToken: Boolean(mcpGatewayToken),
       }, 'Executing MCP call');
 
-      const response = await fetch(mcpGatewayUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(jsonRpcRequest),
-      });
+      // Set up abort controller with timeout to prevent hanging indefinitely
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), MCP_CALL_TIMEOUT_MS);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        logger.debug({
-          toolName: params.toolName,
-          sandboxId,
-          status: response.status,
-          errorText: errorText.substring(0, 200),
-        }, 'MCP call failed with HTTP error');
-        return {
-          result: null,
-          error: `MCP call failed: ${response.status} - ${errorText}`,
-        };
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-
-      // Handle SSE response using eventsource-parser
-      if (contentType.includes('text/event-stream')) {
-        const text = await response.text();
-        let result: unknown = null;
-
-        const parser = createParser({
-          onEvent: (event: EventSourceMessage) => {
-            if (event.data) {
-              try {
-                const data = JSON.parse(event.data);
-                // Look for the result in the SSE data
-                if (data.result !== undefined) {
-                  result = data.result;
-                } else if (data.content) {
-                  result = data.content;
-                } else {
-                  result = data;
-                }
-              } catch {
-                // Skip non-JSON data
-              }
-            }
-          },
+      try {
+        const response = await fetch(mcpGatewayUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(jsonRpcRequest),
+          signal: abortController.signal,
         });
+        clearTimeout(timeoutId);
 
-        parser.feed(text);
+        if (!response.ok) {
+          const errorText = await response.text();
+          logger.debug({
+            toolName: params.toolName,
+            sandboxId,
+            status: response.status,
+            errorText: errorText.substring(0, 200),
+          }, 'MCP call failed with HTTP error');
+          return {
+            result: null,
+            error: `MCP call failed: ${response.status} - ${errorText}`,
+          };
+        }
 
-        logger.debug({
-          toolName: params.toolName,
-          sandboxId,
-          responseType: 'sse',
-          hasResult: result !== null,
-        }, 'MCP call completed (SSE response)');
+        const contentType = response.headers.get('content-type') || '';
 
-        return { result };
-      }
+        // Handle SSE response using eventsource-parser
+        if (contentType.includes('text/event-stream')) {
+          const text = await response.text();
+          let result: unknown = null;
 
-      // Handle JSON response
-      const jsonRpcResponse = await response.json() as {
-        result?: unknown;
-        error?: { message?: string; code?: number };
-      };
+          const parser = createParser({
+            onEvent: (event: EventSourceMessage) => {
+              if (event.data) {
+                try {
+                  const data = JSON.parse(event.data);
+                  // Look for the result in the SSE data
+                  if (data.result !== undefined) {
+                    result = data.result;
+                  } else if (data.content) {
+                    result = data.content;
+                  } else {
+                    result = data;
+                  }
+                } catch {
+                  // Skip non-JSON data
+                }
+              }
+            },
+          });
 
-      if (jsonRpcResponse.error) {
-        logger.debug({
-          toolName: params.toolName,
-          sandboxId,
-          errorCode: jsonRpcResponse.error.code,
-          errorMessage: jsonRpcResponse.error.message,
-        }, 'MCP call completed with RPC error');
-        return {
-          result: null,
-          error: `MCP error: ${jsonRpcResponse.error.message || JSON.stringify(jsonRpcResponse.error)}`,
+          parser.feed(text);
+
+          logger.debug({
+            toolName: params.toolName,
+            sandboxId,
+            responseType: 'sse',
+            hasResult: result !== null,
+          }, 'MCP call completed (SSE response)');
+
+          return { result };
+        }
+
+        // Handle JSON response
+        const jsonRpcResponse = await response.json() as {
+          result?: unknown;
+          error?: { message?: string; code?: number };
         };
+
+        if (jsonRpcResponse.error) {
+          logger.debug({
+            toolName: params.toolName,
+            sandboxId,
+            errorCode: jsonRpcResponse.error.code,
+            errorMessage: jsonRpcResponse.error.message,
+          }, 'MCP call completed with RPC error');
+          return {
+            result: null,
+            error: `MCP error: ${jsonRpcResponse.error.message || JSON.stringify(jsonRpcResponse.error)}`,
+          };
+        }
+
+        logger.debug({
+          toolName: params.toolName,
+          sandboxId,
+          responseType: 'json',
+          hasResult: jsonRpcResponse.result !== undefined,
+        }, 'MCP call completed successfully');
+
+        return { result: jsonRpcResponse.result };
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        // Check if the error is due to abort/timeout
+        if (error instanceof Error && error.name === 'AbortError') {
+          logger.warn({
+            toolName: params.toolName,
+            sandboxId,
+            timeout: MCP_CALL_TIMEOUT_MS,
+          }, 'MCP call timed out');
+          return {
+            result: null,
+            error: `MCP call timed out after ${MCP_CALL_TIMEOUT_MS}ms`,
+          };
+        }
+
+        // Re-throw other errors
+        throw error;
       }
-
-      logger.debug({
-        toolName: params.toolName,
-        sandboxId,
-        responseType: 'json',
-        hasResult: jsonRpcResponse.result !== undefined,
-      }, 'MCP call completed successfully');
-
-      return { result: jsonRpcResponse.result };
     }
   );
 }

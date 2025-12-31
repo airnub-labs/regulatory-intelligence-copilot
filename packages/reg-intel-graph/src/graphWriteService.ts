@@ -179,6 +179,41 @@ export interface GraphWriteServiceConfig {
 }
 
 /**
+ * Allowed node labels - whitelist to prevent Cypher injection
+ */
+const ALLOWED_NODE_LABELS = [
+  'Concept',
+  'Label',
+  'Jurisdiction',
+  'Region',
+  'Statute',
+  'Section',
+  'Benefit',
+  'Relief',
+  'Timeline',
+  'Agreement',
+  'Regime',
+  'ProfileTag',
+] as const;
+
+/**
+ * Allowed relationship types - whitelist to prevent Cypher injection
+ */
+const ALLOWED_RELATIONSHIP_TYPES = [
+  'PART_OF',
+  'IN_JURISDICTION',
+  'COORDINATED_WITH',
+  'TREATY_LINKED_TO',
+  'EXCLUDES',
+  'MUTUALLY_EXCLUSIVE_WITH',
+  'EQUIVALENT_TO',
+  'REQUIRES',
+  'PROVIDES',
+  'CONSTRAINS',
+  'GOVERNED_BY',
+] as const;
+
+/**
  * Graph Write Service
  *
  * All writes to Memgraph MUST go through this service.
@@ -196,6 +231,34 @@ export class GraphWriteService {
     this.customAspects = config.customAspects || [];
     this.tenantId = config.tenantId;
     this.defaultSource = config.defaultSource || 'script';
+  }
+
+  /**
+   * Validate node label against whitelist to prevent Cypher injection
+   */
+  private validateNodeLabel(label: string | undefined): void {
+    if (!label) {
+      throw new Error('Node label is required');
+    }
+    if (!ALLOWED_NODE_LABELS.includes(label as any)) {
+      throw new Error(
+        `Invalid node label: ${label}. Allowed labels: ${ALLOWED_NODE_LABELS.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * Validate relationship type against whitelist to prevent Cypher injection
+   */
+  private validateRelationshipType(relType: string | undefined): void {
+    if (!relType) {
+      throw new Error('Relationship type is required');
+    }
+    if (!ALLOWED_RELATIONSHIP_TYPES.includes(relType as any)) {
+      throw new Error(
+        `Invalid relationship type: ${relType}. Allowed types: ${ALLOWED_RELATIONSHIP_TYPES.join(', ')}`
+      );
+    }
   }
 
   private sanitizeProperties(properties: Record<string, unknown>): Record<string, unknown> {
@@ -246,6 +309,10 @@ export class GraphWriteService {
    */
   private async executeCypherNode(session: Session, ctx: GraphWriteContext): Promise<void> {
     const { nodeLabel, properties, operation } = ctx;
+
+    // Validate node label to prevent Cypher injection
+    this.validateNodeLabel(nodeLabel);
+
     const sanitizedProperties = this.sanitizeProperties(properties);
 
     return withSpan(
@@ -313,6 +380,10 @@ export class GraphWriteService {
     ctx: GraphWriteContext,
   ): Promise<void> {
     const { relType, properties, operation, metadata } = ctx;
+
+    // Validate relationship type to prevent Cypher injection
+    this.validateRelationshipType(relType);
+
     const sanitizedProperties = this.sanitizeProperties(properties);
 
     return withSpan(
@@ -336,6 +407,10 @@ export class GraphWriteService {
               'Relationship operations require fromLabel, toLabel, fromId, toId in metadata',
             );
           }
+
+          // Validate node labels to prevent Cypher injection
+          this.validateNodeLabel(fromLabel);
+          this.validateNodeLabel(toLabel);
 
           const propEntries = Object.entries(sanitizedProperties).filter(
             ([_, value]) => value !== null,
