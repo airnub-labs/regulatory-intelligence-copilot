@@ -479,3 +479,86 @@ Expected performance improvements after creating indices:
 - **Full Documentation**: `scripts/README-INDICES.md`
 - **Implementation Plan**: `docs/architecture/GRAPH_ID_RESOLUTION_IMPLEMENTATION.md`
 - **Memgraph Docs**: https://memgraph.com/docs/fundamentals/indexes
+
+---
+
+## Testing Scripts
+
+### Graph Change Detection Tests (`test-graph-changes.ts`)
+
+Tests the GraphChangeDetector functionality for detecting changes to the Memgraph graph.
+
+#### Usage
+
+```bash
+# Test all change detection scenarios
+pnpm test:changes
+
+# Test specific change type
+pnpm test:changes:add       # Test adding new nodes
+pnpm test:changes:update    # Test updating existing nodes
+pnpm test:changes:remove    # Test removing nodes
+pnpm test:changes:simulate  # Simulate realistic change scenarios
+```
+
+#### What It Tests
+
+- **Add Node**: Detects newly created nodes with timestamps
+- **Update Node**: Detects property changes to existing nodes
+- **Remove Node**: Detects deleted nodes (if tracking is enabled)
+- **Simulate**: Runs a realistic change scenario with multiple operations
+
+#### Configuration
+
+Uses the same environment variables as the seeding scripts:
+- `MEMGRAPH_URI` - Bolt URI (default: `bolt://localhost:7687`)
+- `MEMGRAPH_USERNAME` - Username (optional)
+- `MEMGRAPH_PASSWORD` - Password (optional)
+
+### Supabase Store Check (`manual-supabase-store-check.ts`)
+
+Manually tests the Supabase conversation store connectivity and functionality.
+
+#### Usage
+
+```bash
+pnpm check:supabase-store
+```
+
+#### What It Tests
+
+- Supabase connection and authentication
+- Conversation creation and retrieval
+- Message storage and retrieval
+- Store configuration and mode detection
+
+#### Configuration
+
+Requires Supabase environment variables:
+- `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
+## Development Scripts
+
+### Quick Reference
+
+```bash
+# Development
+pnpm dev              # Start all packages in dev mode
+pnpm dev:web          # Start only the web app
+pnpm build            # Build all packages
+pnpm lint             # Lint all packages
+pnpm type-check       # Type-check all packages
+
+# Database Setup
+pnpm setup:indices    # Create Memgraph indices
+pnpm seed:graph       # Seed Irish regulatory data
+pnpm seed:jurisdictions  # Seed special jurisdictions
+pnpm seed:all         # Seed all data (graph + jurisdictions)
+
+# Testing
+pnpm test:changes     # Test graph change detection
+pnpm check:supabase-store  # Test Supabase store connectivity
+```
