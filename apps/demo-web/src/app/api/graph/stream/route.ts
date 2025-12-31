@@ -176,6 +176,8 @@ function handleWebSocket(filter: ChangeFilter, tenantId: string, userId: string)
         server.send(JSON.stringify(patch));
       } catch (error) {
         logger.error({ err: error, tenantId, userId }, 'WebSocket send failed');
+        // Unsubscribe immediately to prevent further patch delivery
+        subscription?.unsubscribe();
         server.close();
       }
     });

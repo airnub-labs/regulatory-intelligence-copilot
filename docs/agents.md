@@ -8,24 +8,47 @@ This document contains critical information for AI coding agents working on this
 
 ## 🚨 Critical: Hidden Bug Patterns to Watch For
 
-**Before you write any async code, streaming endpoints, or event subscriptions, you MUST read:**
+**Before you write any code, you MUST read:**
 
-### [📖 Hanging Request Bugs Guide](./development/HANGING_REQUEST_BUGS.md)
+### [📖 Insidious Bug Patterns Guide](./development/INSIDIOUS_BUGS.md)
 
-This document catalogs **critical but hidden bugs** that cause requests to hang indefinitely. These bugs:
+This comprehensive document catalogs **18 critical bug patterns** discovered in the codebase. These bugs:
 - Don't throw errors or fail fast
-- Only manifest under specific network conditions
-- Can crash production systems through resource exhaustion
-- Are extremely difficult to debug
+- Only manifest under specific conditions (load, network issues, time, concurrent access)
+- Are difficult to detect in development and code review
+- Can cause production outages, data corruption, or security breaches
 
-**Key Patterns Documented:**
+**Bug Categories Documented:**
+
+**Part I: Hanging Request Bugs** (5 patterns - ALL FIXED)
 1. ✅ Missing status case handlers in promise-based callbacks
 2. ✅ Network operations without timeout protection
 3. ✅ Async iteration without abort signal handlers
 4. ✅ SSE/WebSocket cleanup race conditions
 5. ✅ Unbounded database queries
 
-**All 5 patterns have been found and fixed in this codebase. Do not reintroduce them.**
+**Part II: Memory Leaks** (3 patterns - ACTIVE BUGS)
+6. ⚠️ Unbounded Map/Object growth in singletons
+7. ✅ Event listeners never removed
+8. ⚠️ Interval timers never cleared
+
+**Part III: Security Vulnerabilities** (3 patterns - NEEDS REVIEW)
+9. ⚠️ Cypher/SQL injection
+10. ⚠️ Missing input validation
+11. ✅ Secrets in logs
+
+**Part IV: Concurrency Bugs** (2 patterns - ACTIVE BUGS)
+12. ⚠️ Race conditions in shared state
+13. ✅ Order-dependent initialization
+
+**Part V: Type Coercion & Data Bugs** (3 patterns - MINOR BUGS)
+14. ⚠️ Missing radix in parseInt()
+15. ⚠️ Date/timezone confusion
+16. ✅ Truthy/falsy gotchas
+
+**Part VI: Silent Failures** (2 patterns - ACTIVE BUGS)
+17. ⚠️ Empty catch blocks
+18. ⚠️ Missing error propagation
 
 ---
 

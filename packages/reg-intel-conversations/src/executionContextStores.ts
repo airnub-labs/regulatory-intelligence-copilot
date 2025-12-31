@@ -176,6 +176,19 @@ export class InMemoryExecutionContextStore implements ExecutionContextStore {
   }
 
   async createContext(input: CreateExecutionContextInput): Promise<ExecutionContext> {
+    const pathKey = this.getPathKey(input);
+
+    // Check if context already exists for this path (prevents race condition)
+    const existingContextId = this.pathIndex.get(pathKey);
+    if (existingContextId) {
+      const existingContext = this.contexts.get(existingContextId);
+      if (existingContext && !existingContext.terminatedAt) {
+        throw new Error(
+          `Execution context already exists for path: ${input.pathId} (contextId: ${existingContextId})`
+        );
+      }
+    }
+
     const id = crypto.randomUUID();
     const now = new Date();
     const ttl = input.ttlMinutes ?? 30;
@@ -193,7 +206,7 @@ export class InMemoryExecutionContextStore implements ExecutionContextStore {
     };
 
     this.contexts.set(id, context);
-    this.pathIndex.set(this.getPathKey(input), id);
+    this.pathIndex.set(pathKey, id);
 
     this.logger?.info('[InMemoryExecutionContextStore] Created context', {
       contextId: id,
@@ -386,6 +399,19 @@ export class SupabaseExecutionContextStore implements ExecutionContextStore {
         tenantId: input.tenantId,
       },
       async () => {
+        // Check if context already exists for this path (prevents race condition)
+        const existing = await this.getContextByPath({
+          tenantId: input.tenantId,
+          conversationId: input.conversationId,
+          pathId: input.pathId,
+        });
+
+        if (existing) {
+          throw new Error(
+            `Execution context already exists for path: ${input.pathId} (contextId: ${existing.id})`
+          );
+        }
+
         const { data, error } = await this.supabase
           .from('execution_contexts')
           .insert({

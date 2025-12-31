@@ -475,16 +475,27 @@ class SseStreamWriter {
    * @param data - Event payload (will be JSON stringified if not a string)
    */
   send(event: ConversationEventType, data: unknown) {
-    const payload = typeof data === 'string' ? data : JSON.stringify(data);
-    const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
-    this.controller.enqueue(this.encoder.encode(chunk));
+    try {
+      const payload = typeof data === 'string' ? data : JSON.stringify(data);
+      const chunk = `event: ${event}\n` + `data: ${payload}\n\n`;
+      this.controller.enqueue(this.encoder.encode(chunk));
+    } catch (error) {
+      // Controller may be closed or in error state
+      // Don't propagate error - just log it
+      console.warn(`Failed to send SSE event '${event}':`, error);
+    }
   }
 
   /**
    * Close the SSE stream
    */
   close() {
-    this.controller.close();
+    try {
+      this.controller.close();
+    } catch (error) {
+      // Controller may already be closed (non-critical)
+      console.debug('Failed to close SSE controller (non-critical):', error);
+    }
   }
 }
 
@@ -880,8 +891,9 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
             unsubscribe();
             try {
               controller.close();
-            } catch {
-              // Controller may already be closed
+            } catch (error) {
+              // Controller may already be closed (non-critical)
+              console.debug('Failed to close controller on abort (non-critical):', error);
             }
           };
           request.signal.addEventListener('abort', abortHandler);
