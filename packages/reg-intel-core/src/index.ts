@@ -167,6 +167,9 @@ export {
   estimateTokensHybrid,
   estimateMessageOverhead,
   estimateConversationOverhead,
+  countTokensForMessages,
+  countTokensForText,
+  clearTokenCountCache,
 } from './tokens/index.js';
 
 // LLM Client (legacy MCP-based)

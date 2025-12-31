@@ -39,6 +39,11 @@ export {
   estimateMessageOverhead,
   estimateConversationOverhead,
 } from './estimators.js';
+export {
+  countTokensForMessages,
+  countTokensForText,
+  clearTokenCountCache,
+} from './utils.js';
 
 import type { TokenCounter, TokenCounterConfig } from './types.js';
 import { TiktokenCounter } from './tiktoken.js';
