@@ -9,12 +9,15 @@
  *
  * Usage:
  * ```typescript
- * import { initCostTracking, InMemoryCostStorage, InMemoryQuotaProvider } from '@reg-copilot/reg-intel-observability';
+ * import { initCostTracking, SupabaseCostStorage, SupabaseQuotaProvider } from '@reg-copilot/reg-intel-observability';
+ * import { createClient } from '@supabase/supabase-js';
  *
- * // Initialize cost tracking with in-memory providers
+ * const supabase = createClient(url, key);
+ *
+ * // Initialize cost tracking with Supabase providers (required for all environments)
  * initCostTracking({
- *   storage: new InMemoryCostStorage(),
- *   quotas: new InMemoryQuotaProvider(),
+ *   storage: new SupabaseCostStorage(supabase),
+ *   quotas: new SupabaseQuotaProvider(supabase),
  *   enforceQuotas: true,
  *   onQuotaExceeded: (quota) => {
  *     console.warn(`Quota exceeded for ${quota.scope}:${quota.scopeId}`);
@@ -45,10 +48,10 @@ export {
   type RecordCostRequest,
 } from './costTrackingService.js';
 
-// In-memory providers (for development/testing)
+// In-memory providers (for unit testing only - NOT for local dev or production)
 export { InMemoryCostStorage, InMemoryQuotaProvider } from './inMemoryProviders.js';
 
-// Supabase providers (for production)
+// Supabase providers (required for local development and production)
 export { SupabaseCostStorage, SupabaseQuotaProvider } from './supabaseProviders.js';
 
 // Touchpoint constants

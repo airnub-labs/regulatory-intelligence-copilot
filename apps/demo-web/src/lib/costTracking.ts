@@ -1,8 +1,8 @@
 /**
  * Cost Tracking Initialization
  *
- * Sets up the cost tracking system with storage and quota management.
- * Automatically selects Supabase for production or in-memory for development.
+ * Sets up the cost tracking system with Supabase storage and quota management.
+ * Supabase is required in both local development and production environments.
  *
  * Usage:
  * Import this module at app startup to initialize cost tracking:
@@ -13,14 +13,10 @@
 
 import {
   initCostTracking,
-  InMemoryCostStorage,
-  InMemoryQuotaProvider,
   SupabaseCostStorage,
   SupabaseQuotaProvider,
   LLM_TOUCHPOINTS,
   type CostQuota,
-  type CostStorageProvider,
-  type QuotaProvider,
 } from '@reg-copilot/reg-intel-observability';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
@@ -29,77 +25,67 @@ const logger = createLogger('CostTracking');
 
 /**
  * Get Supabase credentials from environment
+ *
+ * Supabase is required in both local development and production.
+ * For local development, use `supabase start` to run a local Supabase instance.
+ *
+ * @throws Error if Supabase credentials are not configured
  */
-function resolveSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
+function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } {
   // Avoid initializing in browser
-  if (typeof window !== 'undefined') return null;
+  if (typeof window !== 'undefined') {
+    throw new Error('Cost tracking must be initialized on the server');
+  }
 
   const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
-  if (!supabaseUrl || !supabaseKey) return null;
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Supabase credentials required for cost tracking. ' +
+        'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables. ' +
+        'For local development, run `supabase start` to start a local Supabase instance.'
+    );
+  }
+
   return { supabaseUrl, supabaseKey };
 }
 
 /**
- * Create cost tracking providers based on environment
+ * Create cost tracking providers using Supabase
+ *
+ * Supabase is the only supported storage backend for cost tracking.
+ * This ensures consistent behavior across local development and production.
  */
 function createCostTrackingProviders(): {
-  storage: CostStorageProvider;
-  quotas: QuotaProvider;
-  mode: 'supabase' | 'memory';
+  storage: SupabaseCostStorage;
+  quotas: SupabaseQuotaProvider;
 } {
-  const credentials = resolveSupabaseCredentials();
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
-  const isProduction = nodeEnv === 'production';
-  const forceCostTrackingMode = process.env.COPILOT_COST_TRACKING_MODE;
+  const credentials = getSupabaseCredentials();
 
-  // Check if we should use Supabase
-  const useSupabase =
-    forceCostTrackingMode === 'supabase' ||
-    (isProduction && credentials && forceCostTrackingMode !== 'memory');
+  const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'copilot_internal' },
+  });
 
-  if (useSupabase && credentials) {
-    const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: 'copilot_internal' },
-    });
-
-    logger.info(
-      { supabaseUrl: credentials.supabaseUrl },
-      'Using Supabase for cost tracking storage'
-    );
-
-    return {
-      storage: new SupabaseCostStorage(client),
-      quotas: new SupabaseQuotaProvider(client),
-      mode: 'supabase',
-    };
-  }
-
-  // Fall back to in-memory
-  if (isProduction && !credentials) {
-    logger.warn(
-      'Supabase credentials not found; using in-memory cost tracking (not suitable for production)'
-    );
-  }
+  logger.info(
+    { supabaseUrl: credentials.supabaseUrl },
+    'Using Supabase for cost tracking storage'
+  );
 
   return {
-    storage: new InMemoryCostStorage({ maxRecords: 100_000 }),
-    quotas: new InMemoryQuotaProvider(),
-    mode: 'memory',
+    storage: new SupabaseCostStorage(client),
+    quotas: new SupabaseQuotaProvider(client),
   };
 }
 
 /**
  * Initialize cost tracking system
  *
- * Automatically selects:
- * - Supabase providers in production (if credentials available)
- * - In-memory providers for development/testing
+ * Uses Supabase for storage in both local development and production.
+ * For local development, ensure you have a local Supabase instance running.
  *
  * Environment variables:
- * - COPILOT_COST_TRACKING_MODE: Force 'supabase' or 'memory' mode
  * - SUPABASE_URL: Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Service role key for server-side operations
  */
@@ -112,8 +98,8 @@ export const initializeCostTracking = (): void => {
       return;
     }
 
-    // Create providers based on environment
-    const { storage, quotas, mode } = createCostTrackingProviders();
+    // Create Supabase-backed providers
+    const { storage, quotas } = createCostTrackingProviders();
 
     // Initialize cost tracking
     const costService = initCostTracking({
@@ -149,7 +135,7 @@ export const initializeCostTracking = (): void => {
     });
 
     logger.info({
-      mode,
+      storage: 'supabase',
       hasStorage: costService.hasStorage(),
       hasQuotas: costService.hasQuotas(),
       enforcing: costService.isEnforcingQuotas(),
@@ -177,64 +163,43 @@ export const getCostTracking = () => {
 };
 
 /**
- * Production Configuration Notes
+ * Cost Tracking Configuration Notes
  *
- * For production deployments, consider:
+ * This module uses Supabase for cost storage and quota management in both
+ * local development and production environments. There is no in-memory fallback.
  *
- * 1. **Database-backed Storage**
- *    Replace InMemoryCostStorage with a database provider:
- *    - PostgreSQL: For relational queries and complex aggregations
- *    - ClickHouse: For high-volume time-series analytics
- *    - TimescaleDB: For time-series with PostgreSQL compatibility
+ * ## Local Development Setup
  *
- * 2. **Redis-backed Quotas**
- *    Replace InMemoryQuotaProvider with Redis for:
- *    - Multi-instance deployments
- *    - Atomic quota updates
- *    - Distributed quota enforcement
+ * 1. Start local Supabase: `supabase start`
+ * 2. Ensure environment variables are set:
+ *    - SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)
+ *    - SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY)
  *
- * 3. **Quota Enforcement**
+ * ## Production Considerations
+ *
+ * 1. **Quota Enforcement**
  *    Set enforceQuotas: true to block requests that exceed quotas
  *    This prevents runaway costs but may impact UX
  *    Consider soft limits + alerting instead
  *
- * 4. **Alert Integration**
+ * 2. **Alert Integration**
  *    Implement onQuotaWarning and onQuotaExceeded callbacks to:
  *    - Send Slack notifications
  *    - Trigger PagerDuty incidents
  *    - Email billing admins
  *    - Update status dashboards
  *
- * 5. **Default Quotas**
+ * 3. **Default Quotas**
  *    Set sensible default quotas based on your pricing:
  *    - Platform-wide: Prevent catastrophic overspend
  *    - Per-tenant: Based on subscription tier
  *    - Per-user: Prevent abuse
  *
- * Example production setup:
+ * Example quota setup:
  * ```typescript
- * import { PostgresCostStorage, RedisQuotaProvider } from './providers';
- *
- * initCostTracking({
- *   storage: new PostgresCostStorage({
- *     connectionString: process.env.DATABASE_URL,
- *   }),
- *   quotas: new RedisQuotaProvider({
- *     url: process.env.REDIS_URL,
- *   }),
- *   enforceQuotas: true,
- *   onQuotaWarning: async (quota) => {
- *     await sendSlackAlert(...);
- *   },
- *   onQuotaExceeded: async (quota) => {
- *     await sendPagerDutyAlert(...);
- *     await disableTenant(quota.scopeId);
- *   },
- * });
- *
  * // Set tier-based quotas
- * await setQuotasForTier('free', 10);      // $10/month
- * await setQuotasForTier('pro', 100);      // $100/month
- * await setQuotasForTier('enterprise', 1000); // $1000/month
+ * await costService.setQuota('platform', undefined, 10_000, 'month', 0.8);
+ * await costService.setQuota('tenant', 'tenant-123', 100, 'month', 0.8);
+ * await costService.setQuota('user', 'user-456', 10, 'month', 0.8);
  * ```
  */

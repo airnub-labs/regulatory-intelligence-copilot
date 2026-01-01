@@ -16,7 +16,9 @@ This document identifies **outstanding tasks** for the LLM Cost Tracking & Obser
 | Area | Planned | Implemented | Completion | Outstanding Tasks |
 |------|---------|-------------|------------|-------------------|
 | **Compaction Architecture** | 8 strategies + Token counting | 2 strategies + Token counting + APIs + UI | ~70% | 6 strategies |
-| **Cost Tracking** | Full architecture with touchpoints | Service + Supabase Storage + Touchpoints + Tests | ~85% | Alerting, Aggregation APIs, Dashboards |
+| **Cost Tracking** | Full architecture with touchpoints | Service + Supabase Storage (mandatory) + Touchpoints + Tests | ~90% | Alerting, Aggregation APIs, Dashboards |
+
+> **Architecture Decision (2026-01-01)**: Supabase is required for cost tracking in both local development and production. There is no in-memory fallback for runtime. Run `supabase start` for local development.
 
 ---
 
@@ -445,28 +447,31 @@ Response:
 
 ### 2.5 Cost Storage Providers
 
-**Status**: ⚠️ **PARTIAL** (interface defined, only in-memory implementation)
+**Status**: ✅ **FULLY IMPLEMENTED**
 
-**Implemented**:
-- ✅ `CostStorageProvider` interface
-- ✅ In-memory storage for testing
+**Implementation** (at `packages/reg-intel-observability/src/costTracking/`):
+- ✅ `SupabaseCostStorage` - Production storage provider (required)
+- ✅ `SupabaseQuotaProvider` - Production quota management (required)
+- ✅ `InMemoryCostStorage` - For unit testing only
+- ✅ `InMemoryQuotaProvider` - For unit testing only
 
-**Missing**:
-- [ ] Supabase storage provider
-  ```typescript
-  class SupabaseCostStorage implements CostStorageProvider {
-    // Table: llm_cost_records
-    // Columns: id, timestamp, provider, model, tenant_id, user_id,
-    //          touchpoint, input_tokens, output_tokens, cost_usd,
-    //          conversation_id, success, duration_ms
-  }
-  ```
-- [ ] PostgreSQL schema migration
-- [ ] Indexes for fast querying (tenant_id, timestamp)
-- [ ] Data retention policy (90 days default)
-- [ ] Cost record archival
+**Architecture Decision** (2026-01-01):
+- **Supabase is required in both local development and production**
+- No in-memory fallback for runtime environments
+- For local dev, run `supabase start` to start a local Supabase instance
+- In-memory providers are retained only for unit testing purposes
 
-**Effort**: ~6-8 hours
+**What's Implemented**:
+- [x] PostgreSQL schema migration (`20260101000000_llm_cost_tracking.sql`)
+- [x] Indexes for fast querying (6 indexes for common patterns)
+- [x] Data retention policy (optional cleanup function included)
+- [x] 13 provider tests (all passing)
+
+**Environment Variables Required**:
+- `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_KEY`
+
+**Effort**: 0 hours remaining (completed)
 
 ---
 
