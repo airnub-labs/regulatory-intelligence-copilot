@@ -37,10 +37,10 @@ interface CompactRequest {
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ conversationId: string }> }
+  context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const { conversationId } = await context.params;
+    const { id: conversationId } = await context.params;
     const body = (await request.json()) as CompactRequest;
 
     // Get messages from conversation store

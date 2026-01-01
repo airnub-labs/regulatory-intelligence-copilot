@@ -298,14 +298,22 @@ async function seedGraph(logger: Logger) {
   }
 }
 
-await runWithScriptObservability(
-  'seed-graph',
-  async ({ logger, withSpan }) => {
-    await withSpan(
-      'script.seed-graph',
-      { 'script.name': 'seed-graph', 'memgraph.uri': MEMGRAPH_URI },
-      () => seedGraph(logger)
-    );
-  },
-  { tenantId: 'system', agentId: 'seed-graph' }
-);
+async function main() {
+  await runWithScriptObservability(
+    'seed-graph',
+    async ({ logger, withSpan }) => {
+      await withSpan(
+        'script.seed-graph',
+        { 'script.name': 'seed-graph', 'memgraph.uri': MEMGRAPH_URI },
+        () => seedGraph(logger)
+      );
+    },
+    { tenantId: 'system', agentId: 'seed-graph' }
+  );
+}
+
+main().catch(error => {
+  const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+  process.stderr.write(`Seed graph script failed: ${message}\n`);
+  process.exitCode = 1;
+});
