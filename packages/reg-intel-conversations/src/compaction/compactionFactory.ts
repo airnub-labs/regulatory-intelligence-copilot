@@ -11,9 +11,12 @@ import type {
   SlidingWindowConfig,
   SemanticConfig,
   HybridConfig,
+  MergeCompactionConfig,
 } from './types.js';
 import { NoneCompactor } from './strategies/NoneCompactor.js';
 import { SlidingWindowCompactor } from './strategies/SlidingWindowCompactor.js';
+import { SemanticCompactor } from './strategies/SemanticCompactor.js';
+import { ModerateMergeCompactor } from './strategies/ModerateMergeCompactor.js';
 
 /**
  * Get a path compaction strategy
@@ -30,14 +33,12 @@ export const getPathCompactor = (
       return new SlidingWindowCompactor(config as SlidingWindowConfig);
 
     case 'semantic':
-      // TODO: Implement SemanticCompactor
-      console.warn('Semantic compaction not yet implemented, falling back to sliding_window');
-      return new SlidingWindowCompactor(config as SlidingWindowConfig);
+      return new SemanticCompactor(config as SemanticConfig);
 
     case 'hybrid':
       // TODO: Implement HybridCompactor
-      console.warn('Hybrid compaction not yet implemented, falling back to sliding_window');
-      return new SlidingWindowCompactor(config as SlidingWindowConfig);
+      console.warn('Hybrid compaction not yet implemented, falling back to semantic');
+      return new SemanticCompactor(config as SemanticConfig);
 
     default:
       console.warn(`Unknown path compaction strategy: ${strategy}, using 'none'`);
@@ -50,26 +51,34 @@ export const getPathCompactor = (
  */
 export const getMergeCompactor = (
   strategy: MergeCompactionStrategy,
-  config?: any
+  config?: MergeCompactionConfig
 ): MessageCompactor => {
   switch (strategy) {
     case 'none':
       return new NoneCompactor();
 
     case 'minimal':
-      // TODO: Implement MinimalMergeCompactor
-      console.warn('Minimal merge compaction not yet implemented, using none');
-      return new NoneCompactor();
+      // Minimal = just deduplication, no summarization
+      return new ModerateMergeCompactor({
+        ...config,
+        strategy: 'minimal',
+        deduplicate: true,
+        mergeConsecutive: false,
+        useLlm: false,
+      });
 
     case 'moderate':
-      // TODO: Implement ModerateMergeCompactor
-      console.warn('Moderate merge compaction not yet implemented, using none');
-      return new NoneCompactor();
+      return new ModerateMergeCompactor(config);
 
     case 'aggressive':
-      // TODO: Implement AggressiveMergeCompactor
-      console.warn('Aggressive merge compaction not yet implemented, using none');
-      return new NoneCompactor();
+      // Aggressive = all features enabled
+      return new ModerateMergeCompactor({
+        ...config,
+        strategy: 'aggressive',
+        deduplicate: true,
+        mergeConsecutive: true,
+        useLlm: true,
+      });
 
     default:
       console.warn(`Unknown merge compaction strategy: ${strategy}, using 'none'`);

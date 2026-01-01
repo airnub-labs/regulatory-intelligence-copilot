@@ -9,6 +9,7 @@
  * - Pinned message preservation
  * - Configurable compaction strategies
  * - Cost tracking for compaction operations
+ * - Snapshot creation for rollback support
  */
 
 import type { ConversationMessage as Message } from '../conversationStores.js';
@@ -20,6 +21,7 @@ import type {
 } from './types.js';
 import { getPathCompactor, DEFAULT_PATH_COMPACTION_CONFIG } from './compactionFactory.js';
 import { countTokensForMessages } from '@reg-copilot/reg-intel-core';
+import { getSnapshotServiceIfInitialized } from './snapshotService.js';
 
 /**
  * Configuration for path compaction service
@@ -45,6 +47,9 @@ export interface PathCompactionServiceConfig {
 
   /** LLM client for summarization (required for semantic strategies) */
   llmClient?: any;
+
+  /** Whether to create snapshots before compaction (default: true) */
+  createSnapshots?: boolean;
 }
 
 /**
@@ -62,6 +67,7 @@ export class PathCompactionService {
       model: config?.model ?? 'gpt-4',
       autoCompact: config?.autoCompact ?? false,
       llmClient: config?.llmClient,
+      createSnapshots: config?.createSnapshots ?? true,
     };
   }
 
@@ -80,10 +86,33 @@ export class PathCompactionService {
     messages: Message[],
     pinnedMessageIds: Set<string>,
     conversationId?: string,
-    pathId?: string
-  ): Promise<CompactionResult> {
+    pathId?: string,
+    triggeredBy: 'auto' | 'manual' = 'auto'
+  ): Promise<CompactionResult & { snapshotId?: string }> {
     // Count current tokens
     const currentTokens = await countTokensForMessages(messages, this.config.model);
+
+    // Create snapshot before compaction (if enabled)
+    let snapshotId: string | undefined;
+    if (this.config.createSnapshots && conversationId) {
+      const snapshotService = getSnapshotServiceIfInitialized();
+      if (snapshotService) {
+        try {
+          const snapshot = await snapshotService.createSnapshot(
+            conversationId,
+            messages,
+            pinnedMessageIds,
+            currentTokens,
+            this.config.strategy,
+            pathId
+          );
+          snapshotId = snapshot.id;
+        } catch (error) {
+          console.warn('Failed to create compaction snapshot:', error);
+          // Continue with compaction even if snapshot fails
+        }
+      }
+    }
 
     // Build compaction context
     const context: CompactionContext = {
@@ -102,7 +131,54 @@ export class PathCompactionService {
     const compactor = getPathCompactor(this.config.strategy, this.config.strategyConfig);
     const result = await compactor.compact(context);
 
-    return result;
+    // Update snapshot with result (if we created one)
+    if (snapshotId && conversationId) {
+      const snapshotService = getSnapshotServiceIfInitialized();
+      if (snapshotService) {
+        try {
+          await snapshotService.updateWithResult(snapshotId, result);
+        } catch (error) {
+          console.warn('Failed to update snapshot with result:', error);
+        }
+      }
+    }
+
+    // Record metrics for successful compaction
+    if (result.success) {
+      try {
+        const { recordCompactionOperation } = await import('@reg-copilot/reg-intel-observability');
+        recordCompactionOperation({
+          strategy: result.strategy,
+          conversationId,
+          tokensBefore: result.tokensBefore,
+          tokensAfter: result.tokensAfter,
+          messagesBefore: messages.length,
+          messagesAfter: result.messages.length,
+          messagesSummarized: result.messagesSummarized ?? 0,
+          pinnedPreserved: result.pinnedPreserved ?? 0,
+          success: true,
+          durationMs: result.metadata?.durationMs ?? 0,
+          triggeredBy,
+          usedLlm: result.metadata?.usedLlm ?? false,
+        });
+      } catch (error) {
+        // Don't fail compaction if metrics recording fails
+        console.warn('Failed to record compaction metrics:', error);
+      }
+    } else {
+      try {
+        const { recordCompactionFailure } = await import('@reg-copilot/reg-intel-observability');
+        recordCompactionFailure({
+          strategy: this.config.strategy,
+          conversationId,
+          error: result.error || 'Unknown error',
+        });
+      } catch (error) {
+        console.warn('Failed to record compaction failure:', error);
+      }
+    }
+
+    return { ...result, snapshotId };
   }
 
   /**
