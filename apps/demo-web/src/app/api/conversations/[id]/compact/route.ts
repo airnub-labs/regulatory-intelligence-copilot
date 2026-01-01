@@ -27,11 +27,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import {
-  compactMessages,
-  type CompactionWrapperConfig,
-  type PathCompactionStrategy,
-} from '@reg-copilot/reg-intel-conversations/compaction';
+import { type PathCompactionStrategy } from '@reg-copilot/reg-intel-conversations/compaction';
 
 interface CompactRequest {
   strategy?: PathCompactionStrategy;
@@ -41,10 +37,10 @@ interface CompactRequest {
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ conversationId: string }> }
+  context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const { conversationId } = await context.params;
+    const { id: conversationId } = await context.params;
     const body = (await request.json()) as CompactRequest;
 
     // Get messages from conversation store
@@ -76,6 +72,7 @@ export async function POST(
           durationMs: 2341,
         },
       },
+      conversationId,
     }, { status: 501 }); // Not Implemented
 
     // Production implementation:

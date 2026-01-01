@@ -17,7 +17,7 @@ import {
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { Redis } from '@upstash/redis';
-import { PHASE_DEVELOPMENT_SERVER, PHASE_TEST } from 'next/constants';
+import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_TEST } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
 const logger = createLogger('ConversationStoreWiring');
@@ -76,10 +76,12 @@ if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
   throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
 }
 
+const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
+
 if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseServiceKey)) {
   const message =
     'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable the Supabase conversation store';
-  if (isDevLike) {
+  if (isDevLike || isProductionBuildPhase) {
     logger.warn({ mode: normalizeConversationStoreMode }, message);
   } else {
     throw new Error(message);
@@ -322,7 +324,7 @@ if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
   const message =
     'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.';
 
-  if (isDevLike) {
+  if (isDevLike || isProductionBuildPhase) {
     logger.warn({ mode: normalizeConversationStoreMode }, message);
     // Provide stub event hubs for build/dev mode
     // Type assertion needed for stub implementations during build

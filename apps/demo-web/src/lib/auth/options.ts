@@ -92,6 +92,13 @@ export const authOptions: NextAuthOptions = {
         })
 
         if (error || !data.user) {
+          logger.warn(
+            {
+              email: credentials.email,
+              supabaseError: error?.message ?? 'Unknown Supabase error',
+            },
+            'Supabase credential sign-in failed'
+          )
           return null
         }
 

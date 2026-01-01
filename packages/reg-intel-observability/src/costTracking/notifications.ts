@@ -223,42 +223,11 @@ export class DefaultNotificationService implements NotificationService {
       };
     }
 
-    // Try to use nodemailer if available
-    try {
-      // Dynamic import to avoid bundling nodemailer if not used
-      const nodemailer = await import('nodemailer').catch(() => null);
+    console.warn(
+      'Nodemailer is not installed; logging email alert instead of sending.'
+    );
 
-      if (nodemailer) {
-        const transporter = nodemailer.createTransport({
-          host: this.config.email.smtpHost,
-          port: this.config.email.smtpPort,
-          secure: this.config.email.useTls ?? (this.config.email.smtpPort === 465),
-          auth: {
-            user: this.config.email.smtpUser,
-            pass: this.config.email.smtpPassword,
-          },
-        });
 
-        const info = await transporter.sendMail({
-          from: this.config.email.fromAddress,
-          to: this.config.email.toAddresses.join(', '),
-          subject: this.formatEmailSubject(alert),
-          html: this.formatEmailHtml(alert),
-          text: this.formatEmailText(alert),
-        });
-
-        return {
-          success: true,
-          channel: 'email',
-          messageId: info.messageId,
-        };
-      }
-    } catch (error) {
-      // Nodemailer not available or failed, log and continue
-      console.warn('Nodemailer not available or failed:', error);
-    }
-
-    // Fallback: Log that email would be sent (for environments without nodemailer)
     console.log('[EMAIL] Would send cost alert email:', {
       to: this.config.email.toAddresses,
       subject: this.formatEmailSubject(alert),

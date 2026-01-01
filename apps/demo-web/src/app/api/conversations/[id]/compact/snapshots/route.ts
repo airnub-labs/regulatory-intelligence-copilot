@@ -40,10 +40,10 @@ interface SnapshotSummary {
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ conversationId: string }> }
+  context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const { conversationId } = await context.params;
+    const { id: conversationId } = await context.params;
     const url = new URL(request.url);
     const limit = parseInt(url.searchParams.get('limit') || '10', 10);
 

@@ -37,12 +37,11 @@ interface CompactionMetrics {
 export default function CompactionAnalytics() {
   const [metrics, setMetrics] = useState<CompactionMetrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d' | 'all'>('7d');
 
   useEffect(() => {
     // In production, fetch from your metrics endpoint
-    // For now, show example data
+    // For now, show example data asynchronously to avoid synchronous setState
     const exampleMetrics: CompactionMetrics = {
       totalOperations: 1_247,
       totalTokensSaved: 18_450_000,
@@ -78,8 +77,12 @@ export default function CompactionAnalytics() {
       })),
     };
 
-    setMetrics(exampleMetrics);
-    setLoading(false);
+    const timer = setTimeout(() => {
+      setMetrics(exampleMetrics);
+      setLoading(false);
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [timeRange]);
 
   if (loading) {
@@ -91,7 +94,7 @@ export default function CompactionAnalytics() {
     );
   }
 
-  if (error || !metrics) {
+  if (!metrics) {
     return <div className="dashboard-error">Error loading metrics</div>;
   }
 
@@ -104,22 +107,37 @@ export default function CompactionAnalytics() {
         <div className="time-range-selector">
           <button
             className={timeRange === '24h' ? 'active' : ''}
-            onClick={() => setTimeRange('24h')}
+            onClick={() => {
+              setLoading(true);
+              setTimeRange('24h');
+            }}
           >
             24 Hours
           </button>
-          <button className={timeRange === '7d' ? 'active' : ''} onClick={() => setTimeRange('7d')}>
+          <button
+            className={timeRange === '7d' ? 'active' : ''}
+            onClick={() => {
+              setLoading(true);
+              setTimeRange('7d');
+            }}
+          >
             7 Days
           </button>
           <button
             className={timeRange === '30d' ? 'active' : ''}
-            onClick={() => setTimeRange('30d')}
+            onClick={() => {
+              setLoading(true);
+              setTimeRange('30d');
+            }}
           >
             30 Days
           </button>
           <button
             className={timeRange === 'all' ? 'active' : ''}
-            onClick={() => setTimeRange('all')}
+            onClick={() => {
+              setLoading(true);
+              setTimeRange('all');
+            }}
           >
             All Time
           </button>
@@ -208,7 +226,7 @@ export default function CompactionAnalytics() {
         </section>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .compaction-analytics {
           padding: 2rem;
           max-width: 1400px;

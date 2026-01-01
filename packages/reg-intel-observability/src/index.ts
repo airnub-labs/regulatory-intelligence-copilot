@@ -74,4 +74,32 @@ export {
   getCostTrackingServiceIfInitialized,
   InMemoryCostStorage,
   InMemoryQuotaProvider,
+  SupabaseCostStorage,
+  SupabaseQuotaProvider,
+  LLM_TOUCHPOINTS,
+} from './costTracking/index.js';
+
+// Cost anomaly detection and alerting
+export {
+  AnomalyDetectionService,
+  createAnomalyDetectionService,
+  initAnomalyDetection,
+  getAnomalyDetectionService,
+  getAnomalyDetectionServiceIfInitialized,
+  DefaultNotificationService,
+  createNotificationService,
+  createCostAlert,
+  getNotificationService,
+  initNotificationServiceFromEnv,
+  type AnomalyDetectionConfig,
+  type AnomalyResult,
+  type NotificationService,
+  type NotificationConfig,
+  type NotificationChannel,
+  type NotificationResult,
+  type CostAlert,
+  type AlertSeverity,
+  type SlackConfig,
+  type EmailConfig,
+  type PagerDutyConfig,
 } from './costTracking/index.js';

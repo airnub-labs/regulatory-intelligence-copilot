@@ -14,8 +14,11 @@ import { Label } from '@/components/ui/label'
 export default function LoginPage() {
   const { status } = useSession()
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const demoEmail = process.env.NEXT_PUBLIC_SUPABASE_DEMO_EMAIL ?? 'demo.user@example.com'
+  const demoPassword = process.env.NEXT_PUBLIC_SUPABASE_DEMO_PASSWORD ?? 'Password123!'
+
+  const [email, setEmail] = useState(demoEmail)
+  const [password, setPassword] = useState(demoPassword)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -56,7 +59,8 @@ export default function LoginPage() {
               <LogIn className="h-5 w-5 text-primary" /> Sign in to continue
             </CardTitle>
             <CardDescription>
-              Use the seeded Supabase demo credentials from your local stack to access the copilot.
+              Use the seeded Supabase demo credentials from your local stack to access the copilot. Default local
+              credentials are {demoEmail} / {demoPassword} (from supabase/seed/demo_seed.sql).
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -68,7 +72,7 @@ export default function LoginPage() {
                   type="email"
                   value={email}
                   onChange={event => setEmail(event.target.value)}
-                  placeholder="demo@example.com"
+                  placeholder={demoEmail}
                   required
                 />
               </div>
@@ -79,7 +83,7 @@ export default function LoginPage() {
                   type="password"
                   value={password}
                   onChange={event => setPassword(event.target.value)}
-                  placeholder="Supabase demo password"
+                  placeholder={demoPassword}
                   required
                 />
               </div>

@@ -153,6 +153,19 @@ docker compose down -v
 docker compose up -d
 ```
 
+### Reset Memgraph Data Only
+
+Use this when you want the graph to be empty before running `pnpm seed:graph`.
+
+```bash
+# Option 1: Empty the graph without recreating containers
+docker compose exec memgraph mgconsole -e "MATCH (n) DETACH DELETE n"
+
+# Option 2: Drop Memgraph volumes and restart just the graph services
+docker compose down -v memgraph memgraph-mcp
+docker compose up -d memgraph memgraph-mcp
+```
+
 ## 📈 Grafana Dashboards
 
 ### Pre-configured Dashboards

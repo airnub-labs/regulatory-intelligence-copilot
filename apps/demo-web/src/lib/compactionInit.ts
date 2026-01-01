@@ -5,10 +5,18 @@
  * Call this during application startup to enable compaction system.
  */
 
-import { initSnapshotService, InMemorySnapshotStorage } from '@reg-copilot/reg-intel-conversations/compaction';
-import { initCompactionMetrics } from '@reg-copilot/reg-intel-observability';
-import { initCostTracking } from '@reg-copilot/reg-intel-observability';
-import { createLogger } from '@reg-copilot/reg-intel-observability';
+import {
+  initSnapshotService,
+  InMemorySnapshotStorage,
+  type SnapshotStorageProvider,
+} from '@reg-copilot/reg-intel-conversations/compaction';
+import {
+  createLogger,
+  initCompactionMetrics,
+  initCostTracking,
+  type CostStorageProvider,
+  type QuotaProvider,
+} from '@reg-copilot/reg-intel-observability';
 
 const logger = createLogger('CompactionInit');
 
@@ -22,7 +30,7 @@ export async function initializeCompactionSystem(options?: {
   /**
    * Snapshot storage provider (defaults to in-memory)
    */
-  snapshotStorage?: any;
+  snapshotStorage?: SnapshotStorageProvider;
 
   /**
    * Snapshot TTL in hours
@@ -33,12 +41,12 @@ export async function initializeCompactionSystem(options?: {
   /**
    * Cost tracking storage provider
    */
-  costStorage?: any;
+  costStorage?: CostStorageProvider;
 
   /**
    * Quota provider for cost enforcement
    */
-  quotaProvider?: any;
+  quotaProvider?: QuotaProvider;
 
   /**
    * Whether to enforce cost quotas
@@ -101,7 +109,7 @@ export function getCompactionSystemStatus(): {
       compactionMetrics: true, // Metrics are always available after init
       costTracking: getCostTrackingServiceIfInitialized() !== null,
     };
-  } catch (error) {
+  } catch {
     return {
       snapshotService: false,
       compactionMetrics: false,

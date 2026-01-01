@@ -45,9 +45,9 @@ export function CompactionHistory({
         );
         const data = await response.json();
 
-        if (response.ok && data.history) {
+        if (response.ok && Array.isArray(data.history)) {
           setHistory(
-            data.history.map((entry: any) => ({
+            data.history.map((entry: CompactionHistoryEntry) => ({
               ...entry,
               timestamp: new Date(entry.timestamp),
             }))
@@ -133,7 +133,7 @@ export function CompactionHistory({
         ))}
       </div>
 
-      <style jsx>{`
+      <style>{`
         .compaction-history {
           border: 1px solid #e5e7eb;
           border-radius: 0.5rem;
