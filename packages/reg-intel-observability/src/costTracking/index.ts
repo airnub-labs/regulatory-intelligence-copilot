@@ -9,12 +9,15 @@
  *
  * Usage:
  * ```typescript
- * import { initCostTracking, InMemoryCostStorage, InMemoryQuotaProvider } from '@reg-copilot/reg-intel-observability';
+ * import { initCostTracking, SupabaseCostStorage, SupabaseQuotaProvider } from '@reg-copilot/reg-intel-observability';
+ * import { createClient } from '@supabase/supabase-js';
  *
- * // Initialize cost tracking with in-memory providers
+ * const supabase = createClient(url, key);
+ *
+ * // Initialize cost tracking with Supabase providers (required for all environments)
  * initCostTracking({
- *   storage: new InMemoryCostStorage(),
- *   quotas: new InMemoryQuotaProvider(),
+ *   storage: new SupabaseCostStorage(supabase),
+ *   quotas: new SupabaseQuotaProvider(supabase),
  *   enforceQuotas: true,
  *   onQuotaExceeded: (quota) => {
  *     console.warn(`Quota exceeded for ${quota.scope}:${quota.scopeId}`);
@@ -45,10 +48,10 @@ export {
   type RecordCostRequest,
 } from './costTrackingService.js';
 
-// In-memory providers (for development/testing)
+// In-memory providers (for unit testing only - NOT for local dev or production)
 export { InMemoryCostStorage, InMemoryQuotaProvider } from './inMemoryProviders.js';
 
-// Supabase providers (for production)
+// Supabase providers (required for local development and production)
 export { SupabaseCostStorage, SupabaseQuotaProvider } from './supabaseProviders.js';
 
 // Touchpoint constants
@@ -60,3 +63,32 @@ export {
   isValidTouchpoint,
   type LlmTouchpoint,
 } from './touchpoints.js';
+
+// Notification service (for cost alerts)
+export {
+  DefaultNotificationService,
+  createNotificationService,
+  createCostAlert,
+  getNotificationService,
+  initNotificationServiceFromEnv,
+  type NotificationService,
+  type NotificationConfig,
+  type NotificationChannel,
+  type NotificationResult,
+  type CostAlert,
+  type AlertSeverity,
+  type SlackConfig,
+  type EmailConfig,
+  type PagerDutyConfig,
+} from './notifications.js';
+
+// Anomaly detection (for spending spike alerts)
+export {
+  AnomalyDetectionService,
+  createAnomalyDetectionService,
+  initAnomalyDetection,
+  getAnomalyDetectionService,
+  getAnomalyDetectionServiceIfInitialized,
+  type AnomalyDetectionConfig,
+  type AnomalyResult,
+} from './anomalyDetection.js';

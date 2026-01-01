@@ -49,6 +49,7 @@ export type {
 export { NoneCompactor } from './strategies/NoneCompactor.js';
 export { SlidingWindowCompactor } from './strategies/SlidingWindowCompactor.js';
 export { SemanticCompactor } from './strategies/SemanticCompactor.js';
+export { HybridCompactor } from './strategies/HybridCompactor.js';
 export { ModerateMergeCompactor } from './strategies/ModerateMergeCompactor.js';
 
 // Factory
@@ -86,3 +87,25 @@ export {
   type CompactionSnapshot,
   type SnapshotStorageProvider,
 } from './snapshotService.js';
+
+// Utilities
+export {
+  hashMessage,
+  shortHash,
+  deduplicateMessages,
+  findDuplicates,
+  mergeMessageLists,
+  sortMessagesByTimestamp,
+  calculateReduction,
+  calculateCompressionRatio,
+  groupConsecutiveByRole,
+  mergeConsecutiveSameRole,
+  partitionMessages,
+  calculateSimilarity,
+  findSimilarMessages,
+  estimateTokensQuick,
+  estimateTotalTokensQuick,
+  type DeduplicationResult,
+  type HashOptions,
+  type MergeOptions,
+} from './utils.js';

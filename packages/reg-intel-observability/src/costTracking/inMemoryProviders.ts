@@ -2,12 +2,15 @@
  * In-Memory Cost Storage and Quota Providers
  *
  * Provides simple in-memory implementations of cost tracking services.
- * Suitable for:
- * - Development and testing
- * - Single-instance deployments
- * - Low-volume production use
  *
- * For production multi-instance deployments, use database-backed providers.
+ * **NOTE: These providers are intended for unit testing only.**
+ *
+ * For local development and production, use SupabaseCostStorage and
+ * SupabaseQuotaProvider which persist data to the database. The application
+ * requires Supabase in all environments - run `supabase start` for local dev.
+ *
+ * @see SupabaseCostStorage for production storage
+ * @see SupabaseQuotaProvider for production quota management
  */
 
 import { randomUUID } from 'node:crypto';
