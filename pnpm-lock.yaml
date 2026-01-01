@@ -474,6 +474,9 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.28.0
         version: 1.38.0
+      '@supabase/supabase-js':
+        specifier: ^2.45.0
+        version: 2.86.0
       pino:
         specifier: ^9.5.0
         version: 9.14.0
