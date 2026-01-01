@@ -175,6 +175,7 @@ volumes:
   memgraph_data:
   memgraph_log:
   otel_logs:
+  otel_file_storage:
   prometheus_data:
   loki_data:
   grafana_data:
