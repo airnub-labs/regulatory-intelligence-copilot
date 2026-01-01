@@ -1,7 +1,8 @@
 # Outstanding Implementation Tasks - Cost Tracking & Compaction
 
-> **Status**: 📊 Gap Analysis Complete
+> **Status**: 📊 Gap Analysis Complete (Updated)
 > **Date**: 2026-01-01
+> **Last Updated**: 2026-01-01
 > **Based On**: Implementation plan comparison vs actual implementation
 
 ---
@@ -14,7 +15,7 @@ This document identifies **outstanding tasks** for the LLM Cost Tracking & Obser
 
 | Area | Planned | Implemented | Completion | Outstanding Tasks |
 |------|---------|-------------|------------|-------------------|
-| **Compaction Architecture** | 8 strategies + Token counting | 2 strategies + APIs + UI | ~60% | 6 strategies, Token counting |
+| **Compaction Architecture** | 8 strategies + Token counting | 2 strategies + Token counting + APIs + UI | ~70% | 6 strategies |
 | **Cost Tracking** | Full architecture with touchpoints | Service + Storage + Tests | ~70% | Touchpoint tracking, Alerting, Aggregation APIs |
 
 ---
@@ -32,36 +33,46 @@ This document identifies **outstanding tasks** for the LLM Cost Tracking & Obser
 
 ### 1.1 Token Counting Infrastructure
 
-**Status**: ❌ **NOT IMPLEMENTED**
+**Status**: ✅ **FULLY IMPLEMENTED** (verified 2026-01-01)
 
-**Planned** (from `COMPACTION_STRATEGIES_IMPLEMENTATION_PLAN.md` § 2):
+**Implementation** (at `packages/reg-intel-core/src/tokens/`):
 ```typescript
-// packages/reg-intel-core/src/tokens/
-├── tokenCounter.ts          # Main exports & factory
-├── tiktoken.ts              # Tiktoken implementation
-├── estimators.ts            # Fallback estimators
-├── cache.ts                 # Token count caching
+├── index.ts             # Main exports & factory functions
+├── types.ts             # TypeScript interfaces
+├── tiktoken.ts          # TiktokenCounter class
+├── estimators.ts        # Fallback estimators
+├── cache.ts             # LRU token count cache
+├── utils.ts             # Convenience functions
 └── __tests__/
-    ├── tokenCounter.test.ts
-    └── estimators.test.ts
+    └── tokenCounter.test.ts  # 29 passing tests
 ```
 
-**What's Missing**:
-- [ ] Tiktoken integration (`@dqbd/tiktoken` package)
-- [ ] `TiktokenCounter` class with caching
-- [ ] Character-based fallback estimator
-- [ ] `estimateMessageTokens()` function
-- [ ] `estimateContextTokens()` function
-- [ ] Token count caching layer
-- [ ] 15+ token counting tests
+**What's Implemented**:
+- [x] Tiktoken integration (`@dqbd/tiktoken@^1.0.15` package)
+- [x] `TiktokenCounter` class with caching
+- [x] Character-based fallback estimator (`estimateTokensFromCharacters`)
+- [x] Word-based fallback estimator (`estimateTokensFromWords`)
+- [x] Hybrid estimation (`estimateTokensHybrid`)
+- [x] `estimateMessageTokens()` function
+- [x] `estimateContextTokens()` function
+- [x] LRU token count caching with TTL
+- [x] 29 comprehensive tests (all passing)
+- [x] Exported from main package index
 
-**Impact**:
-- Current compaction uses message count, not token count
-- Cannot accurately measure context size
-- Cannot enforce token budgets
-- Risk of exceeding LLM token limits
+**Key APIs**:
+```typescript
+// Factory functions
+createTokenCounter(config: TokenCounterConfig): TokenCounter
+createTokenCounterForModel(model: string): TokenCounter
+quickEstimateTokens(text: string, model?: string): Promise<number>
 
-**Effort**: ~8-12 hours (Phase 1 from original plan)
+// Convenience utilities
+countTokensForMessages(messages, model?): Promise<number>
+countTokensForText(text, model?): Promise<number>
+clearTokenCountCache(): void
+```
+
+**Effort**: Completed (0 hours remaining)
 
 ---
 
@@ -498,9 +509,9 @@ Response:
 ### 3.1 Critical (P0) - Blocking Production Use
 
 **Compaction**:
-- [ ] **Token Counting Infrastructure** (8-12h)
-  - *Why*: Currently using message count, not token count - risk of exceeding LLM limits
-  - *Blocks*: All other compaction improvements
+- [x] ~~**Token Counting Infrastructure** (8-12h)~~ ✅ **COMPLETED**
+  - *Status*: Fully implemented with 29 passing tests
+  - *Location*: `packages/reg-intel-core/src/tokens/`
 
 **Cost Tracking**:
 - [ ] **Touchpoint Tracking** (8-12h)
@@ -510,7 +521,7 @@ Response:
   - *Why*: In-memory storage not suitable for production
   - *Blocks*: Historical cost queries, billing
 
-**Total P0 Effort**: 22-32 hours (~3-4 days)
+**Total P0 Effort**: 14-20 hours (~2-3 days) ~~22-32 hours~~
 
 ---
 
@@ -583,11 +594,10 @@ Response:
 
 **Focus**: Unblock production use
 
-1. **Implement Token Counting Infrastructure** (P0)
-   - Add `@dqbd/tiktoken` dependency
-   - Create `TiktokenCounter` class
-   - Write 15+ tests
-   - **Deliverable**: Accurate token counting for compaction
+1. ~~**Implement Token Counting Infrastructure** (P0)~~ ✅ **COMPLETED**
+   - Token counting is fully implemented at `packages/reg-intel-core/src/tokens/`
+   - 29 tests passing, exported from main package
+   - **Deliverable**: ✅ Accurate token counting for compaction
 
 2. **Instrument Touchpoint Tracking** (P0)
    - Add `touchpoint` field to cost records
@@ -666,23 +676,25 @@ Response:
 
 | Priority | Tasks | Effort | Timeline |
 |----------|-------|--------|----------|
-| **P0 (Critical)** | 3 tasks | 22-32 hours | 3-4 days |
+| **P0 (Critical)** | 2 tasks | 14-20 hours | 2-3 days |
 | **P1 (High)** | 5 tasks | 27-35 hours | 3-4 days |
 | **P2 (Medium)** | 6 tasks | 33-43 hours | 4-5 days |
 | **P3 (Low)** | 3 tasks | 6-8 hours | 1 day |
-| **TOTAL** | **17 tasks** | **88-118 hours** | **11-14 days** |
+| **TOTAL** | **16 tasks** | **80-106 hours** | **10-13 days** |
+
+> **Note**: Token Counting Infrastructure (P0) was completed on 2026-01-01.
 
 ### 5.2 Implementation Completion Status
 
-**Current State**:
-- Compaction: ~60% complete (2/8 strategies + infrastructure)
+**Current State** (as of 2026-01-01):
+- Compaction: ~70% complete (2/8 strategies + token counting infrastructure)
 - Cost Tracking: ~70% complete (service + storage + tests, missing production features)
 
-**After P0+P1 (7-8 days)**:
-- Compaction: ~75% complete (token counting + 4/8 strategies)
+**After P0+P1 (5-7 days)**:
+- Compaction: ~80% complete (4/8 strategies)
 - Cost Tracking: ~90% complete (production-ready)
 
-**After P0+P1+P2 (11-14 days)**:
+**After P0+P1+P2 (10-12 days)**:
 - Compaction: ~95% complete (8/8 strategies + tests)
 - Cost Tracking: ~100% complete (full dashboard + alerting)
 
@@ -721,14 +733,14 @@ Response:
 
 ### Compaction Tasks
 
-#### Token Counting Infrastructure
-- [ ] Add `@dqbd/tiktoken` package dependency
-- [ ] Create `packages/reg-intel-core/src/tokens/` directory
-- [ ] Implement `TiktokenCounter` class
-- [ ] Implement character-based fallback estimator
-- [ ] Add token count caching
-- [ ] Write 15+ token counting tests
-- [ ] Update documentation
+#### Token Counting Infrastructure ✅ COMPLETED
+- [x] Add `@dqbd/tiktoken` package dependency
+- [x] Create `packages/reg-intel-core/src/tokens/` directory
+- [x] Implement `TiktokenCounter` class
+- [x] Implement character-based fallback estimator
+- [x] Add token count caching
+- [x] Write 29 token counting tests (exceeds 15+ target)
+- [x] Update documentation
 
 #### Path Compaction Strategies
 - [ ] Implement `SlidingWindowCompactor`
