@@ -333,14 +333,18 @@ async function seedSpecialJurisdictions(logger: Logger) {
   }
 }
 
-await runWithScriptObservability(
-  'seed-special-jurisdictions',
-  async ({ logger, withSpan }) => {
-    await withSpan(
-      'script.seed-special-jurisdictions',
-      { 'script.name': 'seed-special-jurisdictions', 'memgraph.uri': MEMGRAPH_URI },
-      () => seedSpecialJurisdictions(logger)
-    );
-  },
-  { tenantId: 'system', agentId: 'seed-special-jurisdictions' }
-);
+async function main() {
+  await runWithScriptObservability(
+    'seed-special-jurisdictions',
+    async ({ logger, withSpan }) => {
+      await withSpan(
+        'script.seed-special-jurisdictions',
+        { 'script.name': 'seed-special-jurisdictions', 'memgraph.uri': MEMGRAPH_URI },
+        () => seedSpecialJurisdictions(logger)
+      );
+    },
+    { tenantId: 'system', agentId: 'seed-special-jurisdictions' }
+  );
+}
+
+void main();
