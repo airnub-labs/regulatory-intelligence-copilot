@@ -12,10 +12,8 @@
  * - Error handling and retry logic
  */
 
-import {
-  PathCompactionService,
-  type PathCompactionServiceConfig,
-} from '@reg-copilot/reg-intel-conversations/compaction';
+import { PathCompactionService } from '@reg-copilot/reg-intel-conversations/compaction';
+import type { ConversationMessage, ConversationStore } from '@reg-copilot/reg-intel-conversations';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { countTokensForMessages } from '@reg-copilot/reg-intel-core';
 
@@ -90,8 +88,14 @@ export interface CompactionJobResult {
  * @param config - Job configuration
  * @returns Job execution results
  */
+type CompactionConversationStore = Pick<ConversationStore, 'getMessages'> & {
+  getConversationsNeedingCompaction?: (
+    limit: number
+  ) => Promise<Array<{ id: string; tenantId: string; activePathId?: string }>>;
+};
+
 export async function runAutoCompactionJob(
-  conversationStore: any, // Replace with actual ConversationStore type
+  conversationStore: CompactionConversationStore,
   config: AutoCompactionJobConfig = {}
 ): Promise<CompactionJobResult> {
   const startTime = Date.now();
@@ -138,10 +142,9 @@ export async function runAutoCompactionJob(
 
     // Query conversations (In production, add filters for active conversations, recent activity, etc.)
     // For now, this is a placeholder - you'd implement actual querying logic
-    const conversationsToCheck = await getConversationsNeedingCompaction(
-      conversationStore,
-      batchSize
-    );
+    const conversationsToCheck = conversationStore.getConversationsNeedingCompaction
+      ? await conversationStore.getConversationsNeedingCompaction(batchSize)
+      : await getConversationsNeedingCompaction(conversationStore, batchSize);
 
     logger.info(
       { count: conversationsToCheck.length },
@@ -165,7 +168,9 @@ export async function runAutoCompactionJob(
 
         // Get pinned message IDs
         const pinnedMessageIds = new Set<string>(
-          messages.filter((m: any) => m.pinned).map((m: any) => m.id)
+          messages
+            .filter((message: ConversationMessage) => message.metadata?.pinned === true)
+            .map(m => m.id)
         );
 
         // Check if compaction is needed
@@ -337,11 +342,18 @@ export async function runAutoCompactionJob(
  * @returns List of conversation metadata
  */
 async function getConversationsNeedingCompaction(
-  conversationStore: any,
+  conversationStore: CompactionConversationStore,
   limit: number
 ): Promise<Array<{ id: string; tenantId: string; activePathId?: string }>> {
-  // Placeholder implementation
-  // In production, implement actual querying logic
+  if (conversationStore.getConversationsNeedingCompaction) {
+    return conversationStore.getConversationsNeedingCompaction(limit);
+  }
+
+  logger.warn(
+    { limit },
+    'getConversationsNeedingCompaction not implemented; returning empty set'
+  );
+
   return [];
 
   // Example production implementation:
@@ -379,7 +391,7 @@ async function getConversationsNeedingCompaction(
  * ```
  */
 export function scheduleAutoCompaction(
-  conversationStore: any,
+  conversationStore: CompactionConversationStore,
   config: AutoCompactionJobConfig = {},
   intervalMs: number = 3600000 // 1 hour
 ): () => void {

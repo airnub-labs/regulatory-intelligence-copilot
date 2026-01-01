@@ -17,10 +17,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import {
-  needsCompaction as checkCompaction,
-  type CompactionWrapperConfig,
-} from '@reg-copilot/reg-intel-conversations/compaction';
 
 export async function GET(
   request: Request,

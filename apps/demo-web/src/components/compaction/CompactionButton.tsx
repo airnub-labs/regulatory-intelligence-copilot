@@ -144,7 +144,7 @@ export function CompactionButton({
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .compaction-button-container {
           display: flex;
           flex-direction: column;

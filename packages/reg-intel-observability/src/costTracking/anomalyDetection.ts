@@ -14,7 +14,7 @@
  * @module anomalyDetection
  */
 
-import type { CostStorageProvider, LlmCostRecord } from './types.js';
+import type { CostAggregateQuery, CostQuota, CostStorageProvider, LlmCostRecord } from './types.js';
 import type { CostAlert, NotificationService } from './notifications.js';
 import { createCostAlert } from './notifications.js';
 
@@ -481,17 +481,15 @@ export class AnomalyDetectionService {
     start: Date,
     end: Date
   ): Promise<LlmCostRecord[]> {
-    const query: { startTime?: Date; endTime?: Date; tenantId?: string } = {
+    const query: CostAggregateQuery = {
       startTime: start,
       endTime: end,
+      tenantIds: scope === 'tenant' && scopeId ? [scopeId] : undefined,
+      groupBy: [],
     };
 
-    if (scope === 'tenant' && scopeId) {
-      query.tenantId = scopeId;
-    }
-
     try {
-      return await this.storage.query(query);
+      return await this.storage.queryCostRecords(query);
     } catch (error) {
       console.error('[AnomalyDetection] Failed to fetch records:', error);
       return [];
@@ -516,9 +514,9 @@ export class AnomalyDetectionService {
       const modelCost = bucket.byModel.get(record.model) ?? 0;
       bucket.byModel.set(record.model, modelCost + record.totalCostUsd);
 
-      if (record.taskId) {
-        const touchpointCost = bucket.byTouchpoint.get(record.taskId) ?? 0;
-        bucket.byTouchpoint.set(record.taskId, touchpointCost + record.totalCostUsd);
+      if (record.task) {
+        const touchpointCost = bucket.byTouchpoint.get(record.task) ?? 0;
+        bucket.byTouchpoint.set(record.task, touchpointCost + record.totalCostUsd);
       }
     }
 
@@ -532,7 +530,7 @@ export class AnomalyDetectionService {
     try {
       // Query recent records to find active tenants
       const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-      const records = await this.storage.query({ startTime: oneHourAgo });
+      const records = await this.storage.queryCostRecords({ startTime: oneHourAgo, groupBy: [] });
 
       const tenants = new Set<string>();
       for (const record of records) {
@@ -582,14 +580,23 @@ export class AnomalyDetectionService {
     }
 
     const alertType = result.type === 'spike' ? 'spend_spike' : 'anomaly';
+    const periodStart = new Date();
+    const periodEnd = new Date(periodStart.getTime() + 60 * 60 * 1000);
+    const limitUsd = result.expectedValue * 2; // Use double the expected as a pseudo-limit
+
     const quota = {
+      id: `anomaly-${scope}-${scopeId ?? 'global'}-${periodStart.toISOString()}`,
       scope: scope as 'platform' | 'tenant' | 'user',
       scopeId,
-      period: 'hourly' as const,
-      limitUsd: result.expectedValue * 2, // Use double the expected as a pseudo-limit
+      period: 'hour',
+      limitUsd,
       currentSpendUsd: result.currentValue,
+      periodStart,
+      periodEnd,
+      isExceeded: result.currentValue >= limitUsd,
       warningThreshold: 0.8,
-    };
+      warningExceeded: result.currentValue >= limitUsd * 0.8,
+    } satisfies CostQuota;
 
     const alert: CostAlert = createCostAlert(alertType, quota, result.severity, result.details);
     alert.message = result.message;
@@ -636,7 +643,7 @@ export class AnomalyDetectionService {
     // Group by hour
     const hourlyBuckets: Map<string, LlmCostRecord[]> = new Map();
     for (const record of records) {
-      const hour = new Date(record.createdAt);
+      const hour = new Date(record.timestamp);
       hour.setMinutes(0, 0, 0);
       const key = hour.toISOString();
 
