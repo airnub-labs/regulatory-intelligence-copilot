@@ -142,13 +142,32 @@ export const runWithScriptObservability = async (
   };
 
   const observability = await bootstrapObservability(component, baseContext);
+  let mainSucceeded = false;
 
   try {
     await observability.runWithContext(baseContext, () => execute(observability));
+    mainSucceeded = true;
   } catch (error) {
     observability.logger.error({ error }, 'Script execution failed');
     process.exitCode = 1;
   } finally {
-    await observability.shutdown();
+    try {
+      await observability.shutdown();
+    } catch (error) {
+      const errorCode = (error as NodeJS.ErrnoException | undefined)?.code;
+      const isConnectionError =
+        typeof errorCode === 'string' &&
+        ['ECONNREFUSED', 'ENOTFOUND', 'EHOSTUNREACH', 'ECONNRESET'].includes(errorCode);
+
+      if (isConnectionError) {
+        observability.logger.warn({ error }, 'Failed to shutdown observability due to connection issue');
+      } else {
+        observability.logger.error({ error }, 'Failed to shutdown observability');
+      }
+
+      if (!mainSucceeded && process.exitCode === undefined) {
+        process.exitCode = 1;
+      }
+    }
   }
 };
