@@ -1,7 +1,11 @@
 do $$
 declare
   demo_email text := 'demo.user@example.com';
-  demo_password text := 'Password123!';
+  -- Pre-computed bcrypt hash for 'Password123!' generated using bcryptjs library.
+  -- IMPORTANT: We use a pre-computed hash because PostgreSQL's crypt() function
+  -- produces hashes incompatible with Supabase's GoTrue authentication backend
+  -- (which uses Go's bcrypt library). See: https://github.com/supabase-community/seed/issues/208
+  demo_password_hash text := '$2b$10$SIoRjOvFLs2ZfnKz5XYMeumodcRZAf0Q2b4CnyKPiSGK5bH.lD81u';
   demo_full_name text := 'Demo User';
   demo_now timestamptz := now();
   seeded_user record;
@@ -47,7 +51,7 @@ begin
       'authenticated',
       'authenticated',
       demo_email,
-      crypt(demo_password, gen_salt('bf')),
+      demo_password_hash,
       demo_now,
       demo_now,
       demo_now,
@@ -66,7 +70,7 @@ begin
     demo_user_id := seeded_user.id;
 
     update auth.users
-       set encrypted_password = crypt(demo_password, gen_salt('bf')),
+       set encrypted_password = demo_password_hash,
            instance_id = '00000000-0000-0000-0000-000000000000',
            aud = 'authenticated',
            role = 'authenticated',
