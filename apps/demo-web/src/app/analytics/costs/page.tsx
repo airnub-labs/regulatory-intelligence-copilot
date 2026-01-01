@@ -53,6 +53,83 @@ interface CostMetrics {
 
 type TimeRange = '24h' | '7d' | '30d' | 'all';
 
+/**
+ * Simple Bar Chart Component (no external dependencies)
+ */
+function SimpleBarChart({ data, title }: { data: { label: string; value: number }[]; title: string }) {
+  if (data.length === 0) return null;
+  const maxValue = Math.max(...data.map(d => d.value));
+
+  return (
+    <div className="chart-container">
+      <h3 className="chart-title">{title}</h3>
+      <div className="bar-chart">
+        {data.slice(0, 5).map((item, idx) => (
+          <div key={idx} className="bar-item">
+            <span className="bar-label" title={item.label}>
+              {item.label.length > 15 ? item.label.substring(0, 15) + '...' : item.label}
+            </span>
+            <div className="bar-track">
+              <div
+                className="bar-fill"
+                style={{ width: maxValue > 0 ? `${(item.value / maxValue) * 100}%` : '0%' }}
+              />
+            </div>
+            <span className="bar-value">${item.value.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Export data to CSV
+ */
+function exportToCSV(metrics: CostMetrics, timeRange: TimeRange) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const rows: string[] = [
+    'LLM Cost Report',
+    `Generated: ${new Date().toLocaleString()}`,
+    `Time Range: ${timeRange}`,
+    '',
+    'Summary',
+    `Today,$${metrics.totalCostToday.toFixed(4)}`,
+    `This Week,$${metrics.totalCostWeek.toFixed(4)}`,
+    `This Month,$${metrics.totalCostMonth.toFixed(4)}`,
+    `All Time,$${metrics.totalCostAllTime.toFixed(4)}`,
+    `Total Requests,${metrics.totalRequests}`,
+    `Avg Cost/Request,$${metrics.avgCostPerRequest.toFixed(6)}`,
+    '',
+    'Cost by Provider',
+    'Provider,Requests,Total Cost,Avg Cost/Request',
+    ...metrics.byProvider.map(p => `${p.value},${p.requestCount},$${p.totalCostUsd.toFixed(4)},$${p.avgCostPerRequest.toFixed(6)}`),
+    '',
+    'Cost by Model',
+    'Model,Requests,Total Cost,Avg Cost/Request',
+    ...metrics.byModel.map(m => `${m.value},${m.requestCount},$${m.totalCostUsd.toFixed(4)},$${m.avgCostPerRequest.toFixed(6)}`),
+    '',
+    'Cost by Touchpoint',
+    'Touchpoint,Requests,Total Cost,Avg Cost/Request',
+    ...metrics.byTouchpoint.map(t => `${t.value},${t.requestCount},$${t.totalCostUsd.toFixed(4)},$${t.avgCostPerRequest.toFixed(6)}`),
+    '',
+    'Cost by Tenant',
+    'Tenant,Requests,Total Cost,Avg Cost/Request',
+    ...metrics.byTenant.map(t => `${t.value || 'Unknown'},${t.requestCount},$${t.totalCostUsd.toFixed(4)},$${t.avgCostPerRequest.toFixed(6)}`),
+  ];
+
+  const csvContent = rows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `llm-costs-${timeRange}-${timestamp}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 function getTimeRangeStart(range: TimeRange): Date | undefined {
   const now = new Date();
   switch (range) {
@@ -318,6 +395,13 @@ export default function CostAnalyticsDashboard() {
           <button className="refresh-btn" onClick={fetchMetrics} title="Refresh data">
             ↻
           </button>
+          <button
+            className="export-btn"
+            onClick={() => metrics && exportToCSV(metrics, timeRange)}
+            title="Export to CSV"
+          >
+            📥 Export CSV
+          </button>
         </div>
       </header>
 
@@ -363,6 +447,23 @@ export default function CostAnalyticsDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Charts Section */}
+      {(metrics.byModel.length > 0 || metrics.byProvider.length > 0) && (
+        <section className="charts-section">
+          <h2>Cost Distribution</h2>
+          <div className="charts-grid">
+            <SimpleBarChart
+              title="Top Models by Cost"
+              data={metrics.byModel.map(m => ({ label: m.value || 'Unknown', value: m.totalCostUsd }))}
+            />
+            <SimpleBarChart
+              title="Top Providers by Cost"
+              data={metrics.byProvider.map(p => ({ label: p.value || 'Unknown', value: p.totalCostUsd }))}
+            />
+          </div>
+        </section>
+      )}
 
       {/* Quota Status */}
       {metrics.quotas.length > 0 && (
@@ -573,6 +674,93 @@ export default function CostAnalyticsDashboard() {
         .refresh-btn {
           font-size: 1.25rem;
           padding: 0.5rem 0.75rem !important;
+        }
+
+        .export-btn {
+          background: #10b981;
+          color: white;
+          border: none;
+          font-weight: 500;
+        }
+
+        .export-btn:hover {
+          background: #059669;
+        }
+
+        /* Charts Section */
+        .charts-section {
+          background: white;
+          padding: 1.5rem;
+          border-radius: 0.75rem;
+          border: 1px solid #e5e7eb;
+          margin-bottom: 2rem;
+        }
+
+        .charts-section h2 {
+          margin: 0 0 1rem 0;
+          font-size: 1.25rem;
+          font-weight: 600;
+        }
+
+        .charts-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+
+        .chart-container {
+          padding: 1rem;
+          background: #f9fafb;
+          border-radius: 0.5rem;
+        }
+
+        .chart-title {
+          margin: 0 0 1rem 0;
+          font-size: 1rem;
+          font-weight: 500;
+          color: #374151;
+        }
+
+        .bar-chart {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .bar-item {
+          display: grid;
+          grid-template-columns: 100px 1fr 70px;
+          gap: 0.5rem;
+          align-items: center;
+        }
+
+        .bar-label {
+          font-size: 0.75rem;
+          color: #6b7280;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .bar-track {
+          height: 20px;
+          background: #e5e7eb;
+          border-radius: 4px;
+          overflow: hidden;
+        }
+
+        .bar-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+          border-radius: 4px;
+          transition: width 0.3s ease;
+        }
+
+        .bar-value {
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: #374151;
+          text-align: right;
         }
 
         .metrics-grid {
