@@ -48,6 +48,8 @@ export type {
 // Strategies
 export { NoneCompactor } from './strategies/NoneCompactor.js';
 export { SlidingWindowCompactor } from './strategies/SlidingWindowCompactor.js';
+export { SemanticCompactor } from './strategies/SemanticCompactor.js';
+export { ModerateMergeCompactor } from './strategies/ModerateMergeCompactor.js';
 
 // Factory
 export {
@@ -65,3 +67,11 @@ export {
   getPathCompactionServiceIfInitialized,
   type PathCompactionServiceConfig,
 } from './pathCompactionService.js';
+
+// Conversation Store Integration
+export {
+  wrapWithCompaction,
+  compactMessages,
+  needsCompaction,
+  type CompactionWrapperConfig,
+} from './conversationStoreCompactionAdapter.js';
