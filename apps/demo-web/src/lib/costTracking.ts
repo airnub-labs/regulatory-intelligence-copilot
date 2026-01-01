@@ -22,7 +22,7 @@ import {
   type NotificationService,
 } from '@reg-copilot/reg-intel-observability';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const logger = createLogger('CostTracking');
 
@@ -54,7 +54,7 @@ function getNotificationService(): NotificationService {
  *
  * @throws Error if Supabase credentials are not configured
  */
-function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } {
+function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
   // Avoid initializing in browser
   if (typeof window !== 'undefined') {
     throw new Error('Cost tracking must be initialized on the server');
@@ -64,11 +64,12 @@ function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } 
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error(
+    logger.warn(
       'Supabase credentials required for cost tracking. ' +
         'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables. ' +
         'For local development, run `supabase start` to start a local Supabase instance.'
     );
+    return null;
   }
 
   return { supabaseUrl, supabaseKey };
@@ -86,10 +87,17 @@ function createCostTrackingProviders(): {
 } {
   const credentials = getSupabaseCredentials();
 
+  if (!credentials) {
+    return { storage: null, quotas: null } as unknown as {
+      storage: SupabaseCostStorage;
+      quotas: SupabaseQuotaProvider;
+    };
+  }
+
   const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     db: { schema: 'copilot_internal' },
-  });
+  }) as unknown as SupabaseClient;
 
   logger.info(
     { supabaseUrl: credentials.supabaseUrl },
@@ -135,6 +143,11 @@ export const initializeCostTracking = (): void => {
 
     // Create Supabase-backed providers
     const { storage, quotas } = createCostTrackingProviders();
+
+    if (!storage || !quotas) {
+      logger.warn('Skipping cost tracking initialization due to missing Supabase credentials');
+      return;
+    }
 
     // Initialize cost tracking
     const costService = initCostTracking({

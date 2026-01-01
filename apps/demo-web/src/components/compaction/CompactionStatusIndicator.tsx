@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface CompactionStatusIndicatorProps {
   conversationId: string;
@@ -44,9 +44,11 @@ export function CompactionStatusIndicator({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
-      const response = await fetch(`/api/conversations/${conversationId}/compact/status`);
+      const response = await fetch(
+        `/api/conversations/${conversationId}/compact/status?threshold=${threshold}`
+      );
       const data = await response.json();
 
       if (response.ok) {
@@ -60,7 +62,7 @@ export function CompactionStatusIndicator({
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversationId, threshold]);
 
   useEffect(() => {
     // Fetch immediately
@@ -71,7 +73,7 @@ export function CompactionStatusIndicator({
       const interval = setInterval(fetchStatus, pollInterval);
       return () => clearInterval(interval);
     }
-  }, [conversationId, pollInterval]);
+  }, [conversationId, pollInterval, fetchStatus]);
 
   if (loading) {
     return (
@@ -149,7 +151,7 @@ export function CompactionStatusIndicator({
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .compaction-status {
           padding: 1rem;
           border-radius: 0.5rem;

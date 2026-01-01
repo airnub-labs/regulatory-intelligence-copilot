@@ -92,6 +92,7 @@ export async function DELETE(
     return NextResponse.json({
       message: 'Example data - integrate with snapshot service for production',
       success: true,
+      conversationId,
       snapshotId,
       deletedAt: new Date().toISOString(),
     }, { status: 501 }); // 501 Not Implemented

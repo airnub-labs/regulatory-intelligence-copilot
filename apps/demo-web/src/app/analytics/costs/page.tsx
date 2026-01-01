@@ -516,7 +516,7 @@ export default function CostAnalyticsDashboard() {
         </section>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .cost-analytics {
           padding: 2rem;
           max-width: 1400px;

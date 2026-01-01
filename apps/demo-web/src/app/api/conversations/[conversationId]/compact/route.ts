@@ -27,11 +27,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import {
-  compactMessages,
-  type CompactionWrapperConfig,
-  type PathCompactionStrategy,
-} from '@reg-copilot/reg-intel-conversations/compaction';
+import { type PathCompactionStrategy } from '@reg-copilot/reg-intel-conversations/compaction';
 
 interface CompactRequest {
   strategy?: PathCompactionStrategy;
@@ -76,6 +72,7 @@ export async function POST(
           durationMs: 2341,
         },
       },
+      conversationId,
     }, { status: 501 }); // Not Implemented
 
     // Production implementation:
