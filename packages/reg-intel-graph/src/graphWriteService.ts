@@ -20,6 +20,8 @@ import {
   type GraphIngressAspect,
   composeIngressAspects,
   createBaselineAspects,
+  ALLOWED_NODE_LABELS,
+  ALLOWED_RELATIONSHIP_TYPES,
 } from './graphIngressGuard.js';
 
 export interface UpsertConceptDto {
@@ -177,41 +179,6 @@ export interface GraphWriteServiceConfig {
   /** Source identifier for this write service instance */
   defaultSource?: 'ingestion' | 'agent' | 'background_job' | 'script';
 }
-
-/**
- * Allowed node labels - whitelist to prevent Cypher injection
- */
-const ALLOWED_NODE_LABELS = [
-  'Concept',
-  'Label',
-  'Jurisdiction',
-  'Region',
-  'Statute',
-  'Section',
-  'Benefit',
-  'Relief',
-  'Timeline',
-  'Agreement',
-  'Regime',
-  'ProfileTag',
-] as const;
-
-/**
- * Allowed relationship types - whitelist to prevent Cypher injection
- */
-const ALLOWED_RELATIONSHIP_TYPES = [
-  'PART_OF',
-  'IN_JURISDICTION',
-  'COORDINATED_WITH',
-  'TREATY_LINKED_TO',
-  'EXCLUDES',
-  'MUTUALLY_EXCLUSIVE_WITH',
-  'EQUIVALENT_TO',
-  'REQUIRES',
-  'PROVIDES',
-  'CONSTRAINS',
-  'GOVERNED_BY',
-] as const;
 
 /**
  * Graph Write Service
