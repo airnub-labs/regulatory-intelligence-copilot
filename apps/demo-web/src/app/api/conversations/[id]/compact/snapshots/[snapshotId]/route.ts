@@ -14,10 +14,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ conversationId: string; snapshotId: string }> }
+  context: { params: Promise<{ id: string; snapshotId: string }> }
 ): Promise<NextResponse> {
   try {
-    const { conversationId, snapshotId } = await context.params;
+    const { id: conversationId, snapshotId } = await context.params;
 
     // Example response - replace with actual implementation
     return NextResponse.json({
@@ -83,10 +83,10 @@ export async function GET(
 
 export async function DELETE(
   request: Request,
-  context: { params: Promise<{ conversationId: string; snapshotId: string }> }
+  context: { params: Promise<{ id: string; snapshotId: string }> }
 ): Promise<NextResponse> {
   try {
-    const { conversationId, snapshotId } = await context.params;
+    const { id: conversationId, snapshotId } = await context.params;
 
     // Example response - replace with actual implementation
     return NextResponse.json({
