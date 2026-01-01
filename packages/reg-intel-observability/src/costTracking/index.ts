@@ -63,3 +63,21 @@ export {
   isValidTouchpoint,
   type LlmTouchpoint,
 } from './touchpoints.js';
+
+// Notification service (for cost alerts)
+export {
+  DefaultNotificationService,
+  createNotificationService,
+  createCostAlert,
+  getNotificationService,
+  initNotificationServiceFromEnv,
+  type NotificationService,
+  type NotificationConfig,
+  type NotificationChannel,
+  type NotificationResult,
+  type CostAlert,
+  type AlertSeverity,
+  type SlackConfig,
+  type EmailConfig,
+  type PagerDutyConfig,
+} from './notifications.js';

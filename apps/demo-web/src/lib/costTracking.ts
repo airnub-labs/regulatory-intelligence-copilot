@@ -16,12 +16,35 @@ import {
   SupabaseCostStorage,
   SupabaseQuotaProvider,
   LLM_TOUCHPOINTS,
+  initNotificationServiceFromEnv,
+  createCostAlert,
   type CostQuota,
+  type NotificationService,
 } from '@reg-copilot/reg-intel-observability';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 
 const logger = createLogger('CostTracking');
+
+/** Notification service instance (initialized lazily) */
+let notificationService: NotificationService | null = null;
+
+/**
+ * Get or initialize the notification service
+ *
+ * Initializes from environment variables on first call.
+ * Configure these env vars to enable notifications:
+ * - COST_ALERT_CHANNELS: Comma-separated list of enabled channels (slack,email,pagerduty)
+ * - COST_ALERT_SLACK_WEBHOOK_URL: Slack webhook URL
+ * - COST_ALERT_EMAIL_SMTP_HOST: SMTP host for email
+ * - COST_ALERT_PAGERDUTY_ROUTING_KEY: PagerDuty routing key
+ */
+function getNotificationService(): NotificationService {
+  if (!notificationService) {
+    notificationService = initNotificationServiceFromEnv();
+  }
+  return notificationService;
+}
 
 /**
  * Get Supabase credentials from environment
@@ -88,6 +111,18 @@ function createCostTrackingProviders(): {
  * Environment variables:
  * - SUPABASE_URL: Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Service role key for server-side operations
+ *
+ * Notification environment variables (optional):
+ * - COST_ALERT_CHANNELS: Comma-separated list (slack,email,pagerduty)
+ * - COST_ALERT_SLACK_WEBHOOK_URL: Slack webhook URL
+ * - COST_ALERT_SLACK_CHANNEL: Slack channel (optional)
+ * - COST_ALERT_EMAIL_SMTP_HOST: SMTP host
+ * - COST_ALERT_EMAIL_SMTP_PORT: SMTP port (default: 587)
+ * - COST_ALERT_EMAIL_SMTP_USER: SMTP username
+ * - COST_ALERT_EMAIL_SMTP_PASSWORD: SMTP password
+ * - COST_ALERT_EMAIL_FROM: From address
+ * - COST_ALERT_EMAIL_TO: Comma-separated recipient addresses
+ * - COST_ALERT_PAGERDUTY_ROUTING_KEY: PagerDuty routing key
  */
 export const initializeCostTracking = (): void => {
   try {
@@ -110,8 +145,10 @@ export const initializeCostTracking = (): void => {
       enforceQuotas: false, // Set to true in production if you want hard limits
 
       // Callback when quota warning threshold is exceeded
-      onQuotaWarning: (quota: CostQuota) => {
+      onQuotaWarning: async (quota: CostQuota) => {
         const percentUsed = ((quota.currentSpendUsd / quota.limitUsd) * 100).toFixed(1);
+
+        // Log the warning
         logger.warn({
           scope: quota.scope,
           scopeId: quota.scopeId,
@@ -120,10 +157,29 @@ export const initializeCostTracking = (): void => {
           percentUsed,
           period: quota.period,
         }, 'Quota warning threshold exceeded');
+
+        // Send notifications to configured channels
+        try {
+          const notifier = getNotificationService();
+          const alert = createCostAlert('quota_warning', quota);
+          const results = await notifier.sendAlert(alert);
+
+          // Log notification results
+          for (const result of results) {
+            if (result.success) {
+              logger.info({ channel: result.channel, messageId: result.messageId }, 'Alert sent');
+            } else {
+              logger.error({ channel: result.channel, error: result.error }, 'Failed to send alert');
+            }
+          }
+        } catch (error) {
+          logger.error({ error }, 'Failed to send quota warning notifications');
+        }
       },
 
       // Callback when quota is exceeded
-      onQuotaExceeded: (quota: CostQuota) => {
+      onQuotaExceeded: async (quota: CostQuota) => {
+        // Log the error
         logger.error({
           scope: quota.scope,
           scopeId: quota.scopeId,
@@ -131,8 +187,30 @@ export const initializeCostTracking = (): void => {
           limit: quota.limitUsd.toFixed(4),
           period: quota.period,
         }, 'Quota exceeded');
+
+        // Send notifications to configured channels
+        try {
+          const notifier = getNotificationService();
+          const alert = createCostAlert('quota_exceeded', quota);
+          const results = await notifier.sendAlert(alert);
+
+          // Log notification results
+          for (const result of results) {
+            if (result.success) {
+              logger.info({ channel: result.channel, messageId: result.messageId }, 'Alert sent');
+            } else {
+              logger.error({ channel: result.channel, error: result.error }, 'Failed to send alert');
+            }
+          }
+        } catch (error) {
+          logger.error({ error }, 'Failed to send quota exceeded notifications');
+        }
       },
     });
+
+    // Log enabled notification channels
+    const enabledChannels = process.env.COST_ALERT_CHANNELS ?? '';
+    const channels = enabledChannels.split(',').filter(c => c.trim());
 
     logger.info({
       storage: 'supabase',
@@ -140,6 +218,7 @@ export const initializeCostTracking = (): void => {
       hasQuotas: costService.hasQuotas(),
       enforcing: costService.isEnforcingQuotas(),
       touchpoints: Object.values(LLM_TOUCHPOINTS),
+      notificationChannels: channels.length > 0 ? channels : ['none configured'],
     }, 'Cost tracking initialized successfully');
 
     // Optionally set default quotas
@@ -178,16 +257,33 @@ export const getCostTracking = () => {
  * ## Production Considerations
  *
  * 1. **Quota Enforcement**
- *    Set enforceQuotas: true to block requests that exceed quotas
+ *    Set enforceQuotas: true to block requests that would exceed quotas
  *    This prevents runaway costs but may impact UX
  *    Consider soft limits + alerting instead
  *
  * 2. **Alert Integration**
- *    Implement onQuotaWarning and onQuotaExceeded callbacks to:
- *    - Send Slack notifications
- *    - Trigger PagerDuty incidents
- *    - Email billing admins
- *    - Update status dashboards
+ *    Configure notification channels via environment variables:
+ *
+ *    ### Slack
+ *    - COST_ALERT_CHANNELS=slack
+ *    - COST_ALERT_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx
+ *    - COST_ALERT_SLACK_CHANNEL=#cost-alerts (optional)
+ *
+ *    ### Email
+ *    - COST_ALERT_CHANNELS=email
+ *    - COST_ALERT_EMAIL_SMTP_HOST=smtp.example.com
+ *    - COST_ALERT_EMAIL_SMTP_PORT=587
+ *    - COST_ALERT_EMAIL_SMTP_USER=user
+ *    - COST_ALERT_EMAIL_SMTP_PASSWORD=pass
+ *    - COST_ALERT_EMAIL_FROM=alerts@example.com
+ *    - COST_ALERT_EMAIL_TO=admin@example.com,finance@example.com
+ *
+ *    ### PagerDuty
+ *    - COST_ALERT_CHANNELS=pagerduty
+ *    - COST_ALERT_PAGERDUTY_ROUTING_KEY=your-routing-key
+ *
+ *    ### Multiple Channels
+ *    - COST_ALERT_CHANNELS=slack,email,pagerduty
  *
  * 3. **Default Quotas**
  *    Set sensible default quotas based on your pricing:
@@ -202,4 +298,8 @@ export const getCostTracking = () => {
  * await costService.setQuota('tenant', 'tenant-123', 100, 'month', 0.8);
  * await costService.setQuota('user', 'user-456', 10, 'month', 0.8);
  * ```
+ *
+ * ## View Cost Dashboard
+ *
+ * Access the cost analytics dashboard at: /analytics/costs
  */
