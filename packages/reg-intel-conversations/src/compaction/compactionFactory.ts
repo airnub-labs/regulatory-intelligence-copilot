@@ -16,6 +16,7 @@ import type {
 import { NoneCompactor } from './strategies/NoneCompactor.js';
 import { SlidingWindowCompactor } from './strategies/SlidingWindowCompactor.js';
 import { SemanticCompactor } from './strategies/SemanticCompactor.js';
+import { HybridCompactor } from './strategies/HybridCompactor.js';
 import { ModerateMergeCompactor } from './strategies/ModerateMergeCompactor.js';
 
 /**
@@ -36,9 +37,7 @@ export const getPathCompactor = (
       return new SemanticCompactor(config as SemanticConfig);
 
     case 'hybrid':
-      // TODO: Implement HybridCompactor
-      console.warn('Hybrid compaction not yet implemented, falling back to semantic');
-      return new SemanticCompactor(config as SemanticConfig);
+      return new HybridCompactor(config as HybridConfig);
 
     default:
       console.warn(`Unknown path compaction strategy: ${strategy}, using 'none'`);

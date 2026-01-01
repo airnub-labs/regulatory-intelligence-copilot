@@ -81,3 +81,14 @@ export {
   type EmailConfig,
   type PagerDutyConfig,
 } from './notifications.js';
+
+// Anomaly detection (for spending spike alerts)
+export {
+  AnomalyDetectionService,
+  createAnomalyDetectionService,
+  initAnomalyDetection,
+  getAnomalyDetectionService,
+  getAnomalyDetectionServiceIfInitialized,
+  type AnomalyDetectionConfig,
+  type AnomalyResult,
+} from './anomalyDetection.js';

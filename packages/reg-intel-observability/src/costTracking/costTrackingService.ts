@@ -323,6 +323,20 @@ export class CostTrackingService {
   isEnforcingQuotas(): boolean {
     return this.enforceQuotas && this.quotas !== undefined;
   }
+
+  /**
+   * Get the storage provider for advanced operations
+   */
+  getStorage(): CostStorageProvider | undefined {
+    return this.storage;
+  }
+
+  /**
+   * Get the quota provider for advanced operations
+   */
+  getQuotaProvider(): QuotaProvider | undefined {
+    return this.quotas;
+  }
 }
 
 // Global cost tracking service instance
