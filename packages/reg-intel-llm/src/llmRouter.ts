@@ -20,7 +20,7 @@
  * - Egress control settings
  */
 
-import { createLogger, recordLlmTokenUsage, recordLlmRequest } from '@reg-copilot/reg-intel-observability';
+import { createLogger, recordLlmTokenUsage, recordLlmRequest, recordLlmCost } from '@reg-copilot/reg-intel-observability';
 import type { ChatMessage } from './types.js';
 import { LlmError } from './errors.js';
 import {
@@ -142,6 +142,11 @@ export interface LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      // Attribution context for metrics
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): Promise<string>;
 
@@ -153,6 +158,11 @@ export interface LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      // Attribution context for metrics
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): AsyncIterable<LlmStreamChunk>;
 }
@@ -275,6 +285,10 @@ export class OpenAiProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): Promise<string> {
     const startTime = Date.now();
@@ -293,13 +307,21 @@ export class OpenAiProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      // Record metrics
+      // Record metrics with attribution
       const durationMs = Date.now() - startTime;
+      const attribution = {
+        tenantId: options?.tenantId,
+        userId: options?.userId,
+        task: options?.task,
+        conversationId: options?.conversationId,
+      };
+
       recordLlmRequest(durationMs, {
         provider: 'openai',
         model,
         success: true,
         streaming: false,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -310,6 +332,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: result.usage.promptTokens,
+            ...attribution,
           });
         }
         if (result.usage.completionTokens) {
@@ -318,6 +341,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: result.usage.completionTokens,
+            ...attribution,
           });
         }
         if (result.usage.totalTokens) {
@@ -326,7 +350,19 @@ export class OpenAiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: result.usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'openai',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
 
@@ -338,6 +374,10 @@ export class OpenAiProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: false,
+        tenantId: options?.tenantId,
+        userId: options?.userId,
+        task: options?.task,
+        conversationId: options?.conversationId,
       });
 
       throw new LlmError(
@@ -354,10 +394,21 @@ export class OpenAiProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): AsyncIterable<LlmStreamChunk> {
     const startTime = Date.now();
     let success = true;
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { streamText } = require('ai');
@@ -383,6 +434,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
         model,
         success: true,
         streaming: true,
+        ...attribution,
       });
 
       // Record token usage if available from the finalized result
@@ -394,6 +446,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: usage.promptTokens,
+            ...attribution,
           });
         }
         if (usage.completionTokens) {
@@ -402,6 +455,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: usage.completionTokens,
+            ...attribution,
           });
         }
         if (usage.totalTokens) {
@@ -410,7 +464,19 @@ export class OpenAiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'openai',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -420,6 +486,7 @@ export class OpenAiProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: true,
+        ...attribution,
       });
 
       yield {
@@ -463,9 +530,20 @@ export class GroqProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): Promise<string> {
     const startTime = Date.now();
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { generateText } = require('ai');
@@ -480,13 +558,14 @@ export class GroqProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      // Record metrics
+      // Record metrics with attribution
       const durationMs = Date.now() - startTime;
       recordLlmRequest(durationMs, {
         provider: 'groq',
         model,
         success: true,
         streaming: false,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -497,6 +576,7 @@ export class GroqProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: result.usage.promptTokens,
+            ...attribution,
           });
         }
         if (result.usage.completionTokens) {
@@ -505,6 +585,7 @@ export class GroqProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: result.usage.completionTokens,
+            ...attribution,
           });
         }
         if (result.usage.totalTokens) {
@@ -513,7 +594,19 @@ export class GroqProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: result.usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'groq',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
 
@@ -525,6 +618,7 @@ export class GroqProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: false,
+        ...attribution,
       });
 
       throw new LlmError(
@@ -541,9 +635,20 @@ export class GroqProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): AsyncIterable<LlmStreamChunk> {
     const startTime = Date.now();
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { streamText } = require('ai');
@@ -569,6 +674,7 @@ export class GroqProviderClient implements LlmProviderClient {
         model,
         success: true,
         streaming: true,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -580,6 +686,7 @@ export class GroqProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: usage.promptTokens,
+            ...attribution,
           });
         }
         if (usage.completionTokens) {
@@ -588,6 +695,7 @@ export class GroqProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: usage.completionTokens,
+            ...attribution,
           });
         }
         if (usage.totalTokens) {
@@ -596,7 +704,19 @@ export class GroqProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'groq',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -606,6 +726,7 @@ export class GroqProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: true,
+        ...attribution,
       });
 
       yield {
@@ -649,9 +770,20 @@ export class AnthropicProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): Promise<string> {
     const startTime = Date.now();
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { generateText } = require('ai');
@@ -666,13 +798,14 @@ export class AnthropicProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      // Record metrics
+      // Record metrics with attribution
       const durationMs = Date.now() - startTime;
       recordLlmRequest(durationMs, {
         provider: 'anthropic',
         model,
         success: true,
         streaming: false,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -683,6 +816,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: result.usage.promptTokens,
+            ...attribution,
           });
         }
         if (result.usage.completionTokens) {
@@ -691,6 +825,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: result.usage.completionTokens,
+            ...attribution,
           });
         }
         if (result.usage.totalTokens) {
@@ -699,7 +834,19 @@ export class AnthropicProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: result.usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'anthropic',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
 
@@ -711,6 +858,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: false,
+        ...attribution,
       });
 
       throw new LlmError(
@@ -727,9 +875,20 @@ export class AnthropicProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): AsyncIterable<LlmStreamChunk> {
     const startTime = Date.now();
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { streamText } = require('ai');
@@ -755,6 +914,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
         model,
         success: true,
         streaming: true,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -766,6 +926,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: usage.promptTokens,
+            ...attribution,
           });
         }
         if (usage.completionTokens) {
@@ -774,6 +935,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: usage.completionTokens,
+            ...attribution,
           });
         }
         if (usage.totalTokens) {
@@ -782,7 +944,19 @@ export class AnthropicProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'anthropic',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -792,6 +966,7 @@ export class AnthropicProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: true,
+        ...attribution,
       });
 
       yield {
@@ -835,9 +1010,20 @@ export class GeminiProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): Promise<string> {
     const startTime = Date.now();
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { generateText } = require('ai');
@@ -852,13 +1038,14 @@ export class GeminiProviderClient implements LlmProviderClient {
         maxTokens: options?.maxTokens ?? 2048,
       });
 
-      // Record metrics
+      // Record metrics with attribution
       const durationMs = Date.now() - startTime;
       recordLlmRequest(durationMs, {
         provider: 'google',
         model,
         success: true,
         streaming: false,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -869,6 +1056,7 @@ export class GeminiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: result.usage.promptTokens,
+            ...attribution,
           });
         }
         if (result.usage.completionTokens) {
@@ -877,6 +1065,7 @@ export class GeminiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: result.usage.completionTokens,
+            ...attribution,
           });
         }
         if (result.usage.totalTokens) {
@@ -885,7 +1074,19 @@ export class GeminiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: result.usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (result.usage.promptTokens && result.usage.completionTokens) {
+          recordLlmCost({
+            provider: 'google',
+            model,
+            inputTokens: result.usage.promptTokens,
+            outputTokens: result.usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
 
@@ -897,6 +1098,7 @@ export class GeminiProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: false,
+        ...attribution,
       });
 
       throw new LlmError(
@@ -913,9 +1115,20 @@ export class GeminiProviderClient implements LlmProviderClient {
       maxTokens?: number;
       tools?: Array<Record<string, unknown>>;
       toolChoice?: LlmCompletionOptions['toolChoice'];
+      tenantId?: string;
+      userId?: string;
+      task?: string;
+      conversationId?: string;
     }
   ): AsyncIterable<LlmStreamChunk> {
     const startTime = Date.now();
+
+    const attribution = {
+      tenantId: options?.tenantId,
+      userId: options?.userId,
+      task: options?.task,
+      conversationId: options?.conversationId,
+    };
 
     try {
       const { streamText } = require('ai');
@@ -941,6 +1154,7 @@ export class GeminiProviderClient implements LlmProviderClient {
         model,
         success: true,
         streaming: true,
+        ...attribution,
       });
 
       // Record token usage if available
@@ -952,6 +1166,7 @@ export class GeminiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'input',
             tokens: usage.promptTokens,
+            ...attribution,
           });
         }
         if (usage.completionTokens) {
@@ -960,6 +1175,7 @@ export class GeminiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'output',
             tokens: usage.completionTokens,
+            ...attribution,
           });
         }
         if (usage.totalTokens) {
@@ -968,7 +1184,19 @@ export class GeminiProviderClient implements LlmProviderClient {
             model,
             tokenType: 'total',
             tokens: usage.totalTokens,
+            ...attribution,
           });
+        }
+
+        // Record cost in USD (fire-and-forget to avoid blocking)
+        if (usage.promptTokens && usage.completionTokens) {
+          recordLlmCost({
+            provider: 'google',
+            model,
+            inputTokens: usage.promptTokens,
+            outputTokens: usage.completionTokens,
+            ...attribution,
+          }).catch((err: unknown) => console.warn('Failed to record LLM cost:', err));
         }
       }
     } catch (error) {
@@ -978,6 +1206,7 @@ export class GeminiProviderClient implements LlmProviderClient {
         model,
         success: false,
         streaming: true,
+        ...attribution,
       });
 
       yield {
@@ -1107,7 +1336,12 @@ export class LlmRouter implements LlmClient {
         return providerClient.chat(
           payload.messages,
           payload.model,
-          payload.options ?? taskOptions
+          {
+            ...(payload.options ?? taskOptions),
+            tenantId: options?.tenantId,
+            userId: options?.userId,
+            task: options?.task,
+          }
         );
       }
     );
@@ -1191,7 +1425,12 @@ export class LlmRouter implements LlmClient {
         return providerClient.streamChat(
           payload.messages,
           payload.model,
-          payload.options ?? taskOptions
+          {
+            ...(payload.options ?? taskOptions),
+            tenantId: options?.tenantId,
+            userId: options?.userId,
+            task: options?.task,
+          }
         );
       }
     );

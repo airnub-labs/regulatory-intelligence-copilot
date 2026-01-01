@@ -17,6 +17,7 @@ let graphQueryDurationHistogram: Histogram | null = null;
 let graphQueryCounter: Counter | null = null;
 let llmTokenUsageCounter: Counter | null = null;
 let llmRequestDurationHistogram: Histogram | null = null;
+let llmCostCounter: Counter | null = null;
 let egressGuardCounter: Counter | null = null;
 let egressGuardBlockCounter: Counter | null = null;
 
@@ -62,6 +63,11 @@ export const initBusinessMetrics = (): void => {
   llmRequestDurationHistogram = meter.createHistogram('regintel.llm.request.duration', {
     description: 'Duration of LLM requests in milliseconds',
     unit: 'ms',
+  });
+
+  llmCostCounter = meter.createCounter('regintel.llm.cost.total', {
+    description: 'Total LLM cost in USD (with multi-dimensional attribution)',
+    unit: 'USD',
   });
 
   // Egress guard metrics
@@ -141,7 +147,7 @@ export const recordGraphQuery = (
 };
 
 /**
- * Record LLM token usage
+ * Record LLM token usage with multi-dimensional attribution
  */
 export const recordLlmTokenUsage = (attributes: {
   provider: string;
@@ -149,13 +155,17 @@ export const recordLlmTokenUsage = (attributes: {
   tokenType: 'input' | 'output' | 'total';
   tokens: number;
   cached?: boolean;
+  tenantId?: string;
+  userId?: string;
+  task?: string;
+  conversationId?: string;
 }): void => {
   const { tokens, ...metricAttributes } = attributes;
   llmTokenUsageCounter?.add(tokens, metricAttributes as Attributes);
 };
 
 /**
- * Record LLM request duration
+ * Record LLM request duration with multi-dimensional attribution
  */
 export const recordLlmRequest = (
   durationMs: number,
@@ -165,9 +175,116 @@ export const recordLlmRequest = (
     success: boolean;
     streaming?: boolean;
     cached?: boolean;
+    tenantId?: string;
+    userId?: string;
+    task?: string;
+    conversationId?: string;
   }
 ): void => {
   llmRequestDurationHistogram?.record(durationMs, attributes as Attributes);
+};
+
+/**
+ * Record LLM cost in USD with multi-dimensional attribution
+ *
+ * Enables cost tracking across multiple dimensions:
+ * - Platform-wide (total costs)
+ * - Per-tenant (organizational billing)
+ * - Per-user (individual usage)
+ * - Per-task (touchpoint-level optimization)
+ * - Per-conversation (session-level analysis)
+ */
+export const recordLlmCost = async (attributes: {
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  tenantId?: string;
+  userId?: string;
+  task?: string;
+  conversationId?: string;
+  cached?: boolean;
+  streaming?: boolean;
+  durationMs?: number;
+  success?: boolean;
+}): Promise<void> => {
+  try {
+    // Import dynamically to avoid circular dependencies
+    const { calculateLlmCost } = await import('./pricing/index.js');
+    const { getCostTrackingServiceIfInitialized } = await import('./costTracking/index.js');
+
+    const costCalculation = await calculateLlmCost(
+      attributes.provider,
+      attributes.model,
+      attributes.inputTokens,
+      attributes.outputTokens
+    );
+
+    // Record to OpenTelemetry metrics (real-time observability)
+    llmCostCounter?.add(costCalculation.totalCostUsd, {
+      provider: attributes.provider,
+      model: attributes.model,
+      tenantId: attributes.tenantId,
+      userId: attributes.userId,
+      task: attributes.task,
+      conversationId: attributes.conversationId,
+      isEstimated: costCalculation.isEstimated,
+    } as Attributes);
+
+    // Also record separate input/output costs for detailed analysis
+    if (costCalculation.inputCostUsd > 0) {
+      llmCostCounter?.add(costCalculation.inputCostUsd, {
+        provider: attributes.provider,
+        model: attributes.model,
+        costType: 'input',
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        task: attributes.task,
+        conversationId: attributes.conversationId,
+        isEstimated: costCalculation.isEstimated,
+      } as Attributes);
+    }
+
+    if (costCalculation.outputCostUsd > 0) {
+      llmCostCounter?.add(costCalculation.outputCostUsd, {
+        provider: attributes.provider,
+        model: attributes.model,
+        costType: 'output',
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        task: attributes.task,
+        conversationId: attributes.conversationId,
+        isEstimated: costCalculation.isEstimated,
+      } as Attributes);
+    }
+
+    // Record to cost tracking service (storage & quota management)
+    const costTrackingService = getCostTrackingServiceIfInitialized();
+    if (costTrackingService) {
+      await costTrackingService.recordCost({
+        provider: attributes.provider,
+        model: attributes.model,
+        inputTokens: attributes.inputTokens,
+        outputTokens: attributes.outputTokens,
+        inputCostUsd: costCalculation.inputCostUsd,
+        outputCostUsd: costCalculation.outputCostUsd,
+        totalCostUsd: costCalculation.totalCostUsd,
+        isEstimated: costCalculation.isEstimated,
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        task: attributes.task,
+        conversationId: attributes.conversationId,
+        cached: attributes.cached,
+        streaming: attributes.streaming,
+        durationMs: attributes.durationMs,
+        success: attributes.success,
+      });
+    }
+  } catch (error) {
+    // Silently fail if pricing service is unavailable
+    // This prevents metrics recording from blocking LLM requests
+    console.warn('Failed to record LLM cost:', error);
+  }
 };
 
 /**

@@ -150,6 +150,28 @@ export {
   type CanonicalConceptHandlerConfig,
 } from '@reg-copilot/reg-intel-graph';
 
+// Token Counting
+export {
+  type TokenCounter,
+  type TokenCounterConfig,
+  type TokenEstimate,
+  type TokenCacheEntry,
+  createTokenCounter,
+  createTokenCounterForModel,
+  quickEstimateTokens,
+  TiktokenCounter,
+  TokenCache,
+  createCacheKey,
+  estimateTokensFromCharacters,
+  estimateTokensFromWords,
+  estimateTokensHybrid,
+  estimateMessageOverhead,
+  estimateConversationOverhead,
+  countTokensForMessages,
+  countTokensForText,
+  clearTokenCountCache,
+} from './tokens/index.js';
+
 // LLM Client (legacy MCP-based)
 export {
   createLlmClient,

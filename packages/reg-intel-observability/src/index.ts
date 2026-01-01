@@ -10,6 +10,7 @@ export {
   recordGraphQuery,
   recordLlmTokenUsage,
   recordLlmRequest,
+  recordLlmCost,
   recordEgressGuardScan,
   withMetricTiming,
   // UI/UX metrics
@@ -27,3 +28,43 @@ export type {
   ObservabilityOptions,
   TraceSamplingOptions,
 } from './tracing.js';
+
+// Model Pricing & Cost Tracking
+export {
+  type ModelPricing,
+  type CostCalculation,
+  type CostEstimateRequest,
+  type LlmCostMetrics,
+  type PricingService,
+  InMemoryPricingService,
+  createPricingService,
+  getDefaultPricingService,
+  calculateLlmCost,
+  OPENAI_PRICING,
+  ANTHROPIC_PRICING,
+  GOOGLE_PRICING,
+  GROQ_PRICING,
+  LOCAL_PRICING,
+  ALL_PRICING,
+  DEFAULT_PRICING,
+} from './pricing/index.js';
+
+// Cost Storage & Quota Management
+export {
+  type LlmCostRecord,
+  type CostAggregate,
+  type CostAggregateQuery,
+  type CostQuota,
+  type QuotaCheckRequest,
+  type QuotaCheckResult,
+  type CostStorageProvider,
+  type QuotaProvider,
+  type CostTrackingOptions,
+  type RecordCostRequest,
+  CostTrackingService,
+  initCostTracking,
+  getCostTrackingService,
+  getCostTrackingServiceIfInitialized,
+  InMemoryCostStorage,
+  InMemoryQuotaProvider,
+} from './costTracking/index.js';
