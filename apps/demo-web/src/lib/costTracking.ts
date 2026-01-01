@@ -2,6 +2,7 @@
  * Cost Tracking Initialization
  *
  * Sets up the cost tracking system with storage and quota management.
+ * Automatically selects Supabase for production or in-memory for development.
  *
  * Usage:
  * Import this module at app startup to initialize cost tracking:
@@ -14,18 +15,93 @@ import {
   initCostTracking,
   InMemoryCostStorage,
   InMemoryQuotaProvider,
+  SupabaseCostStorage,
+  SupabaseQuotaProvider,
+  LLM_TOUCHPOINTS,
   type CostQuota,
+  type CostStorageProvider,
+  type QuotaProvider,
 } from '@reg-copilot/reg-intel-observability';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { createClient } from '@supabase/supabase-js';
 
 const logger = createLogger('CostTracking');
 
 /**
+ * Get Supabase credentials from environment
+ */
+function resolveSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
+  // Avoid initializing in browser
+  if (typeof window !== 'undefined') return null;
+
+  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) return null;
+  return { supabaseUrl, supabaseKey };
+}
+
+/**
+ * Create cost tracking providers based on environment
+ */
+function createCostTrackingProviders(): {
+  storage: CostStorageProvider;
+  quotas: QuotaProvider;
+  mode: 'supabase' | 'memory';
+} {
+  const credentials = resolveSupabaseCredentials();
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const isProduction = nodeEnv === 'production';
+  const forceCostTrackingMode = process.env.COPILOT_COST_TRACKING_MODE;
+
+  // Check if we should use Supabase
+  const useSupabase =
+    forceCostTrackingMode === 'supabase' ||
+    (isProduction && credentials && forceCostTrackingMode !== 'memory');
+
+  if (useSupabase && credentials) {
+    const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      db: { schema: 'copilot_internal' },
+    });
+
+    logger.info(
+      { supabaseUrl: credentials.supabaseUrl },
+      'Using Supabase for cost tracking storage'
+    );
+
+    return {
+      storage: new SupabaseCostStorage(client),
+      quotas: new SupabaseQuotaProvider(client),
+      mode: 'supabase',
+    };
+  }
+
+  // Fall back to in-memory
+  if (isProduction && !credentials) {
+    logger.warn(
+      'Supabase credentials not found; using in-memory cost tracking (not suitable for production)'
+    );
+  }
+
+  return {
+    storage: new InMemoryCostStorage({ maxRecords: 100_000 }),
+    quotas: new InMemoryQuotaProvider(),
+    mode: 'memory',
+  };
+}
+
+/**
  * Initialize cost tracking system
  *
- * This should be called once at app startup.
- * Uses in-memory providers for development/testing.
- * For production, replace with database-backed providers.
+ * Automatically selects:
+ * - Supabase providers in production (if credentials available)
+ * - In-memory providers for development/testing
+ *
+ * Environment variables:
+ * - COPILOT_COST_TRACKING_MODE: Force 'supabase' or 'memory' mode
+ * - SUPABASE_URL: Supabase project URL
+ * - SUPABASE_SERVICE_ROLE_KEY: Service role key for server-side operations
  */
 export const initializeCostTracking = (): void => {
   try {
@@ -36,15 +112,13 @@ export const initializeCostTracking = (): void => {
       return;
     }
 
-    // Initialize with in-memory providers
-    const costService = initCostTracking({
-      // Storage provider - stores up to 100K cost records in memory
-      storage: new InMemoryCostStorage({
-        maxRecords: 100_000,
-      }),
+    // Create providers based on environment
+    const { storage, quotas, mode } = createCostTrackingProviders();
 
-      // Quota provider - manages quotas with automatic period resets
-      quotas: new InMemoryQuotaProvider(),
+    // Initialize cost tracking
+    const costService = initCostTracking({
+      storage,
+      quotas,
 
       // Quota enforcement - set true to block requests that would exceed quotas
       enforceQuotas: false, // Set to true in production if you want hard limits
@@ -60,12 +134,6 @@ export const initializeCostTracking = (): void => {
           percentUsed,
           period: quota.period,
         }, 'Quota warning threshold exceeded');
-
-        // TODO: Send alert via webhook, email, Slack, etc.
-        // Example:
-        // await sendSlackAlert({
-        //   message: `⚠️ ${quota.scope}:${quota.scopeId} at ${percentUsed}% of quota ($${quota.currentSpendUsd.toFixed(2)}/$${quota.limitUsd.toFixed(2)})`,
-        // });
       },
 
       // Callback when quota is exceeded
@@ -77,20 +145,15 @@ export const initializeCostTracking = (): void => {
           limit: quota.limitUsd.toFixed(4),
           period: quota.period,
         }, 'Quota exceeded');
-
-        // TODO: Send critical alert
-        // Example:
-        // await sendPagerDutyAlert({
-        //   severity: 'critical',
-        //   message: `🚨 ${quota.scope}:${quota.scopeId} quota exceeded`,
-        // });
       },
     });
 
     logger.info({
+      mode,
       hasStorage: costService.hasStorage(),
       hasQuotas: costService.hasQuotas(),
       enforcing: costService.isEnforcingQuotas(),
+      touchpoints: Object.values(LLM_TOUCHPOINTS),
     }, 'Cost tracking initialized successfully');
 
     // Optionally set default quotas

@@ -45,5 +45,18 @@ export {
   type RecordCostRequest,
 } from './costTrackingService.js';
 
-// In-memory providers
+// In-memory providers (for development/testing)
 export { InMemoryCostStorage, InMemoryQuotaProvider } from './inMemoryProviders.js';
+
+// Supabase providers (for production)
+export { SupabaseCostStorage, SupabaseQuotaProvider } from './supabaseProviders.js';
+
+// Touchpoint constants
+export {
+  LLM_TOUCHPOINTS,
+  TOUCHPOINT_PRIORITY,
+  TOUCHPOINT_DESCRIPTIONS,
+  ALL_TOUCHPOINTS,
+  isValidTouchpoint,
+  type LlmTouchpoint,
+} from './touchpoints.js';
