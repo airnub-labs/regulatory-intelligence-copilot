@@ -10,6 +10,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./compaction": {
+      "import": "./dist/compaction/index.js",
+      "types": "./dist/compaction/index.d.ts"
     }
   },
   "scripts": {

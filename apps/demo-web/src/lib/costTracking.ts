@@ -18,7 +18,7 @@ import {
 } from '@reg-copilot/reg-intel-observability';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 
-const logger = createLogger({ module: 'CostTracking' });
+const logger = createLogger('CostTracking');
 
 /**
  * Initialize cost tracking system
@@ -52,14 +52,14 @@ export const initializeCostTracking = (): void => {
       // Callback when quota warning threshold is exceeded
       onQuotaWarning: (quota: CostQuota) => {
         const percentUsed = ((quota.currentSpendUsd / quota.limitUsd) * 100).toFixed(1);
-        logger.warn('Quota warning threshold exceeded', {
+        logger.warn({
           scope: quota.scope,
           scopeId: quota.scopeId,
           currentSpend: quota.currentSpendUsd.toFixed(4),
           limit: quota.limitUsd.toFixed(4),
           percentUsed,
           period: quota.period,
-        });
+        }, 'Quota warning threshold exceeded');
 
         // TODO: Send alert via webhook, email, Slack, etc.
         // Example:
@@ -70,13 +70,13 @@ export const initializeCostTracking = (): void => {
 
       // Callback when quota is exceeded
       onQuotaExceeded: (quota: CostQuota) => {
-        logger.error('Quota exceeded', {
+        logger.error({
           scope: quota.scope,
           scopeId: quota.scopeId,
           currentSpend: quota.currentSpendUsd.toFixed(4),
           limit: quota.limitUsd.toFixed(4),
           period: quota.period,
-        });
+        }, 'Quota exceeded');
 
         // TODO: Send critical alert
         // Example:
@@ -87,19 +87,19 @@ export const initializeCostTracking = (): void => {
       },
     });
 
-    logger.info('Cost tracking initialized successfully', {
+    logger.info({
       hasStorage: costService.hasStorage(),
       hasQuotas: costService.hasQuotas(),
       enforcing: costService.isEnforcingQuotas(),
-    });
+    }, 'Cost tracking initialized successfully');
 
     // Optionally set default quotas
     // Example: Platform-wide monthly quota
     // costService.setQuota('platform', undefined, 10_000, 'month', 0.8);
   } catch (error) {
-    logger.error('Failed to initialize cost tracking', {
+    logger.error({
       error: error instanceof Error ? error.message : String(error),
-    });
+    }, 'Failed to initialize cost tracking');
   }
 };
 

@@ -75,3 +75,14 @@ export {
   needsCompaction,
   type CompactionWrapperConfig,
 } from './conversationStoreCompactionAdapter.js';
+
+// Snapshot & Rollback
+export {
+  CompactionSnapshotService,
+  InMemorySnapshotStorage,
+  initSnapshotService,
+  getSnapshotService,
+  getSnapshotServiceIfInitialized,
+  type CompactionSnapshot,
+  type SnapshotStorageProvider,
+} from './snapshotService.js';

@@ -22,6 +22,13 @@ export {
   recordMessageScroll,
   recordMessageEdit,
 } from './businessMetrics.js';
+
+// Compaction Metrics
+export {
+  initCompactionMetrics,
+  recordCompactionOperation,
+  recordCompactionFailure,
+} from './compactionMetrics.js';
 export type { LoggerBindings } from './logger.js';
 export type {
   ExporterEndpointOptions,
