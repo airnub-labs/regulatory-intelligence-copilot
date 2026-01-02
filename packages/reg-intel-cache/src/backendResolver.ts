@@ -80,7 +80,12 @@ export function resolveRedisBackend(
   };
 }
 
-export function summarizeBackend(backend: ResolvedBackend | null): {
+/**
+ * Provide a minimal summary of the resolved backend for logging or telemetry without
+ * exposing credentials. Useful when callers only need to report which backend type
+ * (redis, upstash, or none) was selected and, when available, the configured URL.
+ */
+export function describeRedisBackendSelection(backend: ResolvedBackend | null): {
   backend: 'redis' | 'upstash' | 'none';
   url?: string;
 } {

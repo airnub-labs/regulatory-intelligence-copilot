@@ -15,8 +15,8 @@
 
 import {
   createKeyValueClient,
+  describeRedisBackendSelection,
   resolveRedisBackend,
-  summarizeBackend,
   type RedisKeyValueClient,
 } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
@@ -204,7 +204,7 @@ function createRedisCache(): DistributedCache | null {
     return null;
   }
 
-  const summary = summarizeBackend(backend);
+  const summary = describeRedisBackendSelection(backend);
   logger.info({ backend: summary }, 'Using Redis validation cache');
   return new RedisCache(client, summary.backend);
 }

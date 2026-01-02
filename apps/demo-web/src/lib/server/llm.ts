@@ -6,7 +6,7 @@ import {
 } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
-import { createKeyValueClient, resolveRedisBackend, summarizeBackend } from '@reg-copilot/reg-intel-cache';
+import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBackend } from '@reg-copilot/reg-intel-cache';
 
 const logger = createLogger('LlmRouterWiring');
 
@@ -79,7 +79,7 @@ if (supabaseInternalClient) {
         cacheTtl: 300,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
         llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
-        backend: summarizeBackend(cacheBackend)
+        backend: describeRedisBackendSelection(cacheBackend)
       },
       'Using CachingPolicyStore (Supabase + Redis)'
     );

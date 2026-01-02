@@ -14,7 +14,12 @@ import {
   type ConversationConfigStore,
   type ConversationStore,
 } from '@reg-copilot/reg-intel-conversations';
-import { createKeyValueClient, createPubSubClientPair, resolveRedisBackend, summarizeBackend } from '@reg-copilot/reg-intel-cache';
+import {
+  createKeyValueClient,
+  createPubSubClientPair,
+  describeRedisBackendSelection,
+  resolveRedisBackend,
+} from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_TEST } from 'next/constants';
@@ -206,7 +211,7 @@ if (supabaseClient) {
         cacheTtl: 60,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
         conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
-        backend: summarizeBackend(cacheBackend)
+        backend: describeRedisBackendSelection(cacheBackend)
       },
       'Using CachingConversationStore (Supabase + Redis)'
     );
@@ -247,7 +252,7 @@ if (supabaseInternalClient) {
         cacheTtl: 300,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
         conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
-        backend: summarizeBackend(cacheBackend)
+        backend: describeRedisBackendSelection(cacheBackend)
       },
       'Using CachingConversationConfigStore (Supabase + Redis)'
     );
@@ -281,7 +286,7 @@ const preferSupabaseEventHub = EVENT_HUB_TRANSPORT === 'supabase';
 if (preferRedisEventHub && redisEventHubAvailable) {
   logger.info(
     {
-      backend: summarizeBackend(eventBackend),
+      backend: describeRedisBackendSelection(eventBackend),
       mode: normalizeConversationStoreMode,
       globalCachingEnabled: ENABLE_REDIS_CACHING,
       redisEventHubsEnabled: ENABLE_REDIS_EVENT_HUBS
