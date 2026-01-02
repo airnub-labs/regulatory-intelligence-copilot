@@ -1,10 +1,9 @@
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextAuthOptions, Session } from 'next-auth'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { validateUserExists } from './sessionValidation'
 import { authMetrics } from './authMetrics'
+import { createSupabaseServerClient } from './supabaseClient'
 
 const logger = createLogger('AuthOptions')
 
@@ -73,46 +72,44 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const cookieStore = await cookies()
-        const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-          cookies: {
-            getAll() {
-              return cookieStore.getAll()
-            },
-            setAll(cookies) {
-              cookies.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options)
-              })
-            },
-          },
-        })
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: credentials.email,
-          password: credentials.password,
-        })
-
-        if (error || !data.user) {
-          logger.warn(
-            {
-              email: credentials.email,
-              supabaseError: error?.message ?? 'Unknown Supabase error',
-            },
-            'Supabase credential sign-in failed'
+        try {
+          const supabase = await createSupabaseServerClient(
+            supabaseUrl,
+            supabaseAnonKey,
+            'credentials-authorize'
           )
+
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: credentials.email,
+            password: credentials.password,
+          })
+
+          if (error || !data.user) {
+            logger.warn(
+              {
+                email: credentials.email,
+                supabaseError: error?.message ?? 'Unknown Supabase error',
+              },
+              'Supabase credential sign-in failed'
+            )
+            return null
+          }
+
+          // Record successful login in metrics
+          authMetrics.recordLogin(data.user.id)
+
+          return {
+            id: data.user.id,
+            email: data.user.email,
+            name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email,
+            tenantId:
+              (data.user.user_metadata as { tenant_id?: string } | null)?.tenant_id ??
+              data.user.app_metadata?.tenant_id ??
+              fallbackTenantId,
+          }
+        } catch (error) {
+          logger.error({ email: credentials.email, error }, 'Supabase credential sign-in failed')
           return null
-        }
-
-        // Record successful login in metrics
-        authMetrics.recordLogin(data.user.id)
-
-        return {
-          id: data.user.id,
-          email: data.user.email,
-          name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email,
-          tenantId:
-            (data.user.user_metadata as { tenant_id?: string } | null)?.tenant_id ??
-            data.user.app_metadata?.tenant_id ??
-            fallbackTenantId,
         }
       },
     }),

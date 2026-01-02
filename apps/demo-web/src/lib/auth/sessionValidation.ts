@@ -14,11 +14,10 @@
  * METRICS: Tracks authentication patterns, cache effectiveness, and cost optimization.
  */
 
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { getValidationCache } from './distributedValidationCache'
 import { authMetrics } from './authMetrics'
+import { createSupabaseServerClient } from './supabaseClient'
 
 const logger = createLogger('SessionValidation')
 
@@ -83,19 +82,11 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
   const validationStartTime = Date.now()
 
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        },
-      },
-    })
+    const supabase = await createSupabaseServerClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      'session-validation'
+    )
 
     // Use Supabase Admin API to check if user exists
     // Note: We use the service role key for this check to bypass RLS
@@ -142,18 +133,11 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     }
 
     // Use service role client for admin operations
-    const adminSupabase = createServerClient(supabaseUrl, serviceRoleKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        },
-      },
-    })
+    const adminSupabase = await createSupabaseServerClient(
+      supabaseUrl,
+      serviceRoleKey,
+      'session-validation-admin'
+    )
 
     // Check if user exists in auth.users
     const { data, error } = await adminSupabase.auth.admin.getUserById(userId)
