@@ -10,12 +10,19 @@ const PROVIDER_ENV: Record<BackendComponent, string> = {
 };
 
 function inferBackendFromUrl(url: string): 'redis' | 'upstash' | null {
-  if (url.startsWith('redis://') || url.startsWith('rediss://')) {
+  const normalized = url.toLowerCase();
+
+  if (normalized.startsWith('redis://') || normalized.startsWith('rediss://')) {
     return 'redis';
   }
-  if (url.startsWith('https://')) {
+
+  // Only infer Upstash when the URL explicitly targets their service. This keeps
+  // `REDIS_URL` defaulting to the Redis/ioredis backend—even for HTTPS endpoints—
+  // unless the caller explicitly opts into Upstash via the provider overrides.
+  if (normalized.includes('upstash.io')) {
     return 'upstash';
   }
+
   return null;
 }
 
