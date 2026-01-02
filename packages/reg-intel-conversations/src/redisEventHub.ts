@@ -1,4 +1,7 @@
-import { Redis } from '@upstash/redis';
+import type {
+  RedisPubSubClient,
+  RedisKeyValueClient,
+} from '@reg-copilot/reg-intel-cache';
 import type {
   ConversationEventType,
   ConversationListEventType,
@@ -21,19 +24,16 @@ import {
  */
 export interface RedisEventHubConfig {
   /**
-   * Redis connection URL
-   * Can be standard Redis (redis://...) or Upstash REST API (https://...)
+   * Redis pub/sub clients created by the cache factory
    */
-  url: string;
-  /**
-   * Redis authentication token/password
-   */
-  token: string;
+  clients: { pub: RedisPubSubClient; sub: RedisPubSubClient };
   /**
    * Optional prefix for Redis pub/sub channels
    * @default 'copilot:events'
    */
   prefix?: string;
+  /** Optional ping client for health checks */
+  healthCheckClient?: RedisKeyValueClient;
 }
 
 export type EventHubFactoryConfig =
@@ -94,31 +94,23 @@ export type EventHubFactoryConfig =
  * // Broadcast to all instances
  * eventHub.broadcast(tenantId, conversationId, 'message', { text: 'Hello' });
  * ```
- */
+  */
 export class RedisConversationEventHub {
-  private redis: Redis;
-  private subscriber: Redis;
+  private publisher: RedisPubSubClient;
+  private subscriber: RedisPubSubClient;
   private subscribers = new LocalSubscriptionManager<ConversationEventType>();
   private activeChannels = new ChannelLifecycleManager<void>();
   private prefix: string;
   private instanceId: string;
   private isShuttingDown = false;
+  private healthClient?: RedisKeyValueClient;
 
   constructor(config: RedisEventHubConfig) {
     this.prefix = config.prefix ?? 'copilot:events';
     this.instanceId = generateInstanceId();
-
-    // Create separate Redis clients for pub and sub
-    // This is required because a Redis client in subscribe mode cannot be used for other operations
-    this.redis = new Redis({
-      url: config.url,
-      token: config.token,
-    });
-
-    this.subscriber = new Redis({
-      url: config.url,
-      token: config.token,
-    });
+    this.publisher = config.clients.pub;
+    this.subscriber = config.clients.sub;
+    this.healthClient = config.healthCheckClient;
   }
 
   private channelName(tenantId: string, conversationId: string): string {
@@ -139,19 +131,13 @@ export class RedisConversationEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).subscribe(channel, (message: unknown, messageChannel: string) => {
-          if (messageChannel !== channel) {
-            return;
-          }
-
+        await this.subscriber.subscribe(channel, message => {
           if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
             return;
           }
 
           try {
-            const payload = typeof message === 'string' ? message : JSON.stringify(message);
-            const parsed = JSON.parse(payload) as DistributedEventMessage<ConversationEventType>;
+            const parsed = JSON.parse(message) as DistributedEventMessage<ConversationEventType>;
 
             if (parsed.instanceId === this.instanceId) {
               return;
@@ -179,8 +165,7 @@ export class RedisConversationEventHub {
 
       if (subscription) {
         await subscription;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channel);
+        await this.subscriber.unsubscribe(channel);
       }
     } catch (error) {
       console.error(`[RedisEventHub] Error unsubscribing from ${channel}:`, error);
@@ -253,7 +238,7 @@ export class RedisConversationEventHub {
     this.subscribers.localBroadcast(key, event, data);
 
     // Publish to Redis pub/sub for other instances (fire and forget)
-    void this.redis.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
+    void this.publisher.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
       console.error(`[RedisEventHub] Error publishing to ${channel}:`, error);
     });
   }
@@ -267,8 +252,7 @@ export class RedisConversationEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channelName);
+        await this.subscriber.unsubscribe(channelName);
       } catch (error) {
         console.error(`[RedisEventHub] Error shutting down channel ${channelName}:`, error);
       }
@@ -282,7 +266,9 @@ export class RedisConversationEventHub {
    */
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      await this.redis.ping();
+      if (this.healthClient?.ping) {
+        await this.healthClient.ping();
+      }
       return { healthy: true };
     } catch (error) {
       return {
@@ -300,27 +286,21 @@ export class RedisConversationEventHub {
  * (create, update, delete, archive, etc.)
  */
 export class RedisConversationListEventHub {
-  private redis: Redis;
-  private subscriber: Redis;
+  private publisher: RedisPubSubClient;
+  private subscriber: RedisPubSubClient;
   private subscribers = new LocalSubscriptionManager<ConversationListEventType>();
   private activeChannels = new ChannelLifecycleManager<void>();
   private prefix: string;
   private instanceId: string;
   private isShuttingDown = false;
+  private healthClient?: RedisKeyValueClient;
 
   constructor(config: RedisEventHubConfig) {
     this.prefix = config.prefix ?? 'copilot:events';
     this.instanceId = generateInstanceId();
-
-    this.redis = new Redis({
-      url: config.url,
-      token: config.token,
-    });
-
-    this.subscriber = new Redis({
-      url: config.url,
-      token: config.token,
-    });
+    this.publisher = config.clients.pub;
+    this.subscriber = config.clients.sub;
+    this.healthClient = config.healthCheckClient;
   }
 
   private channelName(tenantId: string): string {
@@ -334,19 +314,13 @@ export class RedisConversationListEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).subscribe(channel, (message: unknown, messageChannel: string) => {
-          if (messageChannel !== channel) {
-            return;
-          }
-
+        await this.subscriber.subscribe(channel, message => {
           if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
             return;
           }
 
           try {
-            const payload = typeof message === 'string' ? message : JSON.stringify(message);
-            const parsed = JSON.parse(payload) as DistributedEventMessage<ConversationListEventType>;
+            const parsed = JSON.parse(message) as DistributedEventMessage<ConversationListEventType>;
 
             if (parsed.instanceId === this.instanceId) {
               return;
@@ -370,8 +344,7 @@ export class RedisConversationListEventHub {
 
       if (subscription) {
         await subscription;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channel);
+        await this.subscriber.unsubscribe(channel);
       }
     } catch (error) {
       console.error(`[RedisListEventHub] Error unsubscribing from ${channel}:`, error);
@@ -421,7 +394,7 @@ export class RedisConversationListEventHub {
     this.subscribers.localBroadcast(key, event, data);
 
     // Publish to Redis pub/sub for other instances
-    void this.redis.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
+    void this.publisher.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
       console.error(`[RedisListEventHub] Error publishing to ${channel}:`, error);
     });
   }
@@ -432,8 +405,7 @@ export class RedisConversationListEventHub {
     await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
       try {
         await subscriptionPromise;
-        // Using ioredis-style API which @upstash/redis doesn't support in types
-        await (this.subscriber as any).unsubscribe(channelName);
+        await this.subscriber.unsubscribe(channelName);
       } catch (error) {
         console.error(`[RedisListEventHub] Error shutting down channel ${channelName}:`, error);
       }
@@ -444,7 +416,9 @@ export class RedisConversationListEventHub {
 
   async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
     try {
-      await this.redis.ping();
+      if (this.healthClient?.ping) {
+        await this.healthClient.ping();
+      }
       return { healthy: true };
     } catch (error) {
       return {
@@ -467,10 +441,10 @@ export function createEventHubs(config?: EventHubFactoryConfig): {
   conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 } {
   const redisConfig =
-    (config && 'url' in config ? config : 'redis' in (config ?? {}) ? config?.redis : undefined) ?? undefined;
+    (config && 'clients' in config ? config : 'redis' in (config ?? {}) ? config?.redis : undefined) ?? undefined;
   const supabaseConfig = (config && 'supabase' in config ? config.supabase : undefined) ?? undefined;
 
-  if (redisConfig?.url && redisConfig?.token) {
+  if (redisConfig?.clients) {
     return {
       conversationEventHub: new RedisConversationEventHub(redisConfig),
       conversationListEventHub: new RedisConversationListEventHub(redisConfig),
@@ -484,7 +458,5 @@ export function createEventHubs(config?: EventHubFactoryConfig): {
     };
   }
 
-  throw new Error(
-    'Event hubs require Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.',
-  );
+  throw new Error('Event hubs require Redis or Supabase Realtime credentials; provide pub/sub clients or Supabase config.');
 }

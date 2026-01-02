@@ -1,11 +1,45 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RedisConversationEventHub, RedisConversationListEventHub } from './redisEventHub.js';
 import type { SseSubscriber, ConversationEventType, ConversationListEventType } from './eventHub.js';
+import type { RedisKeyValueClient, RedisPubSubClient } from '@reg-copilot/reg-intel-cache';
+
+function createMockPubSub(): { pub: RedisPubSubClient; sub: RedisPubSubClient } {
+  const handlers = new Map<string, (message: string) => void>();
+
+  const subscribe = async (channel: string, handler: (message: string) => void) => {
+    handlers.set(channel, handler);
+  };
+
+  const unsubscribe = async (channel: string) => {
+    handlers.delete(channel);
+  };
+
+  const publish = async (channel: string, message: string) => {
+    handlers.get(channel)?.(message);
+    return 1;
+  };
+
+  const client: RedisPubSubClient = {
+    publish,
+    subscribe,
+    unsubscribe,
+    ping: async () => 'PONG',
+  };
+
+  return { pub: client, sub: client };
+}
+
+const mockHealthClient: RedisKeyValueClient = {
+  get: async () => null,
+  setex: async () => {},
+  del: async () => {},
+  ping: async () => 'PONG',
+};
 
 describe('RedisConversationEventHub', () => {
   const mockConfig = {
-    url: 'redis://localhost:6379',
-    token: 'test-token',
+    clients: createMockPubSub(),
+    healthCheckClient: mockHealthClient,
   };
 
   it('should create an instance with valid config', () => {
@@ -99,8 +133,8 @@ describe('RedisConversationEventHub', () => {
 
 describe('RedisConversationListEventHub', () => {
   const mockConfig = {
-    url: 'redis://localhost:6379',
-    token: 'test-token',
+    clients: createMockPubSub(),
+    healthCheckClient: mockHealthClient,
   };
 
   it('should create an instance with valid config', () => {

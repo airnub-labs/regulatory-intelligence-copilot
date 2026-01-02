@@ -14,9 +14,9 @@ import {
   type ConversationConfigStore,
   type ConversationStore,
 } from '@reg-copilot/reg-intel-conversations';
+import { createKeyValueClient, createPubSubClientPair, resolveRedisBackend, summarizeBackend } from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_TEST } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
@@ -150,9 +150,11 @@ if (supabaseClient) {
   logger.info({ mode: normalizeConversationStoreMode }, 'Using in-memory conversation store');
 }
 
-// Configure Redis credentials
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
+// Configure Redis backend and shared clients
+const cacheBackend = ENABLE_REDIS_CACHING ? resolveRedisBackend('cache') : null;
+const eventBackend = ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS ? resolveRedisBackend('eventHub') : null;
+const sharedKeyValueClient = ENABLE_REDIS_CACHING ? createKeyValueClient(cacheBackend) : null;
+const eventHubClients = eventBackend ? createPubSubClientPair(eventBackend) : null;
 
 /**
  * Optional: Enable conversation caching for high-traffic scenarios.
@@ -167,22 +169,12 @@ const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING === 
 // Create Redis client for conversation config caching
 // Respects both global flag AND individual flag
 const configRedisClient =
-  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CONFIG_CACHE && redisUrl && redisToken
-    ? new Redis({
-        url: redisUrl,
-        token: redisToken,
-      })
-    : null;
+  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClient : null;
 
 // Create Redis client for conversation caching (opt-in)
 // Respects both global flag AND individual flag
 const conversationRedisClient =
-  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CACHING && redisUrl && redisToken
-    ? new Redis({
-        url: redisUrl,
-        token: redisToken,
-      })
-    : null;
+  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
 
 // Create conversation store with optional caching
 export const conversationStore: ConversationStore = createConversationStore({
@@ -201,7 +193,8 @@ if (supabaseClient) {
         hasRedis: true,
         cacheTtl: 60,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
-        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING
+        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
+        backend: summarizeBackend(cacheBackend)
       },
       'Using CachingConversationStore (Supabase + Redis)'
     );
@@ -241,7 +234,8 @@ if (supabaseInternalClient) {
         hasRedis: true,
         cacheTtl: 300,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
-        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE
+        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
+        backend: summarizeBackend(cacheBackend)
       },
       'Using CachingConversationConfigStore (Supabase + Redis)'
     );
@@ -266,10 +260,10 @@ let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversati
 let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 
 // Use Redis event hubs if global flag AND individual flag are both enabled
-if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
+if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && eventHubClients) {
   logger.info(
     {
-      redisUrl,
+      backend: summarizeBackend(eventBackend),
       mode: normalizeConversationStoreMode,
       globalCachingEnabled: ENABLE_REDIS_CACHING,
       redisEventHubsEnabled: ENABLE_REDIS_EVENT_HUBS
@@ -278,15 +272,15 @@ if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
   );
 
   conversationEventHub = new RedisConversationEventHub({
-    url: redisUrl,
-    token: redisToken,
+    clients: eventHubClients,
     prefix: 'copilot:events',
+    healthCheckClient: sharedKeyValueClient ?? undefined,
   });
 
   conversationListEventHub = new RedisConversationListEventHub({
-    url: redisUrl,
-    token: redisToken,
+    clients: eventHubClients,
     prefix: 'copilot:events',
+    healthCheckClient: sharedKeyValueClient ?? undefined,
   });
 
   // Verify Redis connectivity

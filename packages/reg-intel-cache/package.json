@@ -1,0 +1,37 @@
+{
+  "name": "@reg-copilot/reg-intel-cache",
+  "version": "0.1.0",
+  "description": "Shared Redis cache and rate limiting utilities for the Regulatory Intelligence Copilot",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@reg-copilot/reg-intel-observability": "workspace:*",
+    "@upstash/ratelimit": "^1.0.0",
+    "@upstash/redis": "^1.30.0",
+    "ioredis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
