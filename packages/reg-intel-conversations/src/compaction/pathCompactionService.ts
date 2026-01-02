@@ -143,13 +143,14 @@ export class PathCompactionService {
       }
     }
 
-    // Record metrics for successful compaction
+    // Record metrics for successful compaction (includes database persistence)
     if (result.success) {
       try {
         const { recordCompactionOperation } = await import('@reg-copilot/reg-intel-observability');
         recordCompactionOperation({
           strategy: result.strategy,
           conversationId,
+          pathId,
           tokensBefore: result.tokensBefore,
           tokensAfter: result.tokensAfter,
           messagesBefore: messages.length,
@@ -160,6 +161,7 @@ export class PathCompactionService {
           durationMs: result.metadata?.durationMs ?? 0,
           triggeredBy,
           usedLlm: result.metadata?.usedLlm ?? false,
+          costUsd: result.metadata?.costUsd as number | undefined,
         });
       } catch (error) {
         // Don't fail compaction if metrics recording fails
@@ -171,6 +173,7 @@ export class PathCompactionService {
         recordCompactionFailure({
           strategy: this.config.strategy,
           conversationId,
+          pathId,
           error: result.error || 'Unknown error',
         });
       } catch (error) {

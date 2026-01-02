@@ -29,6 +29,16 @@ export {
   recordCompactionOperation,
   recordCompactionFailure,
 } from './compactionMetrics.js';
+
+// Compaction Storage (Supabase persistence for analytics)
+export {
+  initCompactionStorage,
+  initCompactionStorageWithClient,
+  isCompactionStorageInitialized,
+  recordCompactionToDatabase,
+  recordCompactionFailureToDatabase,
+  type CompactionOperationRecord,
+} from './compactionStorage.js';
 export type { LoggerBindings } from './logger.js';
 export type {
   ExporterEndpointOptions,

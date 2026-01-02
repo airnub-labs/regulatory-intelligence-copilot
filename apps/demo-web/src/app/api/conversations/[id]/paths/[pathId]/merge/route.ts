@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import type { MergeMode } from '@reg-copilot/reg-intel-conversations';
-import { createLogger, requestContext, withSpan, recordMergeExecute } from '@reg-copilot/reg-intel-observability';
+import { createLogger, requestContext, withSpan, recordMergeExecute, recordCompactionOperation } from '@reg-copilot/reg-intel-observability';
 
 import { authOptions } from '@/lib/auth/options';
 import { conversationPathStore, conversationStore, executionContextManager } from '@/lib/server/conversations';
@@ -250,6 +250,43 @@ export async function POST(
               messageCount: result.mergedMessageIds?.length,
               conversationId,
             });
+
+            // Record compaction metrics for summary mode (messages compressed into one summary)
+            if (mergeMode === 'summary' && result.summaryMessageId) {
+              // Get message count from preview (already fetched above for summary generation)
+              const previewForMetrics = await conversationPathStore.previewMerge({
+                tenantId,
+                sourcePathId,
+                targetPathId,
+                mergeMode,
+              });
+              const messageCount = previewForMetrics.messagesToMerge.length;
+
+              // Estimate tokens (rough: ~4 chars per token)
+              const totalContent = previewForMetrics.messagesToMerge
+                .map((m) => m.content)
+                .join(' ');
+              const estimatedTokensBefore = Math.ceil(totalContent.length / 4);
+              const estimatedTokensAfter = Math.ceil((finalSummaryContent?.length ?? 0) / 4);
+
+              recordCompactionOperation({
+                strategy: 'merge_summary',
+                conversationId,
+                pathId: sourcePathId,
+                tenantId,
+                userId,
+                tokensBefore: estimatedTokensBefore,
+                tokensAfter: estimatedTokensAfter,
+                messagesBefore: messageCount,
+                messagesAfter: 1,
+                messagesSummarized: messageCount,
+                pinnedPreserved: 0,
+                success: true,
+                durationMs: 0, // We don't track duration in merge flow
+                triggeredBy: 'manual',
+                usedLlm: true,
+              });
+            }
 
             return NextResponse.json({
               success: result.success,

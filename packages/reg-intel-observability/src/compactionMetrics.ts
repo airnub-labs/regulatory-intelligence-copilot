@@ -2,6 +2,7 @@
  * Compaction Metrics
  *
  * OpenTelemetry metrics for tracking conversation compaction operations.
+ * Also persists to Supabase for historical analytics dashboard.
  *
  * Metrics:
  * - compaction.operations (counter) - Total compaction operations
@@ -12,6 +13,7 @@
  */
 
 import { metrics, type Attributes, type Counter, type Histogram } from '@opentelemetry/api';
+import { recordCompactionToDatabase, recordCompactionFailureToDatabase } from './compactionStorage.js';
 
 // Metric instruments
 let compactionOperationsCounter: Counter | null = null;
@@ -54,10 +56,13 @@ export const initCompactionMetrics = (): void => {
 
 /**
  * Record a compaction operation
+ *
+ * Records to both OpenTelemetry metrics and Supabase database for analytics.
  */
 export const recordCompactionOperation = (attributes: {
   strategy: string;
   conversationId?: string;
+  pathId?: string;
   tenantId?: string;
   userId?: string;
   tokensBefore: number;
@@ -70,10 +75,12 @@ export const recordCompactionOperation = (attributes: {
   durationMs: number;
   triggeredBy?: 'auto' | 'manual';
   usedLlm?: boolean;
+  costUsd?: number;
 }): void => {
   const {
     strategy,
     conversationId,
+    pathId,
     tenantId,
     userId,
     tokensBefore,
@@ -86,6 +93,7 @@ export const recordCompactionOperation = (attributes: {
     durationMs,
     triggeredBy,
     usedLlm,
+    costUsd,
   } = attributes;
 
   const metricAttributes: Attributes = {
@@ -123,14 +131,40 @@ export const recordCompactionOperation = (attributes: {
   // Record compression ratio
   const compressionRatio = tokensBefore > 0 ? tokensAfter / tokensBefore : 1.0;
   compactionCompressionRatioHistogram?.record(compressionRatio, metricAttributes);
+
+  // Persist to database for analytics dashboard (fire-and-forget)
+  recordCompactionToDatabase({
+    conversationId,
+    pathId,
+    tenantId,
+    userId,
+    strategy,
+    triggeredBy: triggeredBy ?? 'manual',
+    tokensBefore,
+    tokensAfter,
+    messagesBefore,
+    messagesAfter,
+    messagesSummarized,
+    pinnedPreserved,
+    durationMs,
+    usedLlm: usedLlm ?? false,
+    costUsd,
+    success,
+  }).catch((err) => {
+    // Don't fail metrics recording if database write fails
+    console.warn('[CompactionMetrics] Failed to persist to database:', err);
+  });
 }
 
 /**
  * Record compaction failure
+ *
+ * Records to both OpenTelemetry metrics and Supabase database for analytics.
  */
 export const recordCompactionFailure = (attributes: {
   strategy: string;
   conversationId?: string;
+  pathId?: string;
   tenantId?: string;
   userId?: string;
   error: string;
@@ -150,6 +184,19 @@ export const recordCompactionFailure = (attributes: {
   if (attributes.durationMs !== undefined) {
     compactionDurationHistogram?.record(attributes.durationMs, metricAttributes);
   }
+
+  // Persist to database for analytics dashboard (fire-and-forget)
+  recordCompactionFailureToDatabase({
+    conversationId: attributes.conversationId,
+    pathId: attributes.pathId,
+    tenantId: attributes.tenantId,
+    userId: attributes.userId,
+    strategy: attributes.strategy,
+    error: attributes.error,
+    durationMs: attributes.durationMs,
+  }).catch((err) => {
+    console.warn('[CompactionMetrics] Failed to persist failure to database:', err);
+  });
 };
 
 /**
