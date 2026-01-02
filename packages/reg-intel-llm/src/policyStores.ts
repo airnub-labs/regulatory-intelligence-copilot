@@ -33,7 +33,7 @@ export interface SupabaseLikeClient {
   };
 }
 
-export type RedisLikeClient = RedisKeyValueClient;
+export type { RedisKeyValueClient as RedisLikeClient } from '@reg-copilot/reg-intel-cache';
 
 interface PolicyRow {
   id: string;
@@ -158,7 +158,7 @@ export class CachingPolicyStore implements LlmPolicyStore {
 
   constructor(
     private readonly backing: LlmPolicyStore,
-    private readonly redis: RedisLikeClient,
+    private readonly redis: RedisKeyValueClient,
     options: CachingPolicyStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 300;
@@ -218,7 +218,7 @@ export class CachingPolicyStore implements LlmPolicyStore {
 
 export interface PolicyStoreConfig {
   supabase?: SupabaseLikeClient;
-  redis?: RedisLikeClient;
+  redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
   schema?: 'public' | 'copilot_internal';
 }

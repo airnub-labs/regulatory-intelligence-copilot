@@ -15,8 +15,6 @@ export type AuthorizationModel = 'supabase_rbac' | 'openfga';
 
 export type SupabaseError = { message: string };
 
-type RedisLikeClient = RedisKeyValueClient;
-
 export type SupabaseLikeClient = {
   from(table: string): any;
   schema?(schema: string): SupabaseLikeClient;
@@ -1461,7 +1459,7 @@ export class CachingConversationStore implements ConversationStore {
 export interface ConversationStoreFactoryOptions {
   supabase?: SupabaseLikeClient;
   supabaseInternal?: SupabaseLikeClient;
-  redis?: RedisLikeClient;
+  redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
   enableCaching?: boolean; // Default: false (opt-in)
 }

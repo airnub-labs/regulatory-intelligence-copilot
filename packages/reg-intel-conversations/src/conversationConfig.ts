@@ -432,7 +432,7 @@ export class SupabaseConversationConfigStore implements ConversationConfigStore 
 // Caching Layer
 // =============================================================================
 
-export type RedisLikeClient = RedisKeyValueClient;
+export type { RedisKeyValueClient as RedisLikeClient } from '@reg-copilot/reg-intel-cache';
 
 export interface CachingConfigStoreOptions {
   /** TTL in seconds (default: 300 = 5 minutes) */
@@ -447,7 +447,7 @@ export class CachingConversationConfigStore implements ConversationConfigStore {
 
   constructor(
     private readonly backing: ConversationConfigStore,
-    private readonly redis: RedisLikeClient,
+    private readonly redis: RedisKeyValueClient,
     options: CachingConfigStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 300;
@@ -545,7 +545,7 @@ export class CachingConversationConfigStore implements ConversationConfigStore {
 
 export interface ConfigStoreFactoryOptions {
   supabase?: SupabaseLikeClient;
-  redis?: RedisLikeClient;
+  redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
   logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void };
 }
