@@ -3,7 +3,7 @@
  *
  * Check if a conversation needs compaction.
  *
- * GET /api/conversations/:conversationId/compact/status?pathId=main
+ * GET /api/conversations/:conversationId/compact/status?pathId=uuid
  *
  * Response:
  * {
@@ -11,83 +11,173 @@
  *   "currentTokens": 125000,
  *   "threshold": 100000,
  *   "messageCount": 150,
+ *   "pinnedCount": 5,
  *   "estimatedSavings": 62500,
+ *   "estimatedSavingsPercent": 50,
  *   "recommendedStrategy": "semantic"
  * }
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth/options';
+import { conversationStore, conversationPathStore } from '@/lib/server/conversations';
+import { PathCompactionService, type PathCompactionStrategy } from '@reg-copilot/reg-intel-conversations/compaction';
+import { countTokensForMessages } from '@reg-copilot/reg-intel-core';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+
+export const dynamic = 'force-dynamic';
+
+const logger = createLogger('CompactionStatusRoute');
+
+const DEFAULT_TOKEN_THRESHOLD = 100_000;
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  try {
-    const { id: conversationId } = await context.params;
-    const url = new URL(request.url);
-    const pathId = url.searchParams.get('pathId') || 'main';
+  const { id: conversationId } = await context.params;
+  const session = (await getServerSession(authOptions)) as {
+    user?: { id?: string; tenantId?: string };
+  } | null;
+  const user = session?.user;
+  const userId = user?.id;
 
-    // Get messages from conversation store
-    // NOTE: In production, you'd fetch from your actual conversation store
-
-    return NextResponse.json({
-      error: 'Conversation store integration required',
-      message: 'Please configure conversation store before using compaction status',
-      example: {
-        needsCompaction: true,
-        currentTokens: 125000,
-        threshold: 100000,
-        messageCount: 150,
-        estimatedSavings: 62500,
-        estimatedSavingsPercent: 50,
-        recommendedStrategy: 'semantic',
-        conversationId,
-        pathId,
-      },
-    }, { status: 501 }); // Not Implemented
-
-    // Production implementation:
-    /*
-    const store = getConversationStore();
-    const messages = await store.getMessages({
-      tenantId: 'tenant-id',
-      conversationId,
-      userId: 'user-id',
-    });
-
-    const config: CompactionWrapperConfig = {
-      enabled: true,
-      strategy: 'sliding_window',
-      tokenThreshold: 100_000,
-      model: 'gpt-4',
-    };
-
-    const needsCompact = await checkCompaction(messages, config);
-    const currentTokens = await countTokensForMessages(messages);
-
-    // Determine recommended strategy based on message count and content
-    let recommendedStrategy: PathCompactionStrategy = 'sliding_window';
-    if (messages.length > 200) {
-      recommendedStrategy = 'semantic'; // Better for very long conversations
-    }
-
-    return NextResponse.json({
-      needsCompaction: needsCompact,
-      currentTokens,
-      threshold: config.tokenThreshold,
-      messageCount: messages.length,
-      estimatedSavings: needsCompact ? Math.floor(currentTokens * 0.5) : 0,
-      estimatedSavingsPercent: needsCompact ? 50 : 0,
-      recommendedStrategy,
-      conversationId,
-      pathId,
-    });
-    */
-  } catch (error) {
-    console.error('Compaction status API error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+  if (!userId || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+
+  return requestContext.run(
+    { tenantId, userId },
+    () =>
+      withSpan(
+        'api.conversations.compact.status.get',
+        {
+          'app.route': '/api/conversations/[id]/compact/status',
+          'app.tenant.id': tenantId,
+          'app.user.id': userId,
+          'app.conversation.id': conversationId,
+        },
+        async () => {
+          try {
+            const url = new URL(request.url);
+            const requestedPathId = url.searchParams.get('pathId');
+            const tokenThreshold = parseInt(url.searchParams.get('threshold') || String(DEFAULT_TOKEN_THRESHOLD), 10);
+
+            // Verify conversation exists and user has access
+            const conversation = await conversationStore.getConversation({
+              tenantId,
+              conversationId,
+              userId,
+            });
+
+            if (!conversation) {
+              logger.warn({ tenantId, userId, conversationId }, 'Conversation not found');
+              return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+            }
+
+            const pathId = requestedPathId ?? conversation.activePathId;
+
+            // Fetch messages for the conversation
+            const messages = await conversationStore.getMessages({
+              tenantId,
+              conversationId,
+              userId,
+            });
+
+            if (!messages || messages.length === 0) {
+              return NextResponse.json({
+                needsCompaction: false,
+                currentTokens: 0,
+                threshold: tokenThreshold,
+                messageCount: 0,
+                pinnedCount: 0,
+                estimatedSavings: 0,
+                estimatedSavingsPercent: 0,
+                recommendedStrategy: 'none',
+                conversationId,
+                pathId,
+              });
+            }
+
+            // Get pinned messages
+            let pinnedCount = 0;
+            try {
+              if (pathId) {
+                const pinnedMessages = await conversationPathStore.getPinnedMessages({
+                  tenantId,
+                  conversationId,
+                  pathId,
+                });
+                pinnedCount = pinnedMessages.length;
+              }
+            } catch {
+              // Pinned messages retrieval failed - continue with count of 0
+            }
+
+            const pinnedMessageIds = new Set<string>();
+
+            // Count current tokens
+            const currentTokens = await countTokensForMessages(messages, 'gpt-4');
+
+            // Initialize compaction service to check if compaction is needed
+            const compactionService = new PathCompactionService({
+              tokenThreshold,
+              targetTokens: tokenThreshold * 0.8,
+              strategy: 'sliding_window',
+              model: 'gpt-4',
+            });
+
+            const needsCompaction = await compactionService.needsCompaction(messages, pinnedMessageIds);
+
+            // Estimate savings (roughly 50% for sliding_window, 40% for semantic)
+            const estimatedSavingsPercent = needsCompaction ? 50 : 0;
+            const estimatedSavings = Math.floor(currentTokens * (estimatedSavingsPercent / 100));
+
+            // Determine recommended strategy based on message count
+            let recommendedStrategy: PathCompactionStrategy = 'sliding_window';
+            if (messages.length > 200) {
+              recommendedStrategy = 'semantic';
+            } else if (messages.length < 20) {
+              recommendedStrategy = 'none';
+            }
+
+            logger.info({
+              tenantId,
+              conversationId,
+              pathId,
+              messageCount: messages.length,
+              currentTokens,
+              needsCompaction,
+              recommendedStrategy,
+            }, 'Compaction status retrieved');
+
+            return NextResponse.json({
+              needsCompaction,
+              currentTokens,
+              threshold: tokenThreshold,
+              messageCount: messages.length,
+              pinnedCount,
+              estimatedSavings,
+              estimatedSavingsPercent,
+              recommendedStrategy,
+              conversationId,
+              pathId,
+            });
+          } catch (error) {
+            logger.error({
+              conversationId,
+              error: error instanceof Error ? error.message : String(error),
+            }, 'Compaction status API error');
+
+            return NextResponse.json(
+              { error: error instanceof Error ? error.message : 'Internal server error' },
+              { status: 500 }
+            );
+          }
+        }
+      )
+  );
 }

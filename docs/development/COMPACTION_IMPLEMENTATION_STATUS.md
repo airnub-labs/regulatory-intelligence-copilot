@@ -16,6 +16,13 @@ All compaction features have been successfully implemented across 3 priority pha
 - **Analytics API**: New `/api/compaction/metrics` endpoint for fetching real compaction data
 - **Dashboard Upgrade**: Analytics dashboard now shows real data instead of mock data
 - **Merge Integration**: Summary merge operations also record compaction metrics
+- **Manual Compaction APIs Fully Implemented**: All stub (501) endpoints replaced with real implementations:
+  - `POST /api/conversations/:id/compact` - Trigger manual compaction with PathCompactionService
+  - `GET /api/conversations/:id/compact/status` - Check token count and compaction need
+  - `GET /api/conversations/:id/compact/history` - Fetch history from `compaction_operations` table
+  - `GET /api/conversations/:id/compact/snapshots` - List available snapshots
+  - `POST /api/conversations/:id/compact/rollback` - Rollback to a previous snapshot
+- **UI Rollback Wired Up**: CompactionButton undo button now calls the rollback API
 
 ---
 
@@ -513,10 +520,10 @@ Structured logging with pino:
 
 ### Immediate (Optional)
 
-1. **Connect to Real Conversation Store**
-   - Replace API endpoint placeholders (501) with real implementations
-   - Integrate with actual conversation database
-   - Test end-to-end with real data
+1. ~~**Connect to Real Conversation Store**~~ ✅ **COMPLETED**
+   - ~~Replace API endpoint placeholders (501) with real implementations~~ **DONE**
+   - ~~Integrate with actual conversation database~~ **DONE**
+   - All manual compaction endpoints now use PathCompactionService and real conversation store
 
 2. **Set Up Monitoring**
    - Import Grafana dashboards

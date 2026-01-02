@@ -126,9 +126,22 @@ export function CompactionButton({
           {lastResult.snapshotId && (
             <button
               className="undo-button"
-              onClick={() => {
-                // TODO: Implement rollback
-                console.log('Rollback to snapshot:', lastResult.snapshotId);
+              onClick={async () => {
+                try {
+                  const response = await fetch(`/api/conversations/${conversationId}/compact/rollback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ snapshotId: lastResult.snapshotId }),
+                  });
+                  const data = await response.json();
+                  if (response.ok && data.success) {
+                    setLastResult(null);
+                  } else {
+                    setError(data.error || 'Rollback failed');
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Rollback failed');
+                }
               }}
               title="Undo compaction"
             >
