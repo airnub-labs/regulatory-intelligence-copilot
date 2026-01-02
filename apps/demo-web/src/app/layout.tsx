@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from './providers'
+import { SidebarLayout } from '@/components/layout/sidebar'
 
 export const metadata: Metadata = {
   title: 'Regulatory Intelligence Copilot',
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
-        <Providers>{children}</Providers>
+        <Providers>
+          <SidebarLayout>{children}</SidebarLayout>
+        </Providers>
       </body>
     </html>
   )
