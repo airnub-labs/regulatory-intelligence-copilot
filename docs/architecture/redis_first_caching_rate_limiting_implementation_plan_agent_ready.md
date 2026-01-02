@@ -1,4 +1,4 @@
-# Redis‑first Caching & Rate Limiting (Upstash optional)
+# Redis‑first Caching & Rate Limiting (Upstash optional, via a single Redis config)
 
 > **Repo:** `airnub-labs/regulatory-intelligence-copilot`
 >
@@ -82,9 +82,11 @@
 
 ## 2) Implementation plan (step-by-step)
 
-### Step 1 — Introduce a shared “Redis Backend” module
+> **Packaging choice:** implement the shared abstraction as **`@reg-copilot/reg-intel-cache`** (generic cache abstraction, not platform-specific).
 
-**Create a single shared module** that resolves configuration and returns clients.
+### ### Step 1 — Introduce a shared cache backend module (`@reg-copilot/reg-intel-cache`)
+
+Create a single shared module/package that resolves configuration and returns clients.
 
 Suggested location (pick one):
 - `apps/demo-web/src/lib/server/redis/` (app-local)
@@ -116,12 +118,15 @@ Create `resolveRedisBackend()` that reads env and returns:
 - `{ backend: 'upstash', url, token }`
 - `null`
 
-**Resolution order (Redis-first):**
+**Resolution rules (Redis-first):**
 
-1. If explicit override exists and not `auto`, honor it.
-2. Else if `REDIS_URL` is present → use direct Redis.
-3. Else if `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` present → use Upstash.
-4. Else → no backend.
+- If a provider override exists for the component (`CACHE_PROVIDER`, `EVENT_HUB_PROVIDER`, `RATE_LIMIT_PROVIDER`), honor it.
+- Otherwise infer provider from `REDIS_URL` scheme:
+  - `redis://` or `rediss://` → `redis` (ioredis)
+  - `https://` → `upstash` (Upstash REST)
+- If `REDIS_URL` is not set → no backend.
+
+> This keeps the default behavior "**use Redis by default when a Redis URL is configured**" while still supporting Upstash via the **single** `REDIS_URL` entrypoint.
 
 **Back-compat for secrets:**
 
@@ -276,13 +281,10 @@ Do not log secrets.
 ### Existing vars (must remain supported)
 
 - Global kill switch: `ENABLE_REDIS_CACHING`
-- Upstash:
-  - `UPSTASH_REDIS_REST_URL`
-  - `UPSTASH_REDIS_REST_TOKEN`
-- Direct Redis:
+- Redis connection (single source of truth):
   - `REDIS_URL`
-  - `REDIS_TOKEN` (legacy)
   - `REDIS_PASSWORD` (preferred)
+  - `REDIS_TOKEN` (accepted for backward compatibility)
 
 - Feature flags already documented in `CACHE_CONTROL.md`:
   - `ENABLE_RATE_LIMITER_REDIS`
@@ -292,7 +294,24 @@ Do not log secrets.
   - `ENABLE_LLM_POLICY_CACHE`
   - etc.
 
-### Optional new override vars (non-breaking)
+> **Note:** We intentionally **remove legacy `UPSTASH_REDIS_REST_*` variables**. Upstash remains supported by setting `REDIS_URL` to the Upstash HTTPS endpoint and providing `REDIS_PASSWORD/REDIS_TOKEN`.
+
+### Optional provider overrides (no `auto`)
+
+By default, the system uses **standard Redis** when `REDIS_URL` is a `redis://`/`rediss://` URL.
+
+If you want to force Upstash explicitly (or avoid any ambiguity), add these optional overrides:
+
+- `CACHE_PROVIDER=redis|upstash`
+- `EVENT_HUB_PROVIDER=redis|upstash`
+- `RATE_LIMIT_PROVIDER=redis|upstash`
+
+Defaults:
+- `CACHE_PROVIDER=redis`
+- `EVENT_HUB_PROVIDER=redis`
+- `RATE_LIMIT_PROVIDER=redis`
+
+If a provider is forced that is incompatible with the URL scheme, fail fast with a clear error at startup.
 
 Add *optional* env vars (defaults to `auto`):
 
@@ -314,30 +333,32 @@ Update these files:
 
 ### Required doc updates
 
-1. **Backend resolution order**
-   - Clearly state Redis-first selection:
-     - `REDIS_URL` → direct Redis
-     - else Upstash
+1. **Single Redis config (no legacy Upstash env vars)**
+   - Replace mentions of `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` with:
+     - `REDIS_URL` (supports `redis://` and Upstash `https://`)
+     - `REDIS_PASSWORD` (preferred) / `REDIS_TOKEN` (alias)
 
-2. **Password naming**
-   - Prefer `REDIS_PASSWORD` but mention `REDIS_TOKEN` supported for back-compat.
+2. **Provider selection**
+   - Default: standard Redis (`redis://` / `rediss://`).
+   - Upstash: `https://` URL + token/password.
+   - Optional overrides (no `auto`): `CACHE_PROVIDER`, `EVENT_HUB_PROVIDER`, `RATE_LIMIT_PROVIDER`.
 
 3. **Single shared factory**
-   - Add a short section: “Redis Backend Factory” describing where it lives and what it returns.
+   - Add a short section: “Cache Backend Factory” describing where it lives (`@reg-copilot/reg-intel-cache`) and what it returns.
 
 4. **Rate limiting note**
    - Document that:
      - Upstash uses `@upstash/ratelimit`.
-     - Direct Redis uses an equivalent ioredis + Lua limiter.
+     - Standard Redis uses an equivalent ioredis + Lua limiter.
 
 5. **Event hub note**
    - Document that event hub uses pub/sub:
-     - ioredis for direct Redis deployments.
+     - ioredis for standard Redis deployments.
      - Upstash client for Upstash deployments.
 
 ---
 
-## 5) Work breakdown (agent-friendly checklist)
+## 5) Work breakdown (agent-friendly checklist) (agent-friendly checklist)
 
 ### A) Code changes
 
