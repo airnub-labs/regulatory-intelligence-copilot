@@ -71,21 +71,20 @@ export type EventHubFactoryConfig =
  * ## Environment Variables
  *
  * ```bash
- * # Upstash Redis (recommended for production)
- * UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
- * UPSTASH_REDIS_REST_TOKEN=your_token_here
- *
- * # Or standard Redis
+ * # Standard Redis (default)
  * REDIS_URL=redis://localhost:6379
- * REDIS_TOKEN=your_password
+ * REDIS_PASSWORD=your_password
+ *
+ * # Or Upstash-compatible credentials using the shared REDIS_URL/REDIS_PASSWORD names
+ * REDIS_URL=https://your-endpoint.upstash.io
+ * REDIS_PASSWORD=your_upstash_token
  * ```
  *
  * ## Usage
  *
  * ```typescript
  * const eventHub = new RedisConversationEventHub({
- *   url: process.env.UPSTASH_REDIS_REST_URL,
- *   token: process.env.UPSTASH_REDIS_REST_TOKEN,
+ *   clients: createPubSubClientPair(resolveRedisBackend('eventHub'))!,
  * });
  *
  * // Subscribe (same API as in-memory version)

@@ -322,13 +322,18 @@ export function withCache<T>(
 ### Standardize on These Variables
 
 ```bash
-# Primary Redis (Upstash REST API - recommended for serverless)
-UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_token
-
-# Fallback Redis (standard Redis URL - for non-serverless)
+# Shared Redis credential names (works for both ioredis and Upstash REST)
 REDIS_URL=redis://localhost:6379
 REDIS_PASSWORD=optional_password
+
+# Upstash-compatible example using the same variables
+# REDIS_URL=https://your-endpoint.upstash.io
+# REDIS_PASSWORD=your_upstash_token
+
+# Provider override (optional; defaults to Redis, will infer Upstash from https:// URLs)
+CACHE_PROVIDER=redis|upstash
+EVENT_HUB_PROVIDER=redis|upstash
+RATE_LIMIT_PROVIDER=redis|upstash
 
 # Cache TTL overrides (optional)
 CACHE_TTL_AUTH_SECONDS=300
@@ -340,26 +345,13 @@ CACHE_TTL_CONFIG_SECONDS=300
 
 ```typescript
 function getRedisConfig(): RedisConfig | null {
-  // 1. Prefer Upstash REST (works in serverless)
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return {
-      type: 'upstash',
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    };
-  }
+  if (!process.env.REDIS_URL) return null;
 
-  // 2. Fall back to standard Redis
-  if (process.env.REDIS_URL) {
-    return {
-      type: 'ioredis',
-      url: process.env.REDIS_URL,
-      password: process.env.REDIS_PASSWORD,
-    };
-  }
+  const isUpstash = process.env.CACHE_PROVIDER === 'upstash' || process.env.REDIS_URL.startsWith('https://');
 
-  // 3. No Redis configured
-  return null;
+  return isUpstash
+    ? { type: 'upstash', url: process.env.REDIS_URL, token: process.env.REDIS_PASSWORD }
+    : { type: 'ioredis', url: process.env.REDIS_URL, password: process.env.REDIS_PASSWORD };
 }
 ```
 

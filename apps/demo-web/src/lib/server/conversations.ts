@@ -54,17 +54,17 @@ const ENABLE_CONVERSATION_CONFIG_CACHE = process.env.ENABLE_CONVERSATION_CONFIG_
  */
 const ENABLE_REDIS_EVENT_HUBS = process.env.ENABLE_REDIS_EVENT_HUBS !== 'false';
 
-type EventHubBackendPreference = 'auto' | 'redis' | 'supabase';
+type EventHubTransportPreference = 'redis' | 'supabase';
 
-function normalizeEventHubBackend(value: string | undefined): EventHubBackendPreference {
-  const normalized = (value ?? 'auto').trim().toLowerCase();
-  if (normalized === 'redis' || normalized === 'supabase') {
-    return normalized;
+function normalizeEventHubTransport(value: string | undefined): EventHubTransportPreference {
+  const normalized = (value ?? 'redis').trim().toLowerCase();
+  if (normalized === 'supabase') {
+    return 'supabase';
   }
-  return 'auto';
+  return 'redis';
 }
 
-const EVENT_HUB_BACKEND = normalizeEventHubBackend(process.env.EVENT_HUB_BACKEND);
+const EVENT_HUB_TRANSPORT = normalizeEventHubTransport(process.env.EVENT_HUB_TRANSPORT);
 
 const normalizeConversationStoreMode = (
   process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
@@ -274,8 +274,8 @@ let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeCo
 const redisEventHubAvailable = ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && Boolean(eventHubClients);
 const supabaseEventHubAvailable = Boolean(supabaseRealtimeClient && supabaseUrl && supabaseRealtimeKey);
 
-const preferRedisEventHub = EVENT_HUB_BACKEND !== 'supabase';
-const preferSupabaseEventHub = EVENT_HUB_BACKEND === 'supabase';
+const preferRedisEventHub = EVENT_HUB_TRANSPORT === 'redis';
+const preferSupabaseEventHub = EVENT_HUB_TRANSPORT === 'supabase';
 
 // Use Redis event hubs if preferred and available
 if (preferRedisEventHub && redisEventHubAvailable) {
@@ -309,7 +309,7 @@ if (preferRedisEventHub && redisEventHubAvailable) {
       logger.error({ error: result.error }, 'Redis event hub health check failed');
     }
   });
-} else if ((preferSupabaseEventHub || EVENT_HUB_BACKEND === 'auto') && supabaseEventHubAvailable) {
+} else if (preferSupabaseEventHub && supabaseEventHubAvailable) {
   logger.info(
     { supabaseUrl, mode: normalizeConversationStoreMode },
     'Using Supabase Realtime event hubs for distributed SSE',
@@ -333,9 +333,9 @@ if (preferRedisEventHub && redisEventHubAvailable) {
     }
   });
 } else {
-  const preferred = EVENT_HUB_BACKEND;
+  const preferred = EVENT_HUB_TRANSPORT;
   const message =
-    'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.';
+    'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_PASSWORD (or REDIS_TOKEN) or SUPABASE_URL/SUPABASE_ANON_KEY.';
 
   if (!redisEventHubAvailable && preferRedisEventHub) {
     logger.warn({ preferred, mode: normalizeConversationStoreMode }, 'Redis event hub requested but unavailable; falling back');

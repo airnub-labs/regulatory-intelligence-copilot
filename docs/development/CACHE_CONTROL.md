@@ -118,13 +118,13 @@ ENABLE_RATE_LIMITER_REDIS=false
 **Required for any caching:**
 
 ```bash
-# Upstash Redis (recommended)
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
-
-# Or standard Redis
+# Standard Redis
 REDIS_URL=redis://localhost:6379
-REDIS_TOKEN=...  # Optional
+REDIS_PASSWORD=...  # Optional
+
+# Or Upstash-compatible credentials using shared names
+# REDIS_URL=https://...
+# REDIS_PASSWORD=upstash_token
 ```
 
 ## Cache Behavior Matrix
@@ -183,9 +183,13 @@ ENABLE_REDIS_EVENT_HUBS=true  # Can be omitted
 ENABLE_AUTH_VALIDATION_CACHE=true  # Can be omitted
 ENABLE_RATE_LIMITER_REDIS=true  # Can be omitted
 
-# Redis credentials
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+# Redis credentials (standard Redis)
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
+
+# Or Upstash-compatible credentials
+# REDIS_URL=https://...
+# REDIS_PASSWORD=upstash_token
 ```
 
 ### Production (Moderate Traffic)
@@ -194,8 +198,8 @@ Enable policy and config caching, skip conversation caching:
 
 ```bash
 # All defaults work fine - just don't set ENABLE_CONVERSATION_CACHING
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
 ```
 
 ### Debugging All Caches
@@ -207,8 +211,8 @@ Disable all caching temporarily with global kill switch:
 ENABLE_REDIS_CACHING=false
 
 # Redis credentials still required for fallback behavior
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
 ```
 
 ### Debugging Specific Cache
@@ -223,8 +227,8 @@ ENABLE_REDIS_CACHING=true
 ENABLE_LLM_POLICY_CACHE=false  # Example: disable LLM policy cache
 
 # Other caches remain enabled
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
 ```
 
 ### Disaster Recovery (Redis Outage)

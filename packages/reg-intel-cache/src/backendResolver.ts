@@ -3,12 +3,6 @@ import type { BackendComponent, ResolvedBackend } from './types.js';
 
 const logger = createLogger('RedisBackendResolver');
 
-const BACKEND_ENV: Record<BackendComponent, string> = {
-  cache: 'CACHE_BACKEND',
-  eventHub: 'EVENT_HUB_BACKEND',
-  rateLimit: 'RATE_LIMIT_BACKEND',
-};
-
 const PROVIDER_ENV: Record<BackendComponent, string> = {
   cache: 'CACHE_PROVIDER',
   eventHub: 'EVENT_HUB_PROVIDER',
@@ -21,15 +15,6 @@ function inferBackendFromUrl(url: string): 'redis' | 'upstash' | null {
   }
   if (url.startsWith('https://')) {
     return 'upstash';
-  }
-  return null;
-}
-
-function normalizeOverride(value: string | undefined): 'auto' | 'redis' | 'upstash' | null {
-  if (!value) return null;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'redis' || normalized === 'upstash' || normalized === 'auto') {
-    return normalized;
   }
   return null;
 }
@@ -56,8 +41,7 @@ export function resolveRedisBackend(
   component: BackendComponent,
   env: NodeJS.ProcessEnv = process.env,
 ): ResolvedBackend | null {
-  const backendOverride = normalizeOverride(env[BACKEND_ENV[component]]);
-  const providerOverride = normalizeProvider(env[PROVIDER_ENV[component]]) ?? 'redis';
+  const providerOverride = normalizeProvider(env[PROVIDER_ENV[component]]);
   const redisUrl = env.REDIS_URL;
   const password = env.REDIS_PASSWORD ?? env.REDIS_TOKEN;
 
@@ -67,8 +51,7 @@ export function resolveRedisBackend(
   }
 
   const inferred = inferBackendFromUrl(redisUrl);
-  const selected = backendOverride ?? 'auto';
-  const backend = selected === 'auto' ? inferred ?? providerOverride : selected;
+  const backend = providerOverride ?? inferred ?? 'redis';
 
   if (!backend) {
     logger.debug({ component }, '[redis-backend] Unable to infer backend; returning null');
