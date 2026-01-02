@@ -52,7 +52,7 @@ function getNotificationService(): NotificationService {
  * Supabase is required in both local development and production.
  * For local development, use `supabase start` to run a local Supabase instance.
  *
- * @throws Error if Supabase credentials are not configured
+ * @returns Credentials or null if not configured
  */
 function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
   // Avoid initializing in browser

@@ -51,6 +51,7 @@ export { SlidingWindowCompactor } from './strategies/SlidingWindowCompactor.js';
 export { SemanticCompactor } from './strategies/SemanticCompactor.js';
 export { HybridCompactor } from './strategies/HybridCompactor.js';
 export { ModerateMergeCompactor } from './strategies/ModerateMergeCompactor.js';
+export { AggressiveMergeCompactor } from './strategies/AggressiveMergeCompactor.js';
 
 // Factory
 export {

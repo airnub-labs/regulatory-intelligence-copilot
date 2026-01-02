@@ -1,14 +1,21 @@
 # Compaction Implementation Status
 
 > **Status**: ✅ FULLY IMPLEMENTED
-> **Last Updated**: 2026-01-01
-> **Version**: 1.0
+> **Last Updated**: 2026-01-02
+> **Version**: 1.1
 
 ---
 
 ## Overview
 
-All compaction features have been successfully implemented across 3 priority phases, totaling **19 files and 4,486 lines of production code** plus comprehensive tests.
+All compaction features have been successfully implemented across 3 priority phases, plus additional database persistence (Priority 4), totaling **22+ files and 5,500+ lines of production code** plus comprehensive tests.
+
+### Latest Updates (2026-01-02)
+
+- **Database Persistence**: Compaction operations now persist to `copilot_internal.compaction_operations` table in Supabase
+- **Analytics API**: New `/api/compaction/metrics` endpoint for fetching real compaction data
+- **Dashboard Upgrade**: Analytics dashboard now shows real data instead of mock data
+- **Merge Integration**: Summary merge operations also record compaction metrics
 
 ---
 
@@ -16,12 +23,13 @@ All compaction features have been successfully implemented across 3 priority pha
 
 | Metric | Value |
 |--------|-------|
-| **Total Files Created** | 19 |
-| **Total Lines of Code** | 4,486 |
-| **Test Files** | 1 (15 tests) |
-| **API Endpoints** | 6 |
-| **UI Components** | 4 |
-| **Commits** | 4 |
+| **Total Files Created** | 22+ |
+| **Total Lines of Code** | 5,500+ |
+| **Test Files** | 2 (35+ tests) |
+| **API Endpoints** | 7 |
+| **UI Components** | 5 |
+| **Database Tables** | 1 (`compaction_operations`) |
+| **Commits** | 7+ |
 | **All Tests Passing** | ✅ Yes |
 | **Production Ready** | ✅ Yes |
 
@@ -225,6 +233,50 @@ GET    /api/conversations/:id/compact/snapshots/:snapshotId // Get snapshot
 
 ---
 
+## Priority 4: Database Persistence
+
+**Status**: ✅ COMPLETE
+**Completion Date**: 2026-01-02
+**Commit**: `e5c5820` - Wire compaction and merge operations to persist to Supabase
+
+### Components Implemented
+
+| Component | File | Lines | Status |
+|-----------|------|-------|--------|
+| Compaction Storage | `compactionStorage.ts` | 170 | ✅ |
+| Database Migration | `20260102000000_compaction_operations.sql` | 180 | ✅ |
+| Metrics API | `api/compaction/metrics/route.ts` | 150 | ✅ |
+| Updated Compaction Metrics | `compactionMetrics.ts` | Updated | ✅ |
+| PathCompactionService | `pathCompactionService.ts` | Updated | ✅ |
+| Merge Route | `merge/route.ts` | Updated | ✅ |
+
+### Features Delivered
+
+✅ **Database Persistence**:
+- `copilot_internal.compaction_operations` table
+- Indexed for time-range, strategy, tenant, conversation queries
+- Auto-calculated columns: `tokens_saved`, `messages_removed`, `compression_ratio`
+- Helper RPC functions: `record_compaction_operation()`, `get_compaction_metrics()`, `get_compaction_strategy_breakdown()`, `get_recent_compaction_operations()`
+
+✅ **Automatic Recording**:
+- PathCompactionService automatically persists all compaction operations
+- Merge route records summary mode compactions
+- Both success and failure operations are tracked
+- Fire-and-forget with graceful degradation
+
+✅ **Analytics API**:
+- `GET /api/compaction/metrics` endpoint
+- Time range filtering (24h, 7d, 30d, all)
+- Returns: totalOperations, tokensSaved, compressionRatio, strategyBreakdown, recentOperations
+- Graceful fallback to empty data if Supabase unavailable
+
+✅ **Dashboard Upgrade**:
+- Analytics dashboard now fetches real data from API
+- Shows empty state when no operations recorded
+- LLM usage section shows operations using LLM and total cost
+
+---
+
 ## Git Commits
 
 | Commit | Message | Files | Lines |
@@ -232,7 +284,9 @@ GET    /api/conversations/:id/compact/snapshots/:snapshotId // Get snapshot
 | `e024459` | Implement Priority 1 Compaction Features | 5 | 1,161 |
 | `ac18c3a` | Implement Priority 2 Compaction Features | 6 | 1,006 |
 | `44d99a0` | Implement Priority 3 Features | 8 | 2,319 |
-| **TOTAL** | - | **19** | **4,486** |
+| `b6d2050` | Wire compaction analytics to real Supabase data | 3 | 1,002 |
+| `e5c5820` | Wire compaction and merge operations to persist to Supabase | 5 | 277 |
+| **TOTAL** | - | **22+** | **5,700+** |
 
 ---
 

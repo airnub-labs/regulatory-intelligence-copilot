@@ -25,7 +25,7 @@ interface AppHeaderProps {
 export function AppHeader({
   subtitle = "Graph-powered research over tax, welfare, pensions, and EU rules using a live regulatory knowledge graph.",
   subtext = "Answers are grounded in a Memgraph regulatory graph, a timeline engine for law-in-time, and scenario-aware agents.",
-  primaryAction = { label: "View Graph", href: "/graph" },
+  primaryAction,
   secondaryAction = { label: "Product docs", href: "https://github.com/saasbabs/regulatory-intelligence-copilot" },
   userEmail,
   onSignOut,

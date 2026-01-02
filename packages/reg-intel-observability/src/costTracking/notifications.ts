@@ -227,6 +227,7 @@ export class DefaultNotificationService implements NotificationService {
       'Nodemailer is not installed; logging email alert instead of sending.'
     );
 
+
     console.log('[EMAIL] Would send cost alert email:', {
       to: this.config.email.toAddresses,
       subject: this.formatEmailSubject(alert),

@@ -18,6 +18,7 @@ import { SlidingWindowCompactor } from './strategies/SlidingWindowCompactor.js';
 import { SemanticCompactor } from './strategies/SemanticCompactor.js';
 import { HybridCompactor } from './strategies/HybridCompactor.js';
 import { ModerateMergeCompactor } from './strategies/ModerateMergeCompactor.js';
+import { AggressiveMergeCompactor } from './strategies/AggressiveMergeCompactor.js';
 
 /**
  * Get a path compaction strategy
@@ -70,14 +71,8 @@ export const getMergeCompactor = (
       return new ModerateMergeCompactor(config);
 
     case 'aggressive':
-      // Aggressive = all features enabled
-      return new ModerateMergeCompactor({
-        ...config,
-        strategy: 'aggressive',
-        deduplicate: true,
-        mergeConsecutive: true,
-        useLlm: true,
-      });
+      // Aggressive = dedicated aggressive compactor with maximum compression
+      return new AggressiveMergeCompactor(config);
 
     default:
       console.warn(`Unknown merge compaction strategy: ${strategy}, using 'none'`);
