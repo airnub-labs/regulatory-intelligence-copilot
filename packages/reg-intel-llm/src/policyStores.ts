@@ -5,7 +5,7 @@
  * Redis caching for multi-instance deployments.
  */
 
-import { createKeyValueClient, type ResolvedBackend, type RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
+import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { LlmPolicyStore, TenantLlmPolicy, LlmTaskPolicy } from './llmRouter.js';
 import type { EgressMode } from './egressClient.js';
@@ -217,7 +217,6 @@ export class CachingPolicyStore implements LlmPolicyStore {
 export interface PolicyStoreConfig {
   supabase?: SupabaseLikeClient;
   redis?: RedisKeyValueClient;
-  redisBackend?: ResolvedBackend | null;
   cacheTtlSeconds?: number;
   schema?: 'public' | 'copilot_internal';
 }
@@ -239,7 +238,7 @@ export function createPolicyStore(config: PolicyStoreConfig): LlmPolicyStore {
   }
 
   const supabaseStore = new SupabasePolicyStore(config.supabase, config.schema);
-  const redisClient = config.redis ?? (config.redisBackend ? createKeyValueClient(config.redisBackend) : null);
+  const redisClient = config.redis;
 
   if (redisClient) {
     logger.info({ ttl: config.cacheTtlSeconds ?? 300 }, 'Using CachingPolicyStore with Redis');
