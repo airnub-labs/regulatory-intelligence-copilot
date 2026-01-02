@@ -52,6 +52,21 @@ interface CompactionHistoryEntry {
   success: boolean;
 }
 
+interface CompactionOperationRow {
+  id: string;
+  timestamp: string;
+  strategy: string;
+  messages_before: number;
+  messages_after: number;
+  tokens_before: number;
+  tokens_after: number;
+  tokens_saved: number;
+  compression_ratio: string | number;
+  duration_ms: number | null;
+  triggered_by: 'auto' | 'manual';
+  success: boolean;
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -141,7 +156,7 @@ export async function GET(
               throw new Error(`Failed to fetch compaction history: ${error.message}`);
             }
 
-            const history: CompactionHistoryEntry[] = (data || []).map((row: any) => ({
+            const history: CompactionHistoryEntry[] = (data || []).map((row: CompactionOperationRow) => ({
               id: row.id,
               timestamp: row.timestamp,
               strategy: row.strategy,
@@ -150,9 +165,9 @@ export async function GET(
               tokensBefore: row.tokens_before,
               tokensAfter: row.tokens_after,
               tokensSaved: row.tokens_saved,
-              compressionRatio: parseFloat(row.compression_ratio) || 0,
+              compressionRatio: parseFloat(String(row.compression_ratio)) || 0,
               durationMs: row.duration_ms,
-              triggeredBy: row.triggered_by as 'auto' | 'manual',
+              triggeredBy: row.triggered_by,
               success: row.success,
             }));
 

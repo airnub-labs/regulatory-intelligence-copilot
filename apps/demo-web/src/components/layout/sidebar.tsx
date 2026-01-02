@@ -2,7 +2,8 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState, useEffect, useCallback } from "react"
+import { useCallback, useEffect, useState } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import {
   MessageSquare,
   Network,
@@ -19,7 +20,7 @@ import { Button } from "../ui/button"
 interface NavItem {
   label: string
   href: string
-  icon: React.ReactNode
+  icon: ReactNode
   description?: string
 }
 
@@ -54,16 +55,15 @@ const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed"
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
-
-  // Load collapsed state from localStorage
-  useEffect(() => {
-    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
-    if (stored !== null) {
-      setIsCollapsed(stored === "true")
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false
     }
-  }, [])
+
+    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+    return stored === "true"
+  })
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   // Persist collapsed state
   const toggleCollapsed = useCallback(() => {
@@ -74,20 +74,21 @@ export function Sidebar() {
     })
   }, [])
 
-  // Close mobile menu when route changes
-  useEffect(() => {
-    setIsMobileOpen(false)
-  }, [pathname])
-
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: KeyboardEvent) => {
       if (e.key === "Escape" && isMobileOpen) {
         setIsMobileOpen(false)
       }
     },
     [isMobileOpen]
   )
+
+  const handleNavSelection = useCallback(() => {
+    if (isMobileOpen) {
+      setIsMobileOpen(false)
+    }
+  }, [isMobileOpen])
 
   return (
     <>
@@ -158,6 +159,7 @@ export function Sidebar() {
                     role="menuitem"
                     aria-current={isActive ? "page" : undefined}
                     title={isCollapsed ? item.label : undefined}
+                    onClick={handleNavSelection}
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                       "hover:bg-accent hover:text-accent-foreground",
@@ -203,7 +205,7 @@ export function Sidebar() {
 }
 
 interface SidebarLayoutProps {
-  children: React.ReactNode
+  children: ReactNode
 }
 
 export function SidebarLayout({ children }: SidebarLayoutProps) {
