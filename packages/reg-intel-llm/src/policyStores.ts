@@ -5,6 +5,7 @@
  * Redis caching for multi-instance deployments.
  */
 
+import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { LlmPolicyStore, TenantLlmPolicy, LlmTaskPolicy } from './llmRouter.js';
 import type { EgressMode } from './egressClient.js';
@@ -32,11 +33,7 @@ export interface SupabaseLikeClient {
   };
 }
 
-export interface RedisLikeClient {
-  get(key: string): Promise<string | null>;
-  setex(key: string, seconds: number, value: string): Promise<string | void>;
-  del(key: string): Promise<number | void>;
-}
+export type RedisLikeClient = RedisKeyValueClient;
 
 interface PolicyRow {
   id: string;
