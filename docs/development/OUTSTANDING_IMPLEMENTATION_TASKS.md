@@ -27,6 +27,12 @@ This document identifies **outstanding tasks** for the LLM Cost Tracking & Obser
 > - **Merge operations record compaction metrics** for summary mode merges
 > - **Collapsible sidebar navigation** for all platform pages (Chat, Graph, Cost Analytics, Compaction)
 > - **API endpoint** `/api/compaction/metrics` for fetching compaction analytics
+> - **Manual Compaction APIs fully implemented** - All stub endpoints replaced with real implementations:
+>   - `POST /api/conversations/:id/compact` - Trigger manual compaction
+>   - `GET /api/conversations/:id/compact/status` - Check compaction status
+>   - `GET /api/conversations/:id/compact/history` - Get compaction history from Supabase
+>   - `GET /api/conversations/:id/compact/snapshots` - List available snapshots
+>   - `POST /api/conversations/:id/compact/rollback` - Rollback to a snapshot
 
 > **Update (2026-01-01)**: ALL implementation tasks completed:
 > - Cost dashboard at `/analytics/costs` with real Supabase data, charts, and CSV export
@@ -896,6 +902,15 @@ The entire cost tracking and compaction architecture is production-ready with no
 - [x] Wire merge route to persist summary compactions
 - [x] Create `/api/compaction/metrics` endpoint
 - [x] Update compaction analytics dashboard to use real data
+
+#### Manual Compaction APIs ✅ COMPLETED (2026-01-02)
+- [x] Implement `POST /api/conversations/:id/compact` - full compaction using PathCompactionService
+- [x] Implement `GET /api/conversations/:id/compact/status` - token count and compaction need check
+- [x] Implement `GET /api/conversations/:id/compact/history` - fetch from `copilot_internal.compaction_operations`
+- [x] Implement `GET /api/conversations/:id/compact/snapshots` - list snapshots from SnapshotService
+- [x] Implement `POST /api/conversations/:id/compact/rollback` - restore snapshot data
+- [x] Wire CompactionButton rollback to call rollback API
+- [x] All endpoints use proper authentication, tenant isolation, and error handling
 
 #### Utilities & Integration ✅ COMPLETED
 - [x] Implement compaction utility functions (`packages/reg-intel-conversations/src/compaction/utils.ts`)

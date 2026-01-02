@@ -1,7 +1,7 @@
 /**
  * Compaction History API
  *
- * Get compaction history for a conversation.
+ * Get compaction history for a conversation from the database.
  *
  * GET /api/conversations/:conversationId/compact/history?limit=10
  *
@@ -9,7 +9,7 @@
  * {
  *   "history": [
  *     {
- *       "id": "compact-123",
+ *       "id": "uuid",
  *       "timestamp": "2024-01-15T10:30:00Z",
  *       "strategy": "semantic",
  *       "messagesBefore": 150,
@@ -26,93 +26,162 @@
  * }
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth/options';
+import { conversationStore } from '@/lib/server/conversations';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { createClient } from '@supabase/supabase-js';
+
+export const dynamic = 'force-dynamic';
+
+const logger = createLogger('CompactionHistoryRoute');
 
 interface CompactionHistoryEntry {
   id: string;
-  timestamp: Date;
+  timestamp: string;
   strategy: string;
   messagesBefore: number;
   messagesAfter: number;
   tokensBefore: number;
   tokensAfter: number;
+  tokensSaved: number;
   compressionRatio: number;
-  durationMs: number;
+  durationMs: number | null;
   triggeredBy: 'auto' | 'manual';
+  success: boolean;
 }
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  try {
-    const { id: conversationId } = await context.params;
-    const url = new URL(request.url);
-    const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+  const { id: conversationId } = await context.params;
+  const session = (await getServerSession(authOptions)) as {
+    user?: { id?: string; tenantId?: string };
+  } | null;
+  const user = session?.user;
+  const userId = user?.id;
 
-    // In production, fetch from compaction history store
-    // For now, return example data
-
-    const exampleHistory: CompactionHistoryEntry[] = [
-      {
-        id: 'compact-123',
-        timestamp: new Date('2024-01-15T10:30:00Z'),
-        strategy: 'semantic',
-        messagesBefore: 150,
-        messagesAfter: 75,
-        tokensBefore: 125000,
-        tokensAfter: 62500,
-        compressionRatio: 0.5,
-        durationMs: 2341,
-        triggeredBy: 'manual',
-      },
-      {
-        id: 'compact-122',
-        timestamp: new Date('2024-01-14T15:20:00Z'),
-        strategy: 'sliding_window',
-        messagesBefore: 120,
-        messagesAfter: 50,
-        tokensBefore: 100000,
-        tokensAfter: 42000,
-        compressionRatio: 0.42,
-        durationMs: 1823,
-        triggeredBy: 'auto',
-      },
-    ];
-
-    return NextResponse.json({
-      message: 'Example data - integrate with compaction metrics store for production',
-      conversationId,
-      history: exampleHistory.slice(0, limit),
-      totalCompactions: exampleHistory.length,
-      totalTokensSaved: exampleHistory.reduce(
-        (sum, entry) => sum + (entry.tokensBefore - entry.tokensAfter),
-        0
-      ),
-    });
-
-    // Production implementation:
-    /*
-    const metricsStore = getCompactionMetricsStore();
-    const history = await metricsStore.getHistory(conversationId, limit);
-
-    const totalTokensSaved = history.reduce(
-      (sum, entry) => sum + (entry.tokensBefore - entry.tokensAfter),
-      0
-    );
-
-    return NextResponse.json({
-      conversationId,
-      history,
-      totalCompactions: history.length,
-      totalTokensSaved,
-    });
-    */
-  } catch (error) {
-    console.error('Compaction history API error:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
-      { status: 500 }
-    );
+  if (!userId || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+
+  return requestContext.run(
+    { tenantId, userId },
+    () =>
+      withSpan(
+        'api.conversations.compact.history.get',
+        {
+          'app.route': '/api/conversations/[id]/compact/history',
+          'app.tenant.id': tenantId,
+          'app.user.id': userId,
+          'app.conversation.id': conversationId,
+        },
+        async () => {
+          try {
+            const url = new URL(request.url);
+            const limit = parseInt(url.searchParams.get('limit') || '10', 10);
+
+            // Verify conversation exists and user has access
+            const conversation = await conversationStore.getConversation({
+              tenantId,
+              conversationId,
+              userId,
+            });
+
+            if (!conversation) {
+              logger.warn({ tenantId, userId, conversationId }, 'Conversation not found');
+              return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
+            }
+
+            // Fetch compaction history from Supabase
+            const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+
+            if (!supabaseUrl || !supabaseKey) {
+              logger.warn('Supabase credentials not configured');
+              return NextResponse.json({
+                conversationId,
+                history: [],
+                totalCompactions: 0,
+                totalTokensSaved: 0,
+                message: 'Compaction history not available (database not configured)',
+              });
+            }
+
+            const supabase = createClient(supabaseUrl, supabaseKey, {
+              db: { schema: 'copilot_internal' },
+            });
+
+            // Query compaction_operations table for this conversation
+            const { data, error } = await supabase
+              .from('compaction_operations')
+              .select('*')
+              .eq('conversation_id', conversationId)
+              .order('timestamp', { ascending: false })
+              .limit(limit);
+
+            if (error) {
+              // Check if table doesn't exist yet
+              if (error.code === '42P01' || error.message.includes('does not exist')) {
+                logger.info('Compaction operations table not yet created');
+                return NextResponse.json({
+                  conversationId,
+                  history: [],
+                  totalCompactions: 0,
+                  totalTokensSaved: 0,
+                  message: 'No compaction history available',
+                });
+              }
+
+              logger.error({ error: error.message }, 'Failed to fetch compaction history');
+              throw new Error(`Failed to fetch compaction history: ${error.message}`);
+            }
+
+            const history: CompactionHistoryEntry[] = (data || []).map((row: any) => ({
+              id: row.id,
+              timestamp: row.timestamp,
+              strategy: row.strategy,
+              messagesBefore: row.messages_before,
+              messagesAfter: row.messages_after,
+              tokensBefore: row.tokens_before,
+              tokensAfter: row.tokens_after,
+              tokensSaved: row.tokens_saved,
+              compressionRatio: parseFloat(row.compression_ratio) || 0,
+              durationMs: row.duration_ms,
+              triggeredBy: row.triggered_by as 'auto' | 'manual',
+              success: row.success,
+            }));
+
+            const totalTokensSaved = history.reduce((sum, entry) => sum + entry.tokensSaved, 0);
+
+            logger.info({
+              conversationId,
+              historyCount: history.length,
+              totalTokensSaved,
+            }, 'Compaction history retrieved');
+
+            return NextResponse.json({
+              conversationId,
+              history,
+              totalCompactions: history.length,
+              totalTokensSaved,
+            });
+          } catch (error) {
+            logger.error({
+              conversationId,
+              error: error instanceof Error ? error.message : String(error),
+            }, 'Compaction history API error');
+
+            return NextResponse.json(
+              { error: error instanceof Error ? error.message : 'Internal server error' },
+              { status: 500 }
+            );
+          }
+        }
+      )
+  );
 }
