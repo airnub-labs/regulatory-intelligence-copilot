@@ -14,8 +14,8 @@ import {
   CachingConversationConfigStore,
   createConversationConfigStore,
   type ConversationConfig,
-  type RedisLikeClient,
 } from './conversationConfig.js';
+import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import type { SupabaseLikeClient } from './conversationStores.js';
 
 // Mock Supabase client
@@ -71,7 +71,7 @@ function createMockSupabaseClient(): SupabaseLikeClient {
 }
 
 // Mock Redis client
-function createMockRedisClient(options: { shouldFail?: boolean } = {}): RedisLikeClient {
+function createMockRedisClient(options: { shouldFail?: boolean } = {}): RedisKeyValueClient {
   const cache: Record<string, { value: string; expiresAt: number }> = {};
   const { shouldFail = false } = options;
 
@@ -215,7 +215,7 @@ describe('SupabaseConversationConfigStore', () => {
 
 describe('CachingConversationConfigStore', () => {
   let supabase: SupabaseLikeClient;
-  let redis: RedisLikeClient;
+  let redis: RedisKeyValueClient;
   let backingStore: SupabaseConversationConfigStore;
   let cachingStore: CachingConversationConfigStore;
 

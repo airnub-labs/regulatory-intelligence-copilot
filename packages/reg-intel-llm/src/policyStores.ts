@@ -5,6 +5,7 @@
  * Redis caching for multi-instance deployments.
  */
 
+import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { LlmPolicyStore, TenantLlmPolicy, LlmTaskPolicy } from './llmRouter.js';
 import type { EgressMode } from './egressClient.js';
@@ -30,12 +31,6 @@ export interface SupabaseLikeClient {
       eq(column: string, value: unknown): Promise<{ error: { message: string } | null }>;
     };
   };
-}
-
-export interface RedisLikeClient {
-  get(key: string): Promise<string | null>;
-  setex(key: string, seconds: number, value: string): Promise<string | void>;
-  del(key: string): Promise<number | void>;
 }
 
 interface PolicyRow {
@@ -161,7 +156,7 @@ export class CachingPolicyStore implements LlmPolicyStore {
 
   constructor(
     private readonly backing: LlmPolicyStore,
-    private readonly redis: RedisLikeClient,
+    private readonly redis: RedisKeyValueClient,
     options: CachingPolicyStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 300;
@@ -221,7 +216,7 @@ export class CachingPolicyStore implements LlmPolicyStore {
 
 export interface PolicyStoreConfig {
   supabase?: SupabaseLikeClient;
-  redis?: RedisLikeClient;
+  redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
   schema?: 'public' | 'copilot_internal';
 }

@@ -578,9 +578,13 @@ ENABLE_REDIS_EVENT_HUBS=true
 ENABLE_AUTH_VALIDATION_CACHE=true
 ENABLE_RATE_LIMITER_REDIS=true
 
-# Redis credentials
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+# Redis credentials (standard Redis)
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
+
+# Or Upstash-compatible credentials using shared variable names
+# REDIS_URL=https://...
+# REDIS_PASSWORD=upstash_token
 ```
 
 ### Production (Moderate Traffic)
@@ -591,9 +595,9 @@ ENABLE_REDIS_CACHING=true
 # Individual flags default to true, except:
 # ENABLE_CONVERSATION_CACHING=false (default)
 
-# Redis credentials
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+# Redis credentials (standard Redis)
+REDIS_URL=redis://...
+REDIS_PASSWORD=...
 ```
 
 ### Development / Testing

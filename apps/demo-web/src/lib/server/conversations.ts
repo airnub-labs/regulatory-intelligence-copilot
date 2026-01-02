@@ -14,9 +14,14 @@ import {
   type ConversationConfigStore,
   type ConversationStore,
 } from '@reg-copilot/reg-intel-conversations';
+import {
+  createKeyValueClient,
+  createPubSubClientPair,
+  describeRedisBackendSelection,
+  resolveRedisBackend,
+} from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
 import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_TEST } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
@@ -53,6 +58,18 @@ const ENABLE_CONVERSATION_CONFIG_CACHE = process.env.ENABLE_CONVERSATION_CONFIG_
  * Requires ENABLE_REDIS_CACHING=true to have any effect.
  */
 const ENABLE_REDIS_EVENT_HUBS = process.env.ENABLE_REDIS_EVENT_HUBS !== 'false';
+
+type EventHubTransportPreference = 'redis' | 'supabase';
+
+function normalizeEventHubTransport(value: string | undefined): EventHubTransportPreference {
+  const normalized = (value ?? 'redis').trim().toLowerCase();
+  if (normalized === 'supabase') {
+    return 'supabase';
+  }
+  return 'redis';
+}
+
+const EVENT_HUB_TRANSPORT = normalizeEventHubTransport(process.env.EVENT_HUB_TRANSPORT);
 
 const normalizeConversationStoreMode = (
   process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto'
@@ -150,9 +167,11 @@ if (supabaseClient) {
   logger.info({ mode: normalizeConversationStoreMode }, 'Using in-memory conversation store');
 }
 
-// Configure Redis credentials
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL ?? process.env.REDIS_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.REDIS_TOKEN;
+// Configure Redis backend and shared clients
+const cacheBackend = ENABLE_REDIS_CACHING ? resolveRedisBackend('cache') : null;
+const eventBackend = ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS ? resolveRedisBackend('eventHub') : null;
+const sharedKeyValueClient = ENABLE_REDIS_CACHING ? createKeyValueClient(cacheBackend) : null;
+const eventHubClients = eventBackend ? createPubSubClientPair(eventBackend) : null;
 
 /**
  * Optional: Enable conversation caching for high-traffic scenarios.
@@ -167,22 +186,12 @@ const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING === 
 // Create Redis client for conversation config caching
 // Respects both global flag AND individual flag
 const configRedisClient =
-  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CONFIG_CACHE && redisUrl && redisToken
-    ? new Redis({
-        url: redisUrl,
-        token: redisToken,
-      })
-    : null;
+  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClient : null;
 
 // Create Redis client for conversation caching (opt-in)
 // Respects both global flag AND individual flag
 const conversationRedisClient =
-  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CACHING && redisUrl && redisToken
-    ? new Redis({
-        url: redisUrl,
-        token: redisToken,
-      })
-    : null;
+  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
 
 // Create conversation store with optional caching
 export const conversationStore: ConversationStore = createConversationStore({
@@ -201,7 +210,8 @@ if (supabaseClient) {
         hasRedis: true,
         cacheTtl: 60,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
-        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING
+        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
+        backend: describeRedisBackendSelection(cacheBackend)
       },
       'Using CachingConversationStore (Supabase + Redis)'
     );
@@ -241,7 +251,8 @@ if (supabaseInternalClient) {
         hasRedis: true,
         cacheTtl: 300,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
-        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE
+        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
+        backend: describeRedisBackendSelection(cacheBackend)
       },
       'Using CachingConversationConfigStore (Supabase + Redis)'
     );
@@ -265,11 +276,17 @@ if (supabaseInternalClient) {
 let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
 let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 
-// Use Redis event hubs if global flag AND individual flag are both enabled
-if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
+const redisEventHubAvailable = ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && Boolean(eventHubClients);
+const supabaseEventHubAvailable = Boolean(supabaseRealtimeClient && supabaseUrl && supabaseRealtimeKey);
+
+const preferRedisEventHub = EVENT_HUB_TRANSPORT === 'redis';
+const preferSupabaseEventHub = EVENT_HUB_TRANSPORT === 'supabase';
+
+// Use Redis event hubs if preferred and available
+if (preferRedisEventHub && redisEventHubAvailable) {
   logger.info(
     {
-      redisUrl,
+      backend: describeRedisBackendSelection(eventBackend),
       mode: normalizeConversationStoreMode,
       globalCachingEnabled: ENABLE_REDIS_CACHING,
       redisEventHubsEnabled: ENABLE_REDIS_EVENT_HUBS
@@ -278,15 +295,15 @@ if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
   );
 
   conversationEventHub = new RedisConversationEventHub({
-    url: redisUrl,
-    token: redisToken,
+    clients: eventHubClients,
     prefix: 'copilot:events',
+    healthCheckClient: sharedKeyValueClient ?? undefined,
   });
 
   conversationListEventHub = new RedisConversationListEventHub({
-    url: redisUrl,
-    token: redisToken,
+    clients: eventHubClients,
     prefix: 'copilot:events',
+    healthCheckClient: sharedKeyValueClient ?? undefined,
   });
 
   // Verify Redis connectivity
@@ -297,19 +314,19 @@ if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
       logger.error({ error: result.error }, 'Redis event hub health check failed');
     }
   });
-} else if (supabaseRealtimeClient && supabaseUrl && supabaseRealtimeKey) {
+} else if (preferSupabaseEventHub && supabaseEventHubAvailable) {
   logger.info(
     { supabaseUrl, mode: normalizeConversationStoreMode },
     'Using Supabase Realtime event hubs for distributed SSE',
   );
 
   conversationEventHub = new SupabaseRealtimeConversationEventHub({
-    client: supabaseRealtimeClient,
+    client: supabaseRealtimeClient!,
     prefix: 'copilot:events',
   });
 
   conversationListEventHub = new SupabaseRealtimeConversationListEventHub({
-    client: supabaseRealtimeClient,
+    client: supabaseRealtimeClient!,
     prefix: 'copilot:events',
   });
 
@@ -321,8 +338,20 @@ if (ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && redisUrl && redisToken) {
     }
   });
 } else {
+  const preferred = EVENT_HUB_TRANSPORT;
   const message =
-    'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_TOKEN or SUPABASE_URL/SUPABASE_ANON_KEY.';
+    'Distributed SSE requires Redis or Supabase Realtime credentials; set REDIS_URL/REDIS_PASSWORD (or REDIS_TOKEN) or SUPABASE_URL/SUPABASE_ANON_KEY.';
+
+  if (!redisEventHubAvailable && preferRedisEventHub) {
+    logger.warn({ preferred, mode: normalizeConversationStoreMode }, 'Redis event hub requested but unavailable; falling back');
+  }
+
+  if (!supabaseEventHubAvailable && preferSupabaseEventHub) {
+    logger.warn(
+      { preferred, mode: normalizeConversationStoreMode },
+      'Supabase Realtime event hub requested but unavailable; falling back',
+    );
+  }
 
   if (isDevLike || isProductionBuildPhase) {
     logger.warn({ mode: normalizeConversationStoreMode }, message);

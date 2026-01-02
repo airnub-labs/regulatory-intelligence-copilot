@@ -34,18 +34,28 @@ const nextConfig = {
     '@reg-copilot/reg-intel-conversations',
     '@reg-copilot/reg-intel-next-adapter',
     '@reg-copilot/reg-intel-observability',
-    '@reg-copilot/reg-intel-llm'
+    '@reg-copilot/reg-intel-llm',
+    '@reg-copilot/reg-intel-cache'
   ],
   experimental: {
     turbopackUseSystemTlsCerts: true,
   },
   turbopack: {
     root: path.resolve(__dirname, '../..'),
+    resolveAlias: {
+      '@reg-copilot/reg-intel-cache': path.resolve(__dirname, '../..', 'packages/reg-intel-cache'),
+      '@reg-copilot/reg-intel-conversations': path.resolve(
+        __dirname,
+        '../..',
+        'packages/reg-intel-conversations',
+      ),
+    },
   },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
       '@reg-copilot/reg-intel-conversations': path.resolve(__dirname, '../..', 'packages/reg-intel-conversations'),
+      '@reg-copilot/reg-intel-cache': path.resolve(__dirname, '../..', 'packages/reg-intel-cache'),
     }
     // Ignore test files in thread-stream and pino that require dev dependencies
     config.plugins.push(

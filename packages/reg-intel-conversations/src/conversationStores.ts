@@ -5,9 +5,9 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
+import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_SQL_TABLE } from '@opentelemetry/semantic-conventions';
-import type { RedisLikeClient } from './conversationConfig.js';
 
 export type ShareAudience = 'private' | 'tenant' | 'public';
 export type TenantAccess = 'view' | 'edit';
@@ -1354,7 +1354,7 @@ export class CachingConversationStore implements ConversationStore {
 
   constructor(
     private readonly backing: ConversationStore,
-    private readonly redis: RedisLikeClient,
+    private readonly redis: RedisKeyValueClient,
     options: CachingConversationStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 60; // Shorter TTL for active data
@@ -1459,7 +1459,7 @@ export class CachingConversationStore implements ConversationStore {
 export interface ConversationStoreFactoryOptions {
   supabase?: SupabaseLikeClient;
   supabaseInternal?: SupabaseLikeClient;
-  redis?: RedisLikeClient;
+  redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
   enableCaching?: boolean; // Default: false (opt-in)
 }

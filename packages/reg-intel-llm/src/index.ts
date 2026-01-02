@@ -49,7 +49,6 @@ export {
   CachingPolicyStore,
   createPolicyStore,
   type SupabaseLikeClient,
-  type RedisLikeClient,
   type CachingPolicyStoreOptions,
   type PolicyStoreConfig,
 } from './policyStores.js';

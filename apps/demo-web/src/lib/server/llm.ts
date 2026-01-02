@@ -6,7 +6,7 @@ import {
 } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
-import { Redis } from '@upstash/redis';
+import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBackend } from '@reg-copilot/reg-intel-cache';
 
 const logger = createLogger('LlmRouterWiring');
 
@@ -52,17 +52,10 @@ const supabaseInternalClient =
 // Redis Setup
 // ============================================================================
 
-const upstashRedisUrl = process.env.UPSTASH_REDIS_REST_URL;
-const upstashRedisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-// Create Redis client only if global flag AND individual flag are both enabled
-const redisClient =
-  ENABLE_REDIS_CACHING && ENABLE_LLM_POLICY_CACHE && upstashRedisUrl && upstashRedisToken
-    ? new Redis({
-        url: upstashRedisUrl,
-        token: upstashRedisToken,
-      })
-    : null;
+const cacheBackend = ENABLE_REDIS_CACHING && ENABLE_LLM_POLICY_CACHE ? resolveRedisBackend('cache') : null;
+const redisClient = ENABLE_REDIS_CACHING && ENABLE_LLM_POLICY_CACHE
+  ? createKeyValueClient(cacheBackend)
+  : null;
 
 // ============================================================================
 // Policy Store Configuration
@@ -85,7 +78,8 @@ if (supabaseInternalClient) {
         hasRedis: true,
         cacheTtl: 300,
         globalCachingEnabled: ENABLE_REDIS_CACHING,
-        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE
+        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
+        backend: describeRedisBackendSelection(cacheBackend)
       },
       'Using CachingPolicyStore (Supabase + Redis)'
     );

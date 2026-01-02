@@ -952,9 +952,10 @@ export const conversationStore = createConversationStore({
 ```bash
 # Redis for caching (optional but recommended for production)
 REDIS_URL=redis://localhost:6379
-# or for Upstash
-UPSTASH_REDIS_REST_URL=https://...
-UPSTASH_REDIS_REST_TOKEN=...
+REDIS_PASSWORD=your_password
+# or point REDIS_URL to an Upstash HTTPS endpoint and supply the token
+# REDIS_URL=https://your-endpoint.upstash.io
+# REDIS_TOKEN=your_upstash_token
 
 # Cache TTL (optional, defaults shown)
 POLICY_CACHE_TTL_SECONDS=300      # 5 minutes for policies

@@ -5,6 +5,7 @@
  * and path management at global, tenant, and user levels.
  */
 
+import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import type { SupabaseLikeClient } from './conversationStores.js';
 
 // =============================================================================
@@ -427,16 +428,6 @@ export class SupabaseConversationConfigStore implements ConversationConfigStore 
   }
 }
 
-// =============================================================================
-// Caching Layer
-// =============================================================================
-
-export interface RedisLikeClient {
-  get(key: string): Promise<string | null>;
-  setex(key: string, seconds: number, value: string): Promise<string | void>;
-  del(...keys: string[]): Promise<number | void>;
-}
-
 export interface CachingConfigStoreOptions {
   /** TTL in seconds (default: 300 = 5 minutes) */
   ttlSeconds?: number;
@@ -450,7 +441,7 @@ export class CachingConversationConfigStore implements ConversationConfigStore {
 
   constructor(
     private readonly backing: ConversationConfigStore,
-    private readonly redis: RedisLikeClient,
+    private readonly redis: RedisKeyValueClient,
     options: CachingConfigStoreOptions = {}
   ) {
     this.ttlSeconds = options.ttlSeconds ?? 300;
@@ -548,7 +539,7 @@ export class CachingConversationConfigStore implements ConversationConfigStore {
 
 export interface ConfigStoreFactoryOptions {
   supabase?: SupabaseLikeClient;
-  redis?: RedisLikeClient;
+  redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
   logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void };
 }

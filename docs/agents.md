@@ -322,7 +322,7 @@ logger.error({ err: error, context }, 'Operation failed');
 - `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key (server-side only)
 
 **Event Bus (choose one):**
-- `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (preferred)
+- `REDIS_URL` (+ `REDIS_PASSWORD` or `REDIS_TOKEN`) for Redis/Upstash pub/sub
 - OR use Supabase Realtime (via `SUPABASE_URL` + `SUPABASE_ANON_KEY`)
 
 **MCP Gateway:**

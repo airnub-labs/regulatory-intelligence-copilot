@@ -112,14 +112,12 @@ This document establishes consistent patterns for Redis caching across the codeb
 
 | Use Case | Recommended Client | Reason |
 |----------|-------------------|--------|
-| Cache (get/set/del) | `@upstash/redis` | REST API works in serverless, no connection pooling needed |
-| Pub/Sub | `@upstash/redis` or `ioredis` | Depends on deployment (serverless vs long-running) |
-| Rate Limiting | `@upstash/ratelimit` | Purpose-built, handles edge cases |
+| Cache (get/set/del) | `ioredis` (default) | Full Redis protocol support, connection pooling, works with `redis://` URLs |
+| Cache (serverless) | `@upstash/redis` (optional) | REST API works in serverless, no connection pooling needed |
+| Pub/Sub | `ioredis` (default) or `@upstash/redis` (optional) | Choose `ioredis` for long-running workers; Upstash works for serverless pub/sub |
+| Rate Limiting | Lua-based limiter via shared cache package (default) or `@upstash/ratelimit` (optional) | Default uses Redis scripts; Upstash variant is available when installed |
 
-**Recommendation:** Standardize on `@upstash/redis` for new implementations since:
-- Works in serverless environments (Vercel, Cloudflare)
-- REST-based, no connection management
-- Already used in rate limiter and event hub
+**Recommendation:** Default to `ioredis` for new implementations and fall back to Upstash packages only when a serverless-friendly REST client is required.
 
 ### 2. Key Namespace Convention
 
@@ -322,13 +320,18 @@ export function withCache<T>(
 ### Standardize on These Variables
 
 ```bash
-# Primary Redis (Upstash REST API - recommended for serverless)
-UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_token
-
-# Fallback Redis (standard Redis URL - for non-serverless)
+# Shared Redis credential names (works for both ioredis and Upstash REST)
 REDIS_URL=redis://localhost:6379
 REDIS_PASSWORD=optional_password
+
+# Upstash-compatible example using the same variables
+# REDIS_URL=https://your-endpoint.upstash.io
+# REDIS_PASSWORD=your_upstash_token
+
+# Provider override (optional; defaults to Redis, will infer Upstash from https:// URLs)
+CACHE_PROVIDER=redis|upstash
+EVENT_HUB_PROVIDER=redis|upstash
+RATE_LIMIT_PROVIDER=redis|upstash
 
 # Cache TTL overrides (optional)
 CACHE_TTL_AUTH_SECONDS=300
@@ -340,26 +343,13 @@ CACHE_TTL_CONFIG_SECONDS=300
 
 ```typescript
 function getRedisConfig(): RedisConfig | null {
-  // 1. Prefer Upstash REST (works in serverless)
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    return {
-      type: 'upstash',
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    };
-  }
+  if (!process.env.REDIS_URL) return null;
 
-  // 2. Fall back to standard Redis
-  if (process.env.REDIS_URL) {
-    return {
-      type: 'ioredis',
-      url: process.env.REDIS_URL,
-      password: process.env.REDIS_PASSWORD,
-    };
-  }
+  const isUpstash = process.env.CACHE_PROVIDER === 'upstash' || process.env.REDIS_URL.startsWith('https://');
 
-  // 3. No Redis configured
-  return null;
+  return isUpstash
+    ? { type: 'upstash', url: process.env.REDIS_URL, token: process.env.REDIS_PASSWORD }
+    : { type: 'ioredis', url: process.env.REDIS_URL, password: process.env.REDIS_PASSWORD };
 }
 ```
 
