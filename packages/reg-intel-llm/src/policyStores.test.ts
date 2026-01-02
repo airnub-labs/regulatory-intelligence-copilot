@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import * as redisCache from '@reg-copilot/reg-intel-cache';
 import {
   SupabasePolicyStore,
   CachingPolicyStore,
@@ -465,5 +466,22 @@ describe('Integration Tests', () => {
     // Cache should NOT be populated for null results
     const cache = (redis as any)._getCache();
     expect(cache['copilot:llm:policy:non-existent']).toBeUndefined();
+  });
+});
+
+describe('createPolicyStore factory', () => {
+  it('creates a caching store when redisBackend is provided', () => {
+    const supabase = createMockSupabaseClient();
+    const redisClient = createMockRedisClient();
+    const backend = { backend: 'redis', url: 'redis://localhost:6379' } as const;
+
+    const createClientSpy = vi.spyOn(redisCache, 'createKeyValueClient').mockReturnValue(redisClient);
+
+    const store = createPolicyStore({ supabase, redisBackend: backend });
+
+    expect(store).toBeInstanceOf(CachingPolicyStore);
+    expect(createClientSpy).toHaveBeenCalledWith(backend);
+
+    createClientSpy.mockRestore();
   });
 });

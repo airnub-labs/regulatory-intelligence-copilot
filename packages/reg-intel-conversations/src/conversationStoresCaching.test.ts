@@ -16,6 +16,7 @@ import {
   createConversationStore,
   type ConversationRecord,
 } from './conversationStores.js';
+import * as redisCache from '@reg-copilot/reg-intel-cache';
 import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import type { SupabaseLikeClient } from './conversationStores.js';
 
@@ -618,6 +619,25 @@ describe('createConversationStore Factory', () => {
       enableCaching: true,
     });
     expect(store).toBeInstanceOf(CachingConversationStore);
+  });
+
+  it('should create CachingConversationStore when redisBackend is provided', () => {
+    const supabase = createMockSupabaseClient();
+    const redis = createMockRedisClient();
+    const backend = { backend: 'redis', url: 'redis://localhost:6379' } as const;
+
+    const createClientSpy = vi.spyOn(redisCache, 'createKeyValueClient').mockReturnValue(redis);
+
+    const store = createConversationStore({
+      supabase,
+      redisBackend: backend,
+      enableCaching: true,
+    });
+
+    expect(store).toBeInstanceOf(CachingConversationStore);
+    expect(createClientSpy).toHaveBeenCalledWith(backend);
+
+    createClientSpy.mockRestore();
   });
 
   it('should respect custom TTL', async () => {
