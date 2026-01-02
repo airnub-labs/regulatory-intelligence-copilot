@@ -40,23 +40,7 @@ const nextConfig = {
   experimental: {
     turbopackUseSystemTlsCerts: true,
   },
-  turbopack: {
-    root: path.resolve(__dirname, '../..'),
-    resolveAlias: {
-      '@reg-copilot/reg-intel-cache': path.resolve(__dirname, '../..', 'packages/reg-intel-cache'),
-      '@reg-copilot/reg-intel-conversations': path.resolve(
-        __dirname,
-        '../..',
-        'packages/reg-intel-conversations',
-      ),
-    },
-  },
   webpack: (config, { isServer }) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@reg-copilot/reg-intel-conversations': path.resolve(__dirname, '../..', 'packages/reg-intel-conversations'),
-      '@reg-copilot/reg-intel-cache': path.resolve(__dirname, '../..', 'packages/reg-intel-cache'),
-    }
     // Ignore test files in thread-stream and pino that require dev dependencies
     config.plugins.push(
       new webpack.IgnorePlugin({

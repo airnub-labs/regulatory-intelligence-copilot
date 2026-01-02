@@ -26,7 +26,6 @@
         "packages/reg-intel-observability/dist/index.d.ts"
       ],
       "@reg-copilot/reg-intel-cache": [
-        "packages/reg-intel-cache/src/index.ts",
         "packages/reg-intel-cache/dist/index.d.ts"
       ]
     }

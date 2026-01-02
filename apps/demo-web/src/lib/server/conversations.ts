@@ -283,7 +283,7 @@ const preferRedisEventHub = EVENT_HUB_TRANSPORT === 'redis';
 const preferSupabaseEventHub = EVENT_HUB_TRANSPORT === 'supabase';
 
 // Use Redis event hubs if preferred and available
-if (preferRedisEventHub && redisEventHubAvailable) {
+if (preferRedisEventHub && redisEventHubAvailable && eventHubClients) {
   logger.info(
     {
       backend: describeRedisBackendSelection(eventBackend),
@@ -294,14 +294,16 @@ if (preferRedisEventHub && redisEventHubAvailable) {
     'Using Redis-backed event hubs for distributed SSE'
   );
 
+  const clients = eventHubClients
+
   conversationEventHub = new RedisConversationEventHub({
-    clients: eventHubClients,
+    clients,
     prefix: 'copilot:events',
     healthCheckClient: sharedKeyValueClient ?? undefined,
   });
 
   conversationListEventHub = new RedisConversationListEventHub({
-    clients: eventHubClients,
+    clients,
     prefix: 'copilot:events',
     healthCheckClient: sharedKeyValueClient ?? undefined,
   });
