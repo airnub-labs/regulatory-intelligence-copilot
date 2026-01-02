@@ -105,6 +105,9 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.7)(react@19.2.0)
+      '@reg-copilot/reg-intel-cache':
+        specifier: workspace:*
+        version: link:../../packages/reg-intel-cache
       '@reg-copilot/reg-intel-conversations':
         specifier: workspace:*
         version: link:../../packages/reg-intel-conversations
@@ -242,6 +245,32 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@24.10.1)(happy-dom@17.6.3)(jsdom@25.0.1)
 
+  packages/reg-intel-cache:
+    dependencies:
+      '@reg-copilot/reg-intel-observability':
+        specifier: workspace:*
+        version: link:../reg-intel-observability
+      ioredis:
+        specifier: ^5.8.2
+        version: 5.8.2
+    optionalDependencies:
+      '@upstash/ratelimit':
+        specifier: ^2.0.4
+        version: 2.0.7(@upstash/redis@1.36.0)
+      '@upstash/redis':
+        specifier: ^1.34.3
+        version: 1.36.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.10.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^1.0.0
+        version: 1.6.1(@types/node@24.10.1)(happy-dom@17.6.3)(jsdom@25.0.1)
+
   packages/reg-intel-conversations:
     dependencies:
       '@opentelemetry/semantic-conventions':
@@ -256,9 +285,6 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.48.0
         version: 2.86.0
-      '@upstash/redis':
-        specifier: ^1.34.3
-        version: 1.36.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
