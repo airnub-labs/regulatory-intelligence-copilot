@@ -22,9 +22,11 @@
   },
   "dependencies": {
     "@reg-copilot/reg-intel-observability": "workspace:*",
-    "@upstash/ratelimit": "^1.0.0",
-    "@upstash/redis": "^1.30.0",
     "ioredis": "^5.8.2"
+  },
+  "optionalDependencies": {
+    "@upstash/ratelimit": "^1.0.0",
+    "@upstash/redis": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

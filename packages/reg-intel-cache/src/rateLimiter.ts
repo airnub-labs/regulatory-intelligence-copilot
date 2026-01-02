@@ -1,9 +1,24 @@
-import { Ratelimit } from '@upstash/ratelimit';
 import Redis from 'ioredis';
+import { createRequire } from 'module';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { RateLimiter, ResolvedBackend } from './types.js';
 
 const logger = createLogger('RateLimiter');
+const require = createRequire(import.meta.url);
+
+interface UpstashRateLimitInstance {
+  limit(identifier: string): Promise<{ success: boolean } | { success: boolean; reset: number }>;
+}
+
+type UpstashRateLimitConstructor = {
+  new (config: {
+    redis: { url: string; token: string };
+    limiter: unknown;
+    analytics?: boolean;
+    prefix?: string;
+  }): UpstashRateLimitInstance;
+  slidingWindow(limit: number, window: string): unknown;
+};
 
 export interface SlidingWindowLimiterOptions {
   windowMs: number;
@@ -48,10 +63,29 @@ class MemoryRateLimiter implements RateLimiter {
   }
 }
 
+let upstashRateLimitConstructor: UpstashRateLimitConstructor | null = null;
+
+function loadUpstashRateLimitConstructor(): UpstashRateLimitConstructor {
+  if (upstashRateLimitConstructor) return upstashRateLimitConstructor;
+
+  try {
+    const mod = require('@upstash/ratelimit') as { Ratelimit: UpstashRateLimitConstructor };
+    upstashRateLimitConstructor = mod.Ratelimit;
+    return upstashRateLimitConstructor;
+  } catch (error) {
+    const message =
+      'Upstash rate limiter selected but @upstash/ratelimit is not installed. Add it to optionalDependencies or disable Upstash.';
+    logger.error({ error }, message);
+    throw new Error(message);
+  }
+}
+
 class UpstashRateLimiter implements RateLimiter {
-  private readonly ratelimit: Ratelimit;
+  private readonly ratelimit: UpstashRateLimitInstance;
 
   constructor(backend: Extract<ResolvedBackend, { backend: 'upstash' }>, options: SlidingWindowLimiterOptions) {
+    const Ratelimit = loadUpstashRateLimitConstructor();
+
     this.ratelimit = new Ratelimit({
       redis: {
         url: backend.url,

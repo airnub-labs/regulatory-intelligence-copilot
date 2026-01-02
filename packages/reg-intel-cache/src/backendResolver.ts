@@ -70,7 +70,7 @@ export function resolveRedisBackend(
   const selected = backendOverride ?? 'auto';
   const backend = selected === 'auto' ? inferred ?? providerOverride : selected;
 
-  if (!backend || backend === 'auto') {
+  if (!backend) {
     logger.debug({ component }, '[redis-backend] Unable to infer backend; returning null');
     return null;
   }

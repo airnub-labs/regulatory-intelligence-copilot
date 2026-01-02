@@ -1,14 +1,31 @@
 import Redis from 'ioredis';
-import { Redis as UpstashRedis } from '@upstash/redis';
+import { createRequire } from 'module';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { RedisKeyValueClient, RedisPubSubClient, ResolvedBackend } from './types.js';
 
 const logger = createLogger('RedisClientFactory');
 
+const require = createRequire(import.meta.url);
+
+interface UpstashRedisInstance {
+  get(key: string): Promise<string | null>;
+  setex(key: string, ttlSeconds: number, value: string): Promise<void>;
+  del(...keys: string[]): Promise<number | void>;
+  ping(): Promise<string>;
+  publish?(channel: string, message: string): Promise<number | void>;
+  subscribe?(
+    channel: string,
+    handler: (message: unknown, channel: string) => void,
+  ): Promise<void> | void;
+  unsubscribe?(channel: string): Promise<void> | void;
+}
+
+type UpstashRedisConstructor = new (config: { url: string; token: string }) => UpstashRedisInstance;
+
 const keyValueCache = new Map<string, RedisKeyValueClient>();
 const pubSubCache = new Map<string, { pub: RedisPubSubClient; sub: RedisPubSubClient }>();
 const redisConnectionCache = new Map<string, Redis>();
-const upstashConnectionCache = new Map<string, UpstashRedis>();
+const upstashConnectionCache = new Map<string, UpstashRedisInstance>();
 
 function getCacheKey(backend: ResolvedBackend): string {
   return `${backend.backend}:${backend.url}`;
@@ -24,11 +41,31 @@ function getIORedis(backend: Extract<ResolvedBackend, { backend: 'redis' }>): Re
   return client;
 }
 
-function getUpstashRedis(backend: Extract<ResolvedBackend, { backend: 'upstash' }>): UpstashRedis {
+let upstashRedisConstructor: UpstashRedisConstructor | null = null;
+
+function loadUpstashRedisConstructor(): UpstashRedisConstructor {
+  if (upstashRedisConstructor) return upstashRedisConstructor;
+
+  try {
+    const mod = require('@upstash/redis') as { Redis: UpstashRedisConstructor };
+    upstashRedisConstructor = mod.Redis;
+    return upstashRedisConstructor;
+  } catch (error) {
+    const message =
+      'Upstash Redis backend selected but @upstash/redis is not installed. Add it to optionalDependencies or disable Upstash.';
+    logger.error({ error }, message);
+    throw new Error(message);
+  }
+}
+
+function getUpstashRedis(
+  backend: Extract<ResolvedBackend, { backend: 'upstash' }>,
+): UpstashRedisInstance {
   const key = getCacheKey(backend);
   const cached = upstashConnectionCache.get(key);
   if (cached) return cached;
 
+  const UpstashRedis = loadUpstashRedisConstructor();
   const client = new UpstashRedis({ url: backend.url, token: backend.token });
   upstashConnectionCache.set(key, client);
   return client;
@@ -55,7 +92,7 @@ class IORedisKeyValueClient implements RedisKeyValueClient {
 }
 
 class UpstashKeyValueClient implements RedisKeyValueClient {
-  constructor(private readonly client: UpstashRedis) {}
+  constructor(private readonly client: UpstashRedisInstance) {}
 
   async get(key: string): Promise<string | null> {
     return this.client.get(key);
@@ -82,7 +119,7 @@ class IORedisPubSubClient implements RedisPubSubClient {
 
   private ensureListener(): void {
     if (this.listening) return;
-    this.client.on('message', (channel, message) => {
+    this.client.on('message', (channel: string, message: string | Buffer) => {
       const handler = this.listeners.get(channel);
       if (!handler) return;
       const payload = typeof message === 'string' ? message : message?.toString?.() ?? '';
@@ -112,9 +149,13 @@ class IORedisPubSubClient implements RedisPubSubClient {
 }
 
 class UpstashPubSubClient implements RedisPubSubClient {
-  constructor(private readonly client: UpstashRedis) {}
+  constructor(private readonly client: UpstashRedisInstance) {}
 
   async publish(channel: string, message: string): Promise<number | void> {
+    if (!this.client.publish) {
+      throw new Error('Upstash Redis client missing publish implementation');
+    }
+
     return this.client.publish(channel, message);
   }
 
