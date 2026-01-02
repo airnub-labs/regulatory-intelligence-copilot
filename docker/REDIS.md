@@ -72,35 +72,29 @@ docker exec reg-copilot-redis redis-cli -a devpassword ping
 docker exec reg-copilot-redis redis-cli -a devpassword KEYS "ratelimit:*"
 ```
 
-## Production Setup (Upstash Redis)
+## Production Setup
 
-For serverless and edge deployments, we recommend [Upstash Redis](https://upstash.com/) which provides:
-- HTTP/REST API (works with Edge Runtime)
-- Global replication
-- Per-request pricing
-- Automatic scaling
+Point the application at your managed Redis deployment (self-hosted, cloud Redis, or Upstash REST):
 
-### 1. Create Upstash Redis Database
-
-1. Sign up at https://upstash.com/
-2. Create a new Redis database
-3. Copy the REST URL and token from the dashboard
-
-### 2. Configure Application
-
-Add to your production environment variables:
+1. Provision Redis (any provider)
+   - For Upstash, create a database and grab the HTTPS endpoint and token.
+2. Configure environment variables:
 
 ```bash
-# Upstash Redis (preferred for production)
-UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_token_here
+# Standard Redis deployment (default)
+REDIS_URL=rediss://user:password@your-host:6379
+REDIS_PASSWORD=your_password
+
+# Optional: Upstash via shared cache abstraction
+REDIS_URL=https://your-endpoint.upstash.io
+REDIS_TOKEN=your_upstash_token
 
 # Rate limit configuration
 CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS=1000
 CLIENT_TELEMETRY_RATE_LIMIT_WINDOW_MS=60000
 ```
 
-The application will automatically use Upstash Redis if these variables are set.
+The shared `@reg-copilot/reg-intel-cache` package auto-selects the correct client for the provided `REDIS_URL` (Redis protocol vs. Upstash HTTPS) so no code changes are required.
 
 ## Fallback Behavior
 
@@ -193,10 +187,8 @@ And rate limit violations:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `REDIS_URL` | Redis connection URL (for local/standard Redis) | - | No |
-| `REDIS_TOKEN` | Redis password | - | No |
-| `UPSTASH_REDIS_REST_URL` | Upstash REST API URL | - | No |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST API token | - | No |
+| `REDIS_URL` | Redis connection URL (`redis://`/`rediss://` or Upstash HTTPS endpoint) | - | No |
+| `REDIS_PASSWORD`/`REDIS_TOKEN` | Redis password or Upstash token | - | No |
 | `CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS` | Max requests per window | `100` | No |
 | `CLIENT_TELEMETRY_RATE_LIMIT_WINDOW_MS` | Window duration in milliseconds | `60000` | No |
 
@@ -320,18 +312,13 @@ No code changes required! Simply configure Redis:
 
 ### From Redis to Upstash
 
-1. Create Upstash Redis database
-2. Update environment variables:
+1. Create an Upstash Redis database
+2. Point `REDIS_URL` at the Upstash HTTPS endpoint and supply the token:
    ```bash
-   # Remove old
-   unset REDIS_URL
-   unset REDIS_TOKEN
-
-   # Add Upstash
-   export UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
-   export UPSTASH_REDIS_REST_TOKEN=your_token_here
+   export REDIS_URL=https://your-endpoint.upstash.io
+   export REDIS_TOKEN=your_upstash_token
    ```
-3. Deploy changes
+3. Deploy changes (the cache package will switch to the Upstash REST client automatically)
 4. No data migration needed - rate limits reset
 
 ## Additional Resources

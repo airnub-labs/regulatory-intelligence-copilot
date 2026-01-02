@@ -27,7 +27,7 @@ This package provides:
 
 ### Event hub configuration (Redis → Supabase Realtime)
 
-- **Redis (production default)** – Provide `REDIS_URL`/`UPSTASH_REDIS_REST_URL` and `REDIS_TOKEN`/`UPSTASH_REDIS_REST_TOKEN` to enable cross-instance SSE delivery via Redis pub/sub.
+- **Redis (production default)** – Provide `REDIS_URL` plus `REDIS_PASSWORD` or `REDIS_TOKEN` (Upstash tokens also work) to enable cross-instance SSE delivery via Redis pub/sub.
 - **Supabase Realtime (local default)** – If Redis credentials are absent but `SUPABASE_URL` and either `SUPABASE_ANON_KEY` or a service key are present (e.g., from `supabase/.env`), event hubs automatically use Supabase Realtime channels with the same payloads and fan-out semantics.
 
 > If neither Redis nor Supabase Realtime credentials are configured, the event hub factory will throw with guidance to supply one of the supported transports.

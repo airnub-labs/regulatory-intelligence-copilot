@@ -1375,12 +1375,11 @@ OTEL_COLLECTOR_ENDPOINT=http://localhost:4318/v1/logs
 OTEL_COLLECTOR_TIMEOUT_MS=5000
 
 # Redis for Distributed SSE (Production Multi-Instance Deployments)
-UPSTASH_REDIS_REST_URL=https://your-endpoint.upstash.io
-UPSTASH_REDIS_REST_TOKEN=your_token_here
-
-# Or standard Redis
 REDIS_URL=redis://localhost:6379
-REDIS_TOKEN=your_password
+REDIS_PASSWORD=your_password
+# Or point to Upstash via HTTPS endpoint + token
+# REDIS_URL=https://your-endpoint.upstash.io
+# REDIS_TOKEN=your_upstash_token
 
 # OpenFGA Authorization (Optional - for fine-grained access control)
 OPENFGA_API_URL=http://localhost:8080
