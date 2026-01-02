@@ -10,8 +10,8 @@ This package provides reusable factories for the cache-centric primitives used a
 
 All facilities share the same backend resolver (`resolveRedisBackend`) so every consumer can run against the currently supported Redis providers:
 
-- **Standard Redis (ioredis)** – covers long-lived deployments that expect TCP Redis URLs (`redis://` or `rediss://`).
-- **Upstash Redis** – available when `REDIS_URL` is an HTTPS REST endpoint and `@upstash/redis` is installed.
+- **Standard Redis (ioredis)** – covers long-lived deployments that expect TCP Redis URLs (`redis://` or `rediss://`), _and_ is now the default whenever `REDIS_URL` is set but the provider is ambiguous (including most HTTPS/TLS URLs).
+- **Upstash Redis** – available when the URL targets Upstash (`upstash.io`) and `@upstash/redis` is installed. You can still force this backend via `CACHE_PROVIDER=upstash` / `EVENT_HUB_PROVIDER=upstash` / `RATE_LIMIT_PROVIDER=upstash` for components that should keep using the REST client and `@upstash/ratelimit`.
 
 Optional provider overrides (`CACHE_PROVIDER`, `EVENT_HUB_PROVIDER`, `RATE_LIMIT_PROVIDER`) let you pick either backend explicitly per component while still using the same helpers (`createKeyValueClient`, `createPubSubClientPair`, `createRateLimiter`).
 
