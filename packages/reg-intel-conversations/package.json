@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@opentelemetry/semantic-conventions": "^1.28.0",
+    "@reg-copilot/reg-intel-cache": "workspace:*",
     "@reg-copilot/reg-intel-core": "workspace:*",
     "@reg-copilot/reg-intel-observability": "workspace:*",
     "@supabase/supabase-js": "^2.48.0"

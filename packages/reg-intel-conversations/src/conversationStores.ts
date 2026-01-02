@@ -5,7 +5,7 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
-import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
+import { createKeyValueClient, type ResolvedBackend, type RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_SQL_TABLE } from '@opentelemetry/semantic-conventions';
 
@@ -1460,6 +1460,7 @@ export interface ConversationStoreFactoryOptions {
   supabase?: SupabaseLikeClient;
   supabaseInternal?: SupabaseLikeClient;
   redis?: RedisKeyValueClient;
+  redisBackend?: ResolvedBackend | null;
   cacheTtlSeconds?: number;
   enableCaching?: boolean; // Default: false (opt-in)
 }
@@ -1477,8 +1478,10 @@ export function createConversationStore(
   );
 
   // Caching is opt-in for ConversationStore
-  if (options.enableCaching && options.redis) {
-    return new CachingConversationStore(supabaseStore, options.redis, {
+  const redisClient = options.redis ?? (options.redisBackend ? createKeyValueClient(options.redisBackend) : null);
+
+  if (options.enableCaching && redisClient) {
+    return new CachingConversationStore(supabaseStore, redisClient, {
       ttlSeconds: options.cacheTtlSeconds ?? 60,
     });
   }

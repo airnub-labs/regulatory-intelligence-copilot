@@ -5,7 +5,7 @@
  * and path management at global, tenant, and user levels.
  */
 
-import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
+import { createKeyValueClient, type ResolvedBackend, type RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import type { SupabaseLikeClient } from './conversationStores.js';
 
 // =============================================================================
@@ -540,6 +540,7 @@ export class CachingConversationConfigStore implements ConversationConfigStore {
 export interface ConfigStoreFactoryOptions {
   supabase?: SupabaseLikeClient;
   redis?: RedisKeyValueClient;
+  redisBackend?: ResolvedBackend | null;
   cacheTtlSeconds?: number;
   logger?: { info?: (msg: string, meta?: any) => void; error?: (msg: string, meta?: any) => void };
 }
@@ -552,9 +553,10 @@ export function createConversationConfigStore(
   }
 
   const supabaseStore = new SupabaseConversationConfigStore(options.supabase, options.logger);
+  const redisClient = options.redis ?? (options.redisBackend ? createKeyValueClient(options.redisBackend) : null);
 
-  if (options.redis) {
-    return new CachingConversationConfigStore(supabaseStore, options.redis, {
+  if (redisClient) {
+    return new CachingConversationConfigStore(supabaseStore, redisClient, {
       ttlSeconds: options.cacheTtlSeconds,
     });
   }
