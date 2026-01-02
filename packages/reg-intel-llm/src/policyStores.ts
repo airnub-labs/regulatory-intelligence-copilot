@@ -6,7 +6,6 @@
  */
 
 import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
-export type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { LlmPolicyStore, TenantLlmPolicy, LlmTaskPolicy } from './llmRouter.js';
 import type { EgressMode } from './egressClient.js';
