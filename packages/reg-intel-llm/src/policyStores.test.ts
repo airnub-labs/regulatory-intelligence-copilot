@@ -14,7 +14,7 @@ import {
   CachingPolicyStore,
   createPolicyStore,
   type SupabaseLikeClient,
-  type RedisLikeClient,
+  type RedisKeyValueClient,
 } from './policyStores.js';
 import type { TenantLlmPolicy } from './llmRouter.js';
 import { InMemoryPolicyStore } from './llmRouter.js';
@@ -64,7 +64,7 @@ function createMockSupabaseClient(): SupabaseLikeClient {
 }
 
 // Mock Redis client with controllable failure scenarios
-function createMockRedisClient(options: { shouldFail?: boolean } = {}): RedisLikeClient {
+function createMockRedisClient(options: { shouldFail?: boolean } = {}): RedisKeyValueClient {
   const cache: Record<string, { value: string; expiresAt: number }> = {};
   const { shouldFail = false } = options;
 
@@ -162,7 +162,7 @@ describe('SupabasePolicyStore', () => {
 
 describe('CachingPolicyStore', () => {
   let supabase: SupabaseLikeClient;
-  let redis: RedisLikeClient;
+  let redis: RedisKeyValueClient;
   let backingStore: SupabasePolicyStore;
   let cachingStore: CachingPolicyStore;
 

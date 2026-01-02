@@ -428,12 +428,6 @@ export class SupabaseConversationConfigStore implements ConversationConfigStore 
   }
 }
 
-// =============================================================================
-// Caching Layer
-// =============================================================================
-
-export type { RedisKeyValueClient as RedisLikeClient } from '@reg-copilot/reg-intel-cache';
-
 export interface CachingConfigStoreOptions {
   /** TTL in seconds (default: 300 = 5 minutes) */
   ttlSeconds?: number;
