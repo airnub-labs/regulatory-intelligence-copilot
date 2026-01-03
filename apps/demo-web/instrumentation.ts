@@ -35,4 +35,14 @@ export async function register() {
       alwaysSampleErrors: process.env.OTEL_TRACES_ALWAYS_SAMPLE_ERRORS !== 'false',
     },
   });
+
+  // Initialize cost tracking system
+  console.log('[Instrumentation] Initializing cost tracking...');
+  try {
+    const { initializeCostTracking } = await import('./src/lib/costTracking');
+    initializeCostTracking();
+    console.log('[Instrumentation] Cost tracking initialized successfully');
+  } catch (error) {
+    console.error('[Instrumentation] Failed to initialize cost tracking:', error);
+  }
 }
