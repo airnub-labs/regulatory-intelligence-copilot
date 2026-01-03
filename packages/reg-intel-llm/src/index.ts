@@ -25,7 +25,6 @@
 export {
   LlmRouter,
   createLlmRouter,
-  InMemoryPolicyStore,
   type LlmCompletionOptions,
   type LlmStreamChunk,
   type LlmProviderClient,

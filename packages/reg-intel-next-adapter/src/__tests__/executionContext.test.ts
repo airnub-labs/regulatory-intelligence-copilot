@@ -13,6 +13,16 @@ import {
   shutdownExecutionContextManager,
 } from '../executionContext.js';
 
+const createMockStore = () => ({
+  createContext: vi.fn(),
+  getContextByPath: vi.fn().mockResolvedValue(null),
+  touchContext: vi.fn(),
+  updateStatus: vi.fn(),
+  terminateContext: vi.fn(),
+  getExpiredContexts: vi.fn().mockResolvedValue([]),
+  isReady: vi.fn().mockResolvedValue(true),
+});
+
 describe('E2BSandboxClient', () => {
   describe('create', () => {
     it('creates a sandbox using the provided constructor', async () => {
@@ -166,55 +176,32 @@ describe('E2BSandboxClient', () => {
 });
 
 describe('createExecutionContextManager', () => {
-  it('creates manager with memory store by default', () => {
-    const manager = createExecutionContextManager({
-      e2bApiKey: 'test-key',
-    });
-
-    expect(manager).toBeDefined();
-  });
-
-  it('creates manager with in-memory store when mode is memory', () => {
-    const manager = createExecutionContextManager({
-      mode: 'memory',
-      e2bApiKey: 'test-key',
-    });
-
-    expect(manager).toBeDefined();
-  });
-
-  it('creates manager with supabase store when mode is supabase', () => {
-    const mockSupabaseClient = {
-      from: vi.fn(),
-      auth: { getSession: vi.fn() },
-    };
-
-    const manager = createExecutionContextManager({
-      mode: 'supabase',
-      supabaseClient: mockSupabaseClient as any,
-      e2bApiKey: 'test-key',
-    });
-
-    expect(manager).toBeDefined();
-  });
-
-  it('throws error if supabase mode without client', () => {
+  it('throws when no store or supabase client is provided', () => {
     expect(() => {
       createExecutionContextManager({
-        mode: 'supabase',
         e2bApiKey: 'test-key',
       });
-    }).toThrow('Supabase client required for supabase execution context store');
+    }).toThrow(
+      'Supabase client required for execution context store. Provide supabaseClient or a custom store.'
+    );
   });
 
-  it('auto-selects supabase store when client is provided', () => {
+  it('creates manager with provided custom store', () => {
+    const manager = createExecutionContextManager({
+      store: createMockStore(),
+      e2bApiKey: 'test-key',
+    });
+
+    expect(manager).toBeDefined();
+  });
+
+  it('creates manager with supabase store when client is supplied', () => {
     const mockSupabaseClient = {
       from: vi.fn(),
       auth: { getSession: vi.fn() },
     };
 
     const manager = createExecutionContextManager({
-      mode: 'auto',
       supabaseClient: mockSupabaseClient as any,
       e2bApiKey: 'test-key',
     });
@@ -222,9 +209,9 @@ describe('createExecutionContextManager', () => {
     expect(manager).toBeDefined();
   });
 
-  it('applies custom configuration parameters', () => {
+  it('applies custom configuration parameters with explicit store', () => {
     const manager = createExecutionContextManager({
-      mode: 'memory',
+      store: createMockStore(),
       e2bApiKey: 'custom-key',
       defaultTtlMinutes: 60,
       sandboxTimeoutMs: 120000,
@@ -250,7 +237,7 @@ describe('Singleton ExecutionContextManager', () => {
       expect(isExecutionContextManagerInitialized()).toBe(false);
 
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'test-key',
       });
 
@@ -259,14 +246,14 @@ describe('Singleton ExecutionContextManager', () => {
 
     it('warns and replaces existing instance on re-initialization', () => {
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'first-key',
       });
 
       const first = getExecutionContextManager();
 
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'second-key',
       });
 
@@ -280,7 +267,7 @@ describe('Singleton ExecutionContextManager', () => {
   describe('getExecutionContextManager', () => {
     it('returns initialized manager', () => {
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'test-key',
       });
 
@@ -298,7 +285,7 @@ describe('Singleton ExecutionContextManager', () => {
   describe('getExecutionContextManagerSafe', () => {
     it('returns manager if initialized', () => {
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'test-key',
       });
 
@@ -315,7 +302,7 @@ describe('Singleton ExecutionContextManager', () => {
   describe('shutdownExecutionContextManager', () => {
     it('shuts down and clears singleton', async () => {
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'test-key',
       });
 
@@ -335,7 +322,7 @@ describe('Singleton ExecutionContextManager', () => {
   describe('isExecutionContextManagerInitialized', () => {
     it('returns true when initialized', () => {
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'test-key',
       });
 
@@ -348,7 +335,7 @@ describe('Singleton ExecutionContextManager', () => {
 
     it('returns false after shutdown', async () => {
       initializeExecutionContextManager({
-        mode: 'memory',
+        store: createMockStore(),
         e2bApiKey: 'test-key',
       });
 

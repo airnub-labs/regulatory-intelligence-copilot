@@ -14,18 +14,10 @@ export type {
 export type { PricingService } from './pricingService.js';
 
 export {
-  InMemoryPricingService,
-  createPricingService,
-  getDefaultPricingService,
+  SupabasePricingService,
+  initPricingService,
+  getPricingService,
+  getPricingServiceIfInitialized,
   calculateLlmCost,
 } from './pricingService.js';
 
-export {
-  OPENAI_PRICING,
-  ANTHROPIC_PRICING,
-  GOOGLE_PRICING,
-  GROQ_PRICING,
-  LOCAL_PRICING,
-  ALL_PRICING,
-  DEFAULT_PRICING,
-} from './pricingData.js';

@@ -4,19 +4,84 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  createPricingService,
+  SupabasePricingService,
   calculateLlmCost,
-  InMemoryPricingService,
+  initPricingService,
   type PricingService,
   type ModelPricing,
 } from '../index.js';
-import { OPENAI_PRICING, ANTHROPIC_PRICING, GROQ_PRICING } from '../pricingData.js';
+import { ALL_PRICING } from '../pricingData.js';
+
+interface PricingRow {
+  provider: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  effective_date: string;
+  expires_at?: string | null;
+  notes?: string | null;
+}
+
+class MockQueryBuilder {
+  private filters: Array<{ field: keyof PricingRow; value: string }> = [];
+
+  constructor(private readonly rows: PricingRow[]) {}
+
+  eq(field: keyof PricingRow, value: string): this {
+    this.filters.push({ field, value });
+    return this;
+  }
+
+  async select(): Promise<{ data: PricingRow[]; error: null }> {
+    const data = this.rows.filter((row) =>
+      this.filters.every((filter) => row[filter.field] === filter.value)
+    );
+    return { data, error: null };
+  }
+
+  async insert(
+    payload: PricingRow | PricingRow[]
+  ): Promise<{ data: PricingRow[]; error: null }> {
+    const normalized = Array.isArray(payload) ? payload : [payload];
+    this.rows.push(
+      ...normalized.map((row) => ({
+        ...row,
+        provider: row.provider.toLowerCase(),
+        model: row.model.toLowerCase(),
+      }))
+    );
+    return { data: normalized, error: null };
+  }
+}
+
+class MockSupabaseClient {
+  constructor(private readonly rows: PricingRow[]) {}
+
+  from(): MockQueryBuilder {
+    return new MockQueryBuilder(this.rows);
+  }
+}
+
+function seedPricingRows(): PricingRow[] {
+  return ALL_PRICING.map((pricing) => ({
+    provider: pricing.provider.toLowerCase(),
+    model: pricing.model.toLowerCase(),
+    input_price_per_million: pricing.inputPricePerMillion,
+    output_price_per_million: pricing.outputPricePerMillion,
+    effective_date: pricing.effectiveDate,
+    expires_at: pricing.expiresAt ?? null,
+    notes: pricing.notes ?? null,
+  }));
+}
 
 describe('PricingService', () => {
   let service: PricingService;
+  let rows: PricingRow[];
 
   beforeEach(() => {
-    service = createPricingService();
+    rows = seedPricingRows();
+    service = new SupabasePricingService(new MockSupabaseClient(rows) as any);
+    initPricingService(service);
   });
 
   describe('getPricing', () => {
@@ -146,17 +211,15 @@ describe('PricingService', () => {
       expect(cost.totalCostUsd).toBeCloseTo(0.04925);
     });
 
-    it('should use default pricing for unknown model', async () => {
-      const cost = await service.calculateCost({
-        provider: 'unknown',
-        model: 'unknown-model',
-        inputTokens: 1000,
-        outputTokens: 500,
-      });
-
-      expect(cost).toBeDefined();
-      expect(cost.isEstimated).toBe(true);
-      expect(cost.totalCostUsd).toBeGreaterThan(0);
+    it('should throw error for unknown model', async () => {
+      await expect(
+        service.calculateCost({
+          provider: 'unknown',
+          model: 'unknown-model',
+          inputTokens: 1000,
+          outputTokens: 500,
+        })
+      ).rejects.toThrow('Pricing not found for unknown/unknown-model');
     });
 
     it('should handle zero tokens', async () => {
@@ -394,4 +457,5 @@ describe('PricingService', () => {
       expect(savingsPercent).toBeGreaterThan(95); // >95% savings
     });
   });
+
 });

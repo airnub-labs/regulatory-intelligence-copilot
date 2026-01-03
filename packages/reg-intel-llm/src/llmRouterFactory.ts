@@ -2,12 +2,12 @@
  * Factory for creating pre-configured LLM router instances
  */
 
-import { createLlmRouter, InMemoryPolicyStore, type LlmPolicyStore, type TenantLlmPolicy, type ProviderConfig, type LocalProviderConfig } from './llmRouter.js';
+import { createLlmRouter, type LlmPolicyStore, type TenantLlmPolicy, type ProviderConfig, type LocalProviderConfig } from './llmRouter.js';
 
 export interface CreateDefaultLlmRouterOptions {
   /**
    * Optional policy store for multi-instance deployments.
-   * If not provided, uses InMemoryPolicyStore (suitable for dev/single-instance only).
+   * This must be provided to avoid in-memory fallbacks.
    */
   policyStore?: LlmPolicyStore;
 }
@@ -76,7 +76,11 @@ export function createDefaultLlmRouter(options?: CreateDefaultLlmRouterOptions) 
     : 'llama-3-8b';
 
   // Use provided policy store or create in-memory one
-  const policyStore = options?.policyStore ?? new InMemoryPolicyStore();
+  if (!options?.policyStore) {
+    throw new Error('policyStore is required to create an LLM router');
+  }
+
+  const policyStore = options.policyStore;
   const defaultPolicy: TenantLlmPolicy = {
     tenantId: 'default',
     defaultModel,

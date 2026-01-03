@@ -218,7 +218,9 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check rate limit using distributed rate limiter (Redis or in-memory fallback)
+    // Check rate limit using distributed rate limiter (Redis/Upstash)
+    // ✅ No null check - rateLimiter ALWAYS exists (transparent failover)
+    // When Redis unavailable, AllowAllRateLimiter allows all requests (fail-open)
     const clientIp = getClientIp(request);
     const isAllowed = await rateLimiter.check(clientIp);
 
@@ -226,7 +228,7 @@ export async function POST(request: Request) {
       logger.warn(
         {
           clientIp,
-          rateLimiterType: rateLimiter.getType(),
+          rateLimiterType: rateLimiter.getBackendType(),
         },
         'Client telemetry rate limit exceeded'
       );

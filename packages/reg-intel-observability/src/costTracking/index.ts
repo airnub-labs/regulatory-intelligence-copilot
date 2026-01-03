@@ -48,9 +48,6 @@ export {
   type RecordCostRequest,
 } from './costTrackingService.js';
 
-// In-memory providers (for unit testing only - NOT for local dev or production)
-export { InMemoryCostStorage, InMemoryQuotaProvider } from './inMemoryProviders.js';
-
 // Supabase providers (required for local development and production)
 export { SupabaseCostStorage, SupabaseQuotaProvider } from './supabaseProviders.js';
 

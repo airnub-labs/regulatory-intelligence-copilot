@@ -210,8 +210,15 @@ export const recordLlmCost = async (attributes: {
 }): Promise<void> => {
   try {
     // Import dynamically to avoid circular dependencies
-    const { calculateLlmCost } = await import('./pricing/index.js');
+    const { calculateLlmCost, getPricingServiceIfInitialized } = await import('./pricing/index.js');
     const { getCostTrackingServiceIfInitialized } = await import('./costTracking/index.js');
+
+    const pricingService = getPricingServiceIfInitialized();
+    if (!pricingService) {
+      throw new Error(
+        'Pricing service is not initialized. Provide a Supabase-backed pricing service for cost tracking.'
+      );
+    }
 
     const costCalculation = await calculateLlmCost(
       attributes.provider,

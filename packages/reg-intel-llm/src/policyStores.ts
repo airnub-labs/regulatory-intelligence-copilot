@@ -5,7 +5,7 @@
  * Redis caching for multi-instance deployments.
  */
 
-import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
+import { createPassThroughRedis, type RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import type { LlmPolicyStore, TenantLlmPolicy, LlmTaskPolicy } from './llmRouter.js';
 import type { EgressMode } from './egressClient.js';
@@ -222,31 +222,42 @@ export interface PolicyStoreConfig {
 }
 
 /**
- * Create the appropriate policy store based on available configuration.
+ * Create policy store with transparent failover
  *
- * Priority:
- * 1. Supabase + Redis = CachingPolicyStore(SupabasePolicyStore)
- * 2. Supabase only = SupabasePolicyStore
- * 3. Neither = InMemoryPolicyStore (dev/test only)
+ * CRITICAL: This function ALWAYS returns CachingPolicyStore regardless of Redis availability.
+ * Factory function NEVER returns different types based on infrastructure.
+ *
+ * When Redis unavailable:
+ * - Uses PassThroughRedis (all cache operations are no-ops)
+ * - Transparently falls back to Supabase on every request
+ * - Application behavior is identical (just slower)
+ *
+ * Pattern matches: Phase 1-3 transparent failover implementations
+ *
+ * @returns CachingPolicyStore instance - ALWAYS returns caching wrapper
  */
 export function createPolicyStore(config: PolicyStoreConfig): LlmPolicyStore {
-  const { InMemoryPolicyStore } = require('./llmRouter.js');
-
   if (!config.supabase) {
-    logger.warn('No Supabase client provided, using InMemoryPolicyStore (not suitable for production)');
-    return new InMemoryPolicyStore();
+    throw new Error('Supabase client is required to create a PolicyStore');
   }
 
   const supabaseStore = new SupabasePolicyStore(config.supabase, config.schema);
-  const redisClient = config.redis;
 
-  if (redisClient) {
-    logger.info({ ttl: config.cacheTtlSeconds ?? 300 }, 'Using CachingPolicyStore with Redis');
-    return new CachingPolicyStore(supabaseStore, redisClient, {
-      ttlSeconds: config.cacheTtlSeconds,
-    });
+  // ✅ ALWAYS return CachingPolicyStore - factory never returns different types
+  // Use provided Redis client or PassThroughRedis when unavailable
+  const redisClient = config.redis ?? createPassThroughRedis();
+
+  const ttl = config.cacheTtlSeconds ?? 300;
+
+  if (config.redis) {
+    logger.info({ ttl, backend: 'redis' }, 'CachingPolicyStore with Redis backend');
+  } else {
+    logger.info({ ttl, backend: 'passthrough' }, 'CachingPolicyStore with PassThrough backend (Redis unavailable)');
   }
 
-  logger.info('Using SupabasePolicyStore without caching');
-  return supabaseStore;
+  // ✅ ALWAYS return CachingPolicyStore, even with PassThroughRedis
+  // CachingPolicyStore handles errors internally (try-catch)
+  return new CachingPolicyStore(supabaseStore, redisClient, {
+    ttlSeconds: ttl,
+  });
 }

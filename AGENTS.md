@@ -137,6 +137,147 @@ All issues identified by these commands must be resolved before committing and p
   - OTEL forwarding works when configured (check logs for forwarding success/failure).
   - Page unload events are captured (use `beforeunload` + `visibilitychange` handlers).
 
+**Fault-tolerant architecture and dependency management:**
+
+- **CRITICAL:** This system follows strict fault-tolerance principles - **NEVER add in-memory fallbacks for distributed state**.
+- **CRITICAL:** All caching and rate limiting MUST use **transparent failover pattern** - Redis failures must be completely invisible to application code.
+
+- **Required dependencies:**
+  - **Supabase**: All persistent storage (conversations, messages, paths, pricing, cost tracking) - system MUST fail-fast if unavailable.
+  - **LLM Providers**: AI functionality (configured via tenant policies) - system MUST error clearly if misconfigured.
+
+- **Optional dependencies with fail-safe behavior:**
+  - **Redis**: Caching and rate limiting
+    - When unavailable → Transparent failover (PassThroughCache, AllowAllRateLimiter)
+    - Factory functions MUST NEVER return null - always return instance
+    - Rate limiter fails-open (allows all requests), caches fail-through (hit database)
+    - Application code MUST NOT check for null - infrastructure failures are internal
+  - **OpenTelemetry Collector**: Observability forwarding (log failures but continue)
+  - **E2B**: Code execution (feature unavailable without it)
+
+- **REQUIRED: Transparent Failover Pattern for Cache/Rate Limiting**
+  ```typescript
+  // ✅ CORRECT: Factory NEVER returns null
+  const cache = getCache();  // ALWAYS returns cache instance
+  const value = await cache.get(key);  // Returns null for miss OR Redis down
+
+  if (value === null) {
+    // Transparent: could be cache miss OR Redis unavailable
+    const data = await fetchFromDatabase();
+    await cache.set(key, data);  // No-op if Redis down
+    return data;
+  }
+
+  // ✅ CORRECT: Rate limiter NEVER null
+  const limiter = getRateLimiter();  // ALWAYS returns limiter instance
+  const allowed = await limiter.check(ip);  // Returns true if Redis down
+  if (!allowed) {
+    return rateLimitError();
+  }
+  ```
+
+- **PROHIBITED patterns:**
+  - ❌ **Factories returning null** (e.g., `getCache(): Cache | null`) - leaks infrastructure to application
+  - ❌ **Null checks in application code** (e.g., `if (cache) { await cache.get() }`) - violates separation of concerns
+  - ❌ **Factory functions returning different types based on Redis availability:**
+    ```typescript
+    // ❌ WRONG: Conditional factory returns different types
+    export function createConversationStore(options): ConversationStore {
+      const supabaseStore = new SupabaseConversationStore(options.supabase);
+      if (options.redis) {
+        return new CachingConversationStore(supabaseStore, options.redis);  // ❌
+      }
+      return supabaseStore;  // ❌ Different implementation based on infrastructure
+    }
+    // Problem: Caller gets different performance characteristics (caching vs no caching)
+    // based on infrastructure availability, making behavior unpredictable
+    ```
+  - ❌ **In-memory fallbacks for rate limiting** (e.g., `Map<string, RateLimitEntry>`) - causes unbounded memory growth
+  - ❌ **In-memory fallbacks for distributed caching** (e.g., `Map<string, CachedValue>`) - breaks multi-instance coordination
+  - ❌ **Static data as fallback for dynamic data** (e.g., DEFAULT_PRICING constants) - becomes stale quickly
+  - ❌ **Try-catch in application code around cache operations** - errors handled internally in cache
+
+- **REQUIRED: Factory Functions Must Always Return Same Type**
+
+  Factory functions (e.g., `createConversationStore`, `createPolicyStore`, `getRateLimiter`) MUST:
+  1. **Always return the same type** regardless of Redis availability
+  2. **Never return null** - always return an instance
+  3. **Use transparent failover implementations** (PassThroughCache, AllowAllRateLimiter) when Redis unavailable
+
+  ```typescript
+  // ✅ CORRECT: Factory always returns CachingConversationStore
+  export function createConversationStore(options): ConversationStore {
+    const supabaseStore = new SupabaseConversationStore(options.supabase);
+    const redisClient = options.redis ?? createPassThroughRedis();
+
+    // ALWAYS return caching wrapper - PassThroughRedis handles null case
+    return new CachingConversationStore(supabaseStore, redisClient);
+  }
+
+  // ✅ CORRECT: CachingConversationStore handles Redis errors transparently
+  class CachingConversationStore {
+    async getConversation(input) {
+      try {
+        const cached = await this.redis.get(key);
+        if (cached) return JSON.parse(cached);
+      } catch {
+        // ✅ Redis error - fall through to backing store
+      }
+
+      const record = await this.backing.getConversation(input);
+
+      try {
+        await this.redis.setex(key, ttl, JSON.stringify(record));
+      } catch {
+        // ✅ Ignore cache write errors
+      }
+
+      return record;
+    }
+  }
+  ```
+
+- **Acceptable in-memory usage (documented exceptions):**
+  - ✅ Performance optimizations (token counting LRU cache) - local per-instance only
+  - ✅ Per-instance stateful features (SSE subscriptions, connection pools) - cannot be shared
+  - ✅ Test-only stores (in `__tests__/` directories) - never exported to production
+
+- **Failure modes (transparent to application):**
+  - **Fail-open**: Rate limiting (AllowAllRateLimiter when Redis down) - better than broken per-instance limits
+  - **Fail-through**: Caching (PassThroughCache when Redis down) - hits database directly
+  - **Fail-fast**: Pricing, conversations, critical data (throw error when Supabase down) - better than wrong data
+
+- **Reference implementation:** `CachingConversationStore` (packages/reg-intel-conversations/src/conversationStores.ts:1013) demonstrates correct transparent failover pattern.
+
+- **Monitoring requirements:**
+  - All fail-safe modes MUST be logged with appropriate severity
+  - Metrics MUST track backend type (`redis`/`upstash`/`passthrough`/`allowall`)
+  - Alerts MUST fire for P0 failures (Supabase down, pricing missing) and P1 degradations (Redis down, passthrough/allowall active)
+
+- **Code review checklist:**
+  - [ ] Cache/rate limiter factory functions return non-nullable types (NOT `Cache | null`)
+  - [ ] Factory functions return **same type** regardless of Redis availability (NOT conditional types)
+  - [ ] No `if (cache)` or `if (limiter)` null checks in application code
+  - [ ] No `if (redis)` conditional logic in factory functions that returns different types
+  - [ ] Error handling is internal to cache/limiter (no try-catch in app code)
+  - [ ] Follows CachingConversationStore pattern (try-catch inside, transparent failover)
+  - [ ] PassThrough/AllowAll implementations exist for failover
+  - [ ] All caching wrappers (e.g., CachingConversationStore) ALWAYS returned, even without Redis
+  - [ ] Transparent failover documented in code comments (✅ markers)
+
+- **Full specifications:**
+  - `docs/development/INDUSTRY_STANDARD_CACHE_IMPLEMENTATION_PLAN.md` - Complete implementation guide
+  - `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` - Decision tree and patterns
+  - `docs/development/REDIS_CACHING_CONVENTIONS.md` - Redis-specific conventions
+
+- **Enforcement:**
+  - ❌ **REJECT**: PRs with null-returning cache/rate limiter factories (e.g., `getCache(): Cache | null`)
+  - ❌ **REJECT**: PRs with null checks in application code (e.g., `if (cache) { ... }`)
+  - ❌ **REJECT**: PRs with conditional factory functions that return different types based on Redis availability
+  - ❌ **REJECT**: PRs with `if (redis) return CachingStore; else return PlainStore` patterns
+  - ✅ **REQUIRE**: All caching/rate limiting MUST follow transparent failover pattern matching Phase 1-3 implementations
+  - ✅ **REQUIRE**: Factory functions MUST return same type regardless of infrastructure availability
+
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.

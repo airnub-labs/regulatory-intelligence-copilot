@@ -10,26 +10,10 @@ import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBacken
 
 const logger = createLogger('LlmRouterWiring');
 
-// ============================================================================
-// Global Cache Control
-// ============================================================================
-
-/**
- * Global kill switch to disable ALL Redis caching across the application.
- * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
- * Defaults to true.
- *
- * Individual cache flags must ALSO be enabled for caching to work.
- * Both conditions must be true: ENABLE_REDIS_CACHING=true AND individual flag enabled.
- */
-const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
-
 /**
  * Individual flag to enable/disable LLM policy caching specifically.
  * Set ENABLE_LLM_POLICY_CACHE=false to disable this cache.
  * Defaults to true.
- *
- * Requires ENABLE_REDIS_CACHING=true to have any effect.
  */
 const ENABLE_LLM_POLICY_CACHE = process.env.ENABLE_LLM_POLICY_CACHE !== 'false';
 
@@ -52,49 +36,42 @@ const supabaseInternalClient =
 // Redis Setup
 // ============================================================================
 
-const cacheBackend = ENABLE_REDIS_CACHING && ENABLE_LLM_POLICY_CACHE ? resolveRedisBackend('cache') : null;
-const redisClient = ENABLE_REDIS_CACHING && ENABLE_LLM_POLICY_CACHE
-  ? createKeyValueClient(cacheBackend)
-  : null;
+const cacheBackend = ENABLE_LLM_POLICY_CACHE ? resolveRedisBackend('cache') : null;
+const redisClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 
 // ============================================================================
 // Policy Store Configuration
 // ============================================================================
 
+if (!supabaseInternalClient) {
+  throw new Error('Supabase credentials are required to build the policy store');
+}
+
 // Type assertion to work around "Type instantiation is excessively deep" error
 export const policyStore = createPolicyStore({
-  supabase: supabaseInternalClient ?? undefined,
+  supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
   redis: redisClient ?? undefined,
   cacheTtlSeconds: 300, // 5 minutes
   schema: 'copilot_internal',
 } as Parameters<typeof createPolicyStore>[0]);
 
 // Log which store implementation is being used
-if (supabaseInternalClient) {
-  if (redisClient) {
-    logger.info(
-      {
-        supabaseUrl,
-        hasRedis: true,
-        cacheTtl: 300,
-        globalCachingEnabled: ENABLE_REDIS_CACHING,
-        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingPolicyStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_REDIS_CACHING
-      ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
-      : !ENABLE_LLM_POLICY_CACHE
-      ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
-      : 'Redis credentials not configured';
-    logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
-  }
-} else {
-  logger.warn(
-    'No Supabase credentials found; using InMemoryPolicyStore (not suitable for production)'
+if (redisClient) {
+  logger.info(
+    {
+      supabaseUrl,
+      hasRedis: true,
+      cacheTtl: 300,
+      llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingPolicyStore (Supabase + Redis)'
   );
+} else {
+  const reason = !ENABLE_LLM_POLICY_CACHE
+    ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
+    : 'Redis credentials not configured';
+  logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
 }
 
 // ============================================================================

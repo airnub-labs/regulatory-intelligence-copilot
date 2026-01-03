@@ -5,14 +5,13 @@ import {
   RedisConversationListEventHub,
   SupabaseRealtimeConversationEventHub,
   SupabaseRealtimeConversationListEventHub,
-  InMemoryConversationContextStore,
-  InMemoryConversationPathStore,
   SupabaseConversationContextStore,
   SupabaseConversationPathStore,
   createConversationConfigStore,
   createConversationStore,
   type ConversationConfigStore,
   type ConversationStore,
+  type ExecutionContextManager,
 } from '@reg-copilot/reg-intel-conversations';
 import {
   createKeyValueClient,
@@ -22,31 +21,15 @@ import {
 } from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
-import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_TEST } from 'next/constants';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
 const logger = createLogger('ConversationStoreWiring');
-
-// ============================================================================
-// Global Cache Control
-// ============================================================================
-
-/**
- * Global kill switch to disable ALL Redis caching across the application.
- * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
- * Defaults to true.
- *
- * Individual cache flags must ALSO be enabled for caching to work.
- * Both conditions must be true: ENABLE_REDIS_CACHING=true AND individual flag enabled.
- */
-const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
 
 /**
  * Individual flag to enable/disable conversation config caching specifically.
  * Set ENABLE_CONVERSATION_CONFIG_CACHE=false to disable this cache.
  * Defaults to true.
- *
- * Requires ENABLE_REDIS_CACHING=true to have any effect.
  */
 const ENABLE_CONVERSATION_CONFIG_CACHE = process.env.ENABLE_CONVERSATION_CONFIG_CACHE !== 'false';
 
@@ -54,8 +37,6 @@ const ENABLE_CONVERSATION_CONFIG_CACHE = process.env.ENABLE_CONVERSATION_CONFIG_
  * Individual flag to enable/disable Redis-backed event hubs for SSE distribution.
  * Set ENABLE_REDIS_EVENT_HUBS=false to disable Redis event hubs (falls back to Supabase Realtime).
  * Defaults to true.
- *
- * Requires ENABLE_REDIS_CACHING=true to have any effect.
  */
 const ENABLE_REDIS_EVENT_HUBS = process.env.ENABLE_REDIS_EVENT_HUBS !== 'false';
 
@@ -82,23 +63,19 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.
 const supabaseRealtimeKey =
   supabaseServiceKey ?? process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const nextPhase = process.env.NEXT_PHASE;
-// Only allow dev-like behavior in actual dev/test phases, not during production builds.
-// This ensures production builds fail if database credentials are missing, preventing
-// accidental deployments with an in-memory store.
-const isDevPhase = nextPhase === PHASE_DEVELOPMENT_SERVER || nextPhase === PHASE_TEST;
-const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || isDevPhase;
+const isDevLike = process.env.NODE_ENV !== 'production';
 const tracingFetch = createTracingFetch();
 
-if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
-  throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
+if (normalizeConversationStoreMode === 'memory') {
+  throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not supported in clustered deployments');
 }
 
 const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
 
-if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseServiceKey)) {
+if (!supabaseUrl || !supabaseServiceKey) {
   const message =
     'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable the Supabase conversation store';
-  if (isDevLike || isProductionBuildPhase) {
+  if (isProductionBuildPhase) {
     logger.warn({ mode: normalizeConversationStoreMode }, message);
   } else {
     throw new Error(message);
@@ -106,7 +83,7 @@ if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseSer
 }
 
 const supabaseClient =
-  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+  supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { fetch: tracingFetch },
@@ -114,7 +91,7 @@ const supabaseClient =
     : null;
 
 const supabaseInternalClient =
-  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+  supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: 'copilot_internal' },
@@ -168,115 +145,96 @@ if (supabaseClient) {
 }
 
 // Configure Redis backend and shared clients
-const cacheBackend = ENABLE_REDIS_CACHING ? resolveRedisBackend('cache') : null;
-const eventBackend = ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS ? resolveRedisBackend('eventHub') : null;
-const sharedKeyValueClient = ENABLE_REDIS_CACHING ? createKeyValueClient(cacheBackend) : null;
+const cacheBackend = resolveRedisBackend('cache');
+const eventBackend = ENABLE_REDIS_EVENT_HUBS ? resolveRedisBackend('eventHub') : null;
+const sharedKeyValueClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 const eventHubClients = eventBackend ? createPubSubClientPair(eventBackend) : null;
 
 /**
  * Optional: Enable conversation caching for high-traffic scenarios.
- * This is an additional opt-in on top of the global ENABLE_REDIS_CACHING flag.
- * Both the global flag AND this flag must be true for conversation caching to be enabled.
- * Defaults to false (opt-in).
- *
- * Requires ENABLE_REDIS_CACHING=true to have any effect.
+ * Defaults to true (opt-out via ENABLE_CONVERSATION_CACHING=false).
  */
-const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING === 'true';
+const ENABLE_CONVERSATION_CACHING = process.env.ENABLE_CONVERSATION_CACHING !== 'false';
 
 // Create Redis client for conversation config caching
-// Respects both global flag AND individual flag
-const configRedisClient =
-  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClient : null;
+const configRedisClient = ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClient : null;
 
 // Create Redis client for conversation caching (opt-in)
-// Respects both global flag AND individual flag
-const conversationRedisClient =
-  ENABLE_REDIS_CACHING && ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
+const conversationRedisClient = ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
+
+if (!supabaseClient || !supabaseInternalClient) {
+  throw new Error('Supabase credentials are required for conversation storage in multi-instance deployments');
+}
 
 // Create conversation store with optional caching
 export const conversationStore: ConversationStore = createConversationStore({
-  supabase: supabaseClient ?? undefined,
-  supabaseInternal: supabaseInternalClient ?? undefined,
+  supabase: supabaseClient,
+  supabaseInternal: supabaseInternalClient,
   redis: conversationRedisClient ?? undefined,
   enableCaching: ENABLE_CONVERSATION_CACHING,
   cacheTtlSeconds: 60, // 1 minute for active conversations
 });
 
 // Log which conversation store implementation is being used
-if (supabaseClient) {
-  if (conversationRedisClient) {
-    logger.info(
-      {
-        hasRedis: true,
-        cacheTtl: 60,
-        globalCachingEnabled: ENABLE_REDIS_CACHING,
-        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingConversationStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_REDIS_CACHING
-      ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
-      : !ENABLE_CONVERSATION_CACHING
-      ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
-      : 'Redis credentials not configured';
-    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
-  }
+if (conversationRedisClient) {
+  logger.info(
+    {
+      hasRedis: true,
+      cacheTtl: 60,
+      conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingConversationStore (Supabase + Redis)'
+  );
 } else {
-  logger.warn('Using InMemoryConversationStore (not suitable for production)');
+  const reason = !ENABLE_CONVERSATION_CACHING
+    ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
+    : 'Redis credentials not configured';
+  logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
 }
 
-export const conversationContextStore = supabaseClient
-  ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient ?? undefined)
-  : new InMemoryConversationContextStore();
+export const conversationContextStore = new SupabaseConversationContextStore(
+  supabaseClient,
+  supabaseInternalClient
+);
 
-export const conversationPathStore = supabaseClient
-  ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient ?? undefined)
-  : new InMemoryConversationPathStore();
+export const conversationPathStore = new SupabaseConversationPathStore(
+  supabaseClient,
+  supabaseInternalClient
+);
 
 // Create conversation config store with caching
 export const conversationConfigStore: ConversationConfigStore = createConversationConfigStore({
-  supabase: supabaseInternalClient ?? undefined,
+  supabase: supabaseInternalClient,
   redis: configRedisClient ?? undefined,
   cacheTtlSeconds: 300, // 5 minutes
   logger,
 });
 
 // Log which config store implementation is being used
-if (supabaseInternalClient) {
-  if (configRedisClient) {
-    logger.info(
-      {
-        hasRedis: true,
-        cacheTtl: 300,
-        globalCachingEnabled: ENABLE_REDIS_CACHING,
-        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingConversationConfigStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_REDIS_CACHING
-      ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
-      : !ENABLE_CONVERSATION_CONFIG_CACHE
-      ? 'conversation config cache disabled via ENABLE_CONVERSATION_CONFIG_CACHE=false'
-      : 'Redis credentials not configured';
-    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
-  }
+if (configRedisClient) {
+  logger.info(
+    {
+      hasRedis: true,
+      cacheTtl: 300,
+      conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingConversationConfigStore (Supabase + Redis)'
+  );
 } else {
-  logger.warn('Using InMemoryConversationConfigStore (not suitable for production)');
+  const reason = !ENABLE_CONVERSATION_CONFIG_CACHE
+    ? 'conversation config cache disabled via ENABLE_CONVERSATION_CONFIG_CACHE=false'
+    : 'Redis credentials not configured';
+  logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
 }
 
 // Configure event hubs with Redis support for distributed SSE
-// Event hubs respect both the global ENABLE_REDIS_CACHING flag AND the individual
-// ENABLE_REDIS_EVENT_HUBS flag. This allows disabling Redis event hubs separately
-// from data caching, or disabling all Redis usage via the global kill switch.
 
 let conversationEventHub: RedisConversationEventHub | SupabaseRealtimeConversationEventHub;
 let conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 
-const redisEventHubAvailable = ENABLE_REDIS_CACHING && ENABLE_REDIS_EVENT_HUBS && Boolean(eventHubClients);
+const redisEventHubAvailable = ENABLE_REDIS_EVENT_HUBS && Boolean(eventHubClients);
 const supabaseEventHubAvailable = Boolean(supabaseRealtimeClient && supabaseUrl && supabaseRealtimeKey);
 
 const preferRedisEventHub = EVENT_HUB_TRANSPORT === 'redis';
@@ -288,7 +246,6 @@ if (preferRedisEventHub && redisEventHubAvailable && eventHubClients) {
     {
       backend: describeRedisBackendSelection(eventBackend),
       mode: normalizeConversationStoreMode,
-      globalCachingEnabled: ENABLE_REDIS_CACHING,
       redisEventHubsEnabled: ENABLE_REDIS_EVENT_HUBS
     },
     'Using Redis-backed event hubs for distributed SSE'
@@ -406,19 +363,27 @@ if (openfgaConfig) {
 // Create ExecutionContextManager if E2B is configured
 // This enables code execution tools in the chat
 const e2bApiKey = process.env.E2B_API_KEY;
-export const executionContextManager = e2bApiKey
-  ? createExecutionContextManager({
-      mode: normalizeConversationStoreMode === 'memory' ? 'memory' : 'supabase',
-      supabaseClient: supabaseClient ?? undefined,
-      e2bApiKey,
-      defaultTtlMinutes: 30,
-      sandboxTimeoutMs: 600000, // 10 minutes
-      enableLogging: true,
-    })
-  : undefined;
 
-if (executionContextManager) {
+let executionContextManager: ExecutionContextManager | undefined;
+
+if (e2bApiKey) {
+  if (!supabaseClient) {
+    const message = 'Supabase client required for execution context manager when E2B is enabled';
+    logger.error(message);
+    throw new Error(message);
+  }
+
+  executionContextManager = createExecutionContextManager({
+    supabaseClient,
+    e2bApiKey,
+    defaultTtlMinutes: 30,
+    sandboxTimeoutMs: 600000, // 10 minutes
+    enableLogging: true,
+  });
+
   logger.info('ExecutionContextManager initialized with E2B integration');
 } else {
   logger.info('E2B_API_KEY not configured; code execution tools disabled');
 }
+
+export { executionContextManager };

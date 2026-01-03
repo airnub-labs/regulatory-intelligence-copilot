@@ -7,7 +7,6 @@
 
 import {
   initSnapshotService,
-  InMemorySnapshotStorage,
   type SnapshotStorageProvider,
 } from '@reg-copilot/reg-intel-conversations/compaction';
 import {
@@ -26,11 +25,11 @@ const logger = createLogger('CompactionInit');
  * This should be called once during application startup, after OpenTelemetry
  * is initialized but before any conversation operations.
  */
-export async function initializeCompactionSystem(options?: {
+export async function initializeCompactionSystem(options: {
   /**
-   * Snapshot storage provider (defaults to in-memory)
+   * Snapshot storage provider (required for multi-instance safety)
    */
-  snapshotStorage?: SnapshotStorageProvider;
+  snapshotStorage: SnapshotStorageProvider;
 
   /**
    * Snapshot TTL in hours
@@ -57,13 +56,14 @@ export async function initializeCompactionSystem(options?: {
   logger.info('Initializing compaction system...');
 
   try {
+    if (!options?.snapshotStorage) {
+      throw new Error('Snapshot storage provider is required to initialize the compaction system');
+    }
+
     // 1. Initialize snapshot service for rollback support
-    initSnapshotService(
-      options?.snapshotStorage || new InMemorySnapshotStorage(),
-      {
-        snapshotTTLHours: options?.snapshotTTLHours || 24,
-      }
-    );
+    initSnapshotService(options.snapshotStorage, {
+      snapshotTTLHours: options.snapshotTTLHours || 24,
+    });
     logger.info('Snapshot service initialized');
 
     // 2. Initialize compaction metrics
