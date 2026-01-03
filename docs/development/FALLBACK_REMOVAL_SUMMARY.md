@@ -28,7 +28,7 @@ All in-memory fallbacks that could cause memory accumulation during Redis outage
 
 ---
 
-### 2. MemoryRateLimiter Replaced with NoOpRateLimiter (Fail-Open)
+### 2. MemoryRateLimiter Removed - Returns Null (Fail-Open)
 
 **Previous Behavior**:
 - When Redis unavailable: Fall back to `Map<string, { count: number; resetAt: number }>`
@@ -38,35 +38,51 @@ All in-memory fallbacks that could cause memory accumulation during Redis outage
 
 **Current Behavior** (packages/reg-intel-cache/src/rateLimiter.ts):
 ```typescript
-class NoOpRateLimiter implements RateLimiter {
-  async check(identifier: string): Promise<boolean> {
-    return true; // Always allow - fail-open
+export function createRateLimiter(
+  backend: ResolvedBackend | null,
+  options: SlidingWindowLimiterOptions,
+): RateLimiter | null {
+  if (!backend) {
+    logger.warn('[rate-limit] No backend configured, rate limiting disabled (fail-open)');
+    return null;  // Return null instead of no-op wrapper
   }
+  // ... create actual rate limiter
+}
+```
 
-  getType(): 'noop' {
-    return 'noop';
+**Usage** (apps/demo-web/src/app/api/client-telemetry/route.ts):
+```typescript
+const rateLimiter = getRateLimiter();
+if (rateLimiter) {  // Check for null
+  const isAllowed = await rateLimiter.check(clientIp);
+  if (!isAllowed) {
+    return Response.json({ error: 'Rate limit exceeded' }, { status: 429 });
   }
 }
+// If null, skip rate limiting (fail-open)
 ```
 
 **Benefits**:
 - ✅ No memory accumulation
-- ✅ Predictable behavior (allow all traffic)
+- ✅ Predictable behavior (allow all traffic when Redis unavailable)
 - ✅ Clear logging when Redis unavailable
 - ✅ Can add alerting/monitoring for Redis failures
-- ✅ Honest about capabilities (no false sense of security)
+- ✅ Honest about capabilities (null = no rate limiting, not wrapper class)
+- ✅ Simpler code (no unnecessary abstraction)
 
 **Tradeoffs**:
 - ⚠️ No rate limiting when Redis down (but this is better than broken rate limiting)
 - ⚠️ Requires monitoring to detect Redis outages
 
 **Files Changed**:
-- `packages/reg-intel-cache/src/rateLimiter.ts` - Replaced MemoryRateLimiter with NoOpRateLimiter
-- `packages/reg-intel-cache/src/types.ts` - Updated RateLimiter type ('noop' instead of 'memory')
+- `packages/reg-intel-cache/src/rateLimiter.ts` - Removed MemoryRateLimiter, returns null when no backend
+- `packages/reg-intel-cache/src/types.ts` - Removed 'noop' from RateLimiter type
+- `apps/demo-web/src/lib/rateLimiter.ts` - Returns `RateLimiter | null`
+- `apps/demo-web/src/app/api/client-telemetry/route.ts` - Added null check before use
 
 ---
 
-### 3. MemoryCache Replaced with NoOpCache (Fail-Through)
+### 3. MemoryCache Removed - Returns Null (Fail-Through)
 
 **Previous Behavior** (Auth Validation Cache):
 - When Redis unavailable: Fall back to `Map<string, CacheEntry>` with 10,000 entry limit
@@ -77,34 +93,55 @@ class NoOpRateLimiter implements RateLimiter {
 
 **Current Behavior** (apps/demo-web/src/lib/auth/distributedValidationCache.ts):
 ```typescript
-class NoOpCache implements DistributedCache {
-  async get(userId: string): Promise<CacheEntry | null> {
-    return null; // Always miss - fail-through to database
-  }
+function createDistributedCache(): DistributedCache | null {
+  const redisCache = createRedisCache();
+  if (redisCache) return redisCache;
 
-  async set(userId: string, isValid: boolean, tenantId?: string): Promise<void> {
-    // No-op - don't store anything
-  }
+  logger.warn({ reason }, 'Caching disabled (fail-through to database)');
+  return null;  // Return null instead of no-op wrapper
+}
 
-  getType(): 'noop' {
-    return 'noop';
+export function getValidationCache(): DistributedCache | null {
+  return validationCache;
+}
+```
+
+**Usage** (apps/demo-web/src/lib/auth/sessionValidation.ts):
+```typescript
+const validationCache = getValidationCache();
+
+// Check cache if available
+if (validationCache) {
+  const cached = await validationCache.get(userId);
+  if (cached !== null) {
+    return cached;
   }
+}
+
+// If no cache or cache miss, hit database
+// ...
+
+// Cache result if cache available
+if (validationCache) {
+  await validationCache.set(userId, isValid, tenantId);
 }
 ```
 
 **Benefits**:
 - ✅ No memory accumulation
-- ✅ Predictable behavior (always hits database)
+- ✅ Predictable behavior (always hits database when Redis unavailable)
 - ✅ Supabase can handle the load
 - ✅ Clear failure mode
 - ✅ Simpler architecture
+- ✅ Honest about capabilities (null = no caching, not wrapper class)
 
 **Tradeoffs**:
 - ⚠️ Higher database load when Redis down (but Supabase is scalable)
 - ⚠️ Slower response times without caching (acceptable during outages)
 
 **Files Changed**:
-- `apps/demo-web/src/lib/auth/distributedValidationCache.ts` - Replaced MemoryCache with NoOpCache
+- `apps/demo-web/src/lib/auth/distributedValidationCache.ts` - Removed NoOpCache, returns null when no backend
+- `apps/demo-web/src/lib/auth/sessionValidation.ts` - Added null checks before cache operations
 
 ---
 
@@ -132,12 +169,12 @@ Issues:
 
 **During Redis Outage**:
 ```
-All Instances: NoOpRateLimiter + NoOpCache = 0 objects
+All Instances: rateLimiter = null, validationCache = null
 
-Total Memory: 0
+Total Memory: 0 objects
 Behavior:
-- Rate limiting: DISABLED (all requests allowed)
-- Auth caching: DISABLED (all requests hit Supabase)
+- Rate limiting: DISABLED (getRateLimiter() returns null, all requests allowed)
+- Auth caching: DISABLED (getValidationCache() returns null, all requests hit Supabase)
 - Clear monitoring/alerting needed
 - System continues to function
 ```
@@ -165,7 +202,7 @@ Behavior:
 ### Metrics to Track
 
 - Redis connection status
-- Rate limiter type (`redis` vs `noop`)
+- Rate limiter availability (`redis`/`upstash` vs `null`)
 - Cache hit/miss rates (drops to 0% when Redis down)
 - Database query latency
 - Database connection pool utilization
@@ -197,7 +234,7 @@ UPSTASH_REDIS_REST_TOKEN=...
 # Disable auth validation cache entirely (even with Redis)
 ENABLE_AUTH_VALIDATION_CACHE=false
 
-# Disable Redis rate limiter (use noop even if Redis available)
+# Disable Redis rate limiter (returns null even if Redis available)
 ENABLE_RATE_LIMITER_REDIS=false
 ```
 
@@ -206,8 +243,10 @@ ENABLE_RATE_LIMITER_REDIS=false
 ## Testing Recommendations
 
 ### Unit Tests
-- ✅ Test NoOpRateLimiter always returns true
-- ✅ Test NoOpCache always returns null
+- ✅ Test createRateLimiter returns null when no backend
+- ✅ Test createDistributedCache returns null when no backend
+- ✅ Test calling code handles null rate limiter correctly
+- ✅ Test calling code handles null cache correctly
 - ✅ Test error handling in SupabasePricingService
 
 ### Integration Tests
@@ -245,7 +284,7 @@ However, **keeping the new behavior is recommended** because:
 | Component | Before | After | Benefit |
 |-----------|--------|-------|---------|
 | **Pricing** | DEFAULT_PRICING fallback | Error if not in Supabase | Always current |
-| **Rate Limiting** | MemoryRateLimiter (unbounded) | NoOpRateLimiter (fail-open) | No memory growth |
-| **Auth Cache** | MemoryCache (10K limit) | NoOpCache (fail-through) | No memory usage |
+| **Rate Limiting** | MemoryRateLimiter (unbounded) | Returns null (fail-open) | No memory growth, clearer code |
+| **Auth Cache** | MemoryCache (10K limit) | Returns null (fail-through) | No memory usage, clearer code |
 
-**Result**: Scalable, fault-tolerant architecture with predictable behavior during Redis outages.
+**Result**: Scalable, fault-tolerant architecture with predictable behavior during Redis outages. Using null pattern instead of no-op wrapper classes for clearer, more honest code.

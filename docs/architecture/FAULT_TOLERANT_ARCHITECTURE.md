@@ -85,24 +85,41 @@ class MemoryCache {
 
 **✅ DO THIS INSTEAD**:
 ```typescript
-// GOOD: Fail-open rate limiter
-class NoOpRateLimiter {
-  async check(key: string): Promise<boolean> {
-    return true; // Always allow - honest about capabilities
+// GOOD: Fail-open rate limiter (return null instead of no-op wrapper)
+function createRateLimiter(backend: Backend | null): RateLimiter | null {
+  if (!backend) {
+    logger.warn('No backend - rate limiting disabled');
+    return null; // Honest about capabilities - no wrapper needed
   }
+  return new RedisRateLimiter(backend);
 }
 
-// GOOD: Fail-through cache
-class NoOpCache {
-  async get(key: string): Promise<Value | null> {
-    return null; // Always miss - hit database
+// Usage
+const limiter = createRateLimiter(backend);
+if (limiter) {
+  await limiter.check(key); // Only rate limit if available
+}
+
+// GOOD: Fail-through cache (return null instead of no-op wrapper)
+function createCache(backend: Backend | null): Cache | null {
+  if (!backend) {
+    logger.warn('No backend - caching disabled');
+    return null; // Honest about capabilities - no wrapper needed
   }
+  return new RedisCache(backend);
+}
+
+// Usage
+const cache = createCache(backend);
+if (cache) {
+  const value = await cache.get(key); // Only cache if available
 }
 ```
 
 **Rationale**:
 - **Memory Safety**: No accumulation during outages
-- **Honesty**: Clear that feature is disabled
+- **Honesty**: Null clearly indicates feature is disabled (no wrapper abstraction)
+- **Simplicity**: No unnecessary no-op classes, cleaner code
 - **Monitoring**: Easy to detect and alert on failures
 - **Predictability**: Consistent behavior across instances
 
@@ -252,8 +269,8 @@ Is this in-memory state?
 
 | Old Pattern | New Pattern | Failure Mode |
 |-------------|-------------|--------------|
-| MemoryRateLimiter | NoOpRateLimiter | Fail-open (allow all) |
-| MemoryCache (auth) | NoOpCache | Fail-through (hit DB) |
+| MemoryRateLimiter | Returns null | Fail-open (allow all) |
+| MemoryCache (auth) | Returns null | Fail-through (hit DB) |
 | DEFAULT_PRICING fallback | Error if not in Supabase | Fail-fast (clear error) |
 | InMemoryConversationStore | SupabaseConversationStore | Fail-closed (require DB) |
 | InMemoryPathStore | SupabasePathStore | Fail-closed (require DB) |
@@ -408,8 +425,10 @@ When reviewing code, check for:
 ### 8.1 Required Test Scenarios
 
 **Unit Tests**:
-- NoOpRateLimiter always returns true
-- NoOpCache always returns null
+- createRateLimiter returns null when no backend
+- createCache returns null when no backend
+- Calling code handles null rate limiter correctly
+- Calling code handles null cache correctly
 - Error thrown when pricing not found
 
 **Integration Tests**:
@@ -430,8 +449,8 @@ When reviewing code, check for:
 
 | Scenario | Pattern | Reason |
 |----------|---------|--------|
-| Redis down, need rate limiting | NoOpRateLimiter (fail-open) | Better than broken per-instance limits |
-| Redis down, need caching | NoOpCache (fail-through) | Database can handle it |
+| Redis down, need rate limiting | Return null (fail-open) | Better than broken per-instance limits |
+| Redis down, need caching | Return null (fail-through) | Database can handle it |
 | Supabase down, need pricing | Error (fail-fast) | Stale pricing = wrong bills |
 | Supabase down, need conversations | Error (fail-fast) | Data loss unacceptable |
 | SSE connections | Per-instance state | Cannot share connections |

@@ -30,5 +30,5 @@ export interface RedisPubSubClient {
 
 export interface RateLimiter {
   check(identifier: string): Promise<boolean>;
-  getType(): 'redis' | 'upstash' | 'noop';
+  getType(): 'redis' | 'upstash';
 }

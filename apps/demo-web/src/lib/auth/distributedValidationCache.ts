@@ -121,42 +121,6 @@ class RedisCache implements DistributedCache {
   }
 }
 
-/**
- * No-op cache implementation that always misses (fail-through).
- * Used when Redis is unavailable to prevent memory accumulation.
- *
- * This ensures predictable behavior during outages - validation always hits
- * the database (Supabase) which can handle the load.
- *
- * Production deployments should configure Redis for actual caching.
- */
-class NoOpCache implements DistributedCache {
-  async get(userId: string): Promise<CacheEntry | null> {
-    return null; // Always miss - fail-through to database
-  }
-
-  async set(userId: string, isValid: boolean, tenantId?: string): Promise<void> {
-    // No-op - don't store anything
-  }
-
-  async invalidate(userId: string): Promise<void> {
-    // No-op - nothing to invalidate
-  }
-
-  async clear(): Promise<void> {
-    // No-op - nothing to clear
-  }
-
-  async getStats() {
-    return {
-      size: 0,
-      maxSize: 0,
-      ttlMs: 0,
-      backend: 'noop',
-    };
-  }
-}
-
 function createRedisCache(): DistributedCache | null {
   if (!ENABLE_AUTH_VALIDATION_CACHE) {
     return null;
@@ -177,8 +141,9 @@ function createRedisCache(): DistributedCache | null {
 
 /**
  * Factory to get the appropriate distributed cache implementation
+ * Returns null if Redis not configured (caching disabled - fail-through to database)
  */
-function createDistributedCache(): DistributedCache {
+function createDistributedCache(): DistributedCache | null {
   const redisCache = createRedisCache();
   if (redisCache) return redisCache;
 
@@ -186,8 +151,8 @@ function createDistributedCache(): DistributedCache {
     ? 'auth validation cache disabled via ENABLE_AUTH_VALIDATION_CACHE=false'
     : 'Redis credentials not configured';
 
-  logger.warn({ reason }, 'Using no-op cache (fail-through to database)');
-  return new NoOpCache();
+  logger.warn({ reason }, 'Caching disabled (fail-through to database)');
+  return null;
 }
 
 // Singleton instance
@@ -195,7 +160,8 @@ const validationCache = createDistributedCache();
 
 /**
  * Get the distributed cache instance
+ * Returns null if Redis not configured (caching disabled - fail-through to database)
  */
-export function getValidationCache(): DistributedCache {
+export function getValidationCache(): DistributedCache | null {
   return validationCache;
 }

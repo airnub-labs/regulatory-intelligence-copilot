@@ -26,23 +26,6 @@ export interface SlidingWindowLimiterOptions {
   prefix?: string;
 }
 
-/**
- * No-op rate limiter that always allows requests.
- * Used when Redis/Upstash is unavailable to fail-open (allow all traffic).
- *
- * This prevents memory accumulation and ensures predictable behavior during outages.
- * Production deployments should configure Redis/Upstash for actual rate limiting.
- */
-class NoOpRateLimiter implements RateLimiter {
-  async check(identifier: string): Promise<boolean> {
-    return true; // Always allow - fail-open
-  }
-
-  getType(): 'noop' {
-    return 'noop';
-  }
-}
-
 let upstashRateLimitConstructor: UpstashRateLimitConstructor | null = null;
 
 function loadUpstashRateLimitConstructor(): UpstashRateLimitConstructor {
@@ -146,10 +129,10 @@ class RedisSlidingWindowRateLimiter implements RateLimiter {
 export function createRateLimiter(
   backend: ResolvedBackend | null,
   options: SlidingWindowLimiterOptions,
-): RateLimiter {
+): RateLimiter | null {
   if (!backend) {
-    logger.warn('[rate-limit] No backend configured, failing open (allowing all requests)');
-    return new NoOpRateLimiter();
+    logger.warn('[rate-limit] No backend configured, rate limiting disabled (fail-open)');
+    return null;
   }
 
   if (backend.backend === 'redis') {
@@ -162,11 +145,11 @@ export function createRateLimiter(
 export function createFailOpenRateLimiter(
   backend: ResolvedBackend | null,
   options: SlidingWindowLimiterOptions,
-): RateLimiter {
+): RateLimiter | null {
   try {
     return createRateLimiter(backend, options);
   } catch (error) {
-    logger.error({ error }, '[rate-limit] Failed to create backend limiter, failing open (allowing all requests)');
-    return new NoOpRateLimiter();
+    logger.error({ error }, '[rate-limit] Failed to create backend limiter, rate limiting disabled (fail-open)');
+    return null;
   }
 }

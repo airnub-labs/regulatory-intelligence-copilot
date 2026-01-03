@@ -218,22 +218,25 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check rate limit using distributed rate limiter (Redis or in-memory fallback)
+    // Check rate limit using distributed rate limiter (Redis/Upstash)
+    // If no rate limiter configured, fail-open (allow all requests)
     const clientIp = getClientIp(request);
-    const isAllowed = await rateLimiter.check(clientIp);
+    if (rateLimiter) {
+      const isAllowed = await rateLimiter.check(clientIp);
 
-    if (!isAllowed) {
-      logger.warn(
-        {
-          clientIp,
-          rateLimiterType: rateLimiter.getType(),
-        },
-        'Client telemetry rate limit exceeded'
-      );
-      return Response.json(
-        { error: 'Rate limit exceeded. Please slow down your requests.' },
-        { status: 429 }
-      );
+      if (!isAllowed) {
+        logger.warn(
+          {
+            clientIp,
+            rateLimiterType: rateLimiter.getType(),
+          },
+          'Client telemetry rate limit exceeded'
+        );
+        return Response.json(
+          { error: 'Rate limit exceeded. Please slow down your requests.' },
+          { status: 429 }
+        );
+      }
     }
 
     const payload = (await request.json()) as ClientTelemetryPayload;

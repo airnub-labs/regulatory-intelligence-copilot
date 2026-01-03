@@ -24,8 +24,9 @@ interface RateLimiterConfig {
 /**
  * Create a rate limiter instance
  * Uses shared cache package to pick Redis or Upstash backends based on environment
+ * Returns null if no backend is available (rate limiting disabled - fail-open)
  */
-export function createRateLimiter(config: RateLimiterConfig): RateLimiter {
+export function createRateLimiter(config: RateLimiterConfig): RateLimiter | null {
   const backend = ENABLE_RATE_LIMITER_REDIS ? resolveRedisBackend('rateLimit') : null;
   const limiter = createFailOpenRateLimiter(backend, {
     windowMs: config.windowMs,
@@ -40,13 +41,15 @@ export function createRateLimiter(config: RateLimiterConfig): RateLimiter {
  * Singleton rate limiter instance
  */
 let rateLimiterInstance: RateLimiter | null = null;
+let rateLimiterInitialized = false;
 
 /**
  * Get the singleton rate limiter instance
+ * Returns null if Redis/Upstash not configured (rate limiting disabled - fail-open)
  * Configuration is read from environment variables
  */
-export function getRateLimiter(): RateLimiter {
-  if (!rateLimiterInstance) {
+export function getRateLimiter(): RateLimiter | null {
+  if (!rateLimiterInitialized) {
     const maxRequests =
       parseInt(process.env.CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS || '100', 10) || 100;
 
@@ -57,10 +60,16 @@ export function getRateLimiter(): RateLimiter {
       windowMs,
     });
 
-    console.log(
-      `[RateLimiter] Initialized ${rateLimiterInstance.getType()} rate limiter ` +
-        `(${maxRequests} requests per ${windowMs}ms)`
-    );
+    if (rateLimiterInstance) {
+      console.log(
+        `[RateLimiter] Initialized ${rateLimiterInstance.getType()} rate limiter ` +
+          `(${maxRequests} requests per ${windowMs}ms)`
+      );
+    } else {
+      console.warn(`[RateLimiter] No backend configured - rate limiting disabled (fail-open)`);
+    }
+
+    rateLimiterInitialized = true;
   }
 
   return rateLimiterInstance;

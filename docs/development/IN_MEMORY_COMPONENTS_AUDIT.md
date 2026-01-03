@@ -14,8 +14,8 @@ All in-memory fallbacks for distributed state have been **completely removed** f
 ### Migration Complete
 
 1. ✅ **InMemoryPricingService** - REMOVED (replaced with error if Supabase unavailable)
-2. ✅ **MemoryRateLimiter** - REMOVED (replaced with NoOpRateLimiter that fails-open)
-3. ✅ **MemoryCache (auth validation)** - REMOVED (replaced with NoOpCache that fails-through)
+2. ✅ **MemoryRateLimiter** - REMOVED (returns null when Redis unavailable, fail-open)
+3. ✅ **MemoryCache (auth validation)** - REMOVED (returns null when Redis unavailable, fail-through)
 4. ✅ **All deprecated in-memory stores** - REMOVED (InMemoryConversationStore, InMemoryPathStore, etc.)
 5. ✅ **Static pricing fallbacks** - REMOVED (DEFAULT_PRICING no longer exported)
 
@@ -29,8 +29,8 @@ All in-memory fallbacks for distributed state have been **completely removed** f
 - ToolRegistry (static configuration)
 
 **❌ No In-Memory Fallbacks**:
-- Rate limiting → NoOpRateLimiter (fails-open)
-- Auth caching → NoOpCache (fails-through)
+- Rate limiting → Returns null (fails-open)
+- Auth caching → Returns null (fails-through)
 - Pricing → Error if not in Supabase (fails-fast)
 
 ---
@@ -69,11 +69,13 @@ if (!pricing) {
 ### 2. Rate Limiting (Fail-Open)
 
 **Previous**: MemoryRateLimiter with `Map<string, RateLimitEntry>` fallback
-**Current**: NoOpRateLimiter that always allows requests
+**Current**: Returns null when Redis unavailable (no rate limiting)
 
 **Files Modified**:
-- `packages/reg-intel-cache/src/rateLimiter.ts` - Replaced MemoryRateLimiter with NoOpRateLimiter
-- `packages/reg-intel-cache/src/types.ts` - Updated RateLimiter type ('noop' instead of 'memory')
+- `packages/reg-intel-cache/src/rateLimiter.ts` - Removed MemoryRateLimiter, returns null when no backend
+- `packages/reg-intel-cache/src/types.ts` - Removed 'noop' from RateLimiter type
+- `apps/demo-web/src/lib/rateLimiter.ts` - Returns `RateLimiter | null`
+- `apps/demo-web/src/app/api/client-telemetry/route.ts` - Added null check before use
 
 **Before** (REMOVED):
 ```typescript
@@ -86,10 +88,22 @@ class MemoryRateLimiter {
 
 **After**:
 ```typescript
-class NoOpRateLimiter {
-  async check(identifier: string): Promise<boolean> {
-    return true; // Always allow - fail-open
+export function createRateLimiter(
+  backend: ResolvedBackend | null,
+  options: SlidingWindowLimiterOptions,
+): RateLimiter | null {
+  if (!backend) {
+    logger.warn('[rate-limit] No backend configured, rate limiting disabled (fail-open)');
+    return null;  // Honest: no rate limiting available
   }
+  // ... create actual rate limiter
+}
+
+// Usage
+const rateLimiter = getRateLimiter();
+if (rateLimiter) {  // Check for null before use
+  const isAllowed = await rateLimiter.check(clientIp);
+  // ...
 }
 ```
 
@@ -98,16 +112,18 @@ class NoOpRateLimiter {
 - Predictable behavior (allow all traffic)
 - Clear logging when Redis unavailable
 - No false sense of security
+- Clearer code (null = no rate limiting, not wrapper class)
 
 ---
 
 ### 3. Auth Validation Cache (Fail-Through)
 
 **Previous**: MemoryCache with 10,000 entry limit per instance
-**Current**: NoOpCache that always returns null (hits database)
+**Current**: Returns null when Redis unavailable (no caching, hits database)
 
 **Files Modified**:
-- `apps/demo-web/src/lib/auth/distributedValidationCache.ts` - Replaced MemoryCache with NoOpCache
+- `apps/demo-web/src/lib/auth/distributedValidationCache.ts` - Removed NoOpCache, returns null when no backend
+- `apps/demo-web/src/lib/auth/sessionValidation.ts` - Added null checks before cache operations
 
 **Before** (REMOVED):
 ```typescript
@@ -120,10 +136,19 @@ class MemoryCache {
 
 **After**:
 ```typescript
-class NoOpCache {
-  async get(userId: string): Promise<CacheEntry | null> {
-    return null; // Always miss - hit database
-  }
+function createDistributedCache(): DistributedCache | null {
+  const redisCache = createRedisCache();
+  if (redisCache) return redisCache;
+
+  logger.warn({ reason }, 'Caching disabled (fail-through to database)');
+  return null;  // Honest: no caching available
+}
+
+// Usage
+const validationCache = getValidationCache();
+if (validationCache) {  // Check for null before use
+  const cached = await validationCache.get(userId);
+  // ...
 }
 ```
 
@@ -132,6 +157,7 @@ class NoOpCache {
 - Supabase can handle the load
 - Clear failure mode
 - Simpler architecture
+- Clearer code (null = no caching, not wrapper class)
 
 ---
 
@@ -294,8 +320,8 @@ Total Risk:   High - memory accumulation, potential OOM
 
 **During Redis Outage (10 Instances)**:
 ```
-Rate Limiter: 0 memory (NoOpRateLimiter)
-Auth Cache:   0 memory (NoOpCache)
+Rate Limiter: 0 memory (returns null, no rate limiting)
+Auth Cache:   0 memory (returns null, no caching)
 Total Risk:   None - no memory accumulation
 ```
 
@@ -310,13 +336,13 @@ Total Risk:   None - no memory accumulation
 
 ### High Alerts (P1)
 - `redis_connection_status = down` → Rate limiting & caching disabled
-- `rate_limiter_type = noop` → Rate limiting bypassed
-- `cache_type = noop` → Database load increased
+- `rate_limiter_available = false` → Rate limiting bypassed (null returned)
+- `cache_available = false` → Database load increased (null returned)
 
 ### Metrics to Track
 - `dependency_health{service="supabase"}` (up/down)
 - `dependency_health{service="redis"}` (up/down)
-- `rate_limiter_type` (redis | upstash | noop)
+- `rate_limiter_available` (true if redis/upstash, false if null)
 - `cache_hit_rate` (drops to 0% when Redis down)
 - `database_query_duration_seconds` (increases when cache down)
 
@@ -325,8 +351,10 @@ Total Risk:   None - no memory accumulation
 ## Testing Requirements
 
 ### Unit Tests
-- ✅ NoOpRateLimiter always returns true
-- ✅ NoOpCache always returns null
+- ✅ createRateLimiter returns null when no backend
+- ✅ createDistributedCache returns null when no backend
+- ✅ Calling code handles null rate limiter correctly
+- ✅ Calling code handles null cache correctly
 - ✅ SupabasePricingService throws error for unknown models
 
 ### Integration Tests
@@ -377,8 +405,8 @@ The regulatory intelligence copilot is **production-ready** with appropriate fau
 | Conversations | Supabase | Error if unavailable | ✅ Required |
 | Paths | Supabase | Error if unavailable | ✅ Required |
 | Pricing | Supabase | Error if unavailable | ✅ Required |
-| Rate Limiting | Redis | NoOp (allow all) | ⚠️ Recommended |
-| Caching | Redis | NoOp (hit DB) | ⚠️ Recommended |
+| Rate Limiting | Redis | Returns null (allow all) | ⚠️ Recommended |
+| Caching | Redis | Returns null (hit DB) | ⚠️ Recommended |
 | Token Cache | Local LRU | N/A | ✅ Performance |
 | SSE State | Per-instance | N/A | ✅ Architectural |
 
