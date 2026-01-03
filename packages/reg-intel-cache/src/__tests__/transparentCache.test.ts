@@ -7,8 +7,33 @@
  * - Application code never needs try-catch
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createTransparentCache, type CacheBackend } from '../transparentCache';
+
+// Mock dependencies to avoid initialization issues in tests
+vi.mock('@opentelemetry/api', () => ({
+  metrics: {
+    getMeter: () => ({
+      createCounter: () => ({ add: vi.fn() }),
+      createHistogram: () => ({ record: vi.fn() }),
+    }),
+  },
+}));
+
+vi.mock('@reg-copilot/reg-intel-observability', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: () => ({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    }),
+  }),
+}));
 
 describe('TransparentCache', () => {
   describe('PassThroughCache (no backend)', () => {
@@ -50,13 +75,13 @@ describe('TransparentCache', () => {
   });
 
   describe('RedisBackedCache (with backend)', () => {
-    let mockBackend: jest.Mocked<CacheBackend>;
+    let mockBackend: CacheBackend;
 
     beforeEach(() => {
       mockBackend = {
-        get: jest.fn<CacheBackend['get']>(),
-        set: jest.fn<CacheBackend['set']>(),
-        del: jest.fn<CacheBackend['del']>(),
+        get: vi.fn<CacheBackend['get']>(),
+        set: vi.fn<CacheBackend['set']>(),
+        del: vi.fn<CacheBackend['del']>(),
       };
     });
 
@@ -174,9 +199,9 @@ describe('TransparentCache', () => {
   describe('Industry standard pattern compliance', () => {
     it('cache miss and backend unavailable are indistinguishable', async () => {
       const workingBackend: CacheBackend = {
-        get: jest.fn<CacheBackend['get']>().mockResolvedValue(null),
-        set: jest.fn<CacheBackend['set']>(),
-        del: jest.fn<CacheBackend['del']>(),
+        get: vi.fn<CacheBackend['get']>().mockResolvedValue(null),
+        set: vi.fn<CacheBackend['set']>(),
+        del: vi.fn<CacheBackend['del']>(),
       };
 
       const cache1 = createTransparentCache<string>(workingBackend, 'redis');
@@ -204,9 +229,9 @@ describe('TransparentCache', () => {
 
     it('application code never needs try-catch', async () => {
       const failingBackend: CacheBackend = {
-        get: jest.fn<CacheBackend['get']>().mockRejectedValue(new Error('Always fails')),
-        set: jest.fn<CacheBackend['set']>().mockRejectedValue(new Error('Always fails')),
-        del: jest.fn<CacheBackend['del']>().mockRejectedValue(new Error('Always fails')),
+        get: vi.fn<CacheBackend['get']>().mockRejectedValue(new Error('Always fails')),
+        set: vi.fn<CacheBackend['set']>().mockRejectedValue(new Error('Always fails')),
+        del: vi.fn<CacheBackend['del']>().mockRejectedValue(new Error('Always fails')),
       };
 
       const cache = createTransparentCache<string>(failingBackend, 'redis');

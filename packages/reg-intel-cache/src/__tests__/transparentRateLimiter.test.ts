@@ -7,8 +7,33 @@
  * - Application code never needs try-catch
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, vi } from 'vitest';
 import { createTransparentRateLimiter, type RateLimiterBackend } from '../transparentRateLimiter';
+
+// Mock dependencies to avoid initialization issues in tests
+vi.mock('@opentelemetry/api', () => ({
+  metrics: {
+    getMeter: () => ({
+      createCounter: () => ({ add: vi.fn() }),
+      createHistogram: () => ({ record: vi.fn() }),
+    }),
+  },
+}));
+
+vi.mock('@reg-copilot/reg-intel-observability', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    child: () => ({
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    }),
+  }),
+}));
 
 describe('TransparentRateLimiter', () => {
   describe('AllowAllRateLimiter (no backend)', () => {
@@ -44,7 +69,7 @@ describe('TransparentRateLimiter', () => {
   describe('RedisBackedRateLimiter (with backend)', () => {
     it('factory never returns null when backend provided', () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
+        check: vi.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
         getType: () => 'redis' as const,
       };
 
@@ -55,7 +80,7 @@ describe('TransparentRateLimiter', () => {
 
     it('returns backend check result when allowed', async () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
+        check: vi.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
         getType: () => 'redis' as const,
       };
 
@@ -68,7 +93,7 @@ describe('TransparentRateLimiter', () => {
 
     it('returns backend check result when rate limited', async () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockResolvedValue(false),
+        check: vi.fn<RateLimiterBackend['check']>().mockResolvedValue(false),
         getType: () => 'redis' as const,
       };
 
@@ -81,7 +106,7 @@ describe('TransparentRateLimiter', () => {
 
     it('fails open on backend error - transparent failover', async () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockRejectedValue(
+        check: vi.fn<RateLimiterBackend['check']>().mockRejectedValue(
           new Error('Redis connection failed')
         ),
         getType: () => 'redis' as const,
@@ -95,7 +120,7 @@ describe('TransparentRateLimiter', () => {
 
     it('continues to fail open on repeated errors', async () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockRejectedValue(
+        check: vi.fn<RateLimiterBackend['check']>().mockRejectedValue(
           new Error('Redis connection failed')
         ),
         getType: () => 'redis' as const,
@@ -111,7 +136,7 @@ describe('TransparentRateLimiter', () => {
 
     it('reports redis backend type', () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>(),
+        check: vi.fn<RateLimiterBackend['check']>(),
         getType: () => 'redis' as const,
       };
 
@@ -121,7 +146,7 @@ describe('TransparentRateLimiter', () => {
 
     it('reports upstash backend type', () => {
       const mockBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>(),
+        check: vi.fn<RateLimiterBackend['check']>(),
         getType: () => 'upstash' as const,
       };
 
@@ -133,7 +158,7 @@ describe('TransparentRateLimiter', () => {
   describe('Industry standard pattern compliance', () => {
     it('backend unavailable and backend allowing are both true', async () => {
       const workingBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
+        check: vi.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
         getType: () => 'redis' as const,
       };
 
@@ -156,7 +181,7 @@ describe('TransparentRateLimiter', () => {
 
     it('application code never needs try-catch', async () => {
       const failingBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockRejectedValue(
+        check: vi.fn<RateLimiterBackend['check']>().mockRejectedValue(
           new Error('Always fails')
         ),
         getType: () => 'redis' as const,
@@ -170,7 +195,7 @@ describe('TransparentRateLimiter', () => {
 
     it('fail-open is better than fail-closed', async () => {
       const failingBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockRejectedValue(
+        check: vi.fn<RateLimiterBackend['check']>().mockRejectedValue(
           new Error('Redis down')
         ),
         getType: () => 'redis' as const,
@@ -188,7 +213,7 @@ describe('TransparentRateLimiter', () => {
     it('handles intermittent Redis failures gracefully', async () => {
       let callCount = 0;
       const intermittentBackend: RateLimiterBackend = {
-        check: jest.fn<RateLimiterBackend['check']>().mockImplementation(async () => {
+        check: vi.fn<RateLimiterBackend['check']>().mockImplementation(async () => {
           callCount++;
           if (callCount % 3 === 0) {
             throw new Error('Intermittent Redis failure');
@@ -228,7 +253,7 @@ describe('TransparentRateLimiter', () => {
 
       // Normal mode (Redis working)
       const workingLimiter = createTransparentRateLimiter({
-        check: jest.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
+        check: vi.fn<RateLimiterBackend['check']>().mockResolvedValue(true),
         getType: () => 'redis' as const,
       });
 
