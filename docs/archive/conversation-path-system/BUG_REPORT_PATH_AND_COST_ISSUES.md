@@ -1,6 +1,10 @@
+> **ARCHIVED (2026-01-03)**: All bugs fixed. Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Bug Report - Path Branching & Cost Tracking Issues
 
-> **Status**: ✅ ALL BUGS FIXED
+> **Status**: ✅ ALL BUGS FIXED - ARCHIVED
 > **Date**: 2026-01-03
 > **Last Updated**: 2026-01-03
 > **Affected Areas**: Path/Branch UI, Cost Analytics, Build System, Message Editing

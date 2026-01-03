@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-01-03)**: Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Full Path System Implementation Plan
 
 ## Executive Summary

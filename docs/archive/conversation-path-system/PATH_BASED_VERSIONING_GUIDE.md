@@ -1,6 +1,10 @@
+> **ARCHIVED (2026-01-03)**: Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Path-Based Versioning Guide
 
-> **Status**: Active (Dec 2024)
+> **Status**: Archived
 > **Version**: 1.0
 > **Author**: System Documentation
 

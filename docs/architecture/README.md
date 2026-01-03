@@ -31,6 +31,21 @@ The codebase is currently aligned to **architecture_v_0_6.md**. Earlier versions
 
 ---
 
+---
+
+## Conversation System
+
+- `conversation-path-system.md`
+  **Canonical documentation** for the conversation path system with branching, merging, and path-aware navigation. Covers:
+  - Conceptual model (paths, branching, merging, inheritance)
+  - Data model (database schema, TypeScript interfaces)
+  - Core operations (path resolution, branching, merging)
+  - API surface (REST endpoints)
+  - UI/UX behavior (components, navigation)
+  - Developer guide and best practices
+
+---
+
 ## Relationship to other docs
 
 The architecture docs are **top-level narratives**. They describe the big picture; detailed behaviour lives in the specs under `docs/architecture/`.
