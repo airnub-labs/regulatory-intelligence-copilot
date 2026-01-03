@@ -6,6 +6,8 @@ import { ConversationPathProvider, type PathApiClient, type ClientPath } from '@
 interface ConditionalPathProviderProps {
   /** Conversation ID - if null/undefined, children are rendered without provider */
   conversationId: string | undefined;
+  /** Initial active path ID to load */
+  initialActivePathId?: string;
   /** API client for path operations */
   apiClient: PathApiClient;
   /** Called when active path changes */
@@ -22,6 +24,7 @@ interface ConditionalPathProviderProps {
  */
 export function ConditionalPathProvider({
   conversationId,
+  initialActivePathId,
   apiClient,
   onPathChange,
   onError,
@@ -34,6 +37,7 @@ export function ConditionalPathProvider({
   return (
     <ConversationPathProvider
       conversationId={conversationId}
+      initialPathId={initialActivePathId}
       apiClient={apiClient}
       onPathChange={onPathChange}
       onError={onError}

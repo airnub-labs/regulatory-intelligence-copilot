@@ -76,6 +76,10 @@ function PathToolbarContent({
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedBranchForMerge, setSelectedBranchForMerge] = useState<ClientPath | null>(null);
 
+  // Path switching state
+  const [isSwitchingPath, setIsSwitchingPath] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
   const handleMergeClick = () => {
     // Get active branch paths (excluding primary)
     const branchPaths = paths.filter(p => !p.isPrimary && p.isActive && !p.isMerged);
@@ -110,10 +114,20 @@ function PathToolbarContent({
   };
 
   const handlePathChange = async (pathId: string) => {
-    await switchPath(pathId);
-    const newPath = paths.find(p => p.id === pathId);
-    if (newPath && onPathSwitch) {
-      onPathSwitch(newPath);
+    try {
+      setIsSwitchingPath(true);
+      setSwitchError(null);
+      await switchPath(pathId);
+      const newPath = paths.find(p => p.id === pathId);
+      if (newPath && onPathSwitch) {
+        onPathSwitch(newPath);
+      }
+    } catch (error) {
+      console.error('Failed to switch path:', error);
+      setSwitchError(error instanceof Error ? error.message : 'Failed to switch path');
+      // TODO: Show error toast/notification to user
+    } finally {
+      setIsSwitchingPath(false);
     }
   };
 
@@ -164,7 +178,7 @@ function PathToolbarContent({
           <Select
             value={activePath?.id || ''}
             onValueChange={handlePathChange}
-            disabled={isLoading}
+            disabled={isLoading || isSwitchingPath}
           >
             <SelectTrigger className="h-7 w-[160px] text-xs">
               <GitBranch className="mr-1 h-3 w-3" />
@@ -217,7 +231,7 @@ function PathToolbarContent({
           <Select
             value={activePath?.id || ''}
             onValueChange={handlePathChange}
-            disabled={isLoading}
+            disabled={isLoading || isSwitchingPath}
           >
             <SelectTrigger className="h-8 min-w-[180px]">
               <SelectValue placeholder="Select path" />

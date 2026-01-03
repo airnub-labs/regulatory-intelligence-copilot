@@ -136,6 +136,7 @@ interface ConversationPayload {
     personaId?: UserProfile['personaType']
     jurisdictions?: string[]
     title?: string | null
+    activePathId?: string
   }
 }
 
@@ -283,6 +284,8 @@ export default function Home() {
   const [branchDialogOpen, setBranchDialogOpen] = useState(false)
   const [branchFromMessageId, setBranchFromMessageId] = useState<string | null>(null)
   const [conversationId, setConversationId] = useState<string | undefined>(undefined)
+  const [activePathId, setActivePathId] = useState<string | undefined>(undefined)
+  const [pathReloadKey, setPathReloadKey] = useState(0)
   const [conversationTitle, setConversationTitle] = useState<string>('')
   const [savedConversationTitle, setSavedConversationTitle] = useState<string>('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -437,6 +440,14 @@ export default function Home() {
       setEditingMessageId(null)
       setShareAudience(payload.conversation?.shareAudience ?? 'private')
       setTenantAccess(payload.conversation?.tenantAccess ?? 'edit')
+
+      // Extract and set active path ID
+      const loadedActivePathId = payload.conversation?.activePathId
+      setActivePathId(loadedActivePathId)
+
+      // Force provider to reload when conversation loads
+      setPathReloadKey(prev => prev + 1)
+
       const personaId = payload.conversation?.personaId
       if (personaId) {
         setProfile(prev => ({ ...prev, personaType: normalizePersonaType(personaId) }))
@@ -1273,7 +1284,9 @@ export default function Home() {
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.8fr)]">
           <ConditionalPathProvider
+            key={`${conversationId}-${pathReloadKey}`}
             conversationId={conversationId}
+            initialActivePathId={activePathId}
             apiClient={pathApiClient}
             onError={(err) => telemetry.error({ err, conversationId }, 'Path error')}
           >
