@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { createTransparentRateLimiter, type RateLimiterBackend } from '../transparentRateLimiter';
+import { createTransparentRateLimiter, type RateLimiterBackend } from '../transparentRateLimiter.js';
 
 // Mock dependencies to avoid initialization issues in tests
 vi.mock('@opentelemetry/api', () => ({

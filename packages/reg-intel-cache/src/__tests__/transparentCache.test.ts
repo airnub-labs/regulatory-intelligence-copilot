@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createTransparentCache, type CacheBackend } from '../transparentCache';
+import { createTransparentCache, type CacheBackend } from '../transparentCache.js';
 
 // Mock dependencies to avoid initialization issues in tests
 vi.mock('@opentelemetry/api', () => ({
