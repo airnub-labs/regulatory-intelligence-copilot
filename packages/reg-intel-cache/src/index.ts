@@ -16,3 +16,4 @@ export { createKeyValueClient, createPubSubClientPair, describeRedisBackendSelec
 export { createRateLimiter, createFailOpenRateLimiter };
 export { createTransparentCache } from './transparentCache.js';
 export { createTransparentRateLimiter } from './transparentRateLimiter.js';
+export { createPassThroughRedis, PassThroughRedis } from './passThroughRedis.js';

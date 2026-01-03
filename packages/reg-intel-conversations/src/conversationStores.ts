@@ -5,7 +5,7 @@ import type {
   ConversationContextStore,
   ConversationIdentity,
 } from '@reg-copilot/reg-intel-core';
-import { createKeyValueClient, type ResolvedBackend, type RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
+import { createKeyValueClient, createPassThroughRedis, type ResolvedBackend, type RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
 import { SEMATTRS_DB_SYSTEM, SEMATTRS_DB_NAME, SEMATTRS_DB_OPERATION, SEMATTRS_DB_SQL_TABLE } from '@opentelemetry/semantic-conventions';
 
@@ -1127,6 +1127,21 @@ export interface ConversationStoreFactoryOptions {
   enableCaching?: boolean; // Default: true (uses caching when Redis is available)
 }
 
+/**
+ * Create conversation store with transparent failover
+ *
+ * CRITICAL: This function ALWAYS returns CachingConversationStore regardless of Redis availability.
+ * Factory function NEVER returns different types based on infrastructure.
+ *
+ * When Redis unavailable:
+ * - Uses PassThroughRedis (all cache operations are no-ops)
+ * - Transparently falls back to Supabase on every request
+ * - Application behavior is identical (just slower)
+ *
+ * Pattern matches: Phase 1-3 transparent failover implementations
+ *
+ * @returns CachingConversationStore instance - ALWAYS returns caching wrapper
+ */
 export function createConversationStore(
   options: ConversationStoreFactoryOptions
 ): ConversationStore {
@@ -1139,16 +1154,22 @@ export function createConversationStore(
     options.supabaseInternal
   );
 
-  // Caching defaults to on for ConversationStore when Redis is available
-  const redisClient = options.redis ?? (options.redisBackend ? createKeyValueClient(options.redisBackend) : null);
+  // ✅ ALWAYS return CachingConversationStore - factory never returns different types
+  // Determine Redis client: provided > from backend > PassThroughRedis
+  let redisClient: RedisKeyValueClient;
 
-  const cachingEnabled = options.enableCaching !== false;
-
-  if (cachingEnabled && redisClient) {
-    return new CachingConversationStore(supabaseStore, redisClient, {
-      ttlSeconds: options.cacheTtlSeconds ?? 60,
-    });
+  if (options.redis) {
+    redisClient = options.redis;
+  } else if (options.redisBackend) {
+    redisClient = createKeyValueClient(options.redisBackend);
+  } else {
+    // ✅ Use PassThroughRedis when Redis unavailable (transparent failover)
+    redisClient = createPassThroughRedis();
   }
 
-  return supabaseStore;
+  // ✅ ALWAYS return CachingConversationStore, even with PassThroughRedis
+  // CachingConversationStore handles errors internally (try-catch)
+  return new CachingConversationStore(supabaseStore, redisClient, {
+    ttlSeconds: options.cacheTtlSeconds ?? 60,
+  });
 }
