@@ -7,7 +7,6 @@
 
 import {
   ExecutionContextManager,
-  InMemoryExecutionContextStore,
   SupabaseExecutionContextStore,
   type ExecutionContextStore,
   type E2BClient,
@@ -117,10 +116,10 @@ export class E2BSandboxClient implements E2BClient {
  * Configuration for creating execution context manager
  */
 export interface ExecutionContextConfig {
-  /** Execution context store mode */
-  mode?: 'memory' | 'supabase' | 'auto';
+  /** Custom execution context store (e.g., cached wrapper) */
+  store?: ExecutionContextStore;
 
-  /** Supabase client (required for supabase mode) */
+  /** Supabase client used when a custom store is not provided */
   supabaseClient?: SupabaseClient;
 
   /** E2B API key */
@@ -140,21 +139,17 @@ export interface ExecutionContextConfig {
  * Resolve execution context store based on configuration
  */
 function resolveExecutionContextStore(config: ExecutionContextConfig): ExecutionContextStore {
-  const mode = config.mode ?? 'auto';
-
-  if (mode === 'memory') {
-    return new InMemoryExecutionContextStore();
+  if (config.store) {
+    return config.store;
   }
 
-  if (mode === 'supabase' || (mode === 'auto' && config.supabaseClient)) {
-    if (!config.supabaseClient) {
-      throw new Error('Supabase client required for supabase execution context store');
-    }
+  if (config.supabaseClient) {
     return new SupabaseExecutionContextStore(config.supabaseClient);
   }
 
-  // Default to in-memory
-  return new InMemoryExecutionContextStore();
+  throw new Error(
+    'Supabase client required for execution context store. Provide supabaseClient or a custom store.'
+  );
 }
 
 /**

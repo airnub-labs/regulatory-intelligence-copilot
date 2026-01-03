@@ -361,19 +361,27 @@ if (openfgaConfig) {
 // Create ExecutionContextManager if E2B is configured
 // This enables code execution tools in the chat
 const e2bApiKey = process.env.E2B_API_KEY;
-export const executionContextManager = e2bApiKey
-  ? createExecutionContextManager({
-      mode: normalizeConversationStoreMode === 'memory' ? 'memory' : 'supabase',
-      supabaseClient: supabaseClient ?? undefined,
-      e2bApiKey,
-      defaultTtlMinutes: 30,
-      sandboxTimeoutMs: 600000, // 10 minutes
-      enableLogging: true,
-    })
-  : undefined;
 
-if (executionContextManager) {
+let executionContextManager: ExecutionContextManager | undefined;
+
+if (e2bApiKey) {
+  if (!supabaseClient) {
+    const message = 'Supabase client required for execution context manager when E2B is enabled';
+    logger.error(message);
+    throw new Error(message);
+  }
+
+  executionContextManager = createExecutionContextManager({
+    supabaseClient,
+    e2bApiKey,
+    defaultTtlMinutes: 30,
+    sandboxTimeoutMs: 600000, // 10 minutes
+    enableLogging: true,
+  });
+
   logger.info('ExecutionContextManager initialized with E2B integration');
 } else {
   logger.info('E2B_API_KEY not configured; code execution tools disabled');
 }
+
+export { executionContextManager };
