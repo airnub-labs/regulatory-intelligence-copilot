@@ -11,8 +11,27 @@
  */
 
 import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { metrics } from '@opentelemetry/api';
 
 const logger = createLogger('TransparentRateLimiter');
+
+// Initialize metrics
+const meter = metrics.getMeter('reg-intel-cache', '1.0.0');
+
+const rateLimiterCheckCounter = meter.createCounter('ratelimiter.checks.total', {
+  description: 'Total number of rate limiter checks by result',
+  unit: '{checks}',
+});
+
+const rateLimiterCheckDuration = meter.createHistogram('ratelimiter.check.duration', {
+  description: 'Duration of rate limiter checks in milliseconds',
+  unit: 'ms',
+});
+
+const rateLimiterErrorCounter = meter.createCounter('ratelimiter.errors.total', {
+  description: 'Total number of rate limiter errors',
+  unit: '{errors}',
+});
 
 /**
  * Backend interface for rate limiting operations
@@ -76,6 +95,13 @@ class AllowAllRateLimiter implements TransparentRateLimiter {
       );
       this.hasWarned = true;
     }
+
+    // Track metric for passthrough rate limiter usage
+    rateLimiterCheckCounter.add(1, {
+      result: 'allowed',
+      backend: 'allowall',
+    });
+
     return true; // ✅ FAIL-OPEN: Always allow request
   }
 
@@ -96,16 +122,38 @@ class RedisBackedRateLimiter implements TransparentRateLimiter {
   constructor(private readonly backend: RateLimiterBackend) {}
 
   async check(identifier: string): Promise<boolean> {
+    const startTime = Date.now();
+    let result: 'allowed' | 'denied' | 'error' = 'allowed';
+    let allowed = true;
+
     try {
-      return await this.backend.check(identifier);
+      allowed = await this.backend.check(identifier);
+      result = allowed ? 'allowed' : 'denied';
+      rateLimiterCheckCounter.add(1, {
+        result,
+        backend: this.backend.getType(),
+      });
+      return allowed;
     } catch (error) {
       // ✅ TRANSPARENT: Log error but fail-open (allow request)
       // Better to allow request during outage than block legitimate users
+      result = 'error';
+      allowed = true;
+      rateLimiterErrorCounter.add(1, {
+        backend: this.backend.getType(),
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
       this.componentLogger.error(
         { identifier, error: error instanceof Error ? error.message : String(error) },
         'Rate limit check failed - allowing request (fail-open)'
       );
       return true; // Fail-open
+    } finally {
+      const duration = Date.now() - startTime;
+      rateLimiterCheckDuration.record(duration, {
+        result,
+        backend: this.backend.getType(),
+      });
     }
   }
 

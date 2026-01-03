@@ -11,8 +11,27 @@
  */
 
 import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { metrics } from '@opentelemetry/api';
 
 const logger = createLogger('TransparentCache');
+
+// Initialize metrics
+const meter = metrics.getMeter('reg-intel-cache', '1.0.0');
+
+const cacheOperationCounter = meter.createCounter('cache.operations.total', {
+  description: 'Total number of cache operations by type and result',
+  unit: '{operations}',
+});
+
+const cacheOperationDuration = meter.createHistogram('cache.operation.duration', {
+  description: 'Duration of cache operations in milliseconds',
+  unit: 'ms',
+});
+
+const cacheErrorCounter = meter.createCounter('cache.errors.total', {
+  description: 'Total number of cache errors by operation',
+  unit: '{errors}',
+});
 
 /**
  * Backend interface for cache operations
@@ -72,14 +91,34 @@ class PassThroughCache<T> implements TransparentCache<T> {
       logger.warn('PassThroughCache active - all cache operations disabled (Redis unavailable)');
       this.hasWarned = true;
     }
+
+    // Track metric for passthrough cache usage
+    cacheOperationCounter.add(1, {
+      operation: 'get',
+      result: 'miss',
+      backend: 'passthrough',
+    });
+
     return null; // Always cache miss
   }
 
   async set(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    // Track metric for passthrough cache usage
+    cacheOperationCounter.add(1, {
+      operation: 'set',
+      result: 'success',
+      backend: 'passthrough',
+    });
     // No-op - silently accept writes
   }
 
   async del(key: string): Promise<void> {
+    // Track metric for passthrough cache usage
+    cacheOperationCounter.add(1, {
+      operation: 'del',
+      result: 'success',
+      backend: 'passthrough',
+    });
     // No-op - silently accept deletes
   }
 
@@ -108,49 +147,122 @@ class RedisBackedCache<T> implements TransparentCache<T> {
   ) {}
 
   async get(key: string): Promise<T | null> {
+    const startTime = Date.now();
+    let result: 'hit' | 'miss' | 'error' = 'miss';
+
     try {
       const raw = await this.backend.get(key);
-      if (!raw) return null;
+      if (!raw) {
+        result = 'miss';
+        cacheOperationCounter.add(1, {
+          operation: 'get',
+          result: 'miss',
+          backend: this.backendType,
+        });
+        return null;
+      }
 
       const deserialize = this.options.deserialize ?? ((s: string) => JSON.parse(s) as T);
-      return deserialize(raw);
+      const value = deserialize(raw);
+      result = 'hit';
+      cacheOperationCounter.add(1, {
+        operation: 'get',
+        result: 'hit',
+        backend: this.backendType,
+      });
+      return value;
     } catch (error) {
       // ✅ TRANSPARENT: Log warning but return null (cache miss)
       // Application code doesn't know if this was a cache miss or Redis error
+      result = 'error';
+      cacheErrorCounter.add(1, {
+        operation: 'get',
+        backend: this.backendType,
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
       this.componentLogger.warn(
         { key, error: error instanceof Error ? error.message : String(error) },
         'Cache get failed - treating as cache miss'
       );
       return null;
+    } finally {
+      const duration = Date.now() - startTime;
+      cacheOperationDuration.record(duration, {
+        operation: 'get',
+        result,
+        backend: this.backendType,
+      });
     }
   }
 
   async set(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    const startTime = Date.now();
+    let success = true;
+
     try {
       const serialize = this.options.serialize ?? ((v: T) => JSON.stringify(v));
       const raw = serialize(value);
       const ttl = ttlSeconds ?? this.options.defaultTtlSeconds ?? 300;
 
       await this.backend.set(key, raw, ttl);
+      cacheOperationCounter.add(1, {
+        operation: 'set',
+        result: 'success',
+        backend: this.backendType,
+      });
     } catch (error) {
       // ✅ TRANSPARENT: Log warning but don't throw
       // Application code continues normally
+      success = false;
+      cacheErrorCounter.add(1, {
+        operation: 'set',
+        backend: this.backendType,
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
       this.componentLogger.warn(
         { key, error: error instanceof Error ? error.message : String(error) },
         'Cache set failed - continuing without cache'
       );
+    } finally {
+      const duration = Date.now() - startTime;
+      cacheOperationDuration.record(duration, {
+        operation: 'set',
+        result: success ? 'success' : 'error',
+        backend: this.backendType,
+      });
     }
   }
 
   async del(key: string): Promise<void> {
+    const startTime = Date.now();
+    let success = true;
+
     try {
       await this.backend.del(key);
+      cacheOperationCounter.add(1, {
+        operation: 'del',
+        result: 'success',
+        backend: this.backendType,
+      });
     } catch (error) {
       // ✅ TRANSPARENT: Log warning but don't throw
+      success = false;
+      cacheErrorCounter.add(1, {
+        operation: 'del',
+        backend: this.backendType,
+        errorType: error instanceof Error ? error.name : 'unknown',
+      });
       this.componentLogger.warn(
         { key, error: error instanceof Error ? error.message : String(error) },
         'Cache delete failed - continuing'
       );
+    } finally {
+      const duration = Date.now() - startTime;
+      cacheOperationDuration.record(duration, {
+        operation: 'del',
+        result: success ? 'success' : 'error',
+        backend: this.backendType,
+      });
     }
   }
 

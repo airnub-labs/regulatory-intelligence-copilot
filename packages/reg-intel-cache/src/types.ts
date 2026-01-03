@@ -30,5 +30,9 @@ export interface RedisPubSubClient {
 
 export interface RateLimiter {
   check(identifier: string): Promise<boolean>;
-  getType(): 'redis' | 'upstash';
+  getType(): 'redis' | 'upstash' | 'allowall'; // Added 'allowall' for transparent failover
 }
+
+// Re-export transparent failover types for convenience
+export type { TransparentCache, CacheBackend } from './transparentCache.js';
+export type { TransparentRateLimiter, RateLimiterBackend } from './transparentRateLimiter.js';
