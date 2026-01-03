@@ -14,8 +14,10 @@ export type {
 export type { PricingService } from './pricingService.js';
 
 export {
-  createPricingService,
-  getDefaultPricingService,
+  SupabasePricingService,
+  initPricingService,
+  getPricingService,
+  getPricingServiceIfInitialized,
   calculateLlmCost,
 } from './pricingService.js';
 

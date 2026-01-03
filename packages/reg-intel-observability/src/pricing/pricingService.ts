@@ -4,12 +4,13 @@
  * Service for looking up model pricing and calculating costs.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   ModelPricing,
   CostCalculation,
   CostEstimateRequest,
 } from './types.js';
-import { ALL_PRICING, DEFAULT_PRICING } from './pricingData.js';
+import { DEFAULT_PRICING } from './pricingData.js';
 
 /**
  * Pricing service interface
@@ -36,54 +37,51 @@ export interface PricingService {
   updatePricing(pricing: ModelPricing): Promise<void>;
 }
 
-/**
- * In-memory pricing service
- *
- * Uses static pricing data. For production, use database-backed service.
- */
-class InMemoryPricingService implements PricingService {
-  private pricingMap: Map<string, ModelPricing[]>;
+interface PricingRow {
+  provider: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  effective_date: string;
+  expires_at?: string | null;
+  notes?: string | null;
+}
 
-  constructor(pricingData: ModelPricing[] = ALL_PRICING) {
-    this.pricingMap = new Map();
+function mapRowToPricing(row: PricingRow): ModelPricing {
+  return {
+    provider: row.provider,
+    model: row.model,
+    inputPricePerMillion: Number(row.input_price_per_million),
+    outputPricePerMillion: Number(row.output_price_per_million),
+    effectiveDate: row.effective_date,
+    expiresAt: row.expires_at ?? undefined,
+    notes: row.notes ?? undefined,
+  };
+}
 
-    // Group pricing by provider:model key
-    for (const pricing of pricingData) {
-      const key = this.createKey(pricing.provider, pricing.model);
-      const existing = this.pricingMap.get(key) || [];
-      existing.push(pricing);
-      this.pricingMap.set(key, existing);
-    }
+export class SupabasePricingService implements PricingService {
+  private readonly client: SupabaseClient;
+  private readonly tableName: string;
+
+  constructor(client: SupabaseClient, tableName = 'copilot_internal.model_pricing') {
+    this.client = client;
+    this.tableName = tableName;
   }
 
-  /**
-   * Create lookup key from provider and model
-   */
-  private createKey(provider: string, model: string): string {
-    return `${provider.toLowerCase()}:${model.toLowerCase()}`;
-  }
-
-  /**
-   * Normalize model name to match pricing keys
-   */
   private normalizeModel(provider: string, model: string): string {
     const providerLower = provider.toLowerCase();
     const modelLower = model.toLowerCase();
 
-    // Handle common model name variations
     if (providerLower === 'openai') {
-      // gpt-4-0314 -> gpt-4
       if (modelLower.startsWith('gpt-4-0') || modelLower === 'gpt-4-32k-0314') {
-        return modelLower.split('-').slice(0, 2).join('-'); // gpt-4 or gpt-4-32k
+        return modelLower.split('-').slice(0, 2).join('-');
       }
-      // gpt-3.5-turbo-0301 -> gpt-3.5-turbo
       if (modelLower.startsWith('gpt-3.5-turbo-0')) {
         return 'gpt-3.5-turbo';
       }
     }
 
     if (providerLower === 'anthropic') {
-      // claude-3-opus -> claude-3-opus-20240229
       if (modelLower === 'claude-3-opus') {
         return 'claude-3-opus-20240229';
       }
@@ -98,50 +96,19 @@ class InMemoryPricingService implements PricingService {
     return modelLower;
   }
 
-  /**
-   * Get pricing for a specific model
-   */
-  async getPricing(
-    provider: string,
-    model: string,
-    date?: Date
-  ): Promise<ModelPricing | null> {
-    const normalizedModel = this.normalizeModel(provider, model);
-    const key = this.createKey(provider, normalizedModel);
-    const pricingList = this.pricingMap.get(key);
-
-    if (!pricingList || pricingList.length === 0) {
-      // Try original model name as fallback
-      const originalKey = this.createKey(provider, model);
-      const originalList = this.pricingMap.get(originalKey);
-      if (!originalList || originalList.length === 0) {
-        return null;
-      }
-      return this.selectPricingByDate(originalList, date);
+  private selectPricingByDate(pricingList: ModelPricing[], date?: Date): ModelPricing | null {
+    if (pricingList.length === 0) {
+      return null;
     }
 
-    return this.selectPricingByDate(pricingList, date);
-  }
-
-  /**
-   * Select appropriate pricing based on date
-   */
-  private selectPricingByDate(
-    pricingList: ModelPricing[],
-    date?: Date
-  ): ModelPricing {
     const targetDate = date || new Date();
-
-    // Sort by effective date (newest first)
     const sorted = [...pricingList].sort((a, b) => {
       return new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime();
     });
 
-    // Find first pricing that is effective before target date
     for (const pricing of sorted) {
       const effectiveDate = new Date(pricing.effectiveDate);
       if (effectiveDate <= targetDate) {
-        // Check if expired
         if (pricing.expiresAt) {
           const expiresDate = new Date(pricing.expiresAt);
           if (expiresDate < targetDate) {
@@ -152,13 +119,31 @@ class InMemoryPricingService implements PricingService {
       }
     }
 
-    // Fallback to oldest pricing if none match
-    return sorted[sorted.length - 1] || sorted[0];
+    return sorted[sorted.length - 1] || null;
   }
 
-  /**
-   * Calculate cost for a request
-   */
+  async getPricing(provider: string, model: string, date?: Date): Promise<ModelPricing | null> {
+    const normalizedModel = this.normalizeModel(provider, model);
+    const providerLower = provider.toLowerCase();
+
+    const { data, error } = await this.client
+      .from(this.tableName)
+      .select('*')
+      .eq('provider', providerLower)
+      .eq('model', normalizedModel);
+
+    if (error) {
+      throw new Error(`Failed to fetch pricing for ${provider}/${model}: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    const pricingList = (data as PricingRow[]).map(mapRowToPricing);
+    return this.selectPricingByDate(pricingList, date);
+  }
+
   async calculateCost(request: CostEstimateRequest): Promise<CostCalculation> {
     const pricing = await this.getPricing(
       request.provider,
@@ -169,7 +154,6 @@ class InMemoryPricingService implements PricingService {
     const effectivePricing = pricing || DEFAULT_PRICING;
     const isEstimated = !pricing;
 
-    // Calculate costs
     const inputCostUsd =
       (request.inputTokens / 1_000_000) * effectivePricing.inputPricePerMillion;
     const outputCostUsd =
@@ -177,7 +161,7 @@ class InMemoryPricingService implements PricingService {
     const totalCostUsd = inputCostUsd + outputCostUsd;
 
     return {
-      inputCostUsd: Math.round(inputCostUsd * 1_000_000) / 1_000_000, // Round to 6 decimals
+      inputCostUsd: Math.round(inputCostUsd * 1_000_000) / 1_000_000,
       outputCostUsd: Math.round(outputCostUsd * 1_000_000) / 1_000_000,
       totalCostUsd: Math.round(totalCostUsd * 1_000_000) / 1_000_000,
       pricing: effectivePricing,
@@ -185,67 +169,65 @@ class InMemoryPricingService implements PricingService {
     };
   }
 
-  /**
-   * Get all pricing for a provider
-   */
   async getProviderPricing(provider: string): Promise<ModelPricing[]> {
     const providerLower = provider.toLowerCase();
-    const result: ModelPricing[] = [];
+    const { data, error } = await this.client
+      .from(this.tableName)
+      .select('*')
+      .eq('provider', providerLower);
 
-    for (const [key, pricingList] of this.pricingMap.entries()) {
-      if (key.startsWith(`${providerLower}:`)) {
-        result.push(...pricingList);
-      }
+    if (error) {
+      throw new Error(`Failed to fetch provider pricing for ${provider}: ${error.message}`);
     }
 
-    return result;
+    if (!data) {
+      return [];
+    }
+
+    return (data as PricingRow[]).map(mapRowToPricing);
   }
 
-  /**
-   * Update pricing (for in-memory service, just adds to map)
-   */
   async updatePricing(pricing: ModelPricing): Promise<void> {
-    const key = this.createKey(pricing.provider, pricing.model);
-    const existing = this.pricingMap.get(key) || [];
-    existing.push(pricing);
-    this.pricingMap.set(key, existing);
+    const { error } = await this.client.from(this.tableName).insert({
+      provider: pricing.provider.toLowerCase(),
+      model: pricing.model.toLowerCase(),
+      input_price_per_million: pricing.inputPricePerMillion,
+      output_price_per_million: pricing.outputPricePerMillion,
+      effective_date: pricing.effectiveDate,
+      expires_at: pricing.expiresAt ?? null,
+      notes: pricing.notes ?? null,
+    });
+
+    if (error) {
+      throw new Error(`Failed to update pricing for ${pricing.provider}/${pricing.model}: ${error.message}`);
+    }
   }
 }
 
-/**
- * Create a pricing service instance
- */
-export function createPricingService(
-  pricingData?: ModelPricing[]
-): PricingService {
-  return new InMemoryPricingService(pricingData);
+let pricingService: PricingService | null = null;
+
+export function initPricingService(service: PricingService): void {
+  pricingService = service;
 }
 
-/**
- * Singleton pricing service for convenience
- */
-let defaultPricingService: PricingService | null = null;
-
-/**
- * Get default pricing service instance
- */
-export function getDefaultPricingService(): PricingService {
-  if (!defaultPricingService) {
-    defaultPricingService = createPricingService();
+export function getPricingService(): PricingService {
+  if (!pricingService) {
+    throw new Error('Pricing service has not been initialized. Provide a persistent pricing service.');
   }
-  return defaultPricingService;
+  return pricingService;
 }
 
-/**
- * Quick cost calculation helper
- */
+export function getPricingServiceIfInitialized(): PricingService | null {
+  return pricingService;
+}
+
 export async function calculateLlmCost(
   provider: string,
   model: string,
   inputTokens: number,
   outputTokens: number
 ): Promise<CostCalculation> {
-  const service = getDefaultPricingService();
+  const service = getPricingService();
   return service.calculateCost({
     provider,
     model,
