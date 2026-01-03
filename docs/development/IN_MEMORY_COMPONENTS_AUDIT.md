@@ -1,316 +1,385 @@
-# In-Memory Components Audit
+# In-Memory Components Audit - Final State
 
 **Date**: 2026-01-03
 **Branch**: `claude/dynamic-pricing-service-o1Rlc`
-**Audit Type**: Comprehensive review of all in-memory stores, caches, rate limiters, and calculations
+**Status**: All deprecated in-memory fallbacks removed
+**See Also**: `FALLBACK_REMOVAL_SUMMARY.md`, `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md`
+
+---
 
 ## Executive Summary
 
-This audit identifies all in-memory components in the regulatory intelligence copilot codebase to ensure cloud deployment readiness. The system has been successfully migrated from static in-memory pricing to dynamic Supabase-backed pricing, and SupabaseSnapshotStorage has been implemented for conversation compaction.
+All in-memory fallbacks for distributed state have been **completely removed** from the codebase. The system now uses strict fail-safe patterns (fail-open, fail-through, fail-fast) to prevent memory accumulation during outages and ensure predictable, scalable behavior.
 
-### Key Changes Made
+### Migration Complete
 
-1. ✅ **Removed `InMemoryPricingService`** from public exports
-2. ✅ **Implemented `SupabasePricingService`** initialization at app startup
-3. ✅ **Verified `SupabaseSnapshotStorage`** exists and is properly implemented
-4. ✅ **Documented all remaining in-memory components** with justification
+1. ✅ **InMemoryPricingService** - REMOVED (replaced with error if Supabase unavailable)
+2. ✅ **MemoryRateLimiter** - REMOVED (replaced with NoOpRateLimiter that fails-open)
+3. ✅ **MemoryCache (auth validation)** - REMOVED (replaced with NoOpCache that fails-through)
+4. ✅ **All deprecated in-memory stores** - REMOVED (InMemoryConversationStore, InMemoryPathStore, etc.)
+5. ✅ **Static pricing fallbacks** - REMOVED (DEFAULT_PRICING no longer exported)
+
+### Current State
+
+**✅ Production In-Memory Components (Justified)**:
+- TokenCache (performance optimization - local LRU)
+- GraphChangeDetector (SSE/WebSocket state - per-instance)
+- ExecutionContextManager.activeSandboxes (connection pools)
+- AnomalyDetectionService.historyCache (time-series analysis)
+- ToolRegistry (static configuration)
+
+**❌ No In-Memory Fallbacks**:
+- Rate limiting → NoOpRateLimiter (fails-open)
+- Auth caching → NoOpCache (fails-through)
+- Pricing → Error if not in Supabase (fails-fast)
 
 ---
 
 ## Changes Implemented
 
-### 1. Dynamic Pricing Service Migration
+### 1. Dynamic Pricing Service (Supabase Only)
 
-**Previous State**: No pricing service initialization; InMemoryPricingService available for use
-
-**Current State**: Dynamic pricing with Supabase backend
+**Previous**: InMemoryPricingService with static DEFAULT_PRICING fallback
+**Current**: SupabasePricingService with error if pricing not found
 
 **Files Modified**:
-- `/packages/reg-intel-observability/src/pricing/index.ts`: Removed InMemoryPricingService export
-- `/apps/demo-web/src/lib/pricingInit.ts`: Created pricing initialization module
-- `/apps/demo-web/instrumentation.ts`: Added pricing service initialization
+- `packages/reg-intel-observability/src/pricing/index.ts` - Removed InMemoryPricingService and pricing constant exports
+- `packages/reg-intel-observability/src/pricing/pricingService.ts` - Removed InMemoryPricingService class, removed DEFAULT_PRICING fallback
+- `apps/demo-web/src/lib/pricingInit.ts` - Created Supabase pricing initialization
+- `apps/demo-web/instrumentation.ts` - Added pricing service initialization at startup
 
-**Configuration**:
+**Behavior**:
 ```typescript
-// Pricing service now initialized with Supabase in instrumentation.ts
-const pricingService = new SupabasePricingService(supabaseClient);
-initPricingService(pricingService);
+// Now throws error if pricing not found
+const pricing = await service.getPricing('openai', 'gpt-4');
+if (!pricing) {
+  throw new Error(
+    `Pricing not found for openai/gpt-4. ` +
+    `Ensure pricing data is loaded in Supabase.`
+  );
+}
 ```
 
-**Environment Variables Required**:
-- `SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SERVICE_KEY`
-
-### 2. Snapshot Storage Verification
-
-**Status**: ✅ Already Implemented
-
-**Location**: `/packages/reg-intel-conversations/src/compaction/supabaseSnapshotStorage.ts`
-
-**Features**:
-- Persistent snapshot storage in Supabase
-- Snapshot expiration and cleanup
-- Full CRUD operations
-- Multi-instance safe
-
-**Exported From**: `@reg-copilot/reg-intel-conversations/compaction`
+**Required**:
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+- Pricing data seeded in `copilot_internal.model_pricing` table
 
 ---
 
-## In-Memory Components Inventory
+### 2. Rate Limiting (Fail-Open)
 
-### Category 1: Production In-Memory Components (Justified)
+**Previous**: MemoryRateLimiter with `Map<string, RateLimitEntry>` fallback
+**Current**: NoOpRateLimiter that always allows requests
 
-These components use in-memory storage intentionally for performance or architectural reasons:
+**Files Modified**:
+- `packages/reg-intel-cache/src/rateLimiter.ts` - Replaced MemoryRateLimiter with NoOpRateLimiter
+- `packages/reg-intel-cache/src/types.ts` - Updated RateLimiter type ('noop' instead of 'memory')
+
+**Before** (REMOVED):
+```typescript
+class MemoryRateLimiter {
+  private store = new Map<string, { count: number; resetAt: number }>();
+  // ❌ Unbounded memory growth
+  // ❌ No coordination between instances
+}
+```
+
+**After**:
+```typescript
+class NoOpRateLimiter {
+  async check(identifier: string): Promise<boolean> {
+    return true; // Always allow - fail-open
+  }
+}
+```
+
+**Benefits**:
+- No memory accumulation during Redis outages
+- Predictable behavior (allow all traffic)
+- Clear logging when Redis unavailable
+- No false sense of security
+
+---
+
+### 3. Auth Validation Cache (Fail-Through)
+
+**Previous**: MemoryCache with 10,000 entry limit per instance
+**Current**: NoOpCache that always returns null (hits database)
+
+**Files Modified**:
+- `apps/demo-web/src/lib/auth/distributedValidationCache.ts` - Replaced MemoryCache with NoOpCache
+
+**Before** (REMOVED):
+```typescript
+class MemoryCache {
+  private cache = new Map<string, CacheEntry>(); // Max 10K
+  // ❌ Memory multiplied across instances
+  // ❌ Cache thrashing under load
+}
+```
+
+**After**:
+```typescript
+class NoOpCache {
+  async get(userId: string): Promise<CacheEntry | null> {
+    return null; // Always miss - hit database
+  }
+}
+```
+
+**Benefits**:
+- No memory accumulation
+- Supabase can handle the load
+- Clear failure mode
+- Simpler architecture
+
+---
+
+### 4. Deprecated In-Memory Stores (Completely Removed)
+
+**Removed Classes**:
+- `InMemoryConversationStore` (~290 lines)
+- `InMemoryConversationContextStore` (~47 lines)
+- `InMemoryConversationPathStore` (~643 lines)
+- `InMemoryConversationConfigStore` (~112 lines)
+
+**Removed Test Files**:
+- `packages/reg-intel-conversations/src/__tests__/pathStores.test.ts` (982 lines)
+- `packages/reg-intel-conversations/src/__tests__/testExecutionContextStore.ts` (175 lines)
+
+**Replacement**:
+- All use Supabase stores (SupabaseConversationStore, SupabasePathStore, etc.)
+- Optional Redis caching via CachingConversationStore wrappers
+
+**Total Deletion**: 2,363 lines removed
+
+---
+
+## Remaining In-Memory Components (Justified)
+
+### Category 1: Performance Optimizations (Local-Only)
 
 #### 1.1 TokenCache
 - **Location**: `packages/reg-intel-core/src/tokens/cache.ts:13-131`
-- **Purpose**: LRU cache for token counts to avoid repeated tokenization
-- **Justification**: Performance optimization; tokenization is CPU-intensive
-- **Multi-Instance Safe**: ✅ Yes (local cache per instance is acceptable)
-- **Configuration**:
-  - Max size: 1000 entries
-  - TTL: 1 hour
-- **Recommendation**: Keep as-is
+- **Purpose**: LRU cache for token counts (avoid expensive re-tokenization)
+- **Storage**: `Map<string, TokenCacheEntry>` with max 1000 entries, 1-hour TTL
+- **Multi-Instance Safe**: ✅ Yes (local cache per instance is acceptable for performance)
+- **Justification**: Tokenization is CPU-intensive; local caching provides significant speedup
+- **Recommendation**: ✅ Keep as-is
 
-#### 1.2 MemoryCache (Auth Validation)
-- **Location**: `apps/demo-web/src/lib/auth/distributedValidationCache.ts:128-181`
-- **Purpose**: Fallback cache for user session validation
-- **Primary**: RedisCache (preferred)
-- **Fallback**: MemoryCache (when Redis unavailable)
-- **Multi-Instance Safe**: ⚠️ Single-instance only (use Redis for multi-instance)
-- **Configuration**:
-  - Max size: 10,000 users
-  - TTL: 5 minutes
-- **Recommendation**: Ensure Redis is configured in production
+---
 
-#### 1.3 GraphChangeDetector
+### Category 2: Per-Instance Stateful Features
+
+#### 2.1 GraphChangeDetector
 - **Location**: `packages/reg-intel-graph/src/graphChangeDetector.ts:136-856`
 - **Purpose**: Real-time graph change detection for SSE/WebSocket streaming
 - **Storage**:
-  - Graph state snapshots
-  - Change listeners
-  - Timestamp tracking
-  - Batched changes
-- **Multi-Instance Safe**: ✅ Yes (stateful per-instance by design)
-- **Justification**: SSE/WebSocket connections are inherently per-instance
-- **Recommendation**: Keep as-is
+  - `Map<string, GraphSnapshot>` - graph state snapshots
+  - `Map<string, Set<ChangeCallback>>` - change listeners
+  - `Map<string, LastPollInfo>` - timestamp tracking
+  - `Map<string, PendingBatch>` - batched changes
+- **Multi-Instance Safe**: ✅ Yes (SSE/WebSocket connections are inherently per-instance)
+- **Justification**: Each instance maintains its own client connections; state cannot be shared
+- **Recommendation**: ✅ Keep as-is
 
-#### 1.4 MemoryRateLimiter
-- **Location**: `packages/reg-intel-cache/src/rateLimiter.ts:29-64`
-- **Purpose**: Fallback rate limiter
-- **Primary**: RedisSlidingWindowRateLimiter or UpstashRateLimiter (preferred)
-- **Fallback**: MemoryRateLimiter (when Redis unavailable)
-- **Multi-Instance Safe**: ⚠️ Single-instance only (use Redis for multi-instance)
-- **Configuration**: Configurable window and limit
-- **Usage**: Client telemetry rate limiting
-- **Recommendation**: Ensure Redis is configured in production
+#### 2.2 ExecutionContextManager.activeSandboxes
+- **Location**: `packages/reg-intel-conversations/src/executionContextManager.ts:125`
+- **Purpose**: Track active E2B sandbox connections
+- **Storage**: `Map<string, E2BSandbox>` - active connection pool
+- **Multi-Instance Safe**: ✅ Yes (connections are inherently local to the instance)
+- **Justification**: Cannot share active connections across processes
+- **Note**: Context metadata is stored in Supabase; only active connections are in-memory
+- **Recommendation**: ✅ Keep as-is
 
-#### 1.5 AnomalyDetectionService.historyCache
+---
+
+### Category 3: Computational State
+
+#### 3.1 AnomalyDetectionService.historyCache
 - **Location**: `packages/reg-intel-observability/src/costTracking/anomalyDetection.ts:86`
-- **Purpose**: Historical cost data for anomaly detection
-- **Storage**: Time-series data for moving averages and z-scores
+- **Purpose**: Historical cost data for anomaly detection (moving averages, z-scores)
+- **Storage**: `Map<string, ScopeHistory>` - time-series data
 - **Multi-Instance Safe**: ✅ Yes (each instance analyzes independently)
 - **Justification**: Real-time statistical analysis requires local state
-- **Recommendation**: Keep as-is
+- **Recommendation**: ✅ Keep as-is
 
-#### 1.6 ExecutionContextManager.activeSandboxes
-- **Location**: `packages/reg-intel-conversations/src/executionContextManager.ts:125`
-- **Purpose**: Track active E2B sandboxes
-- **Storage**: Active connection pool
-- **Multi-Instance Safe**: ✅ Yes (connections are inherently local)
-- **Justification**: Cannot share active connections across processes
-- **Note**: Context metadata is stored in Supabase
-- **Recommendation**: Keep as-is
+---
 
-#### 1.7 ToolRegistry.tools
+### Category 4: Static Configuration
+
+#### 4.1 ToolRegistry.tools
 - **Location**: `packages/reg-intel-llm/src/tools/toolRegistry.ts:56`
-- **Purpose**: Registry of available LLM tools
-- **Storage**: Static configuration loaded at startup
-- **Multi-Instance Safe**: ✅ Yes (static data)
+- **Purpose**: Registry of available LLM tools (run_code, run_analysis)
+- **Storage**: `Map<string, RegisteredTool>` - static configuration
+- **Multi-Instance Safe**: ✅ Yes (static data loaded at startup)
 - **Justification**: Tools are registered at startup; no persistence needed
-- **Recommendation**: Keep as-is
+- **Recommendation**: ✅ Keep as-is
 
-#### 1.8 Pricing Data Constants
+#### 4.2 Pricing Data Constants (Internal Use Only)
 - **Location**: `packages/reg-intel-observability/src/pricing/pricingData.ts`
-- **Purpose**: Static model pricing data
-- **Primary**: SupabasePricingService (preferred)
-- **Fallback**: ALL_PRICING constants (when Supabase unavailable)
-- **Multi-Instance Safe**: ✅ Yes (static data)
-- **Justification**: Fallback reference data for pricing calculations
-- **Recommendation**: Keep as fallback; use SupabasePricingService in production
+- **Status**: ❌ **NOT EXPORTED** (kept only for Supabase seeding)
+- **Previous**: Exported ALL_PRICING, DEFAULT_PRICING for fallback
+- **Current**: File exists but not exported; used only for seeding scripts
+- **Recommendation**: ✅ Keep file for seeding; never export for runtime use
 
 ---
 
-### Category 2: Deprecated Test-Only Components
+## Fail-Safe Patterns Summary
 
-These components are marked as deprecated and only used in tests:
+### Pattern 1: Fail-Open (Rate Limiting)
+**When**: Redis unavailable
+**Behavior**: Allow all requests through
+**Rationale**: Better than broken per-instance rate limiting
 
-#### 2.1 InMemoryConversationStore
-- **Location**: `packages/reg-intel-conversations/src/conversationStores.ts:211-500`
-- **Status**: ❌ Deprecated (test-only)
-- **Replacement**: ✅ SupabaseConversationStore + CachingConversationStore
-- **Recommendation**: Continue using for legacy tests only
+### Pattern 2: Fail-Through (Caching)
+**When**: Redis unavailable
+**Behavior**: Skip cache, hit database directly
+**Rationale**: Supabase can handle the load
 
-#### 2.2 InMemoryConversationContextStore
-- **Location**: `packages/reg-intel-conversations/src/conversationStores.ts:506-552`
-- **Status**: ❌ Deprecated (test-only)
-- **Replacement**: ✅ SupabaseConversationContextStore
-- **Recommendation**: Continue using for legacy tests only
-
-#### 2.3 InMemoryConversationPathStore
-- **Location**: `packages/reg-intel-conversations/src/pathStores.ts:97-732`
-- **Status**: ❌ Deprecated (test-only)
-- **Replacement**: ✅ SupabaseConversationPathStore
-- **Recommendation**: Continue using for legacy tests only
-
-#### 2.4 InMemoryConversationConfigStore
-- **Location**: `packages/reg-intel-conversations/src/conversationConfig.ts:133-235`
-- **Status**: ❌ Deprecated (test-only)
-- **Replacement**: ✅ SupabaseConversationConfigStore + CachingConversationConfigStore
-- **Recommendation**: Continue using for legacy tests only
-
-#### 2.5 TestExecutionContextStore
-- **Location**: `packages/reg-intel-conversations/src/__tests__/testExecutionContextStore.ts:14-175`
-- **Status**: ❌ Test-only (in __tests__ directory)
-- **Replacement**: ✅ SupabaseExecutionContextStore
-- **Recommendation**: Keep for testing purposes
+### Pattern 3: Fail-Fast (Critical Data)
+**When**: Supabase unavailable or data missing
+**Behavior**: Throw clear error
+**Rationale**: Better than stale/incorrect data
 
 ---
 
-## Production Deployment Checklist
+## Production Deployment Requirements
 
-### Required for Multi-Instance Deployments
+### Required (All Environments)
 
-1. ✅ **Supabase**: Required for all persistent storage
-   - Conversations, messages, paths
-   - Execution contexts
-   - Cost tracking
-   - Pricing data
-   - Snapshot storage
-
-2. ⚠️ **Redis**: Recommended for multi-instance deployments
-   - Conversation caching
-   - Config caching
-   - Rate limiting
-   - Auth validation caching
-   - Event hubs (SSE distribution)
-
-3. ✅ **Acceptable In-Memory Usage**:
-   - Token caching (performance)
-   - Graph change detection (SSE/WebSocket state)
-   - E2B sandbox connections (cannot be shared)
-   - Cost anomaly detection (real-time analysis)
-   - Tool registry (static config)
-
-### Environment Variables Checklist
-
-#### Required
 ```bash
+# Supabase - Required for all persistent storage
 SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
+
+# Pricing data must be seeded in copilot_internal.model_pricing table
 ```
 
-#### Recommended for Multi-Instance
+### Recommended (Production)
+
 ```bash
+# Redis - For caching & rate limiting
 REDIS_URL=...
 REDIS_PASSWORD=...
-# OR
+
+# OR Upstash
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 ```
 
-#### Optional Optimizations
+### Optional (Feature Flags)
+
 ```bash
-# Cache control flags (all default to true)
-ENABLE_CONVERSATION_CACHING=true
-ENABLE_CONVERSATION_CONFIG_CACHE=true
-ENABLE_AUTH_VALIDATION_CACHE=true
-ENABLE_LLM_POLICY_CACHE=true
-ENABLE_RATE_LIMITER_REDIS=true
-ENABLE_REDIS_EVENT_HUBS=true
+# Disable specific caches (even with Redis)
+ENABLE_AUTH_VALIDATION_CACHE=false
+ENABLE_CONVERSATION_CACHING=false
+ENABLE_RATE_LIMITER_REDIS=false
 ```
 
 ---
 
-## Recommendations Summary
+## Memory Impact Analysis
 
-### ✅ Keep As-Is (Justified In-Memory)
-- TokenCache (performance optimization)
-- GraphChangeDetector (SSE/WebSocket state)
-- ExecutionContextManager.activeSandboxes (connection pooling)
-- AnomalyDetectionService.historyCache (real-time analysis)
-- ToolRegistry (static configuration)
-- Pricing data constants (fallback data)
+### Before (With In-Memory Fallbacks)
 
-### ⚠️ Ensure Redis in Production
-- Auth validation cache (MemoryCache → RedisCache)
-- Rate limiter (MemoryRateLimiter → RedisSlidingWindowRateLimiter)
-- Conversation caching
-- Config caching
-- Event hubs
+**During Redis Outage (10 Instances)**:
+```
+Rate Limiter: 10 instances × unbounded Map = OOM risk
+Auth Cache:   10 instances × 10,000 entries = ~10MB+ per instance
+Total Risk:   High - memory accumulation, potential OOM
+```
 
-### ✅ Already Using Distributed Alternatives
-- Conversation storage (Supabase)
-- Path storage (Supabase)
-- Context storage (Supabase)
-- Config storage (Supabase + Redis)
-- Pricing service (Supabase)
-- Snapshot storage (Supabase)
+### After (With Fail-Safe Patterns)
+
+**During Redis Outage (10 Instances)**:
+```
+Rate Limiter: 0 memory (NoOpRateLimiter)
+Auth Cache:   0 memory (NoOpCache)
+Total Risk:   None - no memory accumulation
+```
 
 ---
 
-## Testing Recommendations
+## Monitoring Requirements
 
-1. **Unit Tests**: Continue using in-memory stores for fast test execution
-2. **Integration Tests**: Use Supabase + Redis for realistic testing
-3. **Load Tests**: Verify Redis fallback behavior under failure scenarios
-4. **Multi-Instance Tests**: Verify SSE/WebSocket distribution works across instances
+### Critical Alerts (P0)
+- `supabase_connection_status = down` → System cannot function
+- `pricing_lookup_errors > 0` → Missing pricing data
+- `auth_validation_failures > threshold` → Auth system issues
 
----
+### High Alerts (P1)
+- `redis_connection_status = down` → Rate limiting & caching disabled
+- `rate_limiter_type = noop` → Rate limiting bypassed
+- `cache_type = noop` → Database load increased
 
-## Migration Notes
-
-### What Changed in This Branch
-
-1. **InMemoryPricingService**:
-   - Removed from public exports
-   - Still exists in code for test purposes
-   - Production code now uses SupabasePricingService exclusively
-
-2. **SupabasePricingService**:
-   - Initialized in `instrumentation.ts` at app startup
-   - Configured via `pricingInit.ts` module
-   - Falls back to static pricing constants if Supabase unavailable
-
-3. **SupabaseSnapshotStorage**:
-   - Already implemented (no changes needed)
-   - Provides persistent snapshot storage for compaction rollback
-
-### Backward Compatibility
-
-- Test code can still import InMemoryPricingService from `./pricingService.js` directly
-- Public API only exports SupabasePricingService
-- Existing test suites continue to work
+### Metrics to Track
+- `dependency_health{service="supabase"}` (up/down)
+- `dependency_health{service="redis"}` (up/down)
+- `rate_limiter_type` (redis | upstash | noop)
+- `cache_hit_rate` (drops to 0% when Redis down)
+- `database_query_duration_seconds` (increases when cache down)
 
 ---
 
-## Conclusion
+## Testing Requirements
 
-The regulatory intelligence copilot is **cloud-ready** with appropriate use of distributed storage (Supabase) and caching (Redis). Remaining in-memory components are justified for:
+### Unit Tests
+- ✅ NoOpRateLimiter always returns true
+- ✅ NoOpCache always returns null
+- ✅ SupabasePricingService throws error for unknown models
 
-1. **Performance** (token caching)
-2. **Architecture** (SSE/WebSocket state, connection pooling)
-3. **Real-time analysis** (anomaly detection)
-4. **Static configuration** (tool registry, fallback pricing)
+### Integration Tests
+- ✅ System behavior when Redis unavailable
+- ✅ System behavior when Supabase unavailable
+- ✅ Database load without caching
 
-For production multi-instance deployments:
-- ✅ Supabase is **required**
-- ⚠️ Redis is **strongly recommended**
-- ✅ In-memory fallbacks work but are less effective
+### Load Tests
+- ✅ Performance without Redis caching
+- ✅ Supabase can handle uncached load
+- ✅ Rate limiter fail-open doesn't cause issues
 
 ---
 
-**Report Generated**: 2026-01-03
-**Audited By**: Claude (Anthropic AI Assistant)
-**Branch**: `claude/dynamic-pricing-service-o1Rlc`
+## Architecture Principles
+
+### ✅ Achieved
+- Predictable failure modes
+- No memory accumulation during outages
+- Clear monitoring signals
+- Honest about system capabilities
+- Scalable multi-instance architecture
+
+### ❌ Avoided
+- Silent degradation
+- False sense of security (broken rate limiting)
+- OOM risk during extended outages
+- Stale data serving
+- Hidden coordination issues between instances
+
+---
+
+## Related Documentation
+
+- **Fallback Removal**: `docs/development/FALLBACK_REMOVAL_SUMMARY.md` - Detailed analysis of changes
+- **Architecture**: `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` - Design principles and patterns
+- **Agent Guidelines**: `AGENTS.md` - Includes fault-tolerance section
+- **Environment Setup**: `ENV_SETUP.md` - Configuration guide
+
+---
+
+## Summary
+
+The regulatory intelligence copilot is **production-ready** with appropriate fault-tolerant patterns:
+
+| Component | Storage | Fallback Behavior | Status |
+|-----------|---------|-------------------|---------|
+| Conversations | Supabase | Error if unavailable | ✅ Required |
+| Paths | Supabase | Error if unavailable | ✅ Required |
+| Pricing | Supabase | Error if unavailable | ✅ Required |
+| Rate Limiting | Redis | NoOp (allow all) | ⚠️ Recommended |
+| Caching | Redis | NoOp (hit DB) | ⚠️ Recommended |
+| Token Cache | Local LRU | N/A | ✅ Performance |
+| SSE State | Per-instance | N/A | ✅ Architectural |
+
+**Enforcement**: Any attempt to add in-memory fallbacks for distributed state will be rejected. See `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` for architectural review process.

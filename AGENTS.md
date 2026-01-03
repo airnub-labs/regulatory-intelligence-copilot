@@ -137,6 +137,43 @@ All issues identified by these commands must be resolved before committing and p
   - OTEL forwarding works when configured (check logs for forwarding success/failure).
   - Page unload events are captured (use `beforeunload` + `visibilitychange` handlers).
 
+**Fault-tolerant architecture and dependency management:**
+
+- **CRITICAL:** This system follows strict fault-tolerance principles - **NEVER add in-memory fallbacks for distributed state**.
+- **Required dependencies:**
+  - **Supabase**: All persistent storage (conversations, messages, paths, pricing, cost tracking) - system MUST fail-fast if unavailable.
+  - **LLM Providers**: AI functionality (configured via tenant policies) - system MUST error clearly if misconfigured.
+- **Optional dependencies with fail-safe behavior:**
+  - **Redis**: Caching and rate limiting
+    - When unavailable → Rate limiter fails-open (allows all requests), caches fail-through (hit database)
+    - NoOpRateLimiter and NoOpCache used instead of in-memory maps
+    - Prevents memory accumulation and provides honest behavior
+  - **OpenTelemetry Collector**: Observability forwarding (log failures but continue)
+  - **E2B**: Code execution (feature unavailable without it)
+- **PROHIBITED patterns:**
+  - ❌ In-memory fallbacks for rate limiting (e.g., `Map<string, RateLimitEntry>`) - causes unbounded memory growth
+  - ❌ In-memory fallbacks for distributed caching (e.g., `Map<string, CachedValue>`) - breaks multi-instance coordination
+  - ❌ Static data as fallback for dynamic data (e.g., DEFAULT_PRICING constants) - becomes stale quickly
+  - ❌ LRU caches or bounded maps for distributed state - adds complexity, no real distributed benefit
+- **Acceptable in-memory usage (documented exceptions):**
+  - ✅ Performance optimizations (token counting LRU cache) - local per-instance only
+  - ✅ Per-instance stateful features (SSE subscriptions, connection pools) - cannot be shared
+  - ✅ Test-only stores (in `__tests__/` directories) - never exported to production
+- **Failure modes:**
+  - **Fail-open**: Rate limiting (allow all when Redis down) - better than broken per-instance limits
+  - **Fail-through**: Caching (hit database when Redis down) - Supabase can handle it
+  - **Fail-fast**: Pricing, conversations, critical data (throw error when Supabase down) - better than wrong data
+- **Monitoring requirements:**
+  - All fail-safe modes MUST be logged with appropriate severity
+  - Metrics MUST track dependency health (`redis_connection_status`, `cache_type`, `rate_limiter_type`)
+  - Alerts MUST fire for P0 failures (Supabase down, pricing missing) and P1 degradations (Redis down)
+- **Full specification:** See `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` for:
+  - Complete decision tree for in-memory vs external storage
+  - Migration patterns from in-memory fallbacks
+  - Code review checklist for detecting prohibited patterns
+  - Testing strategies for fault scenarios
+- **Enforcement:** Any PR introducing in-memory fallbacks for distributed state (rate limiting, caching, conversations, etc.) will be rejected. Migrations away from this pattern require architectural review.
+
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
 - A single **Global Regulatory Copilot Agent** is the *primary entry point* for user conversations.
