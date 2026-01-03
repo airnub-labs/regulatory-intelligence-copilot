@@ -1462,7 +1462,7 @@ export interface ConversationStoreFactoryOptions {
   redis?: RedisKeyValueClient;
   redisBackend?: ResolvedBackend | null;
   cacheTtlSeconds?: number;
-  enableCaching?: boolean; // Default: false (opt-in)
+  enableCaching?: boolean; // Default: true (uses caching when Redis is available)
 }
 
 export function createConversationStore(
@@ -1477,10 +1477,12 @@ export function createConversationStore(
     options.supabaseInternal
   );
 
-  // Caching is opt-in for ConversationStore
+  // Caching defaults to on for ConversationStore when Redis is available
   const redisClient = options.redis ?? (options.redisBackend ? createKeyValueClient(options.redisBackend) : null);
 
-  if (options.enableCaching && redisClient) {
+  const cachingEnabled = options.enableCaching !== false;
+
+  if (cachingEnabled && redisClient) {
     return new CachingConversationStore(supabaseStore, redisClient, {
       ttlSeconds: options.cacheTtlSeconds ?? 60,
     });

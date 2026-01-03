@@ -5,9 +5,7 @@
  * Falls back gracefully to in-memory cache if Redis is unavailable (single-instance mode).
  *
  * Cache Control:
- * - ENABLE_REDIS_CACHING: Global kill switch for all Redis caching (default: true)
  * - ENABLE_AUTH_VALIDATION_CACHE: Individual flag for this cache (default: true)
- * - Both flags must be true for Redis caching to be enabled
  *
  * PRODUCTION: Set REDIS_URL/REDIS_PASSWORD environment variables for multi-instance deployments.
  * DEVELOPMENT: Works without Redis (in-memory cache only).
@@ -24,18 +22,9 @@ import { createLogger } from '@reg-copilot/reg-intel-observability';
 const logger = createLogger('DistributedValidationCache');
 
 /**
- * Global kill switch to disable ALL Redis caching across the application.
- * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
- * Defaults to true.
- */
-const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
-
-/**
  * Individual flag to enable/disable auth validation caching specifically.
  * Set ENABLE_AUTH_VALIDATION_CACHE=false to disable this cache.
  * Defaults to true.
- *
- * Requires ENABLE_REDIS_CACHING=true to have any effect.
  */
 const ENABLE_AUTH_VALIDATION_CACHE = process.env.ENABLE_AUTH_VALIDATION_CACHE !== 'false';
 
@@ -192,7 +181,7 @@ class MemoryCache implements DistributedCache {
 }
 
 function createRedisCache(): DistributedCache | null {
-  if (!ENABLE_REDIS_CACHING || !ENABLE_AUTH_VALIDATION_CACHE) {
+  if (!ENABLE_AUTH_VALIDATION_CACHE) {
     return null;
   }
 
@@ -216,9 +205,7 @@ function createDistributedCache(): DistributedCache {
   const redisCache = createRedisCache();
   if (redisCache) return redisCache;
 
-  const reason = !ENABLE_REDIS_CACHING
-    ? 'global caching disabled via ENABLE_REDIS_CACHING=false'
-    : !ENABLE_AUTH_VALIDATION_CACHE
+  const reason = !ENABLE_AUTH_VALIDATION_CACHE
     ? 'auth validation cache disabled via ENABLE_AUTH_VALIDATION_CACHE=false'
     : 'Redis credentials not configured';
 

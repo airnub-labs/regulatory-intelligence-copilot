@@ -1,18 +1,9 @@
 import { createFailOpenRateLimiter, resolveRedisBackend, type RateLimiter } from '@reg-copilot/reg-intel-cache';
 
 /**
- * Global kill switch to disable ALL Redis caching across the application.
- * Set ENABLE_REDIS_CACHING=false to disable all caching (e.g., during debugging/disaster recovery).
- * Defaults to true.
- */
-const ENABLE_REDIS_CACHING = process.env.ENABLE_REDIS_CACHING !== 'false';
-
-/**
  * Individual flag to enable/disable Redis-based rate limiting specifically.
  * Set ENABLE_RATE_LIMITER_REDIS=false to disable Redis rate limiting (falls back to in-memory).
  * Defaults to true.
- *
- * Requires ENABLE_REDIS_CACHING=true to have any effect.
  */
 const ENABLE_RATE_LIMITER_REDIS = process.env.ENABLE_RATE_LIMITER_REDIS !== 'false';
 
@@ -35,7 +26,7 @@ interface RateLimiterConfig {
  * Uses shared cache package to pick Redis or Upstash backends based on environment
  */
 export function createRateLimiter(config: RateLimiterConfig): RateLimiter {
-  const backend = ENABLE_REDIS_CACHING && ENABLE_RATE_LIMITER_REDIS ? resolveRedisBackend('rateLimit') : null;
+  const backend = ENABLE_RATE_LIMITER_REDIS ? resolveRedisBackend('rateLimit') : null;
   const limiter = createFailOpenRateLimiter(backend, {
     windowMs: config.windowMs,
     limit: config.maxRequests,

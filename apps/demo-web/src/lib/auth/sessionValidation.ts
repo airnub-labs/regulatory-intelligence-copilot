@@ -229,3 +229,24 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     }
   }
 }
+
+export async function getCachedValidationResult(userId: string): Promise<ValidateUserResult | null> {
+  const cached = await validationCache.get(userId)
+  if (cached === null) {
+    return null
+  }
+
+  authMetrics.recordCacheHit(userId)
+  logger.debug({ userId, isValid: cached.isValid }, 'Using cached validation result')
+
+  return {
+    isValid: cached.isValid,
+    user: cached.isValid
+      ? {
+          id: userId,
+          tenantId: cached.tenantId,
+        }
+      : undefined,
+    error: cached.isValid ? undefined : 'User not found (cached)',
+  }
+}
