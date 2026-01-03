@@ -1,21 +1,29 @@
 /**
- * Distributed Validation Cache
+ * Distributed Validation Cache - Industry Standard Transparent Failover
+ *
+ * CRITICAL: This implementation follows the industry-standard transparent failover pattern.
+ * Factory function NEVER returns null - always returns a cache instance.
  *
  * MULTI-INSTANCE SAFE: Uses Redis for distributed caching across multiple app instances.
- * Fails through to database (Supabase) if Redis is unavailable.
+ * When Redis unavailable: Uses PassThroughCache (transparent fail-through to database).
  *
  * Cache Control:
  * - ENABLE_AUTH_VALIDATION_CACHE: Individual flag for this cache (default: true)
  *
  * PRODUCTION: Set REDIS_URL/REDIS_PASSWORD environment variables for caching.
- * WITHOUT REDIS: All validation requests hit Supabase (no caching, no memory accumulation).
+ * WITHOUT REDIS: PassThroughCache returns null on all gets (cache miss), no-ops on sets.
+ *
+ * Reference: CachingConversationStore (packages/reg-intel-conversations/src/conversationStores.ts:1013)
  */
 
 import {
   createKeyValueClient,
   describeRedisBackendSelection,
   resolveRedisBackend,
+  createTransparentCache,
   type RedisKeyValueClient,
+  type CacheBackend,
+  type TransparentCache as BaseTransparentCache,
 } from '@reg-copilot/reg-intel-cache';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 
@@ -28,25 +36,60 @@ const logger = createLogger('DistributedValidationCache');
  */
 const ENABLE_AUTH_VALIDATION_CACHE = process.env.ENABLE_AUTH_VALIDATION_CACHE !== 'false';
 
-// Cache TTL: 5 minutes (as requested by user)
-const CACHE_TTL_MS = 5 * 60 * 1000;
-const CACHE_TTL_SECONDS = 300; // 5 minutes for Redis
-const CACHE_PREFIX = 'auth:validation';
+// Cache TTL: 5 minutes
+const CACHE_TTL_SECONDS = 300;
+const CACHE_PREFIX = 'copilot:auth:validation';
 
-// Removed: in-memory fallback (now uses no-op cache when Redis unavailable)
-
-interface CacheEntry {
+/**
+ * Cache entry stored in Redis
+ */
+export interface CacheEntry {
   isValid: boolean;
   timestamp: number;
   tenantId?: string;
 }
 
-interface DistributedCache {
+/**
+ * Distributed cache interface for auth validation
+ *
+ * CRITICAL: This is ALWAYS available (never null).
+ * When Redis unavailable, operations degrade gracefully (fail-through).
+ */
+export interface DistributedCache {
+  /**
+   * Get cached validation result
+   * @returns null if cache miss OR if Redis unavailable (transparent)
+   */
   get(userId: string): Promise<CacheEntry | null>;
+
+  /**
+   * Set validation result in cache
+   * @returns void - No-op if Redis unavailable (transparent)
+   */
   set(userId: string, isValid: boolean, tenantId?: string): Promise<void>;
+
+  /**
+   * Invalidate cached entry for user
+   * @returns void - No-op if Redis unavailable (transparent)
+   */
   invalidate(userId: string): Promise<void>;
+
+  /**
+   * Clear all tracked cache entries
+   * @returns void - No-op if Redis unavailable (transparent)
+   */
   clear(): Promise<void>;
+
+  /**
+   * Get cache statistics
+   */
   getStats(): Promise<{ size: number; maxSize: number; ttlMs: number; backend: string }>;
+
+  /**
+   * Get backend type for observability
+   * @returns 'redis' | 'upstash' | 'passthrough'
+   */
+  getType(): 'redis' | 'upstash' | 'passthrough';
 }
 
 function buildKey(userId: string): string {
@@ -54,114 +97,163 @@ function buildKey(userId: string): string {
 }
 
 /**
- * Redis cache implementation (for multi-instance deployments)
+ * Adapter: Wraps TransparentCache to implement DistributedCache interface
+ *
+ * This provides the DistributedCache API (get, set, invalidate, clear, getStats)
+ * while using TransparentCache internally for transparent failover.
  */
-class RedisCache implements DistributedCache {
+class DistributedValidationCache implements DistributedCache {
   private readonly touchedKeys = new Set<string>();
 
-  constructor(private readonly client: RedisKeyValueClient, private readonly backendLabel: string) {}
+  constructor(
+    private readonly transparentCache: BaseTransparentCache<CacheEntry>,
+    private readonly ttlSeconds: number
+  ) {}
 
   async get(userId: string): Promise<CacheEntry | null> {
-    try {
-      const cached = await this.client.get(buildKey(userId));
-      if (!cached) return null;
-      return JSON.parse(cached) as CacheEntry;
-    } catch (error) {
-      logger.error({ error, userId }, 'Redis cache get failed');
-      return null;
-    }
+    // ✅ Transparent: Returns null for BOTH cache miss AND Redis unavailable
+    return this.transparentCache.get(buildKey(userId));
   }
 
   async set(userId: string, isValid: boolean, tenantId?: string): Promise<void> {
-    try {
-      const entry: CacheEntry = {
-        isValid,
-        timestamp: Date.now(),
-        tenantId,
-      };
+    const entry: CacheEntry = {
+      isValid,
+      timestamp: Date.now(),
+      tenantId,
+    };
 
-      const key = buildKey(userId);
-      this.touchedKeys.add(key);
-      await this.client.setex(key, CACHE_TTL_SECONDS, JSON.stringify(entry));
-    } catch (error) {
-      logger.error({ error, userId }, 'Redis cache set failed');
-    }
+    const key = buildKey(userId);
+    this.touchedKeys.add(key);
+
+    // ✅ Transparent: No-op if Redis unavailable
+    await this.transparentCache.set(key, entry, this.ttlSeconds);
   }
 
   async invalidate(userId: string): Promise<void> {
     const key = buildKey(userId);
-    try {
-      await this.client.del(key);
-      this.touchedKeys.delete(key);
-      logger.info({ userId }, 'Invalidated user validation cache');
-    } catch (error) {
-      logger.error({ error, userId }, 'Redis cache invalidate failed');
-    }
+    this.touchedKeys.delete(key);
+
+    // ✅ Transparent: No-op if Redis unavailable
+    await this.transparentCache.del(key);
+
+    logger.info({ userId }, 'Invalidated user validation cache');
   }
 
   async clear(): Promise<void> {
     if (this.touchedKeys.size === 0) return;
 
-    try {
-      await this.client.del(...Array.from(this.touchedKeys));
-      logger.info({ clearedKeys: this.touchedKeys.size }, 'Cleared tracked validation cache entries');
-      this.touchedKeys.clear();
-    } catch (error) {
-      logger.error({ error }, 'Redis cache clear failed');
+    // ✅ Transparent: No-op if Redis unavailable
+    const keysToDelete = Array.from(this.touchedKeys);
+    for (const key of keysToDelete) {
+      await this.transparentCache.del(key);
     }
+
+    logger.info({ clearedKeys: this.touchedKeys.size }, 'Cleared tracked validation cache entries');
+    this.touchedKeys.clear();
   }
 
   async getStats() {
+    const backendType = this.transparentCache.getBackendType();
     return {
       size: this.touchedKeys.size,
       maxSize: Infinity, // Redis has no hard limit (memory-bound)
-      ttlMs: CACHE_TTL_MS,
-      backend: this.backendLabel,
+      ttlMs: this.ttlSeconds * 1000,
+      backend: backendType,
     };
   }
-}
 
-function createRedisCache(): DistributedCache | null {
-  if (!ENABLE_AUTH_VALIDATION_CACHE) {
-    return null;
+  getType(): 'redis' | 'upstash' | 'passthrough' {
+    return this.transparentCache.getBackendType();
   }
-
-  const backend = resolveRedisBackend('cache');
-  const client = backend ? createKeyValueClient(backend) : null;
-  if (!backend || !client) {
-    const reason = !backend ? 'Redis backend not configured' : 'Redis client unavailable';
-    logger.info({ reason }, 'No caching (will query database on every request)');
-    return null;
-  }
-
-  const summary = describeRedisBackendSelection(backend);
-  logger.info({ backend: summary }, 'Using Redis validation cache');
-  return new RedisCache(client, summary.backend);
 }
 
 /**
- * Factory to get the appropriate distributed cache implementation
- * Returns null if Redis not configured (caching disabled - fail-through to database)
+ * Create Redis CacheBackend adapter
  */
-function createDistributedCache(): DistributedCache | null {
-  const redisCache = createRedisCache();
-  if (redisCache) return redisCache;
+function createRedisCacheBackend(client: RedisKeyValueClient): CacheBackend {
+  return {
+    async get(key: string): Promise<string | null> {
+      return client.get(key);
+    },
 
-  const reason = !ENABLE_AUTH_VALIDATION_CACHE
-    ? 'auth validation cache disabled via ENABLE_AUTH_VALIDATION_CACHE=false'
-    : 'Redis credentials not configured';
+    async set(key: string, value: string, ttlSeconds: number): Promise<void> {
+      await client.setex(key, ttlSeconds, value);
+    },
 
-  logger.warn({ reason }, 'Caching disabled (fail-through to database)');
-  return null;
+    async del(key: string): Promise<void> {
+      await client.del(key);
+    },
+  };
 }
 
-// Singleton instance
-const validationCache = createDistributedCache();
+/**
+ * Factory: Create distributed validation cache
+ *
+ * CRITICAL: This function NEVER returns null. It always returns a cache instance.
+ *
+ * When Redis is unavailable:
+ * - Returns DistributedValidationCache with PassThroughCache
+ * - get() returns null (cache miss behavior)
+ * - set() / invalidate() / clear() are no-ops
+ * - Application code works identically
+ *
+ * Pattern matches: CachingConversationStore, Redis client libraries
+ *
+ * @returns DistributedCache instance - NEVER returns null
+ */
+function createDistributedCache(): DistributedCache {
+  let cacheBackend: CacheBackend | null = null;
+  let backendType: 'redis' | 'upstash' | null = null;
+
+  if (ENABLE_AUTH_VALIDATION_CACHE) {
+    const backend = resolveRedisBackend('cache');
+    const client = backend ? createKeyValueClient(backend) : null;
+
+    if (backend && client) {
+      cacheBackend = createRedisCacheBackend(client);
+      backendType = backend.type === 'ioredis' ? 'redis' : 'upstash';
+
+      const summary = describeRedisBackendSelection(backend);
+      logger.info({ backend: summary }, 'Using Redis validation cache');
+    } else {
+      const reason = !backend ? 'Redis backend not configured' : 'Redis client unavailable';
+      logger.info({ reason }, 'PassThroughCache active - no caching (fail-through to database)');
+    }
+  } else {
+    logger.info('Auth validation cache disabled via ENABLE_AUTH_VALIDATION_CACHE=false');
+  }
+
+  // ✅ Create TransparentCache (NEVER returns null)
+  const transparentCache = createTransparentCache<CacheEntry>(
+    cacheBackend,
+    backendType,
+    {
+      defaultTtlSeconds: CACHE_TTL_SECONDS,
+      serialize: (entry: CacheEntry) => JSON.stringify(entry),
+      deserialize: (raw: string) => JSON.parse(raw) as CacheEntry,
+    }
+  );
+
+  // ✅ Wrap in DistributedCache adapter
+  return new DistributedValidationCache(transparentCache, CACHE_TTL_SECONDS);
+}
+
+// Singleton instance - NEVER null
+const validationCache: DistributedCache = createDistributedCache();
 
 /**
  * Get the distributed cache instance
- * Returns null if Redis not configured (caching disabled - fail-through to database)
+ *
+ * CRITICAL: This function NEVER returns null. It always returns a cache instance.
+ *
+ * When Redis is unavailable, returns cache with PassThroughCache behavior:
+ * - get() returns null (cache miss)
+ * - set() / invalidate() are no-ops
+ *
+ * Application code NEVER needs to check for null.
+ *
+ * @returns DistributedCache instance - NEVER returns null
  */
-export function getValidationCache(): DistributedCache | null {
+export function getValidationCache(): DistributedCache {
   return validationCache;
 }
