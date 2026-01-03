@@ -10,7 +10,7 @@ import type {
   CostCalculation,
   CostEstimateRequest,
 } from './types.js';
-import { DEFAULT_PRICING } from './pricingData.js';
+import { ALL_PRICING, DEFAULT_PRICING } from './pricingData.js';
 
 /**
  * Pricing service interface
@@ -47,6 +47,60 @@ interface PricingRow {
   notes?: string | null;
 }
 
+function normalizeModel(provider: string, model: string): string {
+  const providerLower = provider.toLowerCase();
+  const modelLower = model.toLowerCase();
+
+  if (providerLower === 'openai') {
+    if (modelLower.startsWith('gpt-4-0') || modelLower === 'gpt-4-32k-0314') {
+      return modelLower.split('-').slice(0, 2).join('-');
+    }
+    if (modelLower.startsWith('gpt-3.5-turbo-0')) {
+      return 'gpt-3.5-turbo';
+    }
+  }
+
+  if (providerLower === 'anthropic') {
+    if (modelLower === 'claude-3-opus') {
+      return 'claude-3-opus-20240229';
+    }
+    if (modelLower === 'claude-3-sonnet') {
+      return 'claude-3-sonnet-20240229';
+    }
+    if (modelLower === 'claude-3-haiku') {
+      return 'claude-3-haiku-20240307';
+    }
+  }
+
+  return modelLower;
+}
+
+function selectPricingByDate(pricingList: ModelPricing[], date?: Date): ModelPricing | null {
+  if (pricingList.length === 0) {
+    return null;
+  }
+
+  const targetDate = date || new Date();
+  const sorted = [...pricingList].sort((a, b) => {
+    return new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime();
+  });
+
+  for (const pricing of sorted) {
+    const effectiveDate = new Date(pricing.effectiveDate);
+    if (effectiveDate <= targetDate) {
+      if (pricing.expiresAt) {
+        const expiresDate = new Date(pricing.expiresAt);
+        if (expiresDate < targetDate) {
+          continue;
+        }
+      }
+      return pricing;
+    }
+  }
+
+  return sorted[sorted.length - 1] || null;
+}
+
 function mapRowToPricing(row: PricingRow): ModelPricing {
   return {
     provider: row.provider,
@@ -68,62 +122,8 @@ export class SupabasePricingService implements PricingService {
     this.tableName = tableName;
   }
 
-  private normalizeModel(provider: string, model: string): string {
-    const providerLower = provider.toLowerCase();
-    const modelLower = model.toLowerCase();
-
-    if (providerLower === 'openai') {
-      if (modelLower.startsWith('gpt-4-0') || modelLower === 'gpt-4-32k-0314') {
-        return modelLower.split('-').slice(0, 2).join('-');
-      }
-      if (modelLower.startsWith('gpt-3.5-turbo-0')) {
-        return 'gpt-3.5-turbo';
-      }
-    }
-
-    if (providerLower === 'anthropic') {
-      if (modelLower === 'claude-3-opus') {
-        return 'claude-3-opus-20240229';
-      }
-      if (modelLower === 'claude-3-sonnet') {
-        return 'claude-3-sonnet-20240229';
-      }
-      if (modelLower === 'claude-3-haiku') {
-        return 'claude-3-haiku-20240307';
-      }
-    }
-
-    return modelLower;
-  }
-
-  private selectPricingByDate(pricingList: ModelPricing[], date?: Date): ModelPricing | null {
-    if (pricingList.length === 0) {
-      return null;
-    }
-
-    const targetDate = date || new Date();
-    const sorted = [...pricingList].sort((a, b) => {
-      return new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime();
-    });
-
-    for (const pricing of sorted) {
-      const effectiveDate = new Date(pricing.effectiveDate);
-      if (effectiveDate <= targetDate) {
-        if (pricing.expiresAt) {
-          const expiresDate = new Date(pricing.expiresAt);
-          if (expiresDate < targetDate) {
-            continue;
-          }
-        }
-        return pricing;
-      }
-    }
-
-    return sorted[sorted.length - 1] || null;
-  }
-
   async getPricing(provider: string, model: string, date?: Date): Promise<ModelPricing | null> {
-    const normalizedModel = this.normalizeModel(provider, model);
+    const normalizedModel = normalizeModel(provider, model);
     const providerLower = provider.toLowerCase();
 
     const { data, error } = await this.client
@@ -141,7 +141,7 @@ export class SupabasePricingService implements PricingService {
     }
 
     const pricingList = (data as PricingRow[]).map(mapRowToPricing);
-    return this.selectPricingByDate(pricingList, date);
+    return selectPricingByDate(pricingList, date);
   }
 
   async calculateCost(request: CostEstimateRequest): Promise<CostCalculation> {
@@ -190,7 +190,7 @@ export class SupabasePricingService implements PricingService {
   async updatePricing(pricing: ModelPricing): Promise<void> {
     const { error } = await this.client.from(this.tableName).insert({
       provider: pricing.provider.toLowerCase(),
-      model: pricing.model.toLowerCase(),
+      model: normalizeModel(pricing.provider, pricing.model),
       input_price_per_million: pricing.inputPricePerMillion,
       output_price_per_million: pricing.outputPricePerMillion,
       effective_date: pricing.effectiveDate,
@@ -201,6 +201,67 @@ export class SupabasePricingService implements PricingService {
     if (error) {
       throw new Error(`Failed to update pricing for ${pricing.provider}/${pricing.model}: ${error.message}`);
     }
+  }
+}
+
+export class InMemoryPricingService implements PricingService {
+  private pricing: ModelPricing[];
+
+  /**
+   * In-process pricing service for computation-only scenarios (tests, dev sandboxes).
+   * This is not a persistence layer and should not be used as a source of truth.
+   */
+  constructor(initialPricing: ModelPricing[] = ALL_PRICING) {
+    this.pricing = initialPricing.map((pricing) => ({
+      ...pricing,
+      provider: pricing.provider.toLowerCase(),
+      model: normalizeModel(pricing.provider, pricing.model),
+    }));
+  }
+
+  async getPricing(provider: string, model: string, date?: Date): Promise<ModelPricing | null> {
+    const normalizedModel = normalizeModel(provider, model);
+    const providerLower = provider.toLowerCase();
+
+    const matches = this.pricing.filter(
+      (pricing) => pricing.provider === providerLower && pricing.model === normalizedModel
+    );
+
+    return selectPricingByDate(matches, date);
+  }
+
+  async calculateCost(request: CostEstimateRequest): Promise<CostCalculation> {
+    const pricing = await this.getPricing(request.provider, request.model, request.pricingDate);
+
+    const effectivePricing = pricing || DEFAULT_PRICING;
+    const isEstimated = !pricing;
+
+    const inputCostUsd =
+      (request.inputTokens / 1_000_000) * effectivePricing.inputPricePerMillion;
+    const outputCostUsd =
+      (request.outputTokens / 1_000_000) * effectivePricing.outputPricePerMillion;
+    const totalCostUsd = inputCostUsd + outputCostUsd;
+
+    return {
+      inputCostUsd: Math.round(inputCostUsd * 1_000_000) / 1_000_000,
+      outputCostUsd: Math.round(outputCostUsd * 1_000_000) / 1_000_000,
+      totalCostUsd: Math.round(totalCostUsd * 1_000_000) / 1_000_000,
+      pricing: effectivePricing,
+      isEstimated,
+    };
+  }
+
+  async getProviderPricing(provider: string): Promise<ModelPricing[]> {
+    const providerLower = provider.toLowerCase();
+    return this.pricing.filter((pricing) => pricing.provider === providerLower);
+  }
+
+  async updatePricing(pricing: ModelPricing): Promise<void> {
+    this.pricing.push({
+      ...pricing,
+      provider: pricing.provider.toLowerCase(),
+      model: normalizeModel(pricing.provider, pricing.model),
+    });
   }
 }
 

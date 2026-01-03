@@ -14,6 +14,7 @@ export type {
 export type { PricingService } from './pricingService.js';
 
 export {
+  InMemoryPricingService,
   SupabasePricingService,
   initPricingService,
   getPricingService,

@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  InMemoryPricingService,
   SupabasePricingService,
   calculateLlmCost,
   initPricingService,
@@ -457,6 +458,34 @@ describe('PricingService', () => {
 
       expect(savings).toBeGreaterThan(1000); // Save >$1000/month
       expect(savingsPercent).toBeGreaterThan(95); // >95% savings
+    });
+  });
+
+  describe('InMemoryPricingService', () => {
+    it('uses static pricing data when seeded', async () => {
+      const memoryService = new InMemoryPricingService();
+      const pricing = await memoryService.getPricing('openai', 'gpt-4');
+
+      expect(pricing).not.toBeNull();
+      expect(pricing?.inputPricePerMillion).toBe(30);
+      expect(pricing?.outputPricePerMillion).toBe(60);
+    });
+
+    it('allows in-process updates for testing scenarios', async () => {
+      const memoryService = new InMemoryPricingService([]);
+      await memoryService.updatePricing({
+        provider: 'test',
+        model: 'ephemeral-model',
+        inputPricePerMillion: 2,
+        outputPricePerMillion: 4,
+        effectiveDate: '2025-01-01',
+      });
+
+      const pricing = await memoryService.getPricing('test', 'ephemeral-model');
+
+      expect(pricing?.provider).toBe('test');
+      expect(pricing?.model).toBe('ephemeral-model');
+      expect(pricing?.outputPricePerMillion).toBe(4);
     });
   });
 });

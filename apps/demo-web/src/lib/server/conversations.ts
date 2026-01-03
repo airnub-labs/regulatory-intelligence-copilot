@@ -11,6 +11,7 @@ import {
   createConversationStore,
   type ConversationConfigStore,
   type ConversationStore,
+  type ExecutionContextManager,
 } from '@reg-copilot/reg-intel-conversations';
 import {
   createKeyValueClient,
@@ -62,6 +63,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.
 const supabaseRealtimeKey =
   supabaseServiceKey ?? process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const nextPhase = process.env.NEXT_PHASE;
+const isDevLike = process.env.NODE_ENV !== 'production';
 const tracingFetch = createTracingFetch();
 
 if (normalizeConversationStoreMode === 'memory') {
