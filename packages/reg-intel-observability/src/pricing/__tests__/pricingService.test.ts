@@ -4,7 +4,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  InMemoryPricingService,
   SupabasePricingService,
   calculateLlmCost,
   initPricingService,
@@ -212,17 +211,15 @@ describe('PricingService', () => {
       expect(cost.totalCostUsd).toBeCloseTo(0.04925);
     });
 
-    it('should use default pricing for unknown model', async () => {
-      const cost = await service.calculateCost({
-        provider: 'unknown',
-        model: 'unknown-model',
-        inputTokens: 1000,
-        outputTokens: 500,
-      });
-
-      expect(cost).toBeDefined();
-      expect(cost.isEstimated).toBe(true);
-      expect(cost.totalCostUsd).toBeGreaterThan(0);
+    it('should throw error for unknown model', async () => {
+      await expect(
+        service.calculateCost({
+          provider: 'unknown',
+          model: 'unknown-model',
+          inputTokens: 1000,
+          outputTokens: 500,
+        })
+      ).rejects.toThrow('Pricing not found for unknown/unknown-model');
     });
 
     it('should handle zero tokens', async () => {
@@ -461,31 +458,4 @@ describe('PricingService', () => {
     });
   });
 
-  describe('InMemoryPricingService', () => {
-    it('uses static pricing data when seeded', async () => {
-      const memoryService = new InMemoryPricingService();
-      const pricing = await memoryService.getPricing('openai', 'gpt-4');
-
-      expect(pricing).not.toBeNull();
-      expect(pricing?.inputPricePerMillion).toBe(30);
-      expect(pricing?.outputPricePerMillion).toBe(60);
-    });
-
-    it('allows in-process updates for testing scenarios', async () => {
-      const memoryService = new InMemoryPricingService([]);
-      await memoryService.updatePricing({
-        provider: 'test',
-        model: 'ephemeral-model',
-        inputPricePerMillion: 2,
-        outputPricePerMillion: 4,
-        effectiveDate: '2025-01-01',
-      });
-
-      const pricing = await memoryService.getPricing('test', 'ephemeral-model');
-
-      expect(pricing?.provider).toBe('test');
-      expect(pricing?.model).toBe('ephemeral-model');
-      expect(pricing?.outputPricePerMillion).toBe(4);
-    });
-  });
 });

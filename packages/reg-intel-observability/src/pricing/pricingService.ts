@@ -10,7 +10,6 @@ import type {
   CostCalculation,
   CostEstimateRequest,
 } from './types.js';
-import { ALL_PRICING, DEFAULT_PRICING } from './pricingData.js';
 
 /**
  * Pricing service interface
@@ -151,21 +150,25 @@ export class SupabasePricingService implements PricingService {
       request.pricingDate
     );
 
-    const effectivePricing = pricing || DEFAULT_PRICING;
-    const isEstimated = !pricing;
+    if (!pricing) {
+      throw new Error(
+        `Pricing not found for ${request.provider}/${request.model}. ` +
+        `Ensure pricing data is loaded in Supabase (copilot_internal.model_pricing table).`
+      );
+    }
 
     const inputCostUsd =
-      (request.inputTokens / 1_000_000) * effectivePricing.inputPricePerMillion;
+      (request.inputTokens / 1_000_000) * pricing.inputPricePerMillion;
     const outputCostUsd =
-      (request.outputTokens / 1_000_000) * effectivePricing.outputPricePerMillion;
+      (request.outputTokens / 1_000_000) * pricing.outputPricePerMillion;
     const totalCostUsd = inputCostUsd + outputCostUsd;
 
     return {
       inputCostUsd: Math.round(inputCostUsd * 1_000_000) / 1_000_000,
       outputCostUsd: Math.round(outputCostUsd * 1_000_000) / 1_000_000,
       totalCostUsd: Math.round(totalCostUsd * 1_000_000) / 1_000_000,
-      pricing: effectivePricing,
-      isEstimated,
+      pricing,
+      isEstimated: false,
     };
   }
 
@@ -201,67 +204,6 @@ export class SupabasePricingService implements PricingService {
     if (error) {
       throw new Error(`Failed to update pricing for ${pricing.provider}/${pricing.model}: ${error.message}`);
     }
-  }
-}
-
-export class InMemoryPricingService implements PricingService {
-  private pricing: ModelPricing[];
-
-  /**
-   * In-process pricing service for computation-only scenarios (tests, dev sandboxes).
-   * This is not a persistence layer and should not be used as a source of truth.
-   */
-  constructor(initialPricing: ModelPricing[] = ALL_PRICING) {
-    this.pricing = initialPricing.map((pricing) => ({
-      ...pricing,
-      provider: pricing.provider.toLowerCase(),
-      model: normalizeModel(pricing.provider, pricing.model),
-    }));
-  }
-
-  async getPricing(provider: string, model: string, date?: Date): Promise<ModelPricing | null> {
-    const normalizedModel = normalizeModel(provider, model);
-    const providerLower = provider.toLowerCase();
-
-    const matches = this.pricing.filter(
-      (pricing) => pricing.provider === providerLower && pricing.model === normalizedModel
-    );
-
-    return selectPricingByDate(matches, date);
-  }
-
-  async calculateCost(request: CostEstimateRequest): Promise<CostCalculation> {
-    const pricing = await this.getPricing(request.provider, request.model, request.pricingDate);
-
-    const effectivePricing = pricing || DEFAULT_PRICING;
-    const isEstimated = !pricing;
-
-    const inputCostUsd =
-      (request.inputTokens / 1_000_000) * effectivePricing.inputPricePerMillion;
-    const outputCostUsd =
-      (request.outputTokens / 1_000_000) * effectivePricing.outputPricePerMillion;
-    const totalCostUsd = inputCostUsd + outputCostUsd;
-
-    return {
-      inputCostUsd: Math.round(inputCostUsd * 1_000_000) / 1_000_000,
-      outputCostUsd: Math.round(outputCostUsd * 1_000_000) / 1_000_000,
-      totalCostUsd: Math.round(totalCostUsd * 1_000_000) / 1_000_000,
-      pricing: effectivePricing,
-      isEstimated,
-    };
-  }
-
-  async getProviderPricing(provider: string): Promise<ModelPricing[]> {
-    const providerLower = provider.toLowerCase();
-    return this.pricing.filter((pricing) => pricing.provider === providerLower);
-  }
-
-  async updatePricing(pricing: ModelPricing): Promise<void> {
-    this.pricing.push({
-      ...pricing,
-      provider: pricing.provider.toLowerCase(),
-      model: normalizeModel(pricing.provider, pricing.model),
-    });
   }
 }
 
