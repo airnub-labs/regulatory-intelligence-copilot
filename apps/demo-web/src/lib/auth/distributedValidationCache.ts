@@ -2,13 +2,13 @@
  * Distributed Validation Cache
  *
  * MULTI-INSTANCE SAFE: Uses Redis for distributed caching across multiple app instances.
- * Falls back gracefully to in-memory cache if Redis is unavailable (single-instance mode).
+ * Fails through to database (Supabase) if Redis is unavailable.
  *
  * Cache Control:
  * - ENABLE_AUTH_VALIDATION_CACHE: Individual flag for this cache (default: true)
  *
- * PRODUCTION: Set REDIS_URL/REDIS_PASSWORD environment variables for multi-instance deployments.
- * DEVELOPMENT: Works without Redis (in-memory cache only).
+ * PRODUCTION: Set REDIS_URL/REDIS_PASSWORD environment variables for caching.
+ * WITHOUT REDIS: All validation requests hit Supabase (no caching, no memory accumulation).
  */
 
 import {
@@ -33,8 +33,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_TTL_SECONDS = 300; // 5 minutes for Redis
 const CACHE_PREFIX = 'auth:validation';
 
-// Max cache size for in-memory fallback: 10,000 users
-const MAX_CACHE_SIZE = 10000;
+// Removed: in-memory fallback (now uses no-op cache when Redis unavailable)
 
 interface CacheEntry {
   isValid: boolean;
@@ -123,59 +122,37 @@ class RedisCache implements DistributedCache {
 }
 
 /**
- * In-memory cache implementation (for development/single-instance deployments)
+ * No-op cache implementation that always misses (fail-through).
+ * Used when Redis is unavailable to prevent memory accumulation.
+ *
+ * This ensures predictable behavior during outages - validation always hits
+ * the database (Supabase) which can handle the load.
+ *
+ * Production deployments should configure Redis for actual caching.
  */
-class MemoryCache implements DistributedCache {
-  private cache = new Map<string, CacheEntry>();
-  private maxSize: number;
-
-  constructor(maxSize: number) {
-    this.maxSize = maxSize;
-  }
-
+class NoOpCache implements DistributedCache {
   async get(userId: string): Promise<CacheEntry | null> {
-    const entry = this.cache.get(userId);
-    if (!entry) return null;
-
-    // Expire entries after TTL
-    if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
-      this.cache.delete(userId);
-      return null;
-    }
-
-    return entry;
+    return null; // Always miss - fail-through to database
   }
 
   async set(userId: string, isValid: boolean, tenantId?: string): Promise<void> {
-    // Enforce max size by evicting oldest entry
-    if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey) {
-        this.cache.delete(oldestKey);
-      }
-    }
-
-    this.cache.set(userId, {
-      isValid,
-      timestamp: Date.now(),
-      tenantId,
-    });
+    // No-op - don't store anything
   }
 
   async invalidate(userId: string): Promise<void> {
-    this.cache.delete(userId);
+    // No-op - nothing to invalidate
   }
 
   async clear(): Promise<void> {
-    this.cache.clear();
+    // No-op - nothing to clear
   }
 
   async getStats() {
     return {
-      size: this.cache.size,
-      maxSize: this.maxSize,
-      ttlMs: CACHE_TTL_MS,
-      backend: 'memory',
+      size: 0,
+      maxSize: 0,
+      ttlMs: 0,
+      backend: 'noop',
     };
   }
 }
@@ -189,7 +166,7 @@ function createRedisCache(): DistributedCache | null {
   const client = backend ? createKeyValueClient(backend) : null;
   if (!backend || !client) {
     const reason = !backend ? 'Redis backend not configured' : 'Redis client unavailable';
-    logger.info({ reason }, 'Using in-memory validation cache');
+    logger.info({ reason }, 'No caching (will query database on every request)');
     return null;
   }
 
@@ -209,8 +186,8 @@ function createDistributedCache(): DistributedCache {
     ? 'auth validation cache disabled via ENABLE_AUTH_VALIDATION_CACHE=false'
     : 'Redis credentials not configured';
 
-  logger.warn({ reason }, 'Falling back to in-memory validation cache');
-  return new MemoryCache(MAX_CACHE_SIZE);
+  logger.warn({ reason }, 'Using no-op cache (fail-through to database)');
+  return new NoOpCache();
 }
 
 // Singleton instance

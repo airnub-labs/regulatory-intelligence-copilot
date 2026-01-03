@@ -10,7 +10,7 @@ import {
   type PricingService,
   type ModelPricing,
 } from '../index.js';
-import { OPENAI_PRICING, ANTHROPIC_PRICING, GROQ_PRICING, ALL_PRICING } from '../pricingData.js';
+import { ALL_PRICING } from '../pricingData.js';
 
 interface PricingRow {
   provider: string;

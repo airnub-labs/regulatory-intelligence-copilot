@@ -26,40 +26,20 @@ export interface SlidingWindowLimiterOptions {
   prefix?: string;
 }
 
-class MemoryRateLimiter implements RateLimiter {
-  private store = new Map<string, { count: number; resetAt: number }>();
-  private cleanup: NodeJS.Timeout;
-
-  constructor(private readonly options: SlidingWindowLimiterOptions) {
-    this.cleanup = setInterval(() => {
-      const now = Date.now();
-      for (const [key, value] of this.store.entries()) {
-        if (value.resetAt <= now) {
-          this.store.delete(key);
-        }
-      }
-    }, options.windowMs * 2);
-    this.cleanup.unref();
-  }
-
+/**
+ * No-op rate limiter that always allows requests.
+ * Used when Redis/Upstash is unavailable to fail-open (allow all traffic).
+ *
+ * This prevents memory accumulation and ensures predictable behavior during outages.
+ * Production deployments should configure Redis/Upstash for actual rate limiting.
+ */
+class NoOpRateLimiter implements RateLimiter {
   async check(identifier: string): Promise<boolean> {
-    const now = Date.now();
-    const entry = this.store.get(identifier);
-    if (!entry || entry.resetAt <= now) {
-      this.store.set(identifier, { count: 1, resetAt: now + this.options.windowMs });
-      return true;
-    }
-
-    if (entry.count >= this.options.limit) {
-      return false;
-    }
-
-    entry.count += 1;
-    return true;
+    return true; // Always allow - fail-open
   }
 
-  getType(): 'memory' {
-    return 'memory';
+  getType(): 'noop' {
+    return 'noop';
   }
 }
 
@@ -168,8 +148,8 @@ export function createRateLimiter(
   options: SlidingWindowLimiterOptions,
 ): RateLimiter {
   if (!backend) {
-    logger.warn('[rate-limit] No backend configured, using memory limiter');
-    return new MemoryRateLimiter(options);
+    logger.warn('[rate-limit] No backend configured, failing open (allowing all requests)');
+    return new NoOpRateLimiter();
   }
 
   if (backend.backend === 'redis') {
@@ -186,7 +166,7 @@ export function createFailOpenRateLimiter(
   try {
     return createRateLimiter(backend, options);
   } catch (error) {
-    logger.error({ error }, '[rate-limit] Failed to create backend limiter, using memory');
-    return new MemoryRateLimiter(options);
+    logger.error({ error }, '[rate-limit] Failed to create backend limiter, failing open (allowing all requests)');
+    return new NoOpRateLimiter();
   }
 }
