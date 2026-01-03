@@ -177,12 +177,65 @@ All issues identified by these commands must be resolved before committing and p
   ```
 
 - **PROHIBITED patterns:**
-  - ❌ Factories returning null (e.g., `getCache(): Cache | null`) - leaks infrastructure to application
-  - ❌ Null checks in application code (e.g., `if (cache) { await cache.get() }`) - violates separation of concerns
-  - ❌ In-memory fallbacks for rate limiting (e.g., `Map<string, RateLimitEntry>`) - causes unbounded memory growth
-  - ❌ In-memory fallbacks for distributed caching (e.g., `Map<string, CachedValue>`) - breaks multi-instance coordination
-  - ❌ Static data as fallback for dynamic data (e.g., DEFAULT_PRICING constants) - becomes stale quickly
-  - ❌ Try-catch in application code around cache operations - errors handled internally in cache
+  - ❌ **Factories returning null** (e.g., `getCache(): Cache | null`) - leaks infrastructure to application
+  - ❌ **Null checks in application code** (e.g., `if (cache) { await cache.get() }`) - violates separation of concerns
+  - ❌ **Factory functions returning different types based on Redis availability:**
+    ```typescript
+    // ❌ WRONG: Conditional factory returns different types
+    export function createConversationStore(options): ConversationStore {
+      const supabaseStore = new SupabaseConversationStore(options.supabase);
+      if (options.redis) {
+        return new CachingConversationStore(supabaseStore, options.redis);  // ❌
+      }
+      return supabaseStore;  // ❌ Different implementation based on infrastructure
+    }
+    // Problem: Caller gets different performance characteristics (caching vs no caching)
+    // based on infrastructure availability, making behavior unpredictable
+    ```
+  - ❌ **In-memory fallbacks for rate limiting** (e.g., `Map<string, RateLimitEntry>`) - causes unbounded memory growth
+  - ❌ **In-memory fallbacks for distributed caching** (e.g., `Map<string, CachedValue>`) - breaks multi-instance coordination
+  - ❌ **Static data as fallback for dynamic data** (e.g., DEFAULT_PRICING constants) - becomes stale quickly
+  - ❌ **Try-catch in application code around cache operations** - errors handled internally in cache
+
+- **REQUIRED: Factory Functions Must Always Return Same Type**
+
+  Factory functions (e.g., `createConversationStore`, `createPolicyStore`, `getRateLimiter`) MUST:
+  1. **Always return the same type** regardless of Redis availability
+  2. **Never return null** - always return an instance
+  3. **Use transparent failover implementations** (PassThroughCache, AllowAllRateLimiter) when Redis unavailable
+
+  ```typescript
+  // ✅ CORRECT: Factory always returns CachingConversationStore
+  export function createConversationStore(options): ConversationStore {
+    const supabaseStore = new SupabaseConversationStore(options.supabase);
+    const redisClient = options.redis ?? createPassThroughRedis();
+
+    // ALWAYS return caching wrapper - PassThroughRedis handles null case
+    return new CachingConversationStore(supabaseStore, redisClient);
+  }
+
+  // ✅ CORRECT: CachingConversationStore handles Redis errors transparently
+  class CachingConversationStore {
+    async getConversation(input) {
+      try {
+        const cached = await this.redis.get(key);
+        if (cached) return JSON.parse(cached);
+      } catch {
+        // ✅ Redis error - fall through to backing store
+      }
+
+      const record = await this.backing.getConversation(input);
+
+      try {
+        await this.redis.setex(key, ttl, JSON.stringify(record));
+      } catch {
+        // ✅ Ignore cache write errors
+      }
+
+      return record;
+    }
+  }
+  ```
 
 - **Acceptable in-memory usage (documented exceptions):**
   - ✅ Performance optimizations (token counting LRU cache) - local per-instance only
@@ -202,18 +255,28 @@ All issues identified by these commands must be resolved before committing and p
   - Alerts MUST fire for P0 failures (Supabase down, pricing missing) and P1 degradations (Redis down, passthrough/allowall active)
 
 - **Code review checklist:**
-  - [ ] Cache/rate limiter factory functions return non-nullable types
+  - [ ] Cache/rate limiter factory functions return non-nullable types (NOT `Cache | null`)
+  - [ ] Factory functions return **same type** regardless of Redis availability (NOT conditional types)
   - [ ] No `if (cache)` or `if (limiter)` null checks in application code
+  - [ ] No `if (redis)` conditional logic in factory functions that returns different types
   - [ ] Error handling is internal to cache/limiter (no try-catch in app code)
-  - [ ] Follows CachingConversationStore pattern
+  - [ ] Follows CachingConversationStore pattern (try-catch inside, transparent failover)
   - [ ] PassThrough/AllowAll implementations exist for failover
+  - [ ] All caching wrappers (e.g., CachingConversationStore) ALWAYS returned, even without Redis
+  - [ ] Transparent failover documented in code comments (✅ markers)
 
 - **Full specifications:**
   - `docs/development/INDUSTRY_STANDARD_CACHE_IMPLEMENTATION_PLAN.md` - Complete implementation guide
   - `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` - Decision tree and patterns
   - `docs/development/REDIS_CACHING_CONVENTIONS.md` - Redis-specific conventions
 
-- **Enforcement:** Any PR with null-returning cache/rate limiter factories or null checks in application code will be rejected. All caching MUST follow transparent failover pattern matching CachingConversationStore.
+- **Enforcement:**
+  - ❌ **REJECT**: PRs with null-returning cache/rate limiter factories (e.g., `getCache(): Cache | null`)
+  - ❌ **REJECT**: PRs with null checks in application code (e.g., `if (cache) { ... }`)
+  - ❌ **REJECT**: PRs with conditional factory functions that return different types based on Redis availability
+  - ❌ **REJECT**: PRs with `if (redis) return CachingStore; else return PlainStore` patterns
+  - ✅ **REQUIRE**: All caching/rate limiting MUST follow transparent failover pattern matching Phase 1-3 implementations
+  - ✅ **REQUIRE**: Factory functions MUST return same type regardless of infrastructure availability
 
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
