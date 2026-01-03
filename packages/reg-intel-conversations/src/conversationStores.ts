@@ -1469,7 +1469,7 @@ export function createConversationStore(
   options: ConversationStoreFactoryOptions
 ): ConversationStore {
   if (!options.supabase) {
-    return new InMemoryConversationStore();
+    throw new Error('Supabase client is required to create a ConversationStore');
   }
 
   const supabaseStore = new SupabaseConversationStore(

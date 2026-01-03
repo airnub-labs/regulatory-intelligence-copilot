@@ -37,43 +37,41 @@ const supabaseInternalClient =
 // ============================================================================
 
 const cacheBackend = ENABLE_LLM_POLICY_CACHE ? resolveRedisBackend('cache') : null;
-const redisClient = ENABLE_LLM_POLICY_CACHE ? createKeyValueClient(cacheBackend) : null;
+const redisClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 
 // ============================================================================
 // Policy Store Configuration
 // ============================================================================
 
+if (!supabaseInternalClient) {
+  throw new Error('Supabase credentials are required to build the policy store');
+}
+
 // Type assertion to work around "Type instantiation is excessively deep" error
 export const policyStore = createPolicyStore({
-  supabase: supabaseInternalClient ?? undefined,
+  supabase: supabaseInternalClient,
   redis: redisClient ?? undefined,
   cacheTtlSeconds: 300, // 5 minutes
   schema: 'copilot_internal',
 } as Parameters<typeof createPolicyStore>[0]);
 
 // Log which store implementation is being used
-if (supabaseInternalClient) {
-  if (redisClient) {
-    logger.info(
-      {
-        supabaseUrl,
-        hasRedis: true,
-        cacheTtl: 300,
-        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingPolicyStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_LLM_POLICY_CACHE
-      ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
-      : 'Redis credentials not configured';
-    logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
-  }
-} else {
-  logger.warn(
-    'No Supabase credentials found; using InMemoryPolicyStore (not suitable for production)'
+if (redisClient) {
+  logger.info(
+    {
+      supabaseUrl,
+      hasRedis: true,
+      cacheTtl: 300,
+      llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingPolicyStore (Supabase + Redis)'
   );
+} else {
+  const reason = !ENABLE_LLM_POLICY_CACHE
+    ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
+    : 'Redis credentials not configured';
+  logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
 }
 
 // ============================================================================

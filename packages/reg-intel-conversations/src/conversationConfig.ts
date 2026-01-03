@@ -549,7 +549,7 @@ export function createConversationConfigStore(
   options: ConfigStoreFactoryOptions
 ): ConversationConfigStore {
   if (!options.supabase) {
-    return new InMemoryConversationConfigStore();
+    throw new Error('Supabase client is required to create a ConversationConfigStore');
   }
 
   const supabaseStore = new SupabaseConversationConfigStore(options.supabase, options.logger);

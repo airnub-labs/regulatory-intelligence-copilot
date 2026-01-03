@@ -227,14 +227,10 @@ export interface PolicyStoreConfig {
  * Priority:
  * 1. Supabase + Redis = CachingPolicyStore(SupabasePolicyStore)
  * 2. Supabase only = SupabasePolicyStore
- * 3. Neither = InMemoryPolicyStore (dev/test only)
  */
 export function createPolicyStore(config: PolicyStoreConfig): LlmPolicyStore {
-  const { InMemoryPolicyStore } = require('./llmRouter.js');
-
   if (!config.supabase) {
-    logger.warn('No Supabase client provided, using InMemoryPolicyStore (not suitable for production)');
-    return new InMemoryPolicyStore();
+    throw new Error('Supabase client is required to create a PolicyStore');
   }
 
   const supabaseStore = new SupabasePolicyStore(config.supabase, config.schema);

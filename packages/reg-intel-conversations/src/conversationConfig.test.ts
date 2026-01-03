@@ -439,9 +439,10 @@ describe('CachingConversationConfigStore', () => {
 });
 
 describe('createConversationConfigStore Factory', () => {
-  it('should create InMemoryConversationConfigStore when no Supabase', () => {
-    const store = createConversationConfigStore({});
-    expect(store).toBeDefined();
+  it('should throw when Supabase is missing', () => {
+    expect(() => createConversationConfigStore({})).toThrow(
+      'Supabase client is required to create a ConversationConfigStore'
+    );
   });
 
   it('should create SupabaseConversationConfigStore when only Supabase provided', () => {

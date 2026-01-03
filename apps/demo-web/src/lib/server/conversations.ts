@@ -5,8 +5,6 @@ import {
   RedisConversationListEventHub,
   SupabaseRealtimeConversationEventHub,
   SupabaseRealtimeConversationListEventHub,
-  InMemoryConversationContextStore,
-  InMemoryConversationPathStore,
   SupabaseConversationContextStore,
   SupabaseConversationPathStore,
   createConversationConfigStore,
@@ -22,7 +20,7 @@ import {
 } from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
-import { PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD, PHASE_TEST } from 'next/constants';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 
 const logger = createLogger('ConversationStoreWiring');
@@ -64,23 +62,18 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.
 const supabaseRealtimeKey =
   supabaseServiceKey ?? process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const nextPhase = process.env.NEXT_PHASE;
-// Only allow dev-like behavior in actual dev/test phases, not during production builds.
-// This ensures production builds fail if database credentials are missing, preventing
-// accidental deployments with an in-memory store.
-const isDevPhase = nextPhase === PHASE_DEVELOPMENT_SERVER || nextPhase === PHASE_TEST;
-const isDevLike = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test' || isDevPhase;
 const tracingFetch = createTracingFetch();
 
-if (normalizeConversationStoreMode === 'memory' && !isDevLike) {
-  throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
+if (normalizeConversationStoreMode === 'memory') {
+  throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not supported in clustered deployments');
 }
 
 const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
 
-if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseServiceKey)) {
+if (!supabaseUrl || !supabaseServiceKey) {
   const message =
     'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable the Supabase conversation store';
-  if (isDevLike || isProductionBuildPhase) {
+  if (isProductionBuildPhase) {
     logger.warn({ mode: normalizeConversationStoreMode }, message);
   } else {
     throw new Error(message);
@@ -88,7 +81,7 @@ if (normalizeConversationStoreMode !== 'memory' && (!supabaseUrl || !supabaseSer
 }
 
 const supabaseClient =
-  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+  supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { fetch: tracingFetch },
@@ -96,7 +89,7 @@ const supabaseClient =
     : null;
 
 const supabaseInternalClient =
-  normalizeConversationStoreMode !== 'memory' && supabaseUrl && supabaseServiceKey
+  supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: 'copilot_internal' },
@@ -167,73 +160,71 @@ const configRedisClient = ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClien
 // Create Redis client for conversation caching (opt-in)
 const conversationRedisClient = ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
 
+if (!supabaseClient || !supabaseInternalClient) {
+  throw new Error('Supabase credentials are required for conversation storage in multi-instance deployments');
+}
+
 // Create conversation store with optional caching
 export const conversationStore: ConversationStore = createConversationStore({
-  supabase: supabaseClient ?? undefined,
-  supabaseInternal: supabaseInternalClient ?? undefined,
+  supabase: supabaseClient,
+  supabaseInternal: supabaseInternalClient,
   redis: conversationRedisClient ?? undefined,
   enableCaching: ENABLE_CONVERSATION_CACHING,
   cacheTtlSeconds: 60, // 1 minute for active conversations
 });
 
 // Log which conversation store implementation is being used
-if (supabaseClient) {
-  if (conversationRedisClient) {
-    logger.info(
-      {
-        hasRedis: true,
-        cacheTtl: 60,
-        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingConversationStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_CONVERSATION_CACHING
-      ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
-      : 'Redis credentials not configured';
-    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
-  }
+if (conversationRedisClient) {
+  logger.info(
+    {
+      hasRedis: true,
+      cacheTtl: 60,
+      conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingConversationStore (Supabase + Redis)'
+  );
 } else {
-  logger.warn('Using InMemoryConversationStore (not suitable for production)');
+  const reason = !ENABLE_CONVERSATION_CACHING
+    ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
+    : 'Redis credentials not configured';
+  logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
 }
 
-export const conversationContextStore = supabaseClient
-  ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient ?? undefined)
-  : new InMemoryConversationContextStore();
+export const conversationContextStore = new SupabaseConversationContextStore(
+  supabaseClient,
+  supabaseInternalClient
+);
 
-export const conversationPathStore = supabaseClient
-  ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient ?? undefined)
-  : new InMemoryConversationPathStore();
+export const conversationPathStore = new SupabaseConversationPathStore(
+  supabaseClient,
+  supabaseInternalClient
+);
 
 // Create conversation config store with caching
 export const conversationConfigStore: ConversationConfigStore = createConversationConfigStore({
-  supabase: supabaseInternalClient ?? undefined,
+  supabase: supabaseInternalClient,
   redis: configRedisClient ?? undefined,
   cacheTtlSeconds: 300, // 5 minutes
   logger,
 });
 
 // Log which config store implementation is being used
-if (supabaseInternalClient) {
-  if (configRedisClient) {
-    logger.info(
-      {
-        hasRedis: true,
-        cacheTtl: 300,
-        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingConversationConfigStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_CONVERSATION_CONFIG_CACHE
-      ? 'conversation config cache disabled via ENABLE_CONVERSATION_CONFIG_CACHE=false'
-      : 'Redis credentials not configured';
-    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
-  }
+if (configRedisClient) {
+  logger.info(
+    {
+      hasRedis: true,
+      cacheTtl: 300,
+      conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingConversationConfigStore (Supabase + Redis)'
+  );
 } else {
-  logger.warn('Using InMemoryConversationConfigStore (not suitable for production)');
+  const reason = !ENABLE_CONVERSATION_CONFIG_CACHE
+    ? 'conversation config cache disabled via ENABLE_CONVERSATION_CONFIG_CACHE=false'
+    : 'Redis credentials not configured';
+  logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
 }
 
 // Configure event hubs with Redis support for distributed SSE
