@@ -49,7 +49,7 @@ if (!supabaseInternalClient) {
 
 // Type assertion to work around "Type instantiation is excessively deep" error
 export const policyStore = createPolicyStore({
-  supabase: supabaseInternalClient,
+  supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
   redis: redisClient ?? undefined,
   cacheTtlSeconds: 300, // 5 minutes
   schema: 'copilot_internal',

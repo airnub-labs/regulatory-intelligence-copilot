@@ -87,6 +87,7 @@ export {
   type CompactionSnapshot,
   type SnapshotStorageProvider,
 } from './snapshotService.js';
+export { SupabaseSnapshotStorage } from './supabaseSnapshotStorage.js';
 
 // Utilities
 export {
