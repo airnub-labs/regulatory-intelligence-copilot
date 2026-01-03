@@ -918,8 +918,8 @@ export default function Home() {
 
     try {
       setIsLoading(true)
-      setEditingMessageId(null)
-      setEditingContent('')
+      // Keep editing state visible until branch is created and reloaded
+      // This prevents the message from disappearing during the operation
 
       // Find the message before the one being edited (branch point)
       const editingIndex = messages.findIndex(m => m.id === messageId)
@@ -970,6 +970,13 @@ export default function Home() {
 
       // Reload conversation to get messages from new path, then add placeholders for streaming
       await loadConversation(conversationId)
+
+      // Clear editing state now that conversation is reloaded
+      setEditingMessageId(null)
+      setEditingContent('')
+
+      // Force path provider to reload with new branch
+      setPathReloadKey(prev => prev + 1)
 
       // Now add user message and assistant placeholder at the end
       setMessages(prev => [
