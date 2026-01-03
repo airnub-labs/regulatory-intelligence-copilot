@@ -124,6 +124,17 @@ These docs are important whenever you’re touching:
 
 ---
 
+## Conversation Path System
+
+The conversation path system enables branching, merging, and path-aware navigation for conversations:
+
+- `architecture/conversation-path-system.md`
+  **Canonical reference** for the conversation path system. Includes architecture, data model, API surface, UI components, and developer guide.
+
+Historical/archived documentation is preserved under `archive/conversation-path-system/` for reference.
+
+---
+
 ## Observability & Client Telemetry
 
 Observability architecture and telemetry systems:

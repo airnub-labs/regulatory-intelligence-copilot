@@ -1,8 +1,12 @@
+> **ARCHIVED (2026-01-03)**: Recommendations implemented. Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Path Labeling UX Analysis & Recommendations
 
 > **Issue**: "Main" label is ambiguous in nested branch scenarios
 > **Created**: 2025-12-27
-> **Priority**: MEDIUM (UX Clarity)
+> **Priority**: MEDIUM (UX Clarity) - ARCHIVED
 
 ## Executive Summary
 

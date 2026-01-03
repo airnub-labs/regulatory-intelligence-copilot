@@ -1,8 +1,12 @@
+> **ARCHIVED (2026-01-03)**: Feature implemented. Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Breadcrumb Navigation with Jump-to-Message Specification
 
 > **Feature**: Enhanced path breadcrumbs with branch point navigation
 > **Created**: 2025-12-27
-> **Status**: ✅ IMPLEMENTED (Phase 4 Complete)
+> **Status**: ✅ IMPLEMENTED (Phase 4 Complete) - ARCHIVED
 
 ## Overview
 

@@ -1,7 +1,11 @@
+> **ARCHIVED (2026-01-03)**: Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Conversation Branching & Merging - Implementation Plan
 
 > **Last Updated**: 2025-12-30
-> **Status**: ✅ Complete (All Features)
+> **Status**: ✅ Complete (All Features) - ARCHIVED
 > **Branch**: Merged to main
 > **Legacy Cleanup**: ✅ Complete (supersededBy fully removed Dec 2024)
 > **AI Merge**: ✅ Complete (LLM router with PolicyStore wired Dec 2025)

@@ -1,7 +1,11 @@
+> **ARCHIVED (2026-01-03)**: Superseded by [`docs/architecture/conversation-path-system.md`](../../architecture/conversation-path-system.md). Retained for historical reference.
+
+---
+
 # Conversation Path System - Implementation Status
 
 **Last Updated**: December 27, 2025
-**Overall Completion**: 100%
+**Overall Completion**: 100% - ARCHIVED
 
 ---
 
