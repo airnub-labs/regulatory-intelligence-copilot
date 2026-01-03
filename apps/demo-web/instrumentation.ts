@@ -3,6 +3,7 @@ export async function register() {
 
   // Use dynamic import to avoid bundling Node.js-only code for Edge Runtime
   const { initObservability } = await import('@reg-copilot/reg-intel-observability');
+  const { initializePricingService } = await import('./src/lib/pricingInit');
 
   const envSamplingRatio = process.env.OTEL_TRACES_SAMPLING_RATIO
     ? Number(process.env.OTEL_TRACES_SAMPLING_RATIO)
@@ -35,4 +36,7 @@ export async function register() {
       alwaysSampleErrors: process.env.OTEL_TRACES_ALWAYS_SAMPLE_ERRORS !== 'false',
     },
   });
+
+  // Initialize dynamic pricing service with Supabase
+  initializePricingService();
 }
