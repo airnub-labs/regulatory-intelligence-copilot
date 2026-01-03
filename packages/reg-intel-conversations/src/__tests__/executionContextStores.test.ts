@@ -3,17 +3,14 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import {
-  InMemoryExecutionContextStore,
-  type ExecutionContext,
-  type CreateExecutionContextInput,
-} from '../executionContextStores.js';
+import { type ExecutionContext, type CreateExecutionContextInput } from '../executionContextStores.js';
+import { TestExecutionContextStore } from './testExecutionContextStore.js';
 
-describe('InMemoryExecutionContextStore', () => {
-  let store: InMemoryExecutionContextStore;
+describe('TestExecutionContextStore', () => {
+  let store: TestExecutionContextStore;
 
   beforeEach(() => {
-    store = new InMemoryExecutionContextStore();
+    store = new TestExecutionContextStore();
   });
 
   describe('createContext', () => {

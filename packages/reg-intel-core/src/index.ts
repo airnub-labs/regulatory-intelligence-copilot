@@ -191,7 +191,6 @@ export {
   type LlmProviderRegistry,
   type LlmPolicyStore,
   LlmRouter,
-  InMemoryPolicyStore,
   createLlmRouter,
   createDefaultLlmRouter,
 } from '@reg-copilot/reg-intel-llm';

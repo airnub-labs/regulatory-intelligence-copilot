@@ -1,7 +1,23 @@
+/**
+ * Rate Limiter - Industry Standard Transparent Failover
+ *
+ * CRITICAL: This implementation follows the industry-standard transparent failover pattern.
+ * Factory function NEVER returns null - always returns a rate limiter instance.
+ *
+ * MULTI-INSTANCE SAFE: Uses Redis/Upstash for distributed rate limiting across instances.
+ * When Redis unavailable: Uses AllowAllRateLimiter (transparent fail-open).
+ *
+ * PRODUCTION: Set REDIS_URL/UPSTASH_URL environment variables for rate limiting.
+ * WITHOUT REDIS: AllowAllRateLimiter allows all requests (fail-open).
+ *
+ * Reference: TransparentRateLimiter (packages/reg-intel-cache/src/transparentRateLimiter.ts)
+ */
+
 import Redis from 'ioredis';
 import { createRequire } from 'module';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
-import type { RateLimiter, ResolvedBackend } from './types.js';
+import type { ResolvedBackend } from './types.js';
+import { createTransparentRateLimiter, type RateLimiterBackend, type TransparentRateLimiter } from './transparentRateLimiter.js';
 
 const logger = createLogger('RateLimiter');
 const require = createRequire(import.meta.url);
@@ -26,43 +42,6 @@ export interface SlidingWindowLimiterOptions {
   prefix?: string;
 }
 
-class MemoryRateLimiter implements RateLimiter {
-  private store = new Map<string, { count: number; resetAt: number }>();
-  private cleanup: NodeJS.Timeout;
-
-  constructor(private readonly options: SlidingWindowLimiterOptions) {
-    this.cleanup = setInterval(() => {
-      const now = Date.now();
-      for (const [key, value] of this.store.entries()) {
-        if (value.resetAt <= now) {
-          this.store.delete(key);
-        }
-      }
-    }, options.windowMs * 2);
-    this.cleanup.unref();
-  }
-
-  async check(identifier: string): Promise<boolean> {
-    const now = Date.now();
-    const entry = this.store.get(identifier);
-    if (!entry || entry.resetAt <= now) {
-      this.store.set(identifier, { count: 1, resetAt: now + this.options.windowMs });
-      return true;
-    }
-
-    if (entry.count >= this.options.limit) {
-      return false;
-    }
-
-    entry.count += 1;
-    return true;
-  }
-
-  getType(): 'memory' {
-    return 'memory';
-  }
-}
-
 let upstashRateLimitConstructor: UpstashRateLimitConstructor | null = null;
 
 function loadUpstashRateLimitConstructor(): UpstashRateLimitConstructor {
@@ -80,7 +59,13 @@ function loadUpstashRateLimitConstructor(): UpstashRateLimitConstructor {
   }
 }
 
-class UpstashRateLimiter implements RateLimiter {
+/**
+ * Upstash Rate Limiter Backend
+ *
+ * Implements RateLimiterBackend for Upstash.
+ * Errors are thrown and handled by TransparentRateLimiter wrapper (fail-open).
+ */
+class UpstashRateLimiterBackend implements RateLimiterBackend {
   private readonly ratelimit: UpstashRateLimitInstance;
 
   constructor(backend: Extract<ResolvedBackend, { backend: 'upstash' }>, options: SlidingWindowLimiterOptions) {
@@ -98,13 +83,9 @@ class UpstashRateLimiter implements RateLimiter {
   }
 
   async check(identifier: string): Promise<boolean> {
-    try {
-      const { success } = await this.ratelimit.limit(identifier);
-      return success;
-    } catch (error) {
-      logger.error({ error }, '[rate-limit] Upstash error, failing open');
-      return true;
-    }
+    // ✅ No try-catch - let errors propagate to TransparentRateLimiter
+    const { success } = await this.ratelimit.limit(identifier);
+    return success;
   }
 
   getType(): 'upstash' {
@@ -130,7 +111,13 @@ end
 return {0, count}
 `;
 
-class RedisSlidingWindowRateLimiter implements RateLimiter {
+/**
+ * Redis Sliding Window Rate Limiter Backend
+ *
+ * Implements RateLimiterBackend using Redis with Lua script for atomic sliding window.
+ * Errors are thrown and handled by TransparentRateLimiter wrapper (fail-open).
+ */
+class RedisSlidingWindowRateLimiterBackend implements RateLimiterBackend {
   constructor(
     private readonly client: Redis,
     private readonly options: SlidingWindowLimiterOptions,
@@ -139,23 +126,20 @@ class RedisSlidingWindowRateLimiter implements RateLimiter {
   async check(identifier: string): Promise<boolean> {
     const now = Date.now();
     const member = `${now}-${Math.random()}`;
-    try {
-      const result = (await this.client.eval(
-        LUA_SLIDING_WINDOW,
-        1,
-        `${this.options.prefix ?? 'copilot:ratelimit'}:${identifier}`,
-        now,
-        this.options.windowMs,
-        this.options.limit,
-        member,
-      )) as [number, number];
 
-      const allowed = Array.isArray(result) ? result[0] === 1 : Boolean(result);
-      return allowed;
-    } catch (error) {
-      logger.error({ error }, '[rate-limit] Redis error, failing open');
-      return true;
-    }
+    // ✅ No try-catch - let errors propagate to TransparentRateLimiter
+    const result = (await this.client.eval(
+      LUA_SLIDING_WINDOW,
+      1,
+      `${this.options.prefix ?? 'copilot:ratelimit'}:${identifier}`,
+      now,
+      this.options.windowMs,
+      this.options.limit,
+      member,
+    )) as [number, number];
+
+    const allowed = Array.isArray(result) ? result[0] === 1 : Boolean(result);
+    return allowed;
   }
 
   getType(): 'redis' {
@@ -163,30 +147,58 @@ class RedisSlidingWindowRateLimiter implements RateLimiter {
   }
 }
 
+/**
+ * Create rate limiter with transparent failover
+ *
+ * CRITICAL: This function NEVER returns null. It always returns a rate limiter instance.
+ *
+ * When Redis/Upstash unavailable:
+ * - Returns TransparentRateLimiter with AllowAllRateLimiter backend
+ * - check() returns true (fail-open)
+ * - Application code works identically
+ *
+ * Pattern matches: TransparentCache, Redis client libraries
+ *
+ * @returns TransparentRateLimiter instance - NEVER returns null
+ */
 export function createRateLimiter(
   backend: ResolvedBackend | null,
   options: SlidingWindowLimiterOptions,
-): RateLimiter {
-  if (!backend) {
-    logger.warn('[rate-limit] No backend configured, using memory limiter');
-    return new MemoryRateLimiter(options);
+): TransparentRateLimiter {
+  let rateLimiterBackend: RateLimiterBackend | null = null;
+
+  if (backend) {
+    try {
+      if (backend.backend === 'redis') {
+        const redisClient = new Redis(
+          backend.url,
+          backend.password ? { password: backend.password } : undefined
+        );
+        rateLimiterBackend = new RedisSlidingWindowRateLimiterBackend(redisClient, options);
+        logger.info({ backend: 'redis' }, 'Created Redis rate limiter backend');
+      } else {
+        rateLimiterBackend = new UpstashRateLimiterBackend(backend, options);
+        logger.info({ backend: 'upstash' }, 'Created Upstash rate limiter backend');
+      }
+    } catch (error) {
+      logger.error({ error }, 'Failed to create rate limiter backend - falling back to AllowAllRateLimiter');
+      rateLimiterBackend = null;
+    }
+  } else {
+    logger.info('No backend configured - using AllowAllRateLimiter (fail-open)');
   }
 
-  if (backend.backend === 'redis') {
-    return new RedisSlidingWindowRateLimiter(new Redis(backend.url, backend.password ? { password: backend.password } : undefined), options);
-  }
-
-  return new UpstashRateLimiter(backend, options);
+  // ✅ Create TransparentRateLimiter (NEVER returns null)
+  return createTransparentRateLimiter(rateLimiterBackend);
 }
 
+/**
+ * @deprecated Use createRateLimiter instead - it now has built-in fail-open behavior via TransparentRateLimiter
+ */
 export function createFailOpenRateLimiter(
   backend: ResolvedBackend | null,
   options: SlidingWindowLimiterOptions,
-): RateLimiter {
-  try {
-    return createRateLimiter(backend, options);
-  } catch (error) {
-    logger.error({ error }, '[rate-limit] Failed to create backend limiter, using memory');
-    return new MemoryRateLimiter(options);
-  }
+): TransparentRateLimiter {
+  logger.warn('createFailOpenRateLimiter is deprecated - use createRateLimiter instead (built-in fail-open)');
+  return createRateLimiter(backend, options);
 }

@@ -10,11 +10,8 @@ import {
   type E2BClient,
   type GetOrCreateContextInput,
 } from '../executionContextManager.js';
-import {
-  InMemoryExecutionContextStore,
-  type ExecutionContext,
-  type ExecutionContextStore,
-} from '../executionContextStores.js';
+import { type ExecutionContext, type ExecutionContextStore } from '../executionContextStores.js';
+import { TestExecutionContextStore } from './testExecutionContextStore.js';
 
 describe('ExecutionContextManager', () => {
   let manager: ExecutionContextManager;
@@ -24,7 +21,7 @@ describe('ExecutionContextManager', () => {
 
   beforeEach(() => {
     // Create in-memory store
-    store = new InMemoryExecutionContextStore();
+    store = new TestExecutionContextStore();
 
     // Create mock sandbox
     mockSandbox = {

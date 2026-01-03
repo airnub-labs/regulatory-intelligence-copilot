@@ -70,48 +70,6 @@ export interface SnapshotStorageProvider {
 }
 
 /**
- * In-memory snapshot storage (for development/testing)
- */
-export class InMemorySnapshotStorage implements SnapshotStorageProvider {
-  private snapshots: Map<string, CompactionSnapshot> = new Map();
-
-  async save(snapshot: CompactionSnapshot): Promise<void> {
-    this.snapshots.set(snapshot.id, snapshot);
-  }
-
-  async get(snapshotId: string): Promise<CompactionSnapshot | null> {
-    return this.snapshots.get(snapshotId) ?? null;
-  }
-
-  async list(conversationId: string, limit: number = 10): Promise<CompactionSnapshot[]> {
-    const conversationSnapshots = Array.from(this.snapshots.values())
-      .filter(s => s.conversationId === conversationId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .slice(0, limit);
-
-    return conversationSnapshots;
-  }
-
-  async delete(snapshotId: string): Promise<void> {
-    this.snapshots.delete(snapshotId);
-  }
-
-  async deleteExpired(): Promise<number> {
-    const now = new Date();
-    let deletedCount = 0;
-
-    for (const [id, snapshot] of this.snapshots.entries()) {
-      if (snapshot.expiresAt < now) {
-        this.snapshots.delete(id);
-        deletedCount++;
-      }
-    }
-
-    return deletedCount;
-  }
-}
-
-/**
  * Compaction Snapshot Service
  */
 export class CompactionSnapshotService {
@@ -119,13 +77,17 @@ export class CompactionSnapshotService {
   private defaultTTL: number; // Time-to-live in milliseconds
 
   constructor(
-    storage?: SnapshotStorageProvider,
+    storage: SnapshotStorageProvider,
     options?: {
       /** Snapshot TTL in hours (default: 24 hours) */
       snapshotTTLHours?: number;
     }
   ) {
-    this.storage = storage ?? new InMemorySnapshotStorage();
+    if (!storage) {
+      throw new Error('Snapshot storage provider is required for compaction snapshots');
+    }
+
+    this.storage = storage;
     this.defaultTTL = (options?.snapshotTTLHours ?? 24) * 60 * 60 * 1000;
   }
 
@@ -225,7 +187,7 @@ let globalSnapshotService: CompactionSnapshotService | null = null;
  * Initialize the global compaction snapshot service
  */
 export const initSnapshotService = (
-  storage?: SnapshotStorageProvider,
+  storage: SnapshotStorageProvider,
   options?: { snapshotTTLHours?: number }
 ): CompactionSnapshotService => {
   globalSnapshotService = new CompactionSnapshotService(storage, options);

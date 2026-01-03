@@ -1236,21 +1236,6 @@ export interface LlmPolicyStore {
 }
 
 /**
- * In-memory policy store (for development)
- */
-export class InMemoryPolicyStore implements LlmPolicyStore {
-  private policies = new Map<string, TenantLlmPolicy>();
-
-  async getPolicy(tenantId: string): Promise<TenantLlmPolicy | null> {
-    return this.policies.get(tenantId) ?? null;
-  }
-
-  async setPolicy(policy: TenantLlmPolicy): Promise<void> {
-    this.policies.set(policy.tenantId, policy);
-  }
-}
-
-/**
  * LLM Router - routes requests to appropriate provider/model based on tenant and task
  */
 export class LlmRouter implements LlmClient {
@@ -1765,7 +1750,11 @@ export function createLlmRouter(config: LlmRouterConfig): LlmRouter {
   const defaultProvider = config.defaultProvider ?? availableProviders[0] ?? 'groq';
   const defaultModel = config.defaultModel ?? 'llama-3.3-70b-versatile';
 
-  const policyStore = config.policyStore ?? new InMemoryPolicyStore();
+  if (!config.policyStore) {
+    throw new Error('policyStore is required for LlmRouter and cannot fall back to in-memory storage');
+  }
+
+  const policyStore = config.policyStore;
   const egressClient =
     config.egressClient ??
     new EgressClient({

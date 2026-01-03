@@ -17,7 +17,6 @@ import {
 } from './policyStores.js';
 import type { RedisKeyValueClient } from '@reg-copilot/reg-intel-cache';
 import type { TenantLlmPolicy } from './llmRouter.js';
-import { InMemoryPolicyStore } from './llmRouter.js';
 
 // Mock the dynamic require in createPolicyStore
 vi.mock('./llmRouter.js', async () => {

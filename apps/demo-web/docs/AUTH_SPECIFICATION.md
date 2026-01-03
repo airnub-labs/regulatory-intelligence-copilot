@@ -155,7 +155,6 @@ Request → Middleware → JWT Validation → Session Callback →
 
 **Implementations**:
 - **RedisCache**: For multi-instance deployments (primary)
-- **InMemoryCache**: For single-instance fallback
 
 **Configuration**:
 ```typescript
@@ -170,7 +169,6 @@ Request → Middleware → JWT Validation → Session Callback →
 if (process.env.REDIS_URL) {
   return new RedisCache(redisUrl)
 } else {
-  return new InMemoryCache()
   logger.warn('Using in-memory cache - NOT suitable for multi-instance')
 }
 ```

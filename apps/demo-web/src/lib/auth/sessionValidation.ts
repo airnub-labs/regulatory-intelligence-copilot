@@ -1,17 +1,22 @@
 /**
- * Session validation utilities
+ * Session validation utilities - Industry Standard Transparent Failover
  *
  * SECURITY: Validates that user sessions correspond to active users in the database.
  * This prevents deleted users from accessing the system with stale JWT tokens.
  *
- * PERFORMANCE: Uses distributed cache (Redis or in-memory) to reduce database queries.
+ * PERFORMANCE: Uses distributed cache (Redis) to reduce database queries.
  * Cache TTL is 5 minutes, balancing security (deleted users locked out quickly)
  * with performance (reduced database load).
  *
  * MULTI-INSTANCE: Uses Redis for distributed caching across multiple app instances.
- * Falls back to in-memory cache if Redis is unavailable (development/single-instance).
+ * WITHOUT REDIS: PassThroughCache (transparent fail-through) - cache.get() returns null,
+ *                cache.set() is no-op. Application code works identically.
+ *
+ * CRITICAL: Cache NEVER returns null - follows industry-standard transparent failover pattern.
  *
  * METRICS: Tracks authentication patterns, cache effectiveness, and cost optimization.
+ *
+ * Reference: CachingConversationStore (packages/reg-intel-conversations/src/conversationStores.ts:1013)
  */
 
 import { createServerClient } from '@supabase/ssr'
@@ -52,7 +57,7 @@ interface ValidateUserResult {
  * @returns ValidateUserResult indicating if user is valid and their current data
  */
 export async function validateUserExists(userId: string): Promise<ValidateUserResult> {
-  // Check cache first (works across multiple instances with Redis)
+  // ✅ No null check - cache ALWAYS exists (transparent failover)
   const cached = await validationCache.get(userId)
   if (cached !== null) {
     authMetrics.recordCacheHit(userId)
@@ -118,7 +123,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
 
       if (error) {
         logger.warn({ userId, error: error.message }, 'User validation failed - user may not exist')
-        // Cache the failure and record metrics
+        // ✅ No null check - cache.set() is no-op if Redis down
         await validationCache.set(userId, false)
         authMetrics.recordCacheMiss(userId, validationDuration, false)
         return {
@@ -127,7 +132,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
         }
       }
 
-      // Cache the success and record metrics
+      // ✅ No null check - cache.set() is no-op if Redis down
       await validationCache.set(userId, true, data.tenant_id)
       authMetrics.recordCacheMiss(userId, validationDuration, true)
 
@@ -162,7 +167,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
 
     if (error) {
       logger.warn({ userId, error: error.message }, 'User validation failed')
-      // Cache the failure and record metrics
+      // ✅ No null check - cache.set() is no-op if Redis down
       await validationCache.set(userId, false)
       authMetrics.recordCacheMiss(userId, validationDuration, false)
       return {
@@ -173,7 +178,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
 
     if (!data.user) {
       logger.warn({ userId }, 'User not found in database')
-      // Cache the failure and record metrics
+      // ✅ No null check - cache.set() is no-op if Redis down
       await validationCache.set(userId, false)
       authMetrics.recordCacheMiss(userId, validationDuration, false)
       return {
@@ -190,7 +195,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
 
     if (bannedUntil || deletedAt) {
       logger.warn({ userId, banned: !!bannedUntil, deleted: !!deletedAt }, 'User is banned or deleted')
-      // Cache the failure (user is banned/deleted) and record metrics
+      // ✅ No null check - cache.set() is no-op if Redis down
       await validationCache.set(userId, false)
       authMetrics.recordCacheMiss(userId, validationDuration, false)
 
@@ -209,6 +214,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     }
 
     // User is valid - cache the success and record metrics
+    // ✅ No null check - cache.set() is no-op if Redis down
     const tenantId = (data.user.user_metadata?.tenant_id ?? data.user.app_metadata?.tenant_id) as string | undefined
     await validationCache.set(userId, true, tenantId)
     authMetrics.recordCacheMiss(userId, validationDuration, true)
@@ -227,5 +233,27 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       isValid: false,
       error: 'Validation failed',
     }
+  }
+}
+
+export async function getCachedValidationResult(userId: string): Promise<ValidateUserResult | null> {
+  // ✅ No null check - cache ALWAYS exists (transparent failover)
+  const cached = await validationCache.get(userId)
+  if (cached === null) {
+    return null
+  }
+
+  authMetrics.recordCacheHit(userId)
+  logger.debug({ userId, isValid: cached.isValid }, 'Using cached validation result')
+
+  return {
+    isValid: cached.isValid,
+    user: cached.isValid
+      ? {
+          id: userId,
+          tenantId: cached.tenantId,
+        }
+      : undefined,
+    error: cached.isValid ? undefined : 'User not found (cached)',
   }
 }

@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextAuthOptions, Session } from 'next-auth'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
-import { validateUserExists } from './sessionValidation'
+import { getCachedValidationResult, validateUserExists } from './sessionValidation'
 import { authMetrics } from './authMetrics'
 
 const logger = createLogger('AuthOptions')
@@ -140,6 +140,22 @@ export const authOptions: NextAuthOptions = {
       const now = Date.now()
       const lastValidated = extendedToken.lastValidated ?? 0
       const needsValidation = now - lastValidated > SESSION_VALIDATION_INTERVAL_MS
+
+      if (extendedToken.sub && !needsValidation) {
+        const cachedValidation = await getCachedValidationResult(extendedToken.sub)
+
+        if (cachedValidation) {
+          if (!cachedValidation.isValid) {
+            logger.warn({ userId: extendedToken.sub }, 'Cached validation failure - invalidating session')
+            return {} as typeof token
+          }
+
+          if (cachedValidation.user) {
+            extendedToken.email = cachedValidation.user.email ?? extendedToken.email
+            extendedToken.tenantId = cachedValidation.user.tenantId ?? extendedToken.tenantId
+          }
+        }
+      }
 
       if (needsValidation && extendedToken.sub) {
         try {

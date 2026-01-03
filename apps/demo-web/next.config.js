@@ -39,6 +39,7 @@ const nextConfig = {
   ],
   experimental: {
     turbopackUseSystemTlsCerts: true,
+    externalDir: true,
   },
   webpack: (config, { isServer }) => {
     // Ignore test files in thread-stream and pino that require dev dependencies

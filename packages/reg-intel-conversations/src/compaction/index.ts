@@ -81,13 +81,13 @@ export {
 // Snapshot & Rollback
 export {
   CompactionSnapshotService,
-  InMemorySnapshotStorage,
   initSnapshotService,
   getSnapshotService,
   getSnapshotServiceIfInitialized,
   type CompactionSnapshot,
   type SnapshotStorageProvider,
 } from './snapshotService.js';
+export { SupabaseSnapshotStorage } from './supabaseSnapshotStorage.js';
 
 // Utilities
 export {
