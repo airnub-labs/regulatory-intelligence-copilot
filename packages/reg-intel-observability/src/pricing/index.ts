@@ -14,7 +14,6 @@ export type {
 export type { PricingService } from './pricingService.js';
 
 export {
-  InMemoryPricingService,
   createPricingService,
   getDefaultPricingService,
   calculateLlmCost,

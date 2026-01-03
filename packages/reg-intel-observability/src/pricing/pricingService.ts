@@ -41,7 +41,7 @@ export interface PricingService {
  *
  * Uses static pricing data. For production, use database-backed service.
  */
-export class InMemoryPricingService implements PricingService {
+class InMemoryPricingService implements PricingService {
   private pricingMap: Map<string, ModelPricing[]>;
 
   constructor(pricingData: ModelPricing[] = ALL_PRICING) {

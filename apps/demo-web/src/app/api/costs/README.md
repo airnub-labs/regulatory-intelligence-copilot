@@ -383,20 +383,19 @@ Cost tracking must be initialized in your Next.js app before using these APIs:
 
 ```typescript
 // app/api/route.ts or middleware.ts
-import {
-  initCostTracking,
-  InMemoryCostStorage,
-  InMemoryQuotaProvider,
-} from '@reg-copilot/reg-intel-observability';
+import { initCostTracking, SupabaseCostStorage, SupabaseQuotaProvider } from '@reg-copilot/reg-intel-observability';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 initCostTracking({
-  storage: new InMemoryCostStorage({ maxRecords: 100_000 }),
-  quotas: new InMemoryQuotaProvider(),
-  enforceQuotas: false, // Set true to enforce quotas in recordLlmCost()
-  onQuotaWarning: (quota) => {
+  storage: new SupabaseCostStorage(supabase),
+  quotas: new SupabaseQuotaProvider(supabase),
+  enforceQuotas: true,
+  onQuotaWarning: quota => {
     console.warn(`Quota warning: ${quota.scope}:${quota.scopeId} at ${quota.currentSpendUsd}/${quota.limitUsd}`);
   },
-  onQuotaExceeded: (quota) => {
+  onQuotaExceeded: quota => {
     console.error(`Quota exceeded: ${quota.scope}:${quota.scopeId}`);
   },
 });

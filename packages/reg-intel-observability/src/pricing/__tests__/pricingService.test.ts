@@ -6,7 +6,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   createPricingService,
   calculateLlmCost,
-  InMemoryPricingService,
   type PricingService,
   type ModelPricing,
 } from '../index.js';

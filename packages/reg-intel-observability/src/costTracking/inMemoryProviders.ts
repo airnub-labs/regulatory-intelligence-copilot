@@ -29,7 +29,7 @@ import type {
  * In-memory cost storage provider
  * Stores all cost records in memory (lost on process restart)
  */
-export class InMemoryCostStorage implements CostStorageProvider {
+class InMemoryCostStorage implements CostStorageProvider {
   private records: LlmCostRecord[] = [];
   private readonly maxRecords: number;
 
@@ -260,7 +260,7 @@ export class InMemoryCostStorage implements CostStorageProvider {
  * In-memory quota provider
  * Stores quota state in memory (lost on process restart)
  */
-export class InMemoryQuotaProvider implements QuotaProvider {
+class InMemoryQuotaProvider implements QuotaProvider {
   private quotas: Map<string, CostQuota> = new Map();
 
   private getQuotaKey(scope: 'platform' | 'tenant' | 'user', scopeId?: string): string {

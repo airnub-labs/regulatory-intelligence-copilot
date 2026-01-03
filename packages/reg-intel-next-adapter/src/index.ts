@@ -33,8 +33,6 @@ import type { ConversationContextStore } from '@reg-copilot/reg-intel-core';
 import {
   ConversationEventHub,
   ConversationListEventHub,
-  InMemoryConversationContextStore,
-  InMemoryConversationStore,
   SupabaseConversationContextStore,
   SupabaseConversationStore,
   presentConversation,
@@ -277,15 +275,6 @@ function resolveSupabaseCredentials() {
   return { supabaseUrl, supabaseKey };
 }
 
-function resolveConversationStoreMode(): 'auto' | 'memory' | 'supabase' {
-  const envValue =
-    process.env.COPILOT_CONVERSATIONS_MODE ?? process.env.COPILOT_CONVERSATIONS_STORE ?? 'auto';
-  const normalized = envValue.trim().toLowerCase();
-  if (['memory', 'inmemory', 'in-memory'].includes(normalized)) return 'memory';
-  if (normalized === 'supabase') return 'supabase';
-  return 'auto';
-}
-
 function resolveGraphWriteMode(): 'auto' | 'memgraph' | 'memory' {
   const envValue =
     process.env.COPILOT_GRAPH_WRITE_MODE ?? process.env.COPILOT_GRAPH_WRITES_MODE ?? 'auto';
@@ -332,61 +321,39 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
   const providedContextStore = options?.conversationContextStore;
 
   if (providedConversationStore || providedContextStore) {
+    if (!providedConversationStore || !providedContextStore) {
+      throw new Error('Both conversationStore and conversationContextStore must be provided together.');
+    }
+
     logConversationStore('provided', 'Using caller-supplied conversation store implementations');
     return {
       mode: 'provided',
-      conversationStore: providedConversationStore ?? new InMemoryConversationStore(),
-      conversationContextStore: providedContextStore ?? new InMemoryConversationContextStore(),
+      conversationStore: providedConversationStore,
+      conversationContextStore: providedContextStore,
     };
   }
 
-  const mode = resolveConversationStoreMode();
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
-  const isDevLike = nodeEnv === 'development' || nodeEnv === 'test';
-  const warnings: string[] = [];
-
-  if (mode === 'memory' && !isDevLike) {
-    throw new Error('COPILOT_CONVERSATIONS_MODE=memory is not permitted outside dev/test environments');
+  const credentials = resolveSupabaseCredentials();
+  if (!credentials) {
+    throw new Error('Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to use the Supabase conversation store');
   }
 
-  if (mode !== 'memory') {
-    const credentials = resolveSupabaseCredentials();
-    if (credentials) {
-      const tracingFetch = createTracingFetch();
-      const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        global: { fetch: tracingFetch },
-      });
-      const internalClient = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        db: { schema: 'copilot_internal' },
-        global: { fetch: tracingFetch },
-      });
+  const tracingFetch = createTracingFetch();
+  const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: tracingFetch },
+  });
+  const internalClient = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    db: { schema: 'copilot_internal' },
+    global: { fetch: tracingFetch },
+  });
 
-      logConversationStore(mode, 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });
-      return {
-        mode: 'supabase',
-        conversationStore: new SupabaseConversationStore(client, internalClient),
-        conversationContextStore: new SupabaseConversationContextStore(client, internalClient),
-      };
-    }
-
-    const message =
-      'Supabase credentials missing; set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to use the Supabase conversation store';
-    if (isDevLike) {
-      warnings.push(message);
-      logConversationStore(mode, `${message}; falling back to in-memory store`);
-    } else {
-      throw new Error(message);
-    }
-  }
-
-  logConversationStore(mode, 'Using in-memory conversation store');
+  logConversationStore('supabase', 'Using SupabaseConversationStore', { supabaseUrl: credentials.supabaseUrl });
   return {
-    mode: 'memory',
-    warnings,
-    conversationStore: new InMemoryConversationStore(),
-    conversationContextStore: new InMemoryConversationContextStore(),
+    mode: 'supabase',
+    conversationStore: new SupabaseConversationStore(client, internalClient),
+    conversationContextStore: new SupabaseConversationContextStore(client, internalClient),
   };
 }
 
@@ -1068,8 +1035,6 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
 }
 
 export {
-  InMemoryConversationStore,
-  InMemoryConversationContextStore,
   ConversationEventHub,
   type ConversationStore,
   type ShareAudience,
