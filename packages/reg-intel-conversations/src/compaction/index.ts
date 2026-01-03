@@ -81,7 +81,6 @@ export {
 // Snapshot & Rollback
 export {
   CompactionSnapshotService,
-  InMemorySnapshotStorage,
   initSnapshotService,
   getSnapshotService,
   getSnapshotServiceIfInitialized,
