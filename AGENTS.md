@@ -140,39 +140,80 @@ All issues identified by these commands must be resolved before committing and p
 **Fault-tolerant architecture and dependency management:**
 
 - **CRITICAL:** This system follows strict fault-tolerance principles - **NEVER add in-memory fallbacks for distributed state**.
+- **CRITICAL:** All caching and rate limiting MUST use **transparent failover pattern** - Redis failures must be completely invisible to application code.
+
 - **Required dependencies:**
   - **Supabase**: All persistent storage (conversations, messages, paths, pricing, cost tracking) - system MUST fail-fast if unavailable.
   - **LLM Providers**: AI functionality (configured via tenant policies) - system MUST error clearly if misconfigured.
+
 - **Optional dependencies with fail-safe behavior:**
   - **Redis**: Caching and rate limiting
-    - When unavailable → Rate limiter fails-open (allows all requests), caches fail-through (hit database)
-    - NoOpRateLimiter and NoOpCache used instead of in-memory maps
-    - Prevents memory accumulation and provides honest behavior
+    - When unavailable → Transparent failover (PassThroughCache, AllowAllRateLimiter)
+    - Factory functions MUST NEVER return null - always return instance
+    - Rate limiter fails-open (allows all requests), caches fail-through (hit database)
+    - Application code MUST NOT check for null - infrastructure failures are internal
   - **OpenTelemetry Collector**: Observability forwarding (log failures but continue)
   - **E2B**: Code execution (feature unavailable without it)
+
+- **REQUIRED: Transparent Failover Pattern for Cache/Rate Limiting**
+  ```typescript
+  // ✅ CORRECT: Factory NEVER returns null
+  const cache = getCache();  // ALWAYS returns cache instance
+  const value = await cache.get(key);  // Returns null for miss OR Redis down
+
+  if (value === null) {
+    // Transparent: could be cache miss OR Redis unavailable
+    const data = await fetchFromDatabase();
+    await cache.set(key, data);  // No-op if Redis down
+    return data;
+  }
+
+  // ✅ CORRECT: Rate limiter NEVER null
+  const limiter = getRateLimiter();  // ALWAYS returns limiter instance
+  const allowed = await limiter.check(ip);  // Returns true if Redis down
+  if (!allowed) {
+    return rateLimitError();
+  }
+  ```
+
 - **PROHIBITED patterns:**
+  - ❌ Factories returning null (e.g., `getCache(): Cache | null`) - leaks infrastructure to application
+  - ❌ Null checks in application code (e.g., `if (cache) { await cache.get() }`) - violates separation of concerns
   - ❌ In-memory fallbacks for rate limiting (e.g., `Map<string, RateLimitEntry>`) - causes unbounded memory growth
   - ❌ In-memory fallbacks for distributed caching (e.g., `Map<string, CachedValue>`) - breaks multi-instance coordination
   - ❌ Static data as fallback for dynamic data (e.g., DEFAULT_PRICING constants) - becomes stale quickly
-  - ❌ LRU caches or bounded maps for distributed state - adds complexity, no real distributed benefit
+  - ❌ Try-catch in application code around cache operations - errors handled internally in cache
+
 - **Acceptable in-memory usage (documented exceptions):**
   - ✅ Performance optimizations (token counting LRU cache) - local per-instance only
   - ✅ Per-instance stateful features (SSE subscriptions, connection pools) - cannot be shared
   - ✅ Test-only stores (in `__tests__/` directories) - never exported to production
-- **Failure modes:**
-  - **Fail-open**: Rate limiting (allow all when Redis down) - better than broken per-instance limits
-  - **Fail-through**: Caching (hit database when Redis down) - Supabase can handle it
+
+- **Failure modes (transparent to application):**
+  - **Fail-open**: Rate limiting (AllowAllRateLimiter when Redis down) - better than broken per-instance limits
+  - **Fail-through**: Caching (PassThroughCache when Redis down) - hits database directly
   - **Fail-fast**: Pricing, conversations, critical data (throw error when Supabase down) - better than wrong data
+
+- **Reference implementation:** `CachingConversationStore` (packages/reg-intel-conversations/src/conversationStores.ts:1013) demonstrates correct transparent failover pattern.
+
 - **Monitoring requirements:**
   - All fail-safe modes MUST be logged with appropriate severity
-  - Metrics MUST track dependency health (`redis_connection_status`, `cache_type`, `rate_limiter_type`)
-  - Alerts MUST fire for P0 failures (Supabase down, pricing missing) and P1 degradations (Redis down)
-- **Full specification:** See `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` for:
-  - Complete decision tree for in-memory vs external storage
-  - Migration patterns from in-memory fallbacks
-  - Code review checklist for detecting prohibited patterns
-  - Testing strategies for fault scenarios
-- **Enforcement:** Any PR introducing in-memory fallbacks for distributed state (rate limiting, caching, conversations, etc.) will be rejected. Migrations away from this pattern require architectural review.
+  - Metrics MUST track backend type (`redis`/`upstash`/`passthrough`/`allowall`)
+  - Alerts MUST fire for P0 failures (Supabase down, pricing missing) and P1 degradations (Redis down, passthrough/allowall active)
+
+- **Code review checklist:**
+  - [ ] Cache/rate limiter factory functions return non-nullable types
+  - [ ] No `if (cache)` or `if (limiter)` null checks in application code
+  - [ ] Error handling is internal to cache/limiter (no try-catch in app code)
+  - [ ] Follows CachingConversationStore pattern
+  - [ ] PassThrough/AllowAll implementations exist for failover
+
+- **Full specifications:**
+  - `docs/development/INDUSTRY_STANDARD_CACHE_IMPLEMENTATION_PLAN.md` - Complete implementation guide
+  - `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md` - Decision tree and patterns
+  - `docs/development/REDIS_CACHING_CONVENTIONS.md` - Redis-specific conventions
+
+- **Enforcement:** Any PR with null-returning cache/rate limiter factories or null checks in application code will be rejected. All caching MUST follow transparent failover pattern matching CachingConversationStore.
 
 The system is **chat‑first**, **engine‑centric**, and **agent‑orchestrated**:
 
