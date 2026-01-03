@@ -204,6 +204,10 @@ function decodeCursor(cursor: string): { timestamp: number; id: string } | null 
   }
 }
 
+/**
+ * @deprecated In-memory conversation storage exists only for legacy tests.
+ * Use SupabaseConversationStore with optional Redis caching for production deployments.
+ */
 export class InMemoryConversationStore implements ConversationStore {
   private conversations = new Map<string, ConversationRecord>();
   private messages = new Map<string, ConversationMessage[]>();
@@ -495,6 +499,10 @@ export class InMemoryConversationStore implements ConversationStore {
   }
 }
 
+/**
+ * @deprecated In-memory conversation context storage exists only for legacy tests.
+ * Use SupabaseConversationContextStore with optional Redis caching for production deployments.
+ */
 export class InMemoryConversationContextStore implements ConversationContextStore {
   private contexts = new Map<string, ConversationContext>();
   private logger = baseConversationLogger.child({ store: 'memory', entity: 'context' });

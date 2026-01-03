@@ -90,6 +90,10 @@ export interface ConversationPathStore {
 /**
  * In-memory implementation of ConversationPathStore for testing
  */
+/**
+ * @deprecated In-memory path storage exists only for legacy tests.
+ * Use SupabaseConversationPathStore with optional Redis caching for production deployments.
+ */
 export class InMemoryConversationPathStore implements ConversationPathStore {
   private paths = new Map<string, ConversationPath>();
   private messages = new Map<string, PathAwareMessage[]>();

@@ -126,6 +126,10 @@ export interface ConversationConfigStore {
 // In-Memory Implementation
 // =============================================================================
 
+/**
+ * @deprecated In-memory config storage is maintained only for legacy tests.
+ * Prefer Supabase-backed config stores (with optional Redis caching) in multi-instance environments.
+ */
 export class InMemoryConversationConfigStore implements ConversationConfigStore {
   private globalConfig: ConversationConfig | null = null;
   private tenantConfigs = new Map<string, ConversationConfig>();
