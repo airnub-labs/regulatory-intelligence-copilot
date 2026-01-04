@@ -40,12 +40,20 @@ export async function register() {
   // Initialize dynamic pricing service with Supabase
   initializePricingService();
 
-  // Initialize cost tracking system
+  // Initialize cost tracking systems
   console.log('[Instrumentation] Initializing cost tracking...');
   try {
+    // Initialize LLM cost tracking
     const { initializeCostTracking } = await import('./src/lib/costTracking');
     initializeCostTracking();
-    console.log('[Instrumentation] Cost tracking initialized successfully');
+    console.log('[Instrumentation] LLM cost tracking initialized successfully');
+
+    // Initialize E2B cost tracking
+    const { initializeE2BCostTracking } = await import('./src/lib/e2bCostTracking');
+    initializeE2BCostTracking();
+    console.log('[Instrumentation] E2B cost tracking initialized successfully');
+
+    console.log('[Instrumentation] All cost tracking systems initialized');
   } catch (error) {
     console.error('[Instrumentation] Failed to initialize cost tracking:', error);
   }

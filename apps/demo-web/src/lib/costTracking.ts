@@ -154,8 +154,10 @@ export const initializeCostTracking = (): void => {
       storage,
       quotas,
 
-      // Quota enforcement - set true to block requests that would exceed quotas
-      enforceQuotas: false, // Set to true in production if you want hard limits
+      // Quota enforcement - ENABLED for Phase 2
+      // Blocks LLM requests that would exceed configured quotas
+      // Configure quotas in Supabase: copilot_internal.cost_quotas table
+      enforceQuotas: process.env.ENFORCE_COST_QUOTAS !== 'false', // Default: true (disable with ENFORCE_COST_QUOTAS=false)
 
       // Callback when quota warning threshold is exceeded
       onQuotaWarning: async (quota: CostQuota) => {
