@@ -91,6 +91,13 @@ export const initBusinessMetrics = (): void => {
     unit: '{operations}',
   });
 
+  // E2B Active Sandboxes Gauge (Phase 4)
+  // Tracks the number of active sandboxes per tenant and tier
+  e2bSandboxActiveGauge = meter.createObservableGauge('regintel.e2b.sandbox.active', {
+    description: 'Number of active E2B sandboxes (gauge)',
+    unit: '{sandboxes}',
+  });
+
   e2bExecutionDurationHistogram = meter.createHistogram('regintel.e2b.execution.duration', {
     description: 'Duration of code execution in E2B sandboxes in seconds',
     unit: 's',
@@ -104,6 +111,13 @@ export const initBusinessMetrics = (): void => {
   e2bResourceUsageCounter = meter.createCounter('regintel.e2b.resource.usage', {
     description: 'E2B resource usage (CPU core-seconds, memory GB-seconds, disk I/O GB)',
     unit: '{units}',
+  });
+
+  // E2B Quota Utilization Gauge (Phase 4)
+  // Tracks quota utilization percentage (0-100) per tenant
+  e2bQuotaUtilizationGauge = meter.createObservableGauge('regintel.e2b.quota.utilization', {
+    description: 'E2B quota utilization percentage (0-100) per tenant',
+    unit: '%',
   });
 
   e2bErrorCounter = meter.createCounter('regintel.e2b.errors.total', {

@@ -16,7 +16,12 @@
  * - docs/architecture/execution-context/spec_v_0_1.md
  */
 
-import { createLogger, withSpan } from '@reg-copilot/reg-intel-observability';
+import {
+  createLogger,
+  withSpan,
+  recordE2BSandboxOperation,
+  recordE2BError,
+} from '@reg-copilot/reg-intel-observability';
 import type {
   ExecutionContextStore,
   ExecutionContext,
@@ -200,12 +205,42 @@ export class ExecutionContextManager {
         expiresAt: context.expiresAt,
       }, 'Found existing execution context');
 
+      // Cost-Aware TTL Adjustment (Phase 4)
+      // Reduce TTL for long-running sandboxes to minimize idle costs
+      // Long-running sandboxes are likely more expensive, so we clean them up sooner
+      const createdAt = new Date(context.createdAt);
+      const now = new Date();
+      const ageMinutes = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+
+      let ttlMinutes = this.defaultTtl;
+
+      // If sandbox has been running > 2 hours, reduce TTL to 15 minutes
+      if (ageMinutes > 120) {
+        ttlMinutes = 15;
+        this.logger.debug({
+          contextId: context.id,
+          ageMinutes: Math.round(ageMinutes),
+          reducedTtl: ttlMinutes,
+        }, 'Reduced TTL for long-running sandbox (cost optimization)');
+      }
+      // If sandbox has been running > 1 hour, reduce TTL to 20 minutes
+      else if (ageMinutes > 60) {
+        ttlMinutes = 20;
+        this.logger.debug({
+          contextId: context.id,
+          ageMinutes: Math.round(ageMinutes),
+          reducedTtl: ttlMinutes,
+        }, 'Reduced TTL for aged sandbox (cost optimization)');
+      }
+
       // Extend TTL by touching
-      await this.config.store.touchContext(context.id, this.defaultTtl);
+      await this.config.store.touchContext(context.id, ttlMinutes);
 
       this.logger.debug({
         contextId: context.id,
-        ttlMinutes: this.defaultTtl,
+        ttlMinutes,
+        ageMinutes: Math.round(ageMinutes),
+        costOptimizationApplied: ttlMinutes < this.defaultTtl,
       }, 'Extended execution context TTL');
 
       // Get or reconnect to sandbox
@@ -223,6 +258,9 @@ export class ExecutionContextManager {
           sandboxId: context.sandboxId,
         }, 'Sandbox not in cache, attempting reconnect');
 
+        // Track reconnect duration for Phase 4 metrics
+        const reconnectStartTime = Date.now();
+
         try {
           sandbox = await this.config.e2bClient.reconnect(context.sandboxId, {
             apiKey: this.config.e2bApiKey,
@@ -230,9 +268,22 @@ export class ExecutionContextManager {
 
           this.activeSandboxes.set(context.id, sandbox);
 
+          // Record successful reconnect (Phase 4)
+          const reconnectDurationMs = Date.now() - reconnectStartTime;
+          recordE2BSandboxOperation(reconnectDurationMs, {
+            operation: 'reconnect',
+            sandboxId: context.sandboxId,
+            tier: 'standard', // TODO: Get from context
+            success: true,
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+          });
+
           this.logger.info('Reconnected to sandbox', {
             contextId: context.id,
             sandboxId: context.sandboxId,
+            durationMs: reconnectDurationMs,
           });
 
           this.logger.debug({
@@ -240,6 +291,28 @@ export class ExecutionContextManager {
             sandboxId: context.sandboxId,
           }, 'Successfully reconnected to sandbox');
         } catch (error) {
+          // Record failed reconnect (Phase 4)
+          const reconnectDurationMs = Date.now() - reconnectStartTime;
+          recordE2BSandboxOperation(reconnectDurationMs, {
+            operation: 'reconnect',
+            sandboxId: context.sandboxId,
+            tier: 'standard',
+            success: false,
+            errorType: error instanceof Error ? error.name : 'UnknownError',
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+          });
+
+          recordE2BError({
+            operation: 'reconnect',
+            errorType: error instanceof Error ? error.name : 'UnknownError',
+            sandboxId: context.sandboxId,
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+          });
+
           // Reconnection failed - sandbox might have been killed
           this.logger.error('Failed to reconnect to sandbox', {
             contextId: context.id,
@@ -327,14 +400,55 @@ export class ExecutionContextManager {
       );
     }
 
-    const sandbox = await this.config.e2bClient.create({
-      apiKey: this.config.e2bApiKey,
-      timeout: this.sandboxTimeout,
-    });
+    // Track sandbox creation duration for Phase 4 metrics
+    const createStartTime = Date.now();
+    let sandbox;
 
-    this.logger.debug({
-      sandboxId: sandbox.sandboxId,
-    }, 'E2B sandbox created, creating execution context record');
+    try {
+      sandbox = await this.config.e2bClient.create({
+        apiKey: this.config.e2bApiKey,
+        timeout: this.sandboxTimeout,
+      });
+
+      // Record successful sandbox creation (Phase 4)
+      const createDurationMs = Date.now() - createStartTime;
+      recordE2BSandboxOperation(createDurationMs, {
+        operation: 'create',
+        sandboxId: sandbox.sandboxId,
+        tier: 'standard', // TODO: Get from config
+        success: true,
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pathId: input.pathId,
+      });
+
+      this.logger.debug({
+        sandboxId: sandbox.sandboxId,
+        durationMs: createDurationMs,
+      }, 'E2B sandbox created, creating execution context record');
+    } catch (createError) {
+      // Record failed sandbox creation (Phase 4)
+      const createDurationMs = Date.now() - createStartTime;
+      recordE2BSandboxOperation(createDurationMs, {
+        operation: 'create',
+        tier: 'standard',
+        success: false,
+        errorType: createError instanceof Error ? createError.name : 'UnknownError',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pathId: input.pathId,
+      });
+
+      recordE2BError({
+        operation: 'create',
+        errorType: createError instanceof Error ? createError.name : 'UnknownError',
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pathId: input.pathId,
+      });
+
+      throw createError;
+    }
 
     // Create execution context record
     // Note: In multi-instance deployments, createContext may return an existing context
@@ -509,13 +623,26 @@ export class ExecutionContextManager {
         sandboxId: sandbox.sandboxId,
       }, 'Sandbox found in cache, killing');
 
+      // Track terminate duration for Phase 4 metrics
+      const terminateStartTime = Date.now();
+
       try {
         // Kill the sandbox
         await sandbox.kill();
 
+        // Record successful terminate (Phase 4)
+        const terminateDurationMs = Date.now() - terminateStartTime;
+        recordE2BSandboxOperation(terminateDurationMs, {
+          operation: 'terminate',
+          sandboxId: sandbox.sandboxId,
+          tier: 'standard', // TODO: Get from context
+          success: true,
+        });
+
         this.logger.info('Sandbox killed', {
           contextId,
           sandboxId: sandbox.sandboxId,
+          durationMs: terminateDurationMs,
         });
 
         this.logger.debug({
@@ -523,6 +650,22 @@ export class ExecutionContextManager {
           sandboxId: sandbox.sandboxId,
         }, 'Sandbox killed successfully');
       } catch (error) {
+        // Record failed terminate (Phase 4)
+        const terminateDurationMs = Date.now() - terminateStartTime;
+        recordE2BSandboxOperation(terminateDurationMs, {
+          operation: 'terminate',
+          sandboxId: sandbox.sandboxId,
+          tier: 'standard',
+          success: false,
+          errorType: error instanceof Error ? error.name : 'UnknownError',
+        });
+
+        recordE2BError({
+          operation: 'terminate',
+          errorType: error instanceof Error ? error.name : 'UnknownError',
+          sandboxId: sandbox.sandboxId,
+        });
+
         this.logger.error('Failed to kill sandbox', {
           contextId,
           error,
