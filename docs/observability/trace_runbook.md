@@ -1,5 +1,8 @@
 # Conversation trace lookup runbook
 
+> **Note:** This document provides operational trace lookup procedures. For the canonical observability overview, see:
+> [`docs/architecture/observability-and-telemetry_v1.md`](../architecture/observability-and-telemetry_v1.md)
+
 Use the stored trace identifiers on conversations and messages to pivot from Supabase/Postgres data to full tracing output in your observability backend. This runbook doubles as the **regression contract** for future coding agents so the trace linkage does not get dropped when adding new stores or background jobs.
 
 ## Persistence contract (do not regress)

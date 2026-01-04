@@ -197,22 +197,31 @@ Related:
 
 ---
 
-## Observability & Client Telemetry
+## Observability & Telemetry
 
-Observability architecture and telemetry systems:
+The observability system provides end-to-end monitoring through client telemetry, server-side tracing, structured logging, and metrics:
 
-- `architecture/client-telemetry-architecture-v1.md` – Production-ready client telemetry system with batching, rate limiting, and OpenTelemetry Collector integration.
-- `client-telemetry/README.md` – Complete user guide covering setup, configuration, deployment, and troubleshooting.
-- `client-telemetry/QUICKSTART.md` – Quick start guide to get running in 5 minutes.
-- `testing/client-telemetry-test-requirements.md` – Mandatory test requirements to prevent regression of scalability features.
+- `architecture/observability-and-telemetry_v1.md`
+  **Canonical reference** for the observability system. Includes:
+  - End-to-end architecture (Client → API → OTEL Collector → Loki/Jaeger/Prometheus → Grafana)
+  - Client telemetry (batching, rate limiting, OTEL integration)
+  - Server-side instrumentation (Pino logging, OTEL traces, business metrics)
+  - Local observability stack (docker-compose setup)
+  - Environment configuration reference
+  - Troubleshooting guide
+
+Related deep-dive documentation:
+- `architecture/client-telemetry-architecture-v1.md` – Detailed client telemetry architecture
+- `architecture/OBSERVABILITY_LOKI_SETUP.md` – Loki/Grafana specific configuration
+- `observability/logging_tracing_framework.md` – Detailed logging/tracing design
+- `observability/SCALABILITY_REVIEW.md` – Scalability analysis
+- `observability/trace_runbook.md` – Trace lookup procedures
+- `client-telemetry/README.md` – Client telemetry user guide
+- `testing/client-telemetry-test-requirements.md` – Mandatory test requirements
+
+Historical/archived documentation is preserved under `archive/observability-and-telemetry/` for reference.
 
 **CRITICAL:** The client telemetry system has strict non-regression requirements documented in `AGENTS.md` (§ Client telemetry). Any changes to telemetry code must pass all tests in the test requirements document before merging.
-
-These docs are important whenever you're:
-- Adding new client-side telemetry events
-- Modifying the telemetry batching or delivery system
-- Configuring OpenTelemetry Collector integration
-- Deploying telemetry infrastructure
 
 ---
 
