@@ -232,19 +232,8 @@ export class SupabaseExecutionContextStore implements ExecutionContextStore {
         tenantId: input.tenantId,
       },
       async () => {
-        // Check if context already exists for this path (prevents race condition)
-        const existing = await this.getContextByPath({
-          tenantId: input.tenantId,
-          conversationId: input.conversationId,
-          pathId: input.pathId,
-        });
-
-        if (existing) {
-          throw new Error(
-            `Execution context already exists for path: ${input.pathId} (contextId: ${existing.id})`
-          );
-        }
-
+        // Try to insert directly - let the database enforce uniqueness
+        // This is more robust for multi-instance deployments than check-then-insert
         const { data, error } = await this.supabase
           .from('execution_contexts')
           .insert({
@@ -259,8 +248,42 @@ export class SupabaseExecutionContextStore implements ExecutionContextStore {
           .single();
 
         if (error) {
+          // Check if this is a unique constraint violation (PostgreSQL error code 23505)
+          // This can happen in multi-instance deployments when two instances try to create concurrently
+          if (error.code === '23505' || error.message?.includes('duplicate key')) {
+            this.logger?.warn('[SupabaseExecutionContextStore] Concurrent creation detected, fetching existing context', {
+              pathId: input.pathId,
+              error: error.message,
+            });
+
+            // Another instance won the race - fetch the existing context
+            const existing = await this.getContextByPath({
+              tenantId: input.tenantId,
+              conversationId: input.conversationId,
+              pathId: input.pathId,
+            });
+
+            if (existing) {
+              this.logger?.info('[SupabaseExecutionContextStore] Using context created by concurrent request', {
+                contextId: existing.id,
+                pathId: input.pathId,
+                sandboxId: existing.sandboxId,
+              });
+              return existing;
+            }
+
+            // This shouldn't happen - constraint violation but no existing context found
+            // Possible if context was terminated between insert attempt and fetch
+            this.logger?.error('[SupabaseExecutionContextStore] Constraint violation but no existing context found', {
+              pathId: input.pathId,
+              error: error.message,
+            });
+          }
+
+          // Not a constraint violation, or couldn't recover - throw error
           this.logger?.error('[SupabaseExecutionContextStore] Failed to create context', {
             error: error.message,
+            code: error.code,
             pathId: input.pathId,
           });
           throw new Error(`Failed to create execution context: ${error.message}`);
