@@ -54,6 +54,15 @@ export interface E2BClient {
 }
 
 /**
+ * Quota check callback for E2B sandbox creation
+ * Returns true if quota allows, false if quota exceeded
+ */
+export type E2BQuotaCheckCallback = (
+  tenantId: string,
+  estimatedCostUsd: number
+) => Promise<{ allowed: boolean; reason?: string }>;
+
+/**
  * Configuration for ExecutionContextManager
  */
 export interface ExecutionContextManagerConfig {
@@ -74,6 +83,12 @@ export interface ExecutionContextManagerConfig {
 
   /** Logger for execution context operations */
   logger?: ExecutionContextLogger;
+
+  /**
+   * Optional quota check callback for E2B sandbox creation (Phase 3)
+   * If provided, will be called before creating new sandboxes to enforce quota limits
+   */
+  quotaCheckCallback?: E2BQuotaCheckCallback;
 }
 
 /**
@@ -278,6 +293,39 @@ export class ExecutionContextManager {
       timeout: this.sandboxTimeout,
       ttl: this.defaultTtl,
     }, 'Initiating E2B sandbox creation');
+
+    // PRE-REQUEST QUOTA CHECK (Phase 3)
+    // Check E2B quota BEFORE creating expensive sandbox if quota callback is configured
+    if (this.config.quotaCheckCallback) {
+      // Estimated cost: ~$0.03 for 5 minutes at standard tier ($0.0001/sec)
+      const estimatedCostUsd = 0.03;
+
+      this.logger.debug({
+        tenantId: input.tenantId,
+        estimatedCostUsd,
+      }, 'Checking E2B quota before sandbox creation');
+
+      const quotaResult = await this.config.quotaCheckCallback(input.tenantId, estimatedCostUsd);
+
+      if (!quotaResult.allowed) {
+        this.logger.error('E2B quota exceeded, cannot create sandbox', {
+          tenantId: input.tenantId,
+          estimatedCostUsd,
+          reason: quotaResult.reason,
+        });
+
+        throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
+      }
+
+      this.logger.debug({
+        tenantId: input.tenantId,
+        quotaCheckPassed: true,
+      }, 'E2B quota check passed');
+    } else {
+      this.logger.debug(
+        'E2B quota check callback not configured, proceeding without quota validation'
+      );
+    }
 
     const sandbox = await this.config.e2bClient.create({
       apiKey: this.config.e2bApiKey,

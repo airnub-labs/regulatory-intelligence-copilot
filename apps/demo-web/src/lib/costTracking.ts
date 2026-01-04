@@ -257,6 +257,94 @@ export const getCostTracking = () => {
 };
 
 /**
+ * Check LLM quota before processing chat request (Phase 3)
+ *
+ * Performs a pre-request quota check to fail fast if quota would be exceeded.
+ * This provides better UX by rejecting the request immediately with HTTP 429
+ * instead of starting the stream and failing mid-response.
+ *
+ * @param tenantId - Tenant ID to check quota for
+ * @param estimatedCostUsd - Estimated cost of the LLM request (default: $0.05 for typical chat)
+ * @returns Quota check result with allowed status and optional reason
+ */
+export const checkLLMQuotaBeforeRequest = async (
+  tenantId: string,
+  estimatedCostUsd: number = 0.05 // Default estimate for typical chat request
+): Promise<{ allowed: boolean; reason?: string; quotaDetails?: any }> => {
+  try {
+    // Get cost tracking service
+    const costService = getCostTracking();
+
+    if (!costService) {
+      // Cost tracking not initialized - allow request
+      logger.debug('Cost tracking not initialized, allowing request');
+      return { allowed: true };
+    }
+
+    // Check if quota enforcement is enabled
+    if (!costService.isEnforcingQuotas()) {
+      logger.debug('Quota enforcement disabled, allowing request');
+      return { allowed: true };
+    }
+
+    // Get quota provider
+    const quotaProvider = costService.getQuotaProvider();
+    if (!quotaProvider) {
+      logger.debug('Quota provider not available, allowing request');
+      return { allowed: true };
+    }
+
+    // Check tenant quota
+    const quotaCheck = await quotaProvider.checkQuota({
+      scope: 'tenant',
+      scopeId: tenantId,
+      estimatedCostUsd,
+    });
+
+    if (!quotaCheck.allowed) {
+      logger.warn({
+        tenantId,
+        estimatedCostUsd,
+        currentSpend: quotaCheck.currentSpendUsd,
+        limit: quotaCheck.limitUsd,
+      }, 'LLM quota check failed');
+
+      return {
+        allowed: false,
+        reason: quotaCheck.denialReason || 'LLM quota exceeded',
+        quotaDetails: {
+          scope: 'tenant',
+          scopeId: tenantId,
+          resourceType: 'llm',
+          limitUsd: quotaCheck.limitUsd,
+          currentSpendUsd: quotaCheck.currentSpendUsd,
+          estimatedCostUsd,
+          remainingUsd: quotaCheck.remainingUsd,
+          period: quotaCheck.period || 'day',
+          utilizationPercent: quotaCheck.utilizationPercent,
+        },
+      };
+    }
+
+    logger.debug({
+      tenantId,
+      estimatedCostUsd,
+      quotaCheckPassed: true,
+    }, 'LLM quota check passed');
+
+    return { allowed: true };
+  } catch (error) {
+    // On error, log and allow request (fail open)
+    logger.error({
+      error: error instanceof Error ? error.message : String(error),
+      tenantId,
+    }, 'Error checking LLM quota, allowing request');
+
+    return { allowed: true };
+  }
+};
+
+/**
  * Cost Tracking Configuration Notes
  *
  * This module uses Supabase for cost storage and quota management in both

@@ -23,6 +23,7 @@ import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observa
 import { createClient } from '@supabase/supabase-js';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
+import { checkE2BQuotaBeforeOperation } from '../e2bCostTracking.js';
 
 const logger = createLogger('ConversationStoreWiring');
 
@@ -379,9 +380,10 @@ if (e2bApiKey) {
     defaultTtlMinutes: 30,
     sandboxTimeoutMs: 600000, // 10 minutes
     enableLogging: true,
+    quotaCheckCallback: checkE2BQuotaBeforeOperation, // Phase 3: Pre-request E2B quota gate
   });
 
-  logger.info('ExecutionContextManager initialized with E2B integration');
+  logger.info('ExecutionContextManager initialized with E2B integration and quota enforcement');
 } else {
   logger.info('E2B_API_KEY not configured; code execution tools disabled');
 }

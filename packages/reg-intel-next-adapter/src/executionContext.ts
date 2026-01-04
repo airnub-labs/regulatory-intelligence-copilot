@@ -10,6 +10,7 @@ import {
   SupabaseExecutionContextStore,
   type ExecutionContextStore,
   type E2BClient,
+  type E2BQuotaCheckCallback,
 } from '@reg-copilot/reg-intel-conversations';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
@@ -133,6 +134,12 @@ export interface ExecutionContextConfig {
 
   /** Enable logging */
   enableLogging?: boolean;
+
+  /**
+   * Optional quota check callback for E2B sandbox creation (Phase 3)
+   * If provided, will be called before creating new sandboxes to enforce quota limits
+   */
+  quotaCheckCallback?: E2BQuotaCheckCallback;
 }
 
 /**
@@ -185,6 +192,7 @@ export function createExecutionContextManager(
     defaultTtlMinutes: config.defaultTtlMinutes,
     sandboxTimeoutMs: config.sandboxTimeoutMs,
     logger,
+    quotaCheckCallback: config.quotaCheckCallback,
   });
 }
 
