@@ -135,6 +135,22 @@ Historical/archived documentation is preserved under `archive/conversation-path-
 
 ---
 
+## Conversation Compaction & Merge Compression
+
+The compaction system manages conversation context size through intelligent message compression:
+
+- `architecture/conversation-compaction-and-merge-compression_v1.md`
+  **Canonical reference** for conversation compaction and merge compression. Includes:
+  - Token counting infrastructure (tiktoken)
+  - 8 compaction strategies (path and merge)
+  - Pinned message preservation
+  - API endpoints and UI components
+  - Configuration options
+
+Historical/archived documentation is preserved under `archive/conversation-compaction/` for reference.
+
+---
+
 ## Observability & Client Telemetry
 
 Observability architecture and telemetry systems:

@@ -44,6 +44,16 @@ The codebase is currently aligned to **architecture_v_0_6.md**. Earlier versions
   - UI/UX behavior (components, navigation)
   - Developer guide and best practices
 
+- `conversation-compaction-and-merge-compression_v1.md`
+  **Canonical documentation** for conversation compaction and merge compression. Covers:
+  - Token counting infrastructure (tiktoken)
+  - Path compaction strategies (none, sliding_window, semantic, hybrid)
+  - Merge compaction strategies (minimal, moderate, aggressive)
+  - Pinned message preservation
+  - PathCompactionService and snapshot/rollback system
+  - API endpoints and UI components
+  - OpenTelemetry metrics and database persistence
+
 ---
 
 ## Relationship to other docs
