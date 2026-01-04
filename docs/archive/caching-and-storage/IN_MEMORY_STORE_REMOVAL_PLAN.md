@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-01-04):** Analysis **COMPLETE**. Recommendations implemented.
+> Consolidated into [`docs/architecture/caching-and-storage_failover_v1.md`](../../architecture/caching-and-storage_failover_v1.md).
+> Retained for historical reference and decision rationale.
+
 # In-Memory Store Analysis and Recommendations
 
 ## Executive Summary

@@ -83,45 +83,53 @@ class MemoryCache {
 }
 ```
 
-**✅ DO THIS INSTEAD**:
+**✅ DO THIS INSTEAD: Transparent Failover Pattern**
+
+> **NOTE:** The implementation uses **transparent failover** where factory functions
+> NEVER return null. See `caching-and-storage_failover_v1.md` for full details.
+
 ```typescript
-// GOOD: Fail-open rate limiter (return null instead of no-op wrapper)
-function createRateLimiter(backend: Backend | null): RateLimiter | null {
+// GOOD: Transparent failover rate limiter (NEVER returns null)
+function createRateLimiter(backend: Backend | null): TransparentRateLimiter {
   if (!backend) {
-    logger.warn('No backend - rate limiting disabled');
-    return null; // Honest about capabilities - no wrapper needed
+    logger.warn('No backend - rate limiting disabled (fail-open)');
+    return new AllowAllRateLimiter();  // ✅ Transparent wrapper
   }
-  return new RedisRateLimiter(backend);
+  return new RedisBackedRateLimiter(backend);
 }
 
-// Usage
-const limiter = createRateLimiter(backend);
-if (limiter) {
-  await limiter.check(key); // Only rate limit if available
-}
+// Usage - NO null checks needed
+const limiter = createRateLimiter(backend);  // NEVER returns null
+const allowed = await limiter.check(key);  // Returns true if Redis down
 
-// GOOD: Fail-through cache (return null instead of no-op wrapper)
-function createCache(backend: Backend | null): Cache | null {
+// GOOD: Transparent failover cache (NEVER returns null)
+function createCache(backend: Backend | null): TransparentCache {
   if (!backend) {
-    logger.warn('No backend - caching disabled');
-    return null; // Honest about capabilities - no wrapper needed
+    logger.warn('No backend - caching disabled (fail-through)');
+    return new PassThroughCache();  // ✅ Transparent wrapper
   }
-  return new RedisCache(backend);
+  return new RedisBackedCache(backend);
 }
 
-// Usage
-const cache = createCache(backend);
-if (cache) {
-  const value = await cache.get(key); // Only cache if available
+// Usage - NO null checks needed
+const cache = createCache(backend);  // NEVER returns null
+const value = await cache.get(key);  // Returns null if miss OR Redis down
+
+if (value === null) {
+  // Transparent: could be cache miss OR Redis unavailable
+  const data = await fetchFromDatabase();
+  await cache.set(key, data);  // No-op if Redis down
+  return data;
 }
 ```
 
 **Rationale**:
-- **Memory Safety**: No accumulation during outages
-- **Honesty**: Null clearly indicates feature is disabled (no wrapper abstraction)
-- **Simplicity**: No unnecessary no-op classes, cleaner code
-- **Monitoring**: Easy to detect and alert on failures
-- **Predictability**: Consistent behavior across instances
+- **Memory Safety**: No accumulation during outages (PassThrough/AllowAll are stateless)
+- **Separation of Concerns**: Application code doesn't know about infrastructure
+- **Industry Standard**: Matches Redis client libraries, Memcached, CDN cache behavior
+- **Simplicity**: No null checks scattered throughout codebase
+- **Monitoring**: `getBackendType()` method reveals if failover is active
+- **Predictability**: Same API whether Redis is up or down
 
 ---
 
@@ -269,11 +277,14 @@ Is this in-memory state?
 
 | Old Pattern | New Pattern | Failure Mode |
 |-------------|-------------|--------------|
-| MemoryRateLimiter | Returns null | Fail-open (allow all) |
-| MemoryCache (auth) | Returns null | Fail-through (hit DB) |
+| MemoryRateLimiter | TransparentRateLimiter (AllowAllRateLimiter) | Fail-open (allow all) |
+| MemoryCache (auth) | TransparentCache (PassThroughCache) | Fail-through (hit DB) |
 | DEFAULT_PRICING fallback | Error if not in Supabase | Fail-fast (clear error) |
-| InMemoryConversationStore | SupabaseConversationStore | Fail-closed (require DB) |
+| InMemoryConversationStore | SupabaseConversationStore + CachingConversationStore | Fail-closed (require DB), cache optional |
 | InMemoryPathStore | SupabasePathStore | Fail-closed (require DB) |
+
+> **Note:** TransparentRateLimiter and TransparentCache are factory-returned wrappers that NEVER return null.
+> See `caching-and-storage_failover_v1.md` for implementation details.
 
 ---
 
@@ -425,21 +436,24 @@ When reviewing code, check for:
 ### 8.1 Required Test Scenarios
 
 **Unit Tests**:
-- createRateLimiter returns null when no backend
-- createCache returns null when no backend
-- Calling code handles null rate limiter correctly
-- Calling code handles null cache correctly
-- Error thrown when pricing not found
+- createRateLimiter NEVER returns null (returns AllowAllRateLimiter when no backend)
+- createCache NEVER returns null (returns PassThroughCache when no backend)
+- TransparentRateLimiter.check() returns true when backend fails (fail-open)
+- TransparentCache.get() returns null when backend fails (transparent)
+- TransparentCache.set() succeeds silently when backend fails (transparent)
+- Error thrown when pricing not found in Supabase (fail-fast)
 
 **Integration Tests**:
-- System behavior when Redis unavailable
-- System behavior when Supabase slow
-- Database load without caching
+- System behavior when Redis unavailable (uses PassThrough/AllowAll)
+- System behavior when Supabase slow (timeouts, retries)
+- Database load without caching (higher but manageable)
 
 **Load Tests**:
-- Performance without Redis caching
-- Rate limiter fail-open behavior
-- Database connection pool under cache bypass
+- Performance without Redis caching (baseline validation)
+- Rate limiter fail-open behavior (system doesn't crash)
+- Database connection pool under cache bypass (scaled appropriately)
+
+See also: `caching-and-storage_failover_v1.md` for detailed test patterns.
 
 ---
 
@@ -449,12 +463,15 @@ When reviewing code, check for:
 
 | Scenario | Pattern | Reason |
 |----------|---------|--------|
-| Redis down, need rate limiting | Return null (fail-open) | Better than broken per-instance limits |
-| Redis down, need caching | Return null (fail-through) | Database can handle it |
+| Redis down, need rate limiting | AllowAllRateLimiter (fail-open) | Better than broken per-instance limits |
+| Redis down, need caching | PassThroughCache (fail-through) | Database can handle it |
 | Supabase down, need pricing | Error (fail-fast) | Stale pricing = wrong bills |
 | Supabase down, need conversations | Error (fail-fast) | Data loss unacceptable |
 | SSE connections | Per-instance state | Cannot share connections |
 | Token counting | Local LRU cache | Performance optimization |
+
+> **Note:** AllowAllRateLimiter and PassThroughCache are transparent wrappers.
+> Factory functions NEVER return null - see `caching-and-storage_failover_v1.md`.
 
 ### 9.2 Architecture Goals
 

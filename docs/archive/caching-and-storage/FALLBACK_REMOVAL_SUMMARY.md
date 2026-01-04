@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-01-04):** Fallback removal **COMPLETE** and implemented in code.
+> Consolidated into [`docs/architecture/caching-and-storage_failover_v1.md`](../../architecture/caching-and-storage_failover_v1.md).
+> Retained for historical reference and change summary.
+
 # Fallback Removal Summary
 
 **Date**: 2026-01-03
