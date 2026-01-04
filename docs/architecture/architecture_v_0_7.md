@@ -35,8 +35,8 @@ This architecture sits on top of, and must remain consistent with, the following
 
 ### New / Refined Specs Introduced by v0.7
 
-- `docs/specs/execution-context/execution_context_spec_v_0_1.md` (E2B sandbox per conversation path)
-- `docs/specs/code-execution/code_execution_tools_v_0_1.md` (LLM-callable execution tools)
+- `docs/architecture/execution-contexts_e2b_v1.md` (E2B sandbox per conversation path — canonical documentation)
+- `docs/architecture/execution-context/IMPLEMENTATION_STATE.json` (implementation tracking)
 
 ### Project‑Level Docs
 

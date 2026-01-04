@@ -2,14 +2,21 @@
 
 This directory contains the **architecture narratives and diagrams** for the Regulatory Intelligence Copilot.
 
-The codebase is currently aligned to **architecture_v_0_6.md**. Earlier versions are retained in `archive/` for design history.
+The codebase is currently aligned to **architecture_v_0_7.md** (extending v0.6 with E2B execution contexts). Earlier versions are retained in `archive/` for design history.
 
 ---
 
 ## What lives here
 
-- `architecture_v_0_6.md`  
-  Canonical high-level architecture for v0.6. Describes:
+- `architecture_v_0_7.md`
+  Canonical high-level architecture for v0.7. Extends v0.6 with:
+  - E2B execution contexts as a first-class architectural concern
+  - LLM-callable code execution tools (`run_code`, `run_analysis`)
+  - Execution context lifecycle management keyed by `(tenantId, conversationId, pathId)`
+  - EgressGuard integration for sandbox output sanitization
+
+- `architecture_v_0_6.md`
+  High-level architecture for v0.6 (superseded by v0.7). Describes:
   - Major packages (`reg-intel-core`, `reg-intel-graph`, `reg-intel-llm`, `reg-intel-prompts`).
   - Core flows (chat → Compliance Engine → LlmRouter/graph/timeline/MCP → streaming response).
   - Safety invariants (no PII in Memgraph, all writes via GraphWriteService + ingress guard, all egress via EgressGuard).
@@ -76,6 +83,24 @@ Related:
 
 ---
 
+## Execution Contexts & E2B Integration
+
+- `execution-contexts_e2b_v1.md`
+  **Canonical documentation** for E2B execution contexts and code execution tools. Covers:
+  - Execution context lifecycle (create, reuse, terminate)
+  - Per-path sandbox isolation model
+  - `run_code` and `run_analysis` tool interfaces
+  - Database schema (`execution_contexts` table)
+  - Security model (multi-tenancy, PII sanitization)
+  - Operational considerations (timeouts, cleanup, observability)
+  - Future work items (clearly separated from implemented features)
+
+Related:
+- `execution-context/IMPLEMENTATION_STATE.json` - Historical implementation tracking
+- `../archive/execution-contexts/` - Archived original documentation
+
+---
+
 ## Relationship to other docs
 
 The architecture docs are **top-level narratives**. They describe the big picture; detailed behaviour lives in the specs under `docs/architecture/`.
@@ -99,6 +124,7 @@ Relevant specs include:
 - `../architecture/graph/algorithms_v_0_1.md` – optional graph algorithms and when to use them.
 - `../architecture/conversation-context/concept_capture_v_0_1.md` – SKOS-style concept capture via tools.
 - `../architecture/conversation-context/spec_v_0_1.md` – server-side ConversationContext and its aspect.
+- `../architecture/execution-contexts_e2b_v1.md` – E2B execution contexts and code execution tools.
 - `../architecture/engines/timeline-engine/spec_v_0_2.md` – timeline engine modelling and tool interface.
 - `../architecture/engines/scenario-engine/spec_v_0_1.md` – conceptual Scenario Engine and integration.
 - `../architecture/graph/change_detection_v_0_6.md` – graph change detection and patch streaming.
@@ -116,16 +142,16 @@ For **when** different architectural pieces are expected to land, see:
 
 ## How to use these docs when making changes
 
-When you’re about to add or change something non-trivial:
+When you're about to add or change something non-trivial:
 
-1. **Skim `architecture_v_0_6.md`** to see where it belongs.
-2. **Check the relevant spec** in `../architecture/` (graph schema, timeline, scenario, conversation-context, guards).
-3. **Confirm there isn’t a conflicting decision** in `../governance/decisions/decisions_v_0_6.md`.
+1. **Skim `architecture_v_0_7.md`** to see where it belongs.
+2. **Check the relevant spec** in `../architecture/` (graph schema, timeline, scenario, conversation-context, execution-contexts, guards).
+3. **Confirm there isn't a conflicting decision** in `../governance/decisions/decisions_v_0_6.md`.
 4. **Check the roadmap** in `../governance/roadmap/roadmap_v_0_6.md` to see if the work is planned in the current phase.
 
-If your change meaningfully alters a flow or invariant that’s described here, update:
+If your change meaningfully alters a flow or invariant that's described here, update:
 
-- `architecture_v_0_6.md` (or add a new version if it’s a major revision), and
+- `architecture_v_0_7.md` (or add a new version if it's a major revision), and
 - The relevant spec(s) and decision entries.
 
 Keeping these documents in sync with the code is what makes this repo a **reusable reference architecture** instead of just another code sample.
