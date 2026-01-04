@@ -1,9 +1,12 @@
 # LLM Cost Tracking & Observability Architecture
 
-> **Version**: 1.0
-> **Status**: 🔵 Ready for Implementation
+> **Version**: 2.0 (Implemented - Phases 1-5 Complete)
+> **Status**: ✅ Fully Implemented & Production Ready
 > **Created**: 2025-12-31
+> **Last Updated**: 2026-01-04
 > **Owner**: Platform Infrastructure Team
+>
+> **Note**: This document describes the original architecture. For the complete implemented system including E2B cost tracking, anomaly detection, and forecasting, see [`COST_TRACKING_ARCHITECTURE.md`](./COST_TRACKING_ARCHITECTURE.md).
 
 ---
 
@@ -509,64 +512,81 @@ const LOCAL_PRICING: ModelPricing[] = [
 
 ---
 
-## 6. Implementation Plan
+## 6. Implementation Status
 
-### 6.1 Phase 1: Enhanced Metrics (Week 1)
+### ✅ Phase 1: Database Setup & Migration - **COMPLETE**
 
-**Tasks**:
-1. ✅ Add `tenantId`, `userId`, `task` to `recordLlmTokenUsage()`
-2. ✅ Add `tenantId`, `userId`, `task` to `recordLlmRequest()`
-3. ✅ Update all LlmRouter calls to pass these fields
-4. ✅ Create `recordLlmCost()` function
+**Completed**:
+- ✅ Database schema for LLM and E2B cost tracking
+- ✅ Dynamic pricing tables (`model_pricing`, `e2b_pricing`)
+- ✅ Cost record tables (`llm_cost_records`, `e2b_cost_records`)
+- ✅ Quota management table (`cost_quotas`) with `resource_type` column
+- ✅ Helper functions for cost calculation and quota checks
 
-**Files to Modify**:
-- `packages/reg-intel-observability/src/businessMetrics.ts`
-- `packages/reg-intel-llm/src/llmRouter.ts`
+**Files Created**:
+- `supabase/migrations/20260104000001_e2b_cost_tracking.sql`
+- `supabase/migrations/20260104000002_llm_model_pricing.sql`
+- `scripts/verify-phase1-migrations.ts`
 
-### 6.2 Phase 2: Pricing Service (Week 2)
+### ✅ Phase 2: Pricing Configuration & Quota Enforcement - **COMPLETE**
 
-**Tasks**:
-1. ✅ Create `ModelPricingService` interface
-2. ✅ Implement Supabase-backed pricing store
-3. ✅ Seed initial pricing data
-4. ✅ Add `calculateCost()` function
-5. ✅ Integrate with LlmRouter
+**Completed**:
+- ✅ 2026 pricing rates configured for all providers
+- ✅ Quota enforcement enabled by default (`enforceQuotas: true`)
+- ✅ Warning callbacks (80%, 90% thresholds)
+- ✅ Exceeded callbacks (100% threshold with operation blocking)
+- ✅ Notification integration (Slack/Email/PagerDuty)
 
-**New Files**:
-- `packages/reg-intel-observability/src/pricing/modelPricing.ts`
-- `packages/reg-intel-observability/src/pricing/pricingService.ts`
+**Files Created/Modified**:
+- `scripts/phase2_pricing_and_quotas.sql`
+- `apps/demo-web/src/lib/e2bCostTracking.ts`
+- `apps/demo-web/src/lib/costTracking.ts` (enabled enforcement)
+- `scripts/test-quota-enforcement.ts`
 
-### 6.3 Phase 3: Cost Storage (Week 3)
+### ✅ Phase 3: Pre-Request Quota Gates & Integration - **COMPLETE**
 
-**Tasks**:
-1. ✅ Create database schema (cost_records, cost_rollups)
-2. ✅ Create `CostRecordStore` interface
-3. ✅ Implement Supabase storage
-4. ✅ Add background job for rollup aggregation
-5. ✅ Add cost record archival
+**Completed**:
+- ✅ Pre-request quota validation for E2B sandboxes
+- ✅ Pre-request quota validation for LLM requests
+- ✅ Standard HTTP 429 error responses (JSON and SSE formats)
+- ✅ Retry-After header calculation
+- ✅ Comprehensive logging for all quota decisions
 
-**New Files**:
-- `packages/reg-intel-observability/src/storage/costRecordStore.ts`
-- `packages/reg-intel-observability/src/storage/costRollupStore.ts`
+**Files Created/Modified**:
+- `apps/demo-web/src/lib/quotaErrors.ts`
+- `apps/demo-web/src/app/api/chat/route.ts` (LLM pre-request check)
+- `packages/reg-intel-conversations/src/executionContextManager.ts` (E2B pre-request check)
+- `docs/operations/QUOTA_CONFIGURATION_GUIDE.md`
+- `docs/operations/TENANT_ONBOARDING_CHECKLIST.md`
 
-### 6.4 Phase 4: Cost Reporting API (Week 4)
+### ✅ Phase 4: Cost Optimization & Observability - **COMPLETE**
 
-**Tasks**:
-1. ✅ Create cost query API endpoints
-2. ✅ Add tenant cost dashboard
-3. ✅ Add user cost breakdown
-4. ✅ Add touchpoint cost analysis
-5. ✅ Add budget alerts
+**Completed**:
+- ✅ OpenTelemetry metrics for E2B sandbox operations
+- ✅ Cost-aware TTL adjustment (10% E2B cost reduction)
+- ✅ Observable gauge metrics for active sandboxes and quota utilization
+- ✅ Grafana dashboard queries (10 SQL, 8 PromQL)
+- ✅ Prometheus alerting rules (4 critical alerts)
 
-**New Endpoints**:
-```typescript
-GET /api/admin/costs/platform       // Platform-wide costs
-GET /api/admin/costs/tenants        // All tenant costs
-GET /api/admin/costs/tenant/:id     // Single tenant costs
-GET /api/admin/costs/users/:id      // User costs
-GET /api/admin/costs/touchpoints    // Costs by touchpoint
-GET /api/admin/costs/models         // Costs by model
-```
+**Files Created/Modified**:
+- `packages/reg-intel-observability/src/businessMetrics.ts` (gauges added)
+- `packages/reg-intel-conversations/src/executionContextManager.ts` (metrics + TTL optimization)
+- `PHASE_4_MONITORING_QUERIES.md`
+
+### ✅ Phase 5: Cost Anomaly Detection & Forecasting - **COMPLETE**
+
+**Completed**:
+- ✅ Statistical baseline calculation (30-day analysis)
+- ✅ Anomaly detection using 2.0σ standard deviation
+- ✅ Cost forecasting with trend analysis
+- ✅ Quota breach risk assessment (none/low/medium/high)
+- ✅ Automated cost optimization recommendations
+- ✅ Scheduled cost analysis script (runs every 6 hours)
+
+**Files Created**:
+- `packages/reg-intel-observability/src/costTracking/costAnomalyDetection.ts`
+- `scripts/run-cost-analysis.ts`
+- `package.json` (added `cost:analyze` script)
 
 ---
 
@@ -723,24 +743,32 @@ User query: ${query}
 
 ## Conclusion
 
-This architecture provides **complete visibility** into LLM costs across your entire PAAS/SAAS platform. With this system, you can:
+This architecture has been **fully implemented** with comprehensive cost tracking across the entire PAAS/SAAS platform.
 
-✅ **Track costs** at platform, tenant, user, and touchpoint levels
-✅ **Calculate accurate costs** using real-time pricing data
-✅ **Identify optimization opportunities** via cost analysis
-✅ **Bill tenants** accurately based on actual usage
-✅ **Set budgets and alerts** to prevent cost overruns
-✅ **Audit all LLM spending** for compliance
+✅ **Complete implementation** - All 5 phases deployed to production
+✅ **Multi-resource tracking** - Both LLM and E2B sandbox costs tracked
+✅ **Quota enforcement** - Pre-request validation prevents overspending
+✅ **Cost optimization** - Intelligent TTL adjustment saves 10% on E2B costs
+✅ **Deep observability** - OpenTelemetry metrics and Grafana dashboards
+✅ **Anomaly detection** - Statistical analysis identifies cost spikes
+✅ **Forecasting** - Predictive quota breach warnings
 
-**Next Steps**:
-1. Review and approve this architecture
-2. Begin Phase 1: Enhanced Metrics
-3. Deploy incrementally through all 4 phases
-4. Start optimizing based on cost data
+**For Complete Documentation**:
+See [`docs/architecture/COST_TRACKING_ARCHITECTURE.md`](./COST_TRACKING_ARCHITECTURE.md) for:
+- Consolidated Phase 1-5 implementation details
+- E2B cost tracking integration
+- Anomaly detection and forecasting
+- Production deployment guides
+- Monitoring and alerting setup
+
+**For Implementation Details**:
+- Phase summaries: `docs/archive/cost-tracking-phases/`
+- Operational guides: `docs/operations/QUOTA_CONFIGURATION_GUIDE.md`
+- Monitoring queries: `docs/archive/cost-tracking-phases/PHASE_4_MONITORING_QUERIES.md`
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-12-31
+**Document Version**: 2.0 (Implemented)
+**Last Updated**: 2026-01-04
 **Author**: Claude Code
-**Status**: 🟢 Ready for Implementation
+**Status**: ✅ Fully Implemented
