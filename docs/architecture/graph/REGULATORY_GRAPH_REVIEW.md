@@ -1,6 +1,8 @@
 # Regulatory Graph Review: Gaps and Proposed Enhancements
 
-> **Status:** Review Document
+> **CONSOLIDATED (2026-01-04):** The actionable proposals from this document have been consolidated into [`regulatory-graph_proposals_v0.7+.md`](./regulatory-graph_proposals_v0.7+.md). Many items identified here (Obligation, Threshold, Rate, Form, PRSIClass, LifeEvent, LegalEntity, TaxCredit, Penalty) are now **implemented** in v0.6. This document is retained for historical reference of the original review process.
+
+> **Status:** Review Document (Historical)
 > **Date:** 2025-12-28
 > **Reviewed Version:** Schema v0.6
 > **Purpose:** Identify gaps in concept types and relationships, propose high-value additions

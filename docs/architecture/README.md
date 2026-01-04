@@ -101,6 +101,29 @@ Related:
 
 ---
 
+## Regulatory Graph
+
+The regulatory graph is a PII-free knowledge graph stored in Memgraph. Documentation has been consolidated:
+
+- `graph/regulatory-graph_current_v0.6.md`
+  **Canonical entry point** for the current graph schema, change detection, and modeling conventions. Covers:
+  - Schema overview (27 node types, 44+ relationship types)
+  - Change detection and SSE streaming (GraphChangeDetector, patch format)
+  - Modeling conventions for jurisdictions, benefits, reliefs, obligations
+  - Special jurisdictions (NI, CTA, IM, Gibraltar, Andorra)
+  - Operational considerations
+
+- `graph/regulatory-graph_proposals_v0.7+.md`
+  **Future proposals** for RegulatoryBody, AssetClass, MeansTest, TaxYear, and UK/EU extensions.
+
+Related detailed specs:
+- `graph/schema_v_0_6.md` — Complete node/edge property definitions
+- `graph/change_detection_v_0_6.md` — Detailed change detection spec
+- `graph/algorithms_v_0_1.md` — Optional Leiden/centrality algorithms
+- `graph/special_jurisdictions_modelling_v_0_1.md` — NI/CTA modeling guidance
+
+---
+
 ## Observability & Telemetry
 
 - `observability-and-telemetry_v1.md`
@@ -139,7 +162,8 @@ When you’re working on a feature:
 Relevant specs include:
 
 - `../architecture/copilot-concept/concept_v_0_6.md` – product concept and goals.
-- `../architecture/graph/schema_v_0_6.md` & `../architecture/graph/schema_changelog_v_0_6.md` – rules graph schema.
+- **`../architecture/graph/regulatory-graph_current_v0.6.md` – canonical entry point for graph schema + change detection.**
+- `../architecture/graph/schema_v_0_6.md` & `../architecture/graph/schema_changelog_v_0_6.md` – detailed rules graph schema.
 - `../architecture/graph/algorithms_v_0_1.md` – optional graph algorithms and when to use them.
 - `../architecture/conversation-context/concept_capture_v_0_1.md` – SKOS-style concept capture via tools.
 - `../architecture/conversation-context/spec_v_0_1.md` – server-side ConversationContext and its aspect.
@@ -147,6 +171,7 @@ Relevant specs include:
 - `../architecture/engines/timeline-engine/spec_v_0_2.md` – timeline engine modelling and tool interface.
 - `../architecture/engines/scenario-engine/spec_v_0_1.md` – conceptual Scenario Engine and integration.
 - `../architecture/graph/change_detection_v_0_6.md` – graph change detection and patch streaming.
+- `../architecture/client-telemetry-architecture-v1.md` – client telemetry batching, rate limiting, and OTEL integration architecture.
 - `../architecture/observability-and-telemetry_v1.md` – observability and telemetry (client telemetry, logging, tracing, metrics).
 
 For decisions about **why** the architecture looks this way, see:

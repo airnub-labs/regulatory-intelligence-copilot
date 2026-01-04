@@ -1,6 +1,8 @@
 # Regulatory Graph Future Enhancements
 
-> **Status:** Review Document
+> **CONSOLIDATED (2026-01-04):** The proposals from this document have been consolidated into [`regulatory-graph_proposals_v0.7+.md`](./regulatory-graph_proposals_v0.7+.md). This document is retained for historical reference of the post-implementation review.
+
+> **Status:** Review Document (Historical)
 > **Date:** 2025-12-29
 > **Reviewed Version:** Schema v0.6 (fully implemented)
 > **Purpose:** Identify future high-value additions beyond the completed implementation
