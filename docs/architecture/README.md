@@ -101,6 +101,25 @@ Related:
 
 ---
 
+## Observability & Telemetry
+
+- `observability-and-telemetry_v1.md`
+  **Canonical documentation** for the observability and telemetry system. Covers:
+  - End-to-end architecture (Client → API → OTEL Collector → Loki/Jaeger/Prometheus → Grafana)
+  - Client telemetry (batching, rate limiting, OTEL integration)
+  - Server-side instrumentation (Pino logging, OTEL traces, metrics)
+  - Local observability stack (docker-compose setup)
+  - Environment configuration reference
+  - Troubleshooting guide
+
+Related:
+- `client-telemetry-architecture-v1.md` - Detailed client telemetry deep-dive
+- `OBSERVABILITY_LOKI_SETUP.md` - Loki/Grafana specific configuration
+- `../observability/` - Additional observability documentation
+- `../archive/observability-and-telemetry/` - Archived historical documentation
+
+---
+
 ## Relationship to other docs
 
 The architecture docs are **top-level narratives**. They describe the big picture; detailed behaviour lives in the specs under `docs/architecture/`.
@@ -128,7 +147,7 @@ Relevant specs include:
 - `../architecture/engines/timeline-engine/spec_v_0_2.md` – timeline engine modelling and tool interface.
 - `../architecture/engines/scenario-engine/spec_v_0_1.md` – conceptual Scenario Engine and integration.
 - `../architecture/graph/change_detection_v_0_6.md` – graph change detection and patch streaming.
-- `../architecture/client-telemetry-architecture-v1.md` – client telemetry batching, rate limiting, and OTEL integration architecture.
+- `../architecture/observability-and-telemetry_v1.md` – observability and telemetry (client telemetry, logging, tracing, metrics).
 
 For decisions about **why** the architecture looks this way, see:
 

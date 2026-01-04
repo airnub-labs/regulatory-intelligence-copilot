@@ -1,8 +1,12 @@
 # Client Telemetry Architecture v1.0
 
+> **Note:** This is a detailed deep-dive document. For the canonical observability entry point, see:
+> [`docs/architecture/observability-and-telemetry_v1.md`](./observability-and-telemetry_v1.md)
+
 > **Status:** Current
 > **Created:** 2025-01-15
 > **Related Documentation:**
+> - `docs/architecture/observability-and-telemetry_v1.md` - **Canonical observability entry point**
 > - `docs/client-telemetry/README.md` - Complete user and deployment guide
 > - `docs/client-telemetry/QUICKSTART.md` - Quick start guide
 > - `AGENTS.md` - Client telemetry requirements (§ Client telemetry section)

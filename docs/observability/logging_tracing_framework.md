@@ -1,5 +1,8 @@
 # Logging and Tracing Framework (Node 24 / Next.js)
 
+> **Note:** This is the detailed logging/tracing design document. For the canonical observability overview, see:
+> [`docs/architecture/observability-and-telemetry_v1.md`](../architecture/observability-and-telemetry_v1.md)
+
 > **Status**: ✅ Fully Implemented
 > **Last Updated**: 2025-12-28
 
