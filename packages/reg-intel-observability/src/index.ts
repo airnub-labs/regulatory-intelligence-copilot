@@ -60,7 +60,7 @@ export {
   calculateLlmCost,
   // Note: Static pricing constants (OPENAI_PRICING, etc.) are intentionally NOT
   // exported. All runtime pricing must come from SupabasePricingService to ensure
-  // current data. Static pricing data in pricingData.ts is only for test seeding.
+  // current data. Static pricing data in pricingData.seed.ts is only for test seeding.
 } from './pricing/index.js';
 
 // Cost Storage & Quota Management

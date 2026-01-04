@@ -23,8 +23,8 @@ export {
 
 // Note: Static pricing constants (OPENAI_PRICING, ANTHROPIC_PRICING, etc.) are
 // intentionally NOT exported to prevent runtime usage of stale pricing data.
-// The pricingData.ts file is kept only for:
-// - Test data seeding (tests can import directly from pricingData.js)
-// - Supabase migration scripts (can import directly from pricingData.js)
+// The pricingData.seed.ts file contains static pricing data ONLY for:
+// - Test data seeding (tests can import directly from pricingData.seed.js)
+// - Supabase migration scripts (can import directly from pricingData.seed.js)
 // All runtime pricing lookups MUST use SupabasePricingService for current data.
 

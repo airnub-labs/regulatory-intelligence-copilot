@@ -243,7 +243,7 @@ if (validationCache) {  // Check for null before use
 - **Recommendation**: ✅ Keep as-is
 
 #### 4.2 Pricing Data Constants (Internal Use Only)
-- **Location**: `packages/reg-intel-observability/src/pricing/pricingData.ts`
+- **Location**: `packages/reg-intel-observability/src/pricing/pricingData.seed.ts`
 - **Status**: ❌ **NOT EXPORTED** (kept only for Supabase seeding)
 - **Previous**: Exported ALL_PRICING, DEFAULT_PRICING for fallback
 - **Current**: File exists but not exported; used only for seeding scripts

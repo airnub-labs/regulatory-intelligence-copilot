@@ -380,8 +380,8 @@ describe('Integration Scenarios', () => {
 
 **Implementation**:
 ```typescript
-├── pricingService.ts    # PricingService interface & InMemoryPricingService
-├── pricingData.ts       # Static pricing data for all major providers
+├── pricingService.ts    # PricingService interface & SupabasePricingService
+├── pricingData.seed.ts  # Static pricing seed data (for tests/migrations only)
 ├── types.ts             # ModelPricing, CostCalculation types
 └── __tests__/
     └── pricingService.test.ts  # Comprehensive tests
