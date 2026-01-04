@@ -1,5 +1,8 @@
 # Logging & Telemetry Scalability Review
 
+> **Note:** This document provides detailed scalability analysis. For the canonical observability overview, see:
+> [`docs/architecture/observability-and-telemetry_v1.md`](../architecture/observability-and-telemetry_v1.md)
+
 > **Review Date**: 2025-12-28
 > **Scope**: Full repository review of logging framework implementation and cloud scalability
 > **Status**: ✅ Framework fully implemented, wired, and production-ready

@@ -1,7 +1,9 @@
 # Phase 4 & UI Improvements - Implementation Summary
 
+> **ARCHIVED (2025-01-04):** This is a phase/milestone document. Observability content consolidated into `docs/architecture/observability-and-telemetry_v1.md`. Retained for historical reference.
+
 > **Date**: 2025-12-09
-> **Status**: In Progress
+> **Status**: Completed (observability spans) / Partial (metrics, cleanup)
 > **Branch**: `claude/fix-chat-streaming-issue-017Jx9N5Q8MGmtVsEkrh1v2f`
 
 ## Overview

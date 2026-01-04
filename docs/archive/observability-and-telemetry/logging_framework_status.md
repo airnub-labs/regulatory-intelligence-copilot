@@ -1,5 +1,7 @@
 # Logging framework status review
 
+> **ARCHIVED (2025-01-04):** Consolidated into `docs/architecture/observability-and-telemetry_v1.md`. Retained for historical reference.
+
 ## Implemented pieces
 - The shared observability package provides the Pino-backed logger with trace/request context mixins plus payload hashing helpers, keeping logging consistent and structured across packages.【F:packages/reg-intel-observability/src/logger.ts†L1-L94】
 - OpenTelemetry setup is available through `initObservability`, wiring OTLP exporters, samplers, and instrumentations (HTTP, Undici, optional FS/Next) with AsyncLocalStorage context management.【F:packages/reg-intel-observability/src/tracing.ts†L1-L188】

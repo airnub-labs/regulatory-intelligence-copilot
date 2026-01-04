@@ -1,5 +1,8 @@
 # Client Telemetry System
 
+> **Note:** This is the detailed user/deployment guide. For the canonical observability overview, see:
+> [`docs/architecture/observability-and-telemetry_v1.md`](../architecture/observability-and-telemetry_v1.md)
+
 ## Overview
 
 The Client Telemetry System provides a scalable, production-ready solution for collecting telemetry events from browser clients. It features automatic batching, rate limiting, and seamless integration with OpenTelemetry collectors.

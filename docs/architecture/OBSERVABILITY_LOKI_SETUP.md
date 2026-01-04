@@ -1,5 +1,8 @@
 # Loki & Grafana Observability Setup
 
+> **Note:** This document focuses on Loki/Grafana specifics. For the canonical observability overview, see:
+> [`docs/architecture/observability-and-telemetry_v1.md`](./observability-and-telemetry_v1.md)
+
 This document describes the production-ready log aggregation setup using Grafana Loki integrated with the OpenTelemetry Collector.
 
 ## Overview
