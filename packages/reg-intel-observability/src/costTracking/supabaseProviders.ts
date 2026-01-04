@@ -584,4 +584,144 @@ export class SupabaseQuotaProvider implements QuotaProvider {
       throw new Error(`Failed to reset quota: ${error.message}`);
     }
   }
+
+  /**
+   * Atomically check and record quota in a single database transaction
+   *
+   * This method uses database-level locking (SELECT FOR UPDATE) to prevent
+   * race conditions during concurrent quota checks. The check and update
+   * happen atomically, preventing quota overruns.
+   *
+   * @param scope - Quota scope (platform, tenant, or user)
+   * @param scopeId - Scope identifier (required for tenant/user)
+   * @param costUsd - Cost to record
+   * @returns Quota check result with updated state
+   *
+   * @example
+   * ```typescript
+   * const result = await quotaProvider.checkAndRecordQuotaAtomic(
+   *   'tenant',
+   *   'tenant-123',
+   *   5.50
+   * );
+   *
+   * if (result.allowed) {
+   *   console.log('Operation allowed, quota updated');
+   * } else {
+   *   console.log('Operation denied:', result.denialReason);
+   * }
+   * ```
+   */
+  async checkAndRecordQuotaAtomic(
+    scope: 'platform' | 'tenant' | 'user',
+    scopeId: string | undefined,
+    costUsd: number
+  ): Promise<{
+    allowed: boolean;
+    currentSpendUsd: number;
+    limitUsd: number;
+    remainingUsd: number;
+    utilizationPercent: number;
+    denialReason?: string;
+    period?: string;
+    periodEnd?: Date;
+  }> {
+    try {
+      const { data, error } = await this.client.rpc('check_and_record_quota_atomic', {
+        p_scope: scope,
+        p_scope_id: scopeId ?? null,
+        p_cost_usd: costUsd,
+      });
+
+      if (error) {
+        // If function doesn't exist, fall back to non-atomic implementation
+        if (error.code === 'PGRST202' || error.code === '42883') {
+          console.warn(
+            'Atomic quota function not available, falling back to non-atomic check. ' +
+            'Run migration 20260104000002_atomic_quota_operations.sql to enable atomic operations.'
+          );
+          return await this.checkAndRecordQuotaFallback(scope, scopeId, costUsd);
+        }
+        throw new Error(`Failed to check and record quota atomically: ${error.message}`);
+      }
+
+      // Extract result from first row
+      const result = (data as any[])[0];
+
+      return {
+        allowed: result.allowed,
+        currentSpendUsd: Number(result.current_spend_usd),
+        limitUsd: Number(result.limit_usd),
+        remainingUsd: Number(result.remaining_usd),
+        utilizationPercent: Number(result.utilization_percent),
+        denialReason: result.reason || undefined,
+        period: result.period || undefined,
+        periodEnd: result.period_end ? new Date(result.period_end) : undefined,
+      };
+    } catch (error) {
+      // On error, fall back to non-atomic implementation
+      console.error('Error in atomic quota operation, falling back:', error);
+      return await this.checkAndRecordQuotaFallback(scope, scopeId, costUsd);
+    }
+  }
+
+  /**
+   * Fallback implementation for quota check + record
+   * Used when atomic function is not available
+   * WARNING: This implementation is NOT atomic and subject to race conditions
+   */
+  private async checkAndRecordQuotaFallback(
+    scope: 'platform' | 'tenant' | 'user',
+    scopeId: string | undefined,
+    costUsd: number
+  ): Promise<{
+    allowed: boolean;
+    currentSpendUsd: number;
+    limitUsd: number;
+    remainingUsd: number;
+    utilizationPercent: number;
+    denialReason?: string;
+    period?: string;
+    periodEnd?: Date;
+  }> {
+    // Check quota
+    const checkResult = await this.checkQuota({
+      scope,
+      scopeId,
+      estimatedCostUsd: costUsd,
+    });
+
+    if (!checkResult.allowed) {
+      return {
+        allowed: false,
+        currentSpendUsd: checkResult.quota?.currentSpendUsd || 0,
+        limitUsd: checkResult.quota?.limitUsd || 0,
+        remainingUsd: checkResult.remainingBudgetUsd || 0,
+        utilizationPercent: checkResult.quota
+          ? (checkResult.quota.currentSpendUsd / checkResult.quota.limitUsd) * 100
+          : 0,
+        denialReason: checkResult.reason,
+        period: checkResult.quota?.period,
+        periodEnd: checkResult.quota?.periodEnd,
+      };
+    }
+
+    // Record cost (WARNING: Not atomic with check!)
+    await this.recordCost(scope, scopeId, costUsd);
+
+    // Get updated quota
+    const updatedQuota = await this.getQuota(scope, scopeId);
+
+    return {
+      allowed: true,
+      currentSpendUsd: updatedQuota?.currentSpendUsd || costUsd,
+      limitUsd: updatedQuota?.limitUsd || 0,
+      remainingUsd: updatedQuota ? updatedQuota.limitUsd - updatedQuota.currentSpendUsd : 0,
+      utilizationPercent: updatedQuota
+        ? (updatedQuota.currentSpendUsd / updatedQuota.limitUsd) * 100
+        : 0,
+      period: updatedQuota?.period,
+      periodEnd: updatedQuota?.periodEnd,
+    };
+  }
 }
