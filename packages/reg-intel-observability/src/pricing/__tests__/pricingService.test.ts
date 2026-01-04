@@ -10,7 +10,7 @@ import {
   type PricingService,
   type ModelPricing,
 } from '../index.js';
-import { ALL_PRICING } from '../pricingData.js';
+import { ALL_PRICING } from '../pricingData.seed.js';
 
 interface PricingRow {
   provider: string;

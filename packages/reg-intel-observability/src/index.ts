@@ -58,13 +58,9 @@ export {
   getPricingService,
   getPricingServiceIfInitialized,
   calculateLlmCost,
-  OPENAI_PRICING,
-  ANTHROPIC_PRICING,
-  GOOGLE_PRICING,
-  GROQ_PRICING,
-  LOCAL_PRICING,
-  ALL_PRICING,
-  DEFAULT_PRICING,
+  // Note: Static pricing constants (OPENAI_PRICING, etc.) are intentionally NOT
+  // exported. All runtime pricing must come from SupabasePricingService to ensure
+  // current data. Static pricing data in pricingData.seed.ts is only for test seeding.
 } from './pricing/index.js';
 
 // Cost Storage & Quota Management

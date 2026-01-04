@@ -1,8 +1,16 @@
 /**
- * Model Pricing Data
+ * Model Pricing Seed Data
  *
- * Current pricing for major LLM providers.
- * Updated as of December 2024.
+ * ⚠️ WARNING: This file is for TEST SEEDING and MIGRATIONS ONLY.
+ * ⚠️ DO NOT use this data at runtime - it becomes stale as soon as deployed.
+ * ⚠️ All runtime pricing MUST come from SupabasePricingService.
+ *
+ * This static pricing data is intentionally NOT exported from index.ts.
+ * It should only be imported directly by:
+ * - Test files (for seeding test databases)
+ * - Migration scripts (for initial Supabase seeding)
+ *
+ * Pricing snapshot as of December 2024.
  *
  * Sources:
  * - OpenAI: https://openai.com/pricing
