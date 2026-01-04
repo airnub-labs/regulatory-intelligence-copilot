@@ -16,19 +16,18 @@ If you're new to the project and want to understand how it fits together:
 2. **Governance (decisions & roadmap)**
    - `governance/decisions/decisions_v_0_6.md`
    - `governance/roadmap/roadmap_v_0_6.md`
-3. **Core schema & engines**
-   - `specs/graph_schema_v_0_6.md`
-   - `specs/graph_schema_changelog_v_0_6.md`
+3. **Regulatory graph**
+   - **`architecture/graph/regulatory-graph_current_v0.6.md`** — Canonical entry point (schema + change detection + modeling)
+   - `architecture/graph/regulatory-graph_proposals_v0.7+.md` — Future proposals
+4. **Engines**
    - `specs/timeline_engine_v_0_2.md`
    - `specs/scenario_engine_v_0_1.md`
-4. **Runtime glue & safety**
+5. **Runtime glue & safety**
    - `specs/conversation-context/concept_capture_from_main_chat_v_0_1.md`
    - `specs/conversation-context/conversation_context_spec_v_0_1.md`
    - `specs/data_privacy_and_architecture_boundaries_v_0_1.md`
    - `specs/graph_ingress_guard_v_0_1.md`
-  - `specs/safety-guards/egress_guard_v_0_3.md`
-5. **Change detection & streaming**
-   - `change-detection/graph_change_detection_v_0_6.md`
+   - `specs/safety-guards/egress_guard_v_0_3.md`
 
 After that, dip into the remaining specs as needed.
 
@@ -84,9 +83,10 @@ Specs capture the **shape and behaviour** of the main subsystems.
 ### Core concept & graph
 
 - `specs/regulatory_graph_copilot_concept_v_0_6.md` – overall product concept and goals.
-- `specs/graph_schema_v_0_6.md` – node/edge schema for the rules graph.
-- `specs/graph_schema_changelog_v_0_6.md` – how the schema evolved to v0.6.
-- `specs/graph_algorithms_v_0_1.md` – query patterns and optional algorithms.
+- **`architecture/graph/regulatory-graph_current_v0.6.md`** – canonical entry point for graph schema + change detection.
+- `architecture/graph/schema_v_0_6.md` – detailed node/edge schema for the rules graph.
+- `architecture/graph/schema_changelog_v_0_6.md` – how the schema evolved to v0.6.
+- `architecture/graph/algorithms_v_0_1.md` – query patterns and optional algorithms.
 
 ### Timeline & scenarios
 
@@ -103,7 +103,7 @@ Specs capture the **shape and behaviour** of the main subsystems.
 - `specs/data_privacy_and_architecture_boundaries_v_0_1.md` – what data is allowed where (Supabase vs Memgraph vs LLMs vs MCP).
 - `specs/graph_ingress_guard_v_0_1.md` – how all Memgraph writes go through ingress aspects.
 - `specs/safety-guards/egress_guard_v_0_3.md` – how all outbound calls (LLM, MCP, HTTP) go through egress aspects.
-- `specs/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/IM/EU/CTA/GI/AD and their special relationships.
+- `architecture/graph/special_jurisdictions_modelling_v_0_1.md` – IE/UK/NI/IM/EU/CTA/GI/AD and their special relationships.
 
 ### Other
 
@@ -112,17 +112,23 @@ Specs capture the **shape and behaviour** of the main subsystems.
 
 ---
 
-## Change detection & graph streaming
+## Regulatory Graph & Change Detection
 
-Change detection and graph streaming have their own area:
+The regulatory graph documentation has been consolidated:
 
-- `change-detection/graph_change_detection_v_0_6.md` – current design for patch-based graph change detection and streaming, including nodes/edges created/updated/deleted and `edges_updated` for edge property changes.
-- `change-detection/archive/*.md` – earlier experiments and enhancement notes kept for reference.
+- **`architecture/graph/regulatory-graph_current_v0.6.md`** – **Canonical entry point** for the current graph schema, change detection, and modeling conventions.
+- `architecture/graph/regulatory-graph_proposals_v0.7+.md` – Future proposals for v0.7+.
 
-These docs are important whenever you’re touching:
+Detailed specifications:
+- `architecture/graph/schema_v_0_6.md` – Complete node/edge property definitions.
+- `architecture/graph/change_detection_v_0_6.md` – Detailed change detection spec.
+- `architecture/graph/algorithms_v_0_1.md` – Optional Leiden/centrality algorithms.
+- `architecture/graph/special_jurisdictions_modelling_v_0_1.md` – NI/CTA/IM modeling.
+
+These docs are important whenever you're touching:
 
 - The Memgraph → frontend graph data flow.
-- Live graph visualisations.
+- Live graph visualizations.
 - Any feature that depends on incremental updates rather than full reloads.
 
 ---
