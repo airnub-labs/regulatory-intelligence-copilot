@@ -24,7 +24,8 @@
     "test:changes:simulate": "tsx scripts/test-graph-changes.ts simulate",
     "check:supabase-store": "tsx scripts/manual-supabase-store-check.ts",
     "verify:phase1": "tsx scripts/verify-phase1-migrations.ts",
-    "test:quotas": "tsx scripts/test-quota-enforcement.ts"
+    "test:quotas": "tsx scripts/test-quota-enforcement.ts",
+    "cost:analyze": "tsx scripts/run-cost-analysis.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

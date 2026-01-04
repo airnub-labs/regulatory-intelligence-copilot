@@ -89,3 +89,12 @@ export {
   type AnomalyDetectionConfig,
   type AnomalyResult,
 } from './anomalyDetection.js';
+
+// Cost forecasting and baseline analysis (Phase 5)
+export {
+  CostAnomalyDetectionService,
+  type CostBaseline,
+  type CostAnomaly,
+  type CostForecast,
+  type CostRecommendation,
+} from './costAnomalyDetection.js';
