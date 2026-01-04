@@ -209,14 +209,23 @@ POST /api/client-telemetry
 
 ### Rate Limiting
 
-**Current implementation:** In-memory per-IP rate limiting
+**Implementation:** Redis-backed distributed rate limiting with transparent failover
+
+The rate limiter uses the `TransparentRateLimiter` pattern:
+- **Primary:** Redis/Upstash for distributed rate limiting across multiple instances
+- **Fallback:** `AllowAllRateLimiter` (fail-open) when Redis unavailable
 
 | Configuration | Default | Environment Variable |
 |---------------|---------|---------------------|
 | Window | 60 seconds | `CLIENT_TELEMETRY_RATE_LIMIT_WINDOW_MS` |
 | Max requests | 100 | `CLIENT_TELEMETRY_RATE_LIMIT_MAX_REQUESTS` |
+| Enable Redis | `true` | `ENABLE_RATE_LIMITER_REDIS` |
 
-**Note:** For multi-instance deployments, the system uses transparent failover rate limiting with Redis as the primary backend and in-memory fallback. See `docs/architecture/caching-and-storage_failover_v1.md`.
+**Implementation files:**
+- `apps/demo-web/src/lib/rateLimiter.ts` - Factory and configuration
+- `packages/reg-intel-cache/src/transparentRateLimiter.ts` - Core implementation
+
+See `docs/architecture/caching-and-storage_failover_v1.md` for the transparent failover pattern.
 
 ### OTEL Forwarding Configuration
 
@@ -639,19 +648,15 @@ See `docs/observability/SCALABILITY_REVIEW.md` (Section 8) for detailed Edge Run
 
 The following items are **not yet implemented**:
 
-1. **Redis-based distributed rate limiting for client telemetry**
-   - Current: In-memory rate limiting (transparent failover)
-   - Needed for: True multi-instance rate limiting
-
-2. **UI metrics integration**
+1. **UI metrics integration**
    - `regintel.ui.breadcrumb.navigate.total` - Pending UI component
    - `regintel.ui.path.switch.total` - Pending UI component
 
-3. **Edge Runtime observability**
+2. **Edge Runtime observability**
    - Lightweight Edge-compatible telemetry
    - Waiting for OTEL community Edge support (expected 2025-2026)
 
-4. **Advanced alerting**
+3. **Advanced alerting**
    - Prometheus alerting rules
    - Alertmanager integration
    - PagerDuty/Slack notifications
