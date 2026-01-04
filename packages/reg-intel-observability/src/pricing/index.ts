@@ -21,13 +21,10 @@ export {
   calculateLlmCost,
 } from './pricingService.js';
 
-export {
-  OPENAI_PRICING,
-  ANTHROPIC_PRICING,
-  GOOGLE_PRICING,
-  GROQ_PRICING,
-  LOCAL_PRICING,
-  ALL_PRICING,
-  DEFAULT_PRICING,
-} from './pricingData.js';
+// Note: Static pricing constants (OPENAI_PRICING, ANTHROPIC_PRICING, etc.) are
+// intentionally NOT exported to prevent runtime usage of stale pricing data.
+// The pricingData.ts file is kept only for:
+// - Test data seeding (tests can import directly from pricingData.js)
+// - Supabase migration scripts (can import directly from pricingData.js)
+// All runtime pricing lookups MUST use SupabasePricingService for current data.
 
