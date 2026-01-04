@@ -56,6 +56,26 @@ The codebase is currently aligned to **architecture_v_0_6.md**. Earlier versions
 
 ---
 
+## Caching & Storage with Transparent Failover
+
+- `caching-and-storage_failover_v1.md`
+  **Canonical documentation** for caching and storage layer patterns. Covers:
+  - Transparent failover architecture (Redis optional, system functions without it)
+  - Cache abstractions (TransparentCache, TransparentRateLimiter, PassThroughCache)
+  - Factory functions that NEVER return null
+  - CachingConversationStore and CachingPolicyStore patterns
+  - Rate limiting with fail-open behavior
+  - In-memory components policy (what's acceptable vs. prohibited)
+  - Operational guidance (env vars, key naming, TTLs)
+  - Code review checklist for cache implementations
+
+Related:
+- `FAULT_TOLERANT_ARCHITECTURE.md` - Core fault tolerance principles
+- `../operations/TRANSPARENT_FAILOVER_RUNBOOK.md` - Operations runbook
+- `../development/TRANSPARENT_FAILOVER_DEPLOYMENT_GUIDE.md` - Deployment guide
+
+---
+
 ## Relationship to other docs
 
 The architecture docs are **top-level narratives**. They describe the big picture; detailed behaviour lives in the specs under `docs/architecture/`.

@@ -151,6 +151,23 @@ Historical/archived documentation is preserved under `archive/conversation-compa
 
 ---
 
+## Caching & Storage with Transparent Failover
+
+The caching layer provides Redis-backed caching with automatic transparent failover:
+
+- `architecture/caching-and-storage_failover_v1.md`
+  **Canonical reference** for caching and storage patterns. Includes:
+  - Transparent failover architecture (Redis optional, system functions without it)
+  - Cache abstractions (TransparentCache, TransparentRateLimiter)
+  - Correct patterns for implementing caches (factory functions NEVER return null)
+  - Rate limiting with fail-open behavior
+  - In-memory components policy
+  - Operational guidance
+
+Historical/archived documentation is preserved under `archive/caching-and-storage/` for reference.
+
+---
+
 ## Observability & Client Telemetry
 
 Observability architecture and telemetry systems:

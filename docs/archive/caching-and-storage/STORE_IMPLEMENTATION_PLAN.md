@@ -1,3 +1,7 @@
+> **ARCHIVED (2026-01-04):** This implementation plan is **COMPLETE** and implemented in code.
+> Consolidated into [`docs/architecture/caching-and-storage_failover_v1.md`](../../architecture/caching-and-storage_failover_v1.md).
+> Retained for historical reference and detailed implementation specifications.
+
 # Store Implementation Plan: PolicyStore & ConfigStore
 
 ## Overview

@@ -1,9 +1,13 @@
+> **ARCHIVED (2026-01-04):** Audit milestone **COMPLETE**. All deprecated in-memory fallbacks removed.
+> Consolidated into [`docs/architecture/caching-and-storage_failover_v1.md`](../../architecture/caching-and-storage_failover_v1.md).
+> Retained for historical reference and audit trail.
+
 # In-Memory Components Audit - Final State
 
 **Date**: 2026-01-03
 **Branch**: `claude/dynamic-pricing-service-o1Rlc`
 **Status**: All deprecated in-memory fallbacks removed
-**See Also**: `FALLBACK_REMOVAL_SUMMARY.md`, `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md`
+**See Also**: `docs/architecture/caching-and-storage_failover_v1.md` (canonical), `docs/architecture/FAULT_TOLERANT_ARCHITECTURE.md`
 
 ---
 
