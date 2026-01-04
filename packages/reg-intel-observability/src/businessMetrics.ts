@@ -21,6 +21,16 @@ let llmCostCounter: Counter | null = null;
 let egressGuardCounter: Counter | null = null;
 let egressGuardBlockCounter: Counter | null = null;
 
+// E2B sandbox metric instrument instances
+let e2bSandboxOperationDurationHistogram: Histogram | null = null;
+let e2bSandboxOperationCounter: Counter | null = null;
+let e2bSandboxActiveGauge: ObservableGauge | null = null;
+let e2bExecutionDurationHistogram: Histogram | null = null;
+let e2bCostCounter: Counter | null = null;
+let e2bResourceUsageCounter: Counter | null = null;
+let e2bQuotaUtilizationGauge: ObservableGauge | null = null;
+let e2bErrorCounter: Counter | null = null;
+
 // UI/UX metric instrument instances
 let uiBreadcrumbNavigateCounter: Counter | null = null;
 let uiBranchCreateCounter: Counter | null = null;
@@ -68,6 +78,37 @@ export const initBusinessMetrics = (): void => {
   llmCostCounter = meter.createCounter('regintel.llm.cost.total', {
     description: 'Total LLM cost in USD (with multi-dimensional attribution)',
     unit: 'USD',
+  });
+
+  // E2B sandbox metrics
+  e2bSandboxOperationDurationHistogram = meter.createHistogram('regintel.e2b.sandbox.operation.duration', {
+    description: 'Duration of E2B sandbox operations (create, reconnect, terminate, cleanup) in milliseconds',
+    unit: 'ms',
+  });
+
+  e2bSandboxOperationCounter = meter.createCounter('regintel.e2b.sandbox.operation.total', {
+    description: 'Total number of E2B sandbox operations by type and outcome',
+    unit: '{operations}',
+  });
+
+  e2bExecutionDurationHistogram = meter.createHistogram('regintel.e2b.execution.duration', {
+    description: 'Duration of code execution in E2B sandboxes in seconds',
+    unit: 's',
+  });
+
+  e2bCostCounter = meter.createCounter('regintel.e2b.cost.total', {
+    description: 'Total E2B sandbox cost in USD (with multi-dimensional attribution)',
+    unit: 'USD',
+  });
+
+  e2bResourceUsageCounter = meter.createCounter('regintel.e2b.resource.usage', {
+    description: 'E2B resource usage (CPU core-seconds, memory GB-seconds, disk I/O GB)',
+    unit: '{units}',
+  });
+
+  e2bErrorCounter = meter.createCounter('regintel.e2b.errors.total', {
+    description: 'Total number of E2B errors by operation and error type',
+    unit: '{errors}',
   });
 
   // Egress guard metrics
@@ -426,4 +467,202 @@ export const recordMessageEdit = (attributes: {
   pathId?: string;
 }): void => {
   uiMessageEditCounter?.add(1, attributes as Attributes);
+};
+
+/**
+ * Record E2B sandbox operation with duration
+ */
+export const recordE2BSandboxOperation = (
+  durationMs: number,
+  attributes: {
+    operation: 'create' | 'reconnect' | 'terminate' | 'cleanup';
+    sandboxId?: string;
+    tier: string;
+    region?: string;
+    success: boolean;
+    errorType?: string;
+    tenantId?: string;
+    userId?: string;
+    conversationId?: string;
+    pathId?: string;
+  }
+): void => {
+  e2bSandboxOperationDurationHistogram?.record(durationMs, attributes as Attributes);
+  e2bSandboxOperationCounter?.add(1, attributes as Attributes);
+};
+
+/**
+ * Record E2B code execution duration
+ */
+export const recordE2BExecution = (
+  durationSeconds: number,
+  attributes: {
+    sandboxId: string;
+    tier: string;
+    region?: string;
+    success: boolean;
+    tenantId?: string;
+    userId?: string;
+    conversationId?: string;
+    pathId?: string;
+    operationType?: string;
+  }
+): void => {
+  e2bExecutionDurationHistogram?.record(durationSeconds, attributes as Attributes);
+};
+
+/**
+ * Record E2B cost in USD with multi-dimensional attribution
+ *
+ * Enables cost tracking across multiple dimensions:
+ * - Platform-wide (total E2B costs)
+ * - Per-tenant (organizational billing)
+ * - Per-user (individual usage)
+ * - Per-conversation (session-level analysis)
+ * - Per-path (branch-level tracking)
+ */
+export const recordE2BCost = async (attributes: {
+  sandboxId: string;
+  tier: string;
+  region?: string;
+  executionTimeSeconds: number;
+  cpuCoreSeconds?: number;
+  memoryGbSeconds?: number;
+  diskIoGb?: number;
+  tenantId?: string;
+  userId?: string;
+  conversationId?: string;
+  pathId?: string;
+  success?: boolean;
+  isEstimated?: boolean;
+}): Promise<void> => {
+  try {
+    // Import dynamically to avoid circular dependencies
+    const { SupabaseE2BPricingService } = await import('./e2b/pricingService.js');
+    const { SupabaseE2BCostTrackingService } = await import('./e2b/costTracking.js');
+    const { getSupabaseClient } = await import('./costTracking/index.js');
+
+    const supabaseClient = getSupabaseClient();
+    if (!supabaseClient) {
+      throw new Error('Supabase client is not initialized. Cannot record E2B costs.');
+    }
+
+    const pricingService = new SupabaseE2BPricingService(supabaseClient);
+    const costTrackingService = new SupabaseE2BCostTrackingService(supabaseClient, pricingService);
+
+    // Calculate cost
+    const costCalculation = await pricingService.calculateCost({
+      tier: attributes.tier,
+      region: attributes.region || 'us-east-1',
+      resourceUsage: {
+        executionTimeSeconds: attributes.executionTimeSeconds,
+        cpuCoreSeconds: attributes.cpuCoreSeconds,
+        memoryGbSeconds: attributes.memoryGbSeconds,
+        diskIoGb: attributes.diskIoGb,
+      },
+    });
+
+    // Record to OpenTelemetry metrics (real-time observability)
+    e2bCostCounter?.add(costCalculation.totalCostUsd, {
+      sandboxId: attributes.sandboxId,
+      tier: attributes.tier,
+      region: attributes.region || 'us-east-1',
+      tenantId: attributes.tenantId,
+      userId: attributes.userId,
+      conversationId: attributes.conversationId,
+      pathId: attributes.pathId,
+      isEstimated: costCalculation.isEstimated,
+    } as Attributes);
+
+    // Also record separate execution and resource costs for detailed analysis
+    if (costCalculation.executionCostUsd > 0) {
+      e2bCostCounter?.add(costCalculation.executionCostUsd, {
+        sandboxId: attributes.sandboxId,
+        tier: attributes.tier,
+        costType: 'execution',
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        conversationId: attributes.conversationId,
+        pathId: attributes.pathId,
+        isEstimated: costCalculation.isEstimated,
+      } as Attributes);
+    }
+
+    if (costCalculation.resourceCostUsd > 0) {
+      e2bCostCounter?.add(costCalculation.resourceCostUsd, {
+        sandboxId: attributes.sandboxId,
+        tier: attributes.tier,
+        costType: 'resource',
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        conversationId: attributes.conversationId,
+        pathId: attributes.pathId,
+        isEstimated: costCalculation.isEstimated,
+      } as Attributes);
+    }
+
+    // Record to cost tracking service (storage & quota management)
+    if (attributes.tenantId) {
+      // Only record to database if we have tenant attribution
+      // (Platform-wide costs without attribution go to metrics only)
+      await costTrackingService.recordCost({
+        sandboxId: attributes.sandboxId,
+        tier: attributes.tier,
+        region: attributes.region || 'us-east-1',
+        executionTimeSeconds: attributes.executionTimeSeconds,
+        cpuCoreSeconds: attributes.cpuCoreSeconds,
+        memoryGbSeconds: attributes.memoryGbSeconds,
+        diskIoGb: attributes.diskIoGb,
+        executionCostUsd: costCalculation.executionCostUsd,
+        resourceCostUsd: costCalculation.resourceCostUsd,
+        totalCostUsd: costCalculation.totalCostUsd,
+        isEstimated: costCalculation.isEstimated,
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        conversationId: attributes.conversationId,
+        pathId: attributes.pathId,
+        success: attributes.success ?? true,
+      });
+
+      // Update quota
+      await costTrackingService.incrementQuotaSpend(attributes.tenantId, costCalculation.totalCostUsd);
+    }
+  } catch (error) {
+    // Silently fail if pricing/cost tracking service is unavailable
+    // This prevents metrics recording from blocking E2B operations
+    console.warn('Failed to record E2B cost:', error);
+  }
+};
+
+/**
+ * Record E2B resource usage
+ */
+export const recordE2BResourceUsage = (attributes: {
+  sandboxId: string;
+  tier: string;
+  region?: string;
+  resourceType: 'cpu' | 'memory' | 'disk' | 'network';
+  amount: number;  // core-seconds, GB-seconds, GB, etc.
+  tenantId?: string;
+  userId?: string;
+  conversationId?: string;
+  pathId?: string;
+}): void => {
+  const { amount, ...metricAttributes } = attributes;
+  e2bResourceUsageCounter?.add(amount, metricAttributes as Attributes);
+};
+
+/**
+ * Record E2B error
+ */
+export const recordE2BError = (attributes: {
+  operation: 'create' | 'reconnect' | 'terminate' | 'cleanup' | 'execute';
+  errorType: string;
+  sandboxId?: string;
+  tier?: string;
+  tenantId?: string;
+  conversationId?: string;
+  pathId?: string;
+}): void => {
+  e2bErrorCounter?.add(1, attributes as Attributes);
 };
