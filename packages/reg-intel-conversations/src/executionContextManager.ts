@@ -289,13 +289,97 @@ export class ExecutionContextManager {
     }, 'E2B sandbox created, creating execution context record');
 
     // Create execution context record
-    const newContext = await this.config.store.createContext({
-      tenantId: input.tenantId,
-      conversationId: input.conversationId,
-      pathId: input.pathId,
-      sandboxId: sandbox.sandboxId,
-      ttlMinutes: this.defaultTtl,
-    });
+    // Note: In multi-instance deployments, createContext may return an existing context
+    // if another instance won the race. In that case, we need to cleanup our orphaned sandbox.
+    let newContext: ExecutionContext;
+    let wasRaceCondition = false;
+
+    try {
+      newContext = await this.config.store.createContext({
+        tenantId: input.tenantId,
+        conversationId: input.conversationId,
+        pathId: input.pathId,
+        sandboxId: sandbox.sandboxId,
+        ttlMinutes: this.defaultTtl,
+      });
+
+      // Check if the returned context has a different sandbox ID
+      // This indicates another instance won the race
+      if (newContext.sandboxId !== sandbox.sandboxId) {
+        wasRaceCondition = true;
+
+        this.logger.warn('Race condition detected: another instance created context', {
+          ourSandboxId: sandbox.sandboxId,
+          theirSandboxId: newContext.sandboxId,
+          contextId: newContext.id,
+          pathId: input.pathId,
+        });
+
+        // Kill our orphaned sandbox to avoid billing for unused resources
+        try {
+          await sandbox.kill();
+          this.logger.info('Cleaned up orphaned sandbox from lost race', {
+            sandboxId: sandbox.sandboxId,
+            pathId: input.pathId,
+          });
+        } catch (killError) {
+          this.logger.error('Failed to cleanup orphaned sandbox', {
+            sandboxId: sandbox.sandboxId,
+            error: killError,
+          });
+        }
+
+        // Try to reconnect to the winner's sandbox
+        try {
+          const winningSandbox = await this.config.e2bClient.reconnect(newContext.sandboxId, {
+            apiKey: this.config.e2bApiKey,
+          });
+
+          this.activeSandboxes.set(newContext.id, winningSandbox);
+
+          this.logger.info('Reconnected to winning sandbox', {
+            contextId: newContext.id,
+            sandboxId: newContext.sandboxId,
+          });
+
+          return {
+            context: newContext,
+            sandbox: winningSandbox,
+            wasCreated: false, // We didn't create this context, another instance did
+          };
+        } catch (reconnectError) {
+          this.logger.error('Failed to reconnect to winning sandbox', {
+            contextId: newContext.id,
+            sandboxId: newContext.sandboxId,
+            error: reconnectError,
+          });
+
+          // Fall through to throw error - we can't proceed without a sandbox
+          throw new Error(`Lost race condition and failed to reconnect to winning sandbox: ${reconnectError instanceof Error ? reconnectError.message : String(reconnectError)}`);
+        }
+      }
+    } catch (createError) {
+      // Context creation failed and wasn't a race condition
+      // Clean up the sandbox we created
+      this.logger.error('Failed to create execution context, cleaning up sandbox', {
+        sandboxId: sandbox.sandboxId,
+        error: createError,
+      });
+
+      try {
+        await sandbox.kill();
+        this.logger.info('Cleaned up sandbox after context creation failure', {
+          sandboxId: sandbox.sandboxId,
+        });
+      } catch (killError) {
+        this.logger.error('Failed to cleanup sandbox after error', {
+          sandboxId: sandbox.sandboxId,
+          error: killError,
+        });
+      }
+
+      throw createError;
+    }
 
     this.logger.debug({
       contextId: newContext.id,
