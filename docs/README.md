@@ -2,17 +2,17 @@
 
 This folder contains all of the **architecture, governance, and spec documents** for the Regulatory Intelligence Copilot.
 
-The codebase is currently aligned with **architecture v0.6.x**. Earlier versions are retained for design history and archaeology.
+The codebase is currently aligned with **architecture v0.7.x** (extending v0.6 with E2B execution contexts). Earlier versions are retained for design history and archaeology.
 
 ---
 
 ## Recommended reading order
 
-If you’re new to the project and want to understand how it fits together:
+If you're new to the project and want to understand how it fits together:
 
 1. **Concept & high-level architecture**
-   - `architecture_v_0_6.md`
-   - `specs/regulatory_graph_copilot_concept_v_0_6.md`
+   - `architecture/architecture_v_0_7.md`
+   - `architecture/copilot-concept/concept_v_0_6.md`
 2. **Governance (decisions & roadmap)**
    - `governance/decisions/decisions_v_0_6.md`
    - `governance/roadmap/roadmap_v_0_6.md`
@@ -38,19 +38,22 @@ After that, dip into the remaining specs as needed.
 
 High-level and historical architecture docs live under `docs/architecture/`:
 
-- `architecture/architecture_v_0_6.md`  
-  Canonical high-level architecture for the current implementation.
+- `architecture/architecture_v_0_7.md`
+  Canonical high-level architecture for the current implementation. Extends v0.6 with E2B execution contexts.
 
-- `architecture/architecture_diagrams_v_0_6.md`  
-  Diagrams for v0.6 (chat flow, LlmRouter, graph ingress/egress, concept capture, ConversationContext, etc.).
+- `architecture/architecture_v_0_6.md`
+  High-level architecture for v0.6 (superseded by v0.7).
 
-- `architecture/versions/architecture_v_0_*.md`  
+- `architecture/architecture_diagrams_v_0_7.md`
+  Diagrams for v0.7 (chat flow, LlmRouter, graph ingress/egress, concept capture, ConversationContext, execution contexts, etc.).
+
+- `architecture/archive/architecture_v_0_*.md`
   Earlier architecture versions preserved for design history (0.1 → 0.5). Use these when you need to understand why something changed.
 
 If you only have time for two docs, read:
 
-1. `architecture/architecture_v_0_6.md`
-2. `specs/regulatory_graph_copilot_concept_v_0_6.md`
+1. `architecture/architecture_v_0_7.md`
+2. `architecture/copilot-concept/concept_v_0_6.md`
 
 ---
 
@@ -168,6 +171,26 @@ Historical/archived documentation is preserved under `archive/caching-and-storag
 
 ---
 
+## Execution Contexts & E2B Integration
+
+The execution context system provides per-path isolated E2B sandboxes for code execution:
+
+- `architecture/execution-contexts_e2b_v1.md`
+  **Canonical reference** for E2B execution contexts and code execution tools. Includes:
+  - Execution context lifecycle (create, reuse, terminate)
+  - Per-path sandbox isolation model
+  - `run_code` and `run_analysis` tool interfaces
+  - Database schema (`execution_contexts` table)
+  - Security model (multi-tenancy, PII sanitization)
+  - Operational considerations (timeouts, cleanup, observability)
+  - Future work items
+
+Related:
+- `architecture/execution-context/IMPLEMENTATION_STATE.json` – Historical implementation tracking
+- `archive/execution-contexts/` – Archived original documentation
+
+---
+
 ## Observability & Client Telemetry
 
 Observability architecture and telemetry systems:
@@ -199,10 +222,10 @@ These are useful for understanding **what was in scope** for a given phase and h
 
 When implementing or changing something, try to:
 
-1. Identify which **spec(s)** apply (graph schema, timeline, scenario, conversation context, safety, etc.).
-2. Check the **architecture** doc to see where the change belongs (reg-intel-core vs reg-intel-graph vs reg-intel-llm vs reg-intel-prompts).
-3. Check **governance/decisions/decisions_v_0_6.md** to ensure you’re not contradicting an existing ADR.
-4. Check the **governance/roadmap/roadmap_v_0_6.md** to see if the work is planned and what phase it’s in.
+1. Identify which **spec(s)** apply (graph schema, timeline, scenario, conversation context, execution contexts, safety, etc.).
+2. Check the **architecture** doc to see where the change belongs (reg-intel-core vs reg-intel-graph vs reg-intel-llm vs reg-intel-prompts vs reg-intel-conversations).
+3. Check **governance/decisions/decisions_v_0_6.md** to ensure you're not contradicting an existing ADR.
+4. Check the **governance/roadmap/roadmap_v_0_6.md** to see if the work is planned and what phase it's in.
 
 If you find gaps or contradictions, update the relevant spec/decision/roadmap rather than letting code drift away from the docs.
 
