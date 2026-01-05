@@ -370,6 +370,9 @@ export class ExecutionContextManager {
     // PRE-REQUEST QUOTA CHECK (Phase 3)
     // Check E2B quota BEFORE creating expensive sandbox if quota callback is configured
     if (this.config.quotaCheckCallback) {
+      // Capture callback in local const to preserve type narrowing in async context
+      const quotaCheckCallback = this.config.quotaCheckCallback;
+
       await withSpan(
         'e2b.quota_check',
         {
@@ -385,7 +388,7 @@ export class ExecutionContextManager {
             estimatedCostUsd,
           }, 'Checking E2B quota before sandbox creation');
 
-          const quotaResult = await this.config.quotaCheckCallback(input.tenantId, estimatedCostUsd);
+          const quotaResult = await quotaCheckCallback(input.tenantId, estimatedCostUsd);
 
           if (!quotaResult.allowed) {
             this.logger.error('E2B quota exceeded, cannot create sandbox', {
@@ -409,7 +412,7 @@ export class ExecutionContextManager {
 
     // Track sandbox creation duration for Phase 4 metrics
     const createStartTime = Date.now();
-    let sandbox;
+    let sandbox: E2BSandbox;
 
     try {
       sandbox = await withSpan(
