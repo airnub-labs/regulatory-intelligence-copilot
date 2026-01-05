@@ -477,7 +477,7 @@ async getPolicy(tenantId: string): Promise<TenantLlmPolicy | null> {
   // Try to populate cache (best effort, ignore failures)
   if (policy) {
     try {
-      await this.redis.setex(key, this.ttlSeconds, JSON.stringify(policy));
+      await this.redis.set(key, JSON.stringify(policy), this.ttlSeconds);
     } catch (error) {
       logger.warn({ tenantId, error }, 'Redis cache write failed');
     }
