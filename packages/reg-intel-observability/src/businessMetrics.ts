@@ -552,98 +552,105 @@ export const recordE2BCost = async (attributes: {
 }): Promise<void> => {
   try {
     // Import dynamically to avoid circular dependencies
-    const { SupabaseE2BPricingService } = await import('./e2b/pricingService.js');
-    const { SupabaseE2BCostTrackingService } = await import('./e2b/costTracking.js');
-    const { getSupabaseClient } = await import('./costTracking/index.js');
+    const {
+      getE2BPricingServiceIfInitialized,
+      getE2BCostTrackingServiceIfInitialized,
+    } = await import('./e2b/costTracking.js');
 
-    const supabaseClient = getSupabaseClient();
-    if (!supabaseClient) {
-      throw new Error('Supabase client is not initialized. Cannot record E2B costs.');
-    }
+    const pricingService = getE2BPricingServiceIfInitialized();
+    const costTrackingService = getE2BCostTrackingServiceIfInitialized();
 
-    const pricingService = new SupabaseE2BPricingService(supabaseClient);
-    const costTrackingService = new SupabaseE2BCostTrackingService(supabaseClient, pricingService);
-
-    // Calculate cost
-    const costCalculation = await pricingService.calculateCost({
-      tier: attributes.tier,
-      region: attributes.region || 'us-east-1',
-      resourceUsage: {
-        executionTimeSeconds: attributes.executionTimeSeconds,
-        cpuCoreSeconds: attributes.cpuCoreSeconds,
-        memoryGbSeconds: attributes.memoryGbSeconds,
-        diskIoGb: attributes.diskIoGb,
-      },
-    });
-
-    // Record to OpenTelemetry metrics (real-time observability)
-    e2bCostCounter?.add(costCalculation.totalCostUsd, {
-      sandboxId: attributes.sandboxId,
-      tier: attributes.tier,
-      region: attributes.region || 'us-east-1',
-      tenantId: attributes.tenantId,
-      userId: attributes.userId,
-      conversationId: attributes.conversationId,
-      pathId: attributes.pathId,
-      isEstimated: costCalculation.isEstimated,
-    } as Attributes);
-
-    // Also record separate execution and resource costs for detailed analysis
-    if (costCalculation.executionCostUsd > 0) {
-      e2bCostCounter?.add(costCalculation.executionCostUsd, {
-        sandboxId: attributes.sandboxId,
+    // If services are initialized, use database-backed cost calculation
+    if (pricingService && costTrackingService) {
+      // Calculate cost using actual pricing tables from database
+      const costCalculation = await pricingService.calculateCost({
         tier: attributes.tier,
-        costType: 'execution',
-        tenantId: attributes.tenantId,
-        userId: attributes.userId,
-        conversationId: attributes.conversationId,
-        pathId: attributes.pathId,
-        isEstimated: costCalculation.isEstimated,
-      } as Attributes);
-    }
+        region: attributes.region || 'us-east-1',
+        resourceUsage: {
+          executionTimeSeconds: attributes.executionTimeSeconds,
+          cpuCoreSeconds: attributes.cpuCoreSeconds,
+          memoryGbSeconds: attributes.memoryGbSeconds,
+          diskIoGb: attributes.diskIoGb,
+        },
+      });
 
-    if (costCalculation.resourceCostUsd > 0) {
-      e2bCostCounter?.add(costCalculation.resourceCostUsd, {
-        sandboxId: attributes.sandboxId,
-        tier: attributes.tier,
-        costType: 'resource',
-        tenantId: attributes.tenantId,
-        userId: attributes.userId,
-        conversationId: attributes.conversationId,
-        pathId: attributes.pathId,
-        isEstimated: costCalculation.isEstimated,
-      } as Attributes);
-    }
-
-    // Record to cost tracking service (storage & quota management)
-    if (attributes.tenantId) {
-      // Only record to database if we have tenant attribution
-      // (Platform-wide costs without attribution go to metrics only)
-      await costTrackingService.recordCost({
+      // Record to OpenTelemetry metrics (real-time observability)
+      e2bCostCounter?.add(costCalculation.totalCostUsd, {
         sandboxId: attributes.sandboxId,
         tier: attributes.tier,
         region: attributes.region || 'us-east-1',
-        executionTimeSeconds: attributes.executionTimeSeconds,
-        cpuCoreSeconds: attributes.cpuCoreSeconds,
-        memoryGbSeconds: attributes.memoryGbSeconds,
-        diskIoGb: attributes.diskIoGb,
-        executionCostUsd: costCalculation.executionCostUsd,
-        resourceCostUsd: costCalculation.resourceCostUsd,
-        totalCostUsd: costCalculation.totalCostUsd,
-        isEstimated: costCalculation.isEstimated,
         tenantId: attributes.tenantId,
         userId: attributes.userId,
         conversationId: attributes.conversationId,
         pathId: attributes.pathId,
-        success: attributes.success ?? true,
-      });
+        isEstimated: costCalculation.isEstimated,
+      } as Attributes);
 
-      // Update quota
-      await costTrackingService.incrementQuotaSpend(attributes.tenantId, costCalculation.totalCostUsd);
+      // Also record separate execution and resource costs for detailed analysis
+      if (costCalculation.executionCostUsd > 0) {
+        e2bCostCounter?.add(costCalculation.executionCostUsd, {
+          sandboxId: attributes.sandboxId,
+          tier: attributes.tier,
+          costType: 'execution',
+          tenantId: attributes.tenantId,
+          userId: attributes.userId,
+          conversationId: attributes.conversationId,
+          pathId: attributes.pathId,
+          isEstimated: costCalculation.isEstimated,
+        } as Attributes);
+      }
+
+      if (costCalculation.resourceCostUsd > 0) {
+        e2bCostCounter?.add(costCalculation.resourceCostUsd, {
+          sandboxId: attributes.sandboxId,
+          tier: attributes.tier,
+          costType: 'resource',
+          tenantId: attributes.tenantId,
+          userId: attributes.userId,
+          conversationId: attributes.conversationId,
+          pathId: attributes.pathId,
+          isEstimated: costCalculation.isEstimated,
+        } as Attributes);
+      }
+
+      // Record to cost tracking service (storage & quota management)
+      if (attributes.tenantId) {
+        // Only record to database if we have tenant attribution
+        // (Platform-wide costs without attribution go to metrics only)
+        await costTrackingService.recordCost({
+          sandboxId: attributes.sandboxId,
+          tier: attributes.tier,
+          region: attributes.region || 'us-east-1',
+          executionTimeSeconds: attributes.executionTimeSeconds,
+          cpuCoreSeconds: attributes.cpuCoreSeconds,
+          memoryGbSeconds: attributes.memoryGbSeconds,
+          diskIoGb: attributes.diskIoGb,
+          executionCostUsd: costCalculation.executionCostUsd,
+          resourceCostUsd: costCalculation.resourceCostUsd,
+          totalCostUsd: costCalculation.totalCostUsd,
+          isEstimated: costCalculation.isEstimated,
+          tenantId: attributes.tenantId,
+          userId: attributes.userId,
+          conversationId: attributes.conversationId,
+          pathId: attributes.pathId,
+          success: attributes.success ?? true,
+        });
+
+        // Update quota
+        await costTrackingService.incrementQuotaSpend(attributes.tenantId, costCalculation.totalCostUsd);
+      }
+    } else {
+      // Services not initialized - skip cost recording entirely
+      // No data is better than inaccurate data
+      console.warn(
+        'E2B cost tracking services not initialized. ' +
+        'Skipping cost recording - no data is better than inaccurate data. ' +
+        'Call initE2BCostTracking() at application startup for full cost tracking.'
+      );
+      // No metrics recorded when services unavailable
     }
   } catch (error) {
-    // Silently fail if pricing/cost tracking service is unavailable
-    // This prevents metrics recording from blocking E2B operations
+    // Silently fail to prevent metrics recording from blocking E2B operations
     console.warn('Failed to record E2B cost:', error);
   }
 };
@@ -667,16 +674,71 @@ export const recordE2BResourceUsage = (attributes: {
 };
 
 /**
- * Record E2B error
+ * Lifecycle stages for E2B operations
+ * Provides explicit attribution of errors to specific phases
+ */
+export type E2BLifecycleStage =
+  | 'initialization'        // Initial setup, API connection
+  | 'quota_validation'      // Pre-request quota checks
+  | 'resource_allocation'   // Sandbox creation, resource provisioning
+  | 'connection'            // Connecting/reconnecting to sandbox
+  | 'execution'             // Code execution within sandbox
+  | 'result_retrieval'      // Fetching execution results
+  | 'cleanup'               // Sandbox termination, resource cleanup
+  | 'monitoring'            // Health checks, metrics collection
+  | 'unknown';              // Fallback for unclassified stages
+
+/**
+ * Record E2B error with explicit lifecycle stage attribution
+ *
+ * Enhanced error tracking that provides clear visibility into
+ * which phase of the sandbox lifecycle experienced the error.
+ *
+ * @example
+ * ```typescript
+ * recordE2BError({
+ *   operation: 'create',
+ *   lifecycleStage: 'quota_validation',
+ *   errorType: 'QuotaExceededError',
+ *   tenantId: 'tenant-123'
+ * });
+ * ```
  */
 export const recordE2BError = (attributes: {
   operation: 'create' | 'reconnect' | 'terminate' | 'cleanup' | 'execute';
   errorType: string;
+  lifecycleStage?: E2BLifecycleStage;
   sandboxId?: string;
   tier?: string;
   tenantId?: string;
   conversationId?: string;
   pathId?: string;
 }): void => {
-  e2bErrorCounter?.add(1, attributes as Attributes);
+  // Auto-derive lifecycle stage from operation if not explicitly provided
+  const lifecycleStage = attributes.lifecycleStage || deriveLifecycleStageFromOperation(attributes.operation);
+
+  e2bErrorCounter?.add(1, {
+    ...attributes,
+    lifecycle_stage: lifecycleStage,
+  } as Attributes);
 };
+
+/**
+ * Derive lifecycle stage from operation type
+ * Used as fallback when explicit stage is not provided
+ */
+function deriveLifecycleStageFromOperation(operation: string): E2BLifecycleStage {
+  switch (operation) {
+    case 'create':
+      return 'resource_allocation';
+    case 'reconnect':
+      return 'connection';
+    case 'terminate':
+    case 'cleanup':
+      return 'cleanup';
+    case 'execute':
+      return 'execution';
+    default:
+      return 'unknown';
+  }
+}

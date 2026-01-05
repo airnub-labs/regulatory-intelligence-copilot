@@ -1061,7 +1061,7 @@ export class CachingConversationStore implements ConversationStore {
     // Cache the result
     if (record) {
       try {
-        await this.redis.setex(key, this.ttlSeconds, JSON.stringify(record));
+        await this.redis.set(key, JSON.stringify(record), this.ttlSeconds);
       } catch {
         // Ignore cache write errors
       }
@@ -1161,7 +1161,9 @@ export function createConversationStore(
   if (options.redis) {
     redisClient = options.redis;
   } else if (options.redisBackend) {
-    redisClient = createKeyValueClient(options.redisBackend);
+    // createKeyValueClient may return null if client creation fails
+    // Fall back to PassThroughRedis for transparent failover
+    redisClient = createKeyValueClient(options.redisBackend) ?? createPassThroughRedis();
   } else {
     // ✅ Use PassThroughRedis when Redis unavailable (transparent failover)
     redisClient = createPassThroughRedis();

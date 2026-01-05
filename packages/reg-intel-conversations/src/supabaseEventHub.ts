@@ -20,7 +20,7 @@ export interface SupabaseRealtimeEventHubConfig {
 const CHANNEL_SUBSCRIBE_TIMEOUT_MS = 30000;
 
 async function subscribeToChannel(channel: RealtimeChannel): Promise<RealtimeChannel> {
-  return await new Promise<RealtimeChannel>((resolve, reject) => {
+  return await new Promise<RealtimeChannel>((resolve: (value: RealtimeChannel) => void, reject: (reason?: Error) => void) => {
     let settled = false;
 
     // Set up a timeout to prevent hanging indefinitely
@@ -31,7 +31,7 @@ async function subscribeToChannel(channel: RealtimeChannel): Promise<RealtimeCha
       }
     }, CHANNEL_SUBSCRIBE_TIMEOUT_MS);
 
-    channel.subscribe(status => {
+    channel.subscribe((status: string) => {
       if (settled) {
         return;
       }
@@ -94,7 +94,7 @@ export class SupabaseRealtimeConversationEventHub {
     return await this.channels.getOrCreate(channel, async () => {
       const realtimeChannel = this.client.channel(channel, { config: { broadcast: { self: false } } });
 
-      realtimeChannel.on('broadcast', { event: 'conversation' }, payload => {
+      realtimeChannel.on('broadcast', { event: 'conversation' }, (payload: { payload: unknown }) => {
         if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
           return;
         }
@@ -257,7 +257,7 @@ export class SupabaseRealtimeConversationListEventHub {
     return await this.channels.getOrCreate(channel, async () => {
       const realtimeChannel = this.client.channel(channel, { config: { broadcast: { self: false } } });
 
-      realtimeChannel.on('broadcast', { event: 'conversation-list' }, payload => {
+      realtimeChannel.on('broadcast', { event: 'conversation-list' }, (payload: { payload: unknown }) => {
         if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
           return;
         }

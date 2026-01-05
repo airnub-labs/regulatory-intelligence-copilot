@@ -78,7 +78,6 @@ function PathToolbarContent({
 
   // Path switching state
   const [isSwitchingPath, setIsSwitchingPath] = useState(false);
-  const [switchError, setSwitchError] = useState<string | null>(null);
 
   const handleMergeClick = () => {
     // Get active branch paths (excluding primary)
@@ -116,7 +115,6 @@ function PathToolbarContent({
   const handlePathChange = async (pathId: string) => {
     try {
       setIsSwitchingPath(true);
-      setSwitchError(null);
       await switchPath(pathId);
       const newPath = paths.find(p => p.id === pathId);
       if (newPath && onPathSwitch) {
@@ -124,7 +122,6 @@ function PathToolbarContent({
       }
     } catch (error) {
       console.error('Failed to switch path:', error);
-      setSwitchError(error instanceof Error ? error.message : 'Failed to switch path');
       // TODO: Show error toast/notification to user
     } finally {
       setIsSwitchingPath(false);

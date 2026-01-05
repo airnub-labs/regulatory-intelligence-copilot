@@ -12,7 +12,7 @@ import type {
   E2BQuotaCheckResult,
 } from './types.js';
 import type { E2BPricingService } from './pricingService.js';
-import { createLogger } from '../logging/logger.js';
+import { createLogger } from '../logger.js';
 
 const logger = createLogger('E2BCostTracking');
 
@@ -79,20 +79,20 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
     });
 
     if (error) {
-      logger.error('[E2BCostTracking] Failed to record cost', {
+      logger.error({
         error: error.message,
         sandboxId: record.sandboxId,
         tenantId: record.tenantId,
-      });
+      }, '[E2BCostTracking] Failed to record cost');
       throw new Error(`Failed to record E2B cost: ${error.message}`);
     }
 
-    logger.info('[E2BCostTracking] Recorded cost', {
+    logger.info({
       sandboxId: record.sandboxId,
       tenantId: record.tenantId,
       costUsd: record.totalCostUsd,
       executionTimeSeconds: record.executionTimeSeconds,
-    });
+    }, '[E2BCostTracking] Recorded cost');
   }
 
   async checkQuota(tenantId: string, estimatedCostUsd: number): Promise<E2BQuotaCheckResult> {
@@ -104,11 +104,11 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
     });
 
     if (error) {
-      logger.error('[E2BCostTracking] Failed to check quota', {
+      logger.error({
         error: error.message,
         tenantId,
         estimatedCostUsd,
-      });
+      }, '[E2BCostTracking] Failed to check quota');
       throw new Error(`Failed to check E2B quota: ${error.message}`);
     }
 
@@ -164,18 +164,18 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
     });
 
     if (error) {
-      logger.error('[E2BCostTracking] Failed to increment quota spend', {
+      logger.error({
         error: error.message,
         tenantId,
         actualCostUsd,
-      });
+      }, '[E2BCostTracking] Failed to increment quota spend');
       throw new Error(`Failed to increment E2B quota spend: ${error.message}`);
     }
 
-    logger.debug('[E2BCostTracking] Incremented quota spend', {
+    logger.debug({
       tenantId,
       actualCostUsd,
-    });
+    }, '[E2BCostTracking] Incremented quota spend');
   }
 
   async getTenantCostSummary(
@@ -199,11 +199,11 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
       .gte('timestamp', `now() - interval '${periodMap[period]}'`);
 
     if (error) {
-      logger.error('[E2BCostTracking] Failed to get cost summary', {
+      logger.error({
         error: error.message,
         tenantId,
         period,
-      });
+      }, '[E2BCostTracking] Failed to get cost summary');
       throw new Error(`Failed to get tenant cost summary: ${error.message}`);
     }
 
@@ -289,3 +289,60 @@ export async function calculateAndRecordE2BCost(
 
   return costCalc.totalCostUsd;
 }
+
+// Global E2B cost tracking service instances
+let globalE2BPricingService: E2BPricingService | null = null;
+let globalE2BCostTrackingService: E2BCostTrackingService | null = null;
+
+/**
+ * Initialize global E2B cost tracking services
+ *
+ * Should be called at application startup with a Supabase client.
+ * Enables database-backed cost calculation and quota tracking for E2B sandboxes.
+ *
+ * @param pricingService - E2B pricing service (typically SupabaseE2BPricingService)
+ * @param costTrackingService - E2B cost tracking service (typically SupabaseE2BCostTrackingService)
+ */
+export const initE2BCostTracking = (
+  pricingService: E2BPricingService,
+  costTrackingService: E2BCostTrackingService
+): void => {
+  globalE2BPricingService = pricingService;
+  globalE2BCostTrackingService = costTrackingService;
+};
+
+/**
+ * Get the global E2B pricing service
+ * @throws Error if E2B cost tracking has not been initialized
+ */
+export const getE2BPricingService = (): E2BPricingService => {
+  if (!globalE2BPricingService) {
+    throw new Error('E2B cost tracking not initialized. Call initE2BCostTracking() first.');
+  }
+  return globalE2BPricingService;
+};
+
+/**
+ * Get the global E2B cost tracking service
+ * @throws Error if E2B cost tracking has not been initialized
+ */
+export const getE2BCostTrackingService = (): E2BCostTrackingService => {
+  if (!globalE2BCostTrackingService) {
+    throw new Error('E2B cost tracking not initialized. Call initE2BCostTracking() first.');
+  }
+  return globalE2BCostTrackingService;
+};
+
+/**
+ * Get the global E2B pricing service if initialized, otherwise null
+ */
+export const getE2BPricingServiceIfInitialized = (): E2BPricingService | null => {
+  return globalE2BPricingService;
+};
+
+/**
+ * Get the global E2B cost tracking service if initialized, otherwise null
+ */
+export const getE2BCostTrackingServiceIfInitialized = (): E2BCostTrackingService | null => {
+  return globalE2BCostTrackingService;
+};

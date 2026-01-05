@@ -31,4 +31,9 @@ export {
   SupabaseE2BCostTrackingService,
   type E2BCostTrackingService,
   calculateAndRecordE2BCost,
+  initE2BCostTracking,
+  getE2BPricingService,
+  getE2BCostTrackingService,
+  getE2BPricingServiceIfInitialized,
+  getE2BCostTrackingServiceIfInitialized,
 } from './costTracking.js';

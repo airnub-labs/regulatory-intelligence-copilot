@@ -23,7 +23,7 @@ import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observa
 import { createClient } from '@supabase/supabase-js';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
-import { checkE2BQuotaBeforeOperation } from '../e2bCostTracking.js';
+import { checkE2BQuotaBeforeOperation } from '../e2bCostTracking';
 
 const logger = createLogger('ConversationStoreWiring');
 

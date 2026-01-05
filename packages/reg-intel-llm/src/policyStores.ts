@@ -186,7 +186,7 @@ export class CachingPolicyStore implements LlmPolicyStore {
 
     if (policy) {
       try {
-        await this.redis.setex(key, this.ttlSeconds, JSON.stringify(policy));
+        await this.redis.set(key, JSON.stringify(policy), this.ttlSeconds);
         logger.debug({ tenantId, ttl: this.ttlSeconds }, 'Policy cached');
       } catch (err) {
         logger.warn({ tenantId, error: err }, 'Redis cache write failed');

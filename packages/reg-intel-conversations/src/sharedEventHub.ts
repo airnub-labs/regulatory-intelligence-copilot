@@ -86,7 +86,7 @@ export class ChannelLifecycleManager<TChannel> {
   }
 
   async shutdown(unsubscribe: (channelName: string, channel: Promise<TChannel>) => Promise<void>): Promise<void> {
-    const unsubscribePromises = Array.from(this.channels.entries()).map(([name, channel]) => unsubscribe(name, channel));
+    const unsubscribePromises = Array.from(this.channels.entries()).map(([name, channel]: [string, Promise<TChannel>]) => unsubscribe(name, channel));
     this.channels.clear();
     await Promise.all(unsubscribePromises);
   }

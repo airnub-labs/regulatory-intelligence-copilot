@@ -69,11 +69,13 @@ export function createQuotaExceededResponse(
  * @param resourceType - Type of resource that exceeded quota
  * @param message - Human-readable error message
  * @param quotaDetails - Optional detailed quota information
+ * @param retryAfter - Optional retry-after duration in seconds
  */
 export function createQuotaExceededStreamResponse(
   resourceType: 'llm' | 'e2b',
   message: string,
-  quotaDetails?: QuotaDetails
+  quotaDetails?: QuotaDetails,
+  retryAfter?: number
 ): Response {
   const encoder = new TextEncoder();
   const errorData: QuotaExceededError = {
@@ -81,6 +83,7 @@ export function createQuotaExceededStreamResponse(
     message,
     resourceType,
     quotaDetails,
+    retryAfter,
   };
 
   const stream = new ReadableStream({
@@ -97,13 +100,20 @@ export function createQuotaExceededStreamResponse(
     },
   });
 
+  const headers: HeadersInit = {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    Connection: 'keep-alive',
+    'Cache-Control': 'no-cache, no-transform',
+  };
+
+  // Add Retry-After header if provided (in seconds)
+  if (retryAfter) {
+    headers['Retry-After'] = String(retryAfter);
+  }
+
   return new Response(stream, {
     status: 429,
-    headers: {
-      'Content-Type': 'text/event-stream; charset=utf-8',
-      Connection: 'keep-alive',
-      'Cache-Control': 'no-cache, no-transform',
-    },
+    headers,
   });
 }
 

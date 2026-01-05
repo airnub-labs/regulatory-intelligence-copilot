@@ -14,10 +14,16 @@ export type ResolvedBackend = RedisBackend | UpstashBackend;
 
 export type BackendComponent = 'cache' | 'eventHub' | 'rateLimit';
 
+/**
+ * Industry-standard key-value cache interface
+ *
+ * Signature matches standard cache libraries (cache-manager, node-cache, keyv)
+ * for seamless integration with TransparentCache.
+ */
 export interface RedisKeyValueClient {
   get(key: string): Promise<string | null>;
-  setex(key: string, ttlSeconds: number, value: string): Promise<void>;
-  del(...keys: string[]): Promise<number | void>;
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;
+  del(key: string): Promise<void>;
   ping?(): Promise<string>;
 }
 

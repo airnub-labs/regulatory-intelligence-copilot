@@ -21,6 +21,8 @@ import {
   withSpan,
   recordE2BSandboxOperation,
   recordE2BError,
+  getCostEstimationServiceIfInitialized,
+  getE2BCostEstimateFallback,
 } from '@reg-copilot/reg-intel-observability';
 import type {
   ExecutionContextStore,
@@ -370,22 +372,45 @@ export class ExecutionContextManager {
     // PRE-REQUEST QUOTA CHECK (Phase 3)
     // Check E2B quota BEFORE creating expensive sandbox if quota callback is configured
     if (this.config.quotaCheckCallback) {
+      // Get cost estimate (database or fallback)
+      const costEstimator = getCostEstimationServiceIfInitialized();
+      let estimatedCostUsd: number;
+
+      if (costEstimator) {
+        // Use service (will query database and fallback to ENUM if unavailable)
+        estimatedCostUsd = await costEstimator.getE2BCostEstimate({
+          tier: 'standard',
+          region: 'us-east-1',
+          operationType: 'standard_session',
+          confidenceLevel: 'conservative',
+        });
+      } else {
+        // Service not initialized - use fallback ENUM directly
+        this.logger.info('Cost estimation service not initialized, using fallback ENUM constant for quota check');
+        estimatedCostUsd = getE2BCostEstimateFallback(
+          'standard',
+          'us-east-1',
+          'standard_session',
+          'conservative'
+        );
+      }
+
+      // Capture callback in local const to preserve type narrowing in async context
+      const quotaCheckCallback = this.config.quotaCheckCallback;
+
       await withSpan(
         'e2b.quota_check',
         {
           'e2b.tenant_id': input.tenantId,
-          'e2b.estimated_cost': 0.03,
+          'e2b.estimated_cost': estimatedCostUsd,
         },
         async () => {
-          // Estimated cost: ~$0.03 for 5 minutes at standard tier ($0.0001/sec)
-          const estimatedCostUsd = 0.03;
-
           this.logger.debug({
             tenantId: input.tenantId,
             estimatedCostUsd,
           }, 'Checking E2B quota before sandbox creation');
 
-          const quotaResult = await this.config.quotaCheckCallback(input.tenantId, estimatedCostUsd);
+          const quotaResult = await quotaCheckCallback(input.tenantId, estimatedCostUsd);
 
           if (!quotaResult.allowed) {
             this.logger.error('E2B quota exceeded, cannot create sandbox', {
@@ -404,14 +429,12 @@ export class ExecutionContextManager {
         }
       );
     } else {
-      this.logger.debug(
-        'E2B quota check callback not configured, proceeding without quota validation'
-      );
+      this.logger.debug({}, 'E2B quota check callback not configured, proceeding without quota validation');
     }
 
     // Track sandbox creation duration for Phase 4 metrics
     const createStartTime = Date.now();
-    let sandbox;
+    let sandbox: E2BSandbox;
 
     try {
       sandbox = await withSpan(

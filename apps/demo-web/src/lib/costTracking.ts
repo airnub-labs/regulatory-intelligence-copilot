@@ -11,6 +11,7 @@
  * ```
  */
 
+import type { QuotaDetails } from './quotaErrors';
 import {
   initCostTracking,
   SupabaseCostStorage,
@@ -264,13 +265,13 @@ export const getCostTracking = () => {
  * instead of starting the stream and failing mid-response.
  *
  * @param tenantId - Tenant ID to check quota for
- * @param estimatedCostUsd - Estimated cost of the LLM request (default: $0.05 for typical chat)
+ * @param estimatedCostUsd - Estimated cost of the LLM request (from database or fallback ENUM)
  * @returns Quota check result with allowed status and optional reason
  */
 export const checkLLMQuotaBeforeRequest = async (
   tenantId: string,
-  estimatedCostUsd: number = 0.05 // Default estimate for typical chat request
-): Promise<{ allowed: boolean; reason?: string; quotaDetails?: any }> => {
+  estimatedCostUsd: number
+): Promise<{ allowed: boolean; reason?: string; quotaDetails?: QuotaDetails }> => {
   try {
     // Get cost tracking service
     const costService = getCostTracking();
