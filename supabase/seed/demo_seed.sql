@@ -5,6 +5,17 @@ declare
   -- IMPORTANT: We use a pre-computed hash because PostgreSQL's crypt() function
   -- produces hashes incompatible with Supabase's GoTrue authentication backend
   -- (which uses Go's bcrypt library). See: https://github.com/supabase-community/seed/issues/208
+
+--   hashed bcrypt password for supabase user by running this code for password Password123! ---
+-- async function hashPassword(password: string): Promise<string> {
+--   const saltRounds = 6;
+--   const salt = await bcrypt.genSalt(saltRounds);
+--   const hashedPassword = await bcrypt.hash(password, salt);
+--   return hashedPassword;
+-- }
+-- .....
+--  password: await hashPassword('password'),
+
   demo_password_hash text := '$2b$06$kPdMymWM7GkrHql.BwroSu1e8wuh5q.KqLLZjP.FctnqV.tii7dGq';
   demo_full_name text := 'Demo User';
   demo_now timestamptz := now();
