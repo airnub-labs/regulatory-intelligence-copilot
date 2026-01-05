@@ -346,7 +346,12 @@ async function getConversationsNeedingCompaction(
   limit: number
 ): Promise<Array<{ id: string; tenantId: string; activePathId?: string }>> {
   if (conversationStore.getConversationsNeedingCompaction) {
-    return conversationStore.getConversationsNeedingCompaction(limit);
+    // Use the store's implementation with default filters
+    return conversationStore.getConversationsNeedingCompaction({
+      messageCountGt: 50,
+      lastActivityAfter: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
+      lastCompactionBefore: new Date(Date.now() - 24 * 60 * 60 * 1000), // Not compacted in 24h
+    }, limit);
   }
 
   logger.warn(
@@ -355,22 +360,6 @@ async function getConversationsNeedingCompaction(
   );
 
   return [];
-
-  // Example production implementation:
-  /*
-  const conversations = await conversationStore.queryConversations({
-    filters: {
-      messageCountGt: 50,
-      lastActivityAfter: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
-      lastCompactionBefore: new Date(Date.now() - 24 * 60 * 60 * 1000), // Not compacted in 24h
-    },
-    limit,
-    orderBy: 'lastActivity',
-    orderDirection: 'desc',
-  });
-
-  return conversations;
-  */
 }
 
 /**

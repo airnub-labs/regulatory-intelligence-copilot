@@ -137,6 +137,24 @@ export interface ConversationStore {
     userId?: string | null;
     archived: boolean;
   }): Promise<void>;
+
+  /**
+   * Get conversations that may need compaction
+   * Used by auto-compaction job to identify conversations to process
+   *
+   * @param filters Query filters
+   * @param limit Maximum number of conversations to return
+   * @returns List of conversation metadata for compaction candidates
+   */
+  getConversationsNeedingCompaction?(filters: {
+    messageCountGt?: number;
+    lastActivityAfter?: Date;
+    lastCompactionBefore?: Date;
+  }, limit: number): Promise<Array<{
+    id: string;
+    tenantId: string;
+    activePathId?: string;
+  }>>;
 }
 
 function resolveShareAudience(input: { shareAudience?: ShareAudience }): ShareAudience {
@@ -907,6 +925,61 @@ export class SupabaseConversationStore implements ConversationStore {
       }
     );
   }
+
+  async getConversationsNeedingCompaction(filters: {
+    messageCountGt?: number;
+    lastActivityAfter?: Date;
+    lastCompactionBefore?: Date;
+  }, limit: number): Promise<Array<{
+    id: string;
+    tenantId: string;
+    activePathId?: string;
+  }>> {
+    return this.wrapQuery(
+      { operation: 'select', table: 'conversations_view', tenantId: 'system' },
+      async () => {
+        this.logger.info({
+          messageCountGt: filters.messageCountGt,
+          lastActivityAfter: filters.lastActivityAfter?.toISOString(),
+          lastCompactionBefore: filters.lastCompactionBefore?.toISOString(),
+          limit,
+        }, 'Querying conversations needing compaction');
+
+        // Use a raw query to join conversations with message counts and last compaction times
+        // Note: Supabase doesn't support complex joins in the query builder, so we use rpc
+        if (!this.internalClient.rpc) {
+          this.logger.warn('Supabase client does not support RPC - returning empty set');
+          return [];
+        }
+
+        const { data, error } = await this.internalClient.rpc('get_conversations_needing_compaction', {
+          p_message_count_gt: filters.messageCountGt ?? 50,
+          p_last_activity_after: filters.lastActivityAfter?.toISOString() ?? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+          p_last_compaction_before: filters.lastCompactionBefore?.toISOString() ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          p_limit: limit,
+        });
+
+        if (error) {
+          // If the function doesn't exist yet, log a warning and return empty
+          if (error.message?.includes('function') && error.message?.includes('does not exist')) {
+            this.logger.warn('Database function get_conversations_needing_compaction does not exist - returning empty set');
+            return [];
+          }
+          throw new Error(`Failed to query conversations needing compaction: ${error.message}`);
+        }
+
+        if (!data || !Array.isArray(data)) {
+          return [];
+        }
+
+        return data.map((row: any) => ({
+          id: row.conversation_id,
+          tenantId: row.tenant_id,
+          activePathId: row.active_path_id,
+        }));
+      }
+    );
+  }
 }
 
 export class SupabaseConversationContextStore implements ConversationContextStore {
@@ -1103,6 +1176,17 @@ export class CachingConversationStore implements ConversationStore {
 
   async listConversations(input: Parameters<ConversationStore['listConversations']>[0]) {
     return this.backing.listConversations(input);
+  }
+
+  async getConversationsNeedingCompaction(filters: {
+    messageCountGt?: number;
+    lastActivityAfter?: Date;
+    lastCompactionBefore?: Date;
+  }, limit: number) {
+    if (this.backing.getConversationsNeedingCompaction) {
+      return this.backing.getConversationsNeedingCompaction(filters, limit);
+    }
+    return [];
   }
 
   private async invalidate(conversationId: string): Promise<void> {
