@@ -88,8 +88,7 @@ $$;
 
 -- Add comment explaining the function
 COMMENT ON FUNCTION copilot_internal.initialize_tenant_quotas() IS
-  'Automatically creates default cost quotas when a new tenant is created. ' ||
-  'Sets $100/month for LLM, $50/month for E2B, and $150/month total spend limit.';
+  'Automatically creates default cost quotas when a new tenant is created. Sets $100/month for LLM, $50/month for E2B, and $150/month total spend limit.';
 
 -- Create trigger on tenants table (if it exists)
 -- Note: Adjust table name and schema if different in your setup
@@ -185,8 +184,7 @@ $$;
 
 -- Add comment
 COMMENT ON FUNCTION copilot_internal.initialize_existing_tenant_quotas(TEXT) IS
-  'Manually initializes default quotas for an existing tenant. ' ||
-  'Usage: SELECT copilot_internal.initialize_existing_tenant_quotas(''tenant-id'');';
+  'Manually initializes default quotas for an existing tenant. Usage: SELECT copilot_internal.initialize_existing_tenant_quotas(''tenant-id'');';
 
 -- Example usage for existing tenants:
 -- SELECT copilot_internal.initialize_existing_tenant_quotas('your-tenant-id');

@@ -64,9 +64,15 @@ CREATE INDEX IF NOT EXISTS idx_model_pricing_provider
     ON copilot_internal.model_pricing(provider, effective_date DESC);
 
 -- Query pattern: find active pricing (where expires_at IS NULL or in future)
+-- NOTE:
+--   Postgres requires predicates in partial indexes to use only IMMUTABLE expressions.
+--   now() is VOLATILE, so we cannot use: (expires_at IS NULL OR expires_at > now())
+--
+--   In this schema, "current/active" pricing is represented by expires_at IS NULL,
+--   and we keep the expires_at > now() logic in the query (not the index predicate).
 CREATE INDEX IF NOT EXISTS idx_model_pricing_active
     ON copilot_internal.model_pricing(provider, model, effective_date DESC)
-    WHERE expires_at IS NULL OR expires_at > now();
+    WHERE expires_at IS NULL;
 
 COMMENT ON TABLE copilot_internal.model_pricing IS 'LLM model pricing configuration - allows dynamic pricing updates without code deployment';
 COMMENT ON COLUMN copilot_internal.model_pricing.provider IS 'LLM provider: openai, anthropic, google, groq, etc.';
