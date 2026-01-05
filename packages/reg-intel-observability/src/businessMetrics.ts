@@ -667,16 +667,71 @@ export const recordE2BResourceUsage = (attributes: {
 };
 
 /**
- * Record E2B error
+ * Lifecycle stages for E2B operations
+ * Provides explicit attribution of errors to specific phases
+ */
+export type E2BLifecycleStage =
+  | 'initialization'        // Initial setup, API connection
+  | 'quota_validation'      // Pre-request quota checks
+  | 'resource_allocation'   // Sandbox creation, resource provisioning
+  | 'connection'            // Connecting/reconnecting to sandbox
+  | 'execution'             // Code execution within sandbox
+  | 'result_retrieval'      // Fetching execution results
+  | 'cleanup'               // Sandbox termination, resource cleanup
+  | 'monitoring'            // Health checks, metrics collection
+  | 'unknown';              // Fallback for unclassified stages
+
+/**
+ * Record E2B error with explicit lifecycle stage attribution
+ *
+ * Enhanced error tracking that provides clear visibility into
+ * which phase of the sandbox lifecycle experienced the error.
+ *
+ * @example
+ * ```typescript
+ * recordE2BError({
+ *   operation: 'create',
+ *   lifecycleStage: 'quota_validation',
+ *   errorType: 'QuotaExceededError',
+ *   tenantId: 'tenant-123'
+ * });
+ * ```
  */
 export const recordE2BError = (attributes: {
   operation: 'create' | 'reconnect' | 'terminate' | 'cleanup' | 'execute';
   errorType: string;
+  lifecycleStage?: E2BLifecycleStage;
   sandboxId?: string;
   tier?: string;
   tenantId?: string;
   conversationId?: string;
   pathId?: string;
 }): void => {
-  e2bErrorCounter?.add(1, attributes as Attributes);
+  // Auto-derive lifecycle stage from operation if not explicitly provided
+  const lifecycleStage = attributes.lifecycleStage || deriveLifecycleStageFromOperation(attributes.operation);
+
+  e2bErrorCounter?.add(1, {
+    ...attributes,
+    lifecycle_stage: lifecycleStage,
+  } as Attributes);
 };
+
+/**
+ * Derive lifecycle stage from operation type
+ * Used as fallback when explicit stage is not provided
+ */
+function deriveLifecycleStageFromOperation(operation: string): E2BLifecycleStage {
+  switch (operation) {
+    case 'create':
+      return 'resource_allocation';
+    case 'reconnect':
+      return 'connection';
+    case 'terminate':
+    case 'cleanup':
+      return 'cleanup';
+    case 'execute':
+      return 'execution';
+    default:
+      return 'unknown';
+  }
+}
