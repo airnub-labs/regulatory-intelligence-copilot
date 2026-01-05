@@ -36,6 +36,29 @@ v0.6 updates the v0.4 agent design by:
 - Fix TypeScript and lint errors instead of masking them with `typescript.ignoreBuildErrors` (or similar) in `next.config.js`.
 - When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
 - Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
+- **Build and lint error resolution discipline:** When encountering build errors, linting errors, or type errors, the ONLY acceptable solution is to find and fix the root cause. NEVER:
+  - Disable TypeScript strict mode (`strict: false`, `noImplicitAny: false`, etc.)
+  - Add `@ts-ignore`, `@ts-expect-error`, or `@ts-nocheck` comments
+  - Change working code to use `any` types to bypass errors
+  - Remove or disable functionality to make errors go away
+  - Add `skipLibCheck: true` to bypass type checking
+  - Simplify implementations by removing features (e.g., removing database persistence to fix import errors)
+  - Add comments like "disabled pending..." or "not implemented yet" to working code
+
+  **Required approach:**
+  1. Read the full error message and stack trace carefully
+  2. Identify the actual root cause (wrong types, missing imports, incorrect usage, etc.)
+  3. Fix the root cause with proper types, imports, and implementation
+  4. If you encounter an error you cannot fix, ask for guidance - NEVER disable checks
+  5. Only disable type checking or features if explicitly requested by the user
+
+  **Examples of PROHIBITED fixes:**
+  - ❌ Adding `strict: false` to tsconfig because of type errors → ✅ Fix the type annotations
+  - ❌ Removing database code because imports fail → ✅ Fix the import paths
+  - ❌ Changing `const x: SpecificType` to `const x: any` → ✅ Fix the type mismatch
+  - ❌ Commenting out working code that has lint errors → ✅ Fix the linting issues
+  - ❌ Removing cost tracking to fix build → ✅ Fix the dependencies/imports
+
 - **Code removal discipline:** Never remove code that appears unused, unwired, or incomplete without first verifying its purpose through appropriate documentation and/or explicit confirmation. Code may be intentionally staged for future integration once dependent components are implemented. When encountering code that looks like dead code or incomplete wiring:
   1. Search for related documentation explaining the implementation roadmap
   2. Check for comments indicating the code is staged for future use
