@@ -5,7 +5,7 @@ declare
   -- IMPORTANT: We use a pre-computed hash because PostgreSQL's crypt() function
   -- produces hashes incompatible with Supabase's GoTrue authentication backend
   -- (which uses Go's bcrypt library). See: https://github.com/supabase-community/seed/issues/208
-  demo_password_hash text := '$2b$10$SIoRjOvFLs2ZfnKz5XYMeumodcRZAf0Q2b4CnyKPiSGK5bH.lD81u';
+  demo_password_hash text := '$2b$06$kPdMymWM7GkrHql.BwroSu1e8wuh5q.KqLLZjP.FctnqV.tii7dGq';
   demo_full_name text := 'Demo User';
   demo_now timestamptz := now();
   seeded_user record;
