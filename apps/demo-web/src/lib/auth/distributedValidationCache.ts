@@ -21,6 +21,7 @@ import {
   describeRedisBackendSelection,
   resolveRedisBackend,
   createTransparentCache,
+  createRedisCacheBackend,
   type RedisKeyValueClient,
   type CacheBackend,
   type TransparentCache as BaseTransparentCache,
@@ -165,25 +166,6 @@ class DistributedValidationCache implements DistributedCache {
   getType(): 'redis' | 'upstash' | 'passthrough' {
     return this.transparentCache.getBackendType();
   }
-}
-
-/**
- * Create Redis CacheBackend adapter
- */
-function createRedisCacheBackend(client: RedisKeyValueClient): CacheBackend {
-  return {
-    async get(key: string): Promise<string | null> {
-      return client.get(key);
-    },
-
-    async set(key: string, value: string, ttlSeconds: number): Promise<void> {
-      await client.setex(key, ttlSeconds, value);
-    },
-
-    async del(key: string): Promise<void> {
-      await client.del(key);
-    },
-  };
 }
 
 /**

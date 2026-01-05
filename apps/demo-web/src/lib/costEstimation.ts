@@ -18,7 +18,7 @@ import {
 import {
   createKeyValueClient,
   resolveRedisBackend,
-  RedisCacheBackendAdapter,
+  createRedisCacheBackend,
   createTransparentCache,
   type TransparentCache,
 } from '@reg-copilot/reg-intel-cache';
@@ -73,7 +73,7 @@ export const initializeCostEstimation = (): void => {
 
     if (redisClient && redisBackend) {
       // Redis is available - create caches with adapter
-      const cacheBackend = new RedisCacheBackendAdapter(redisClient);
+      const cacheBackend = createRedisCacheBackend(redisClient);
 
       llmCache = createTransparentCache(
         cacheBackend,

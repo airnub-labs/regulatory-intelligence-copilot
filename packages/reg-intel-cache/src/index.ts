@@ -17,4 +17,4 @@ export { createRateLimiter, createFailOpenRateLimiter };
 export { createTransparentCache } from './transparentCache.js';
 export { createTransparentRateLimiter } from './transparentRateLimiter.js';
 export { createPassThroughRedis, PassThroughRedis } from './passThroughRedis.js';
-export { RedisCacheBackendAdapter } from './cacheBackendAdapter.js';
+export { createRedisCacheBackend } from './backendAdapter.js';
