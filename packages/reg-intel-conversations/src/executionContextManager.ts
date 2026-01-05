@@ -370,30 +370,39 @@ export class ExecutionContextManager {
     // PRE-REQUEST QUOTA CHECK (Phase 3)
     // Check E2B quota BEFORE creating expensive sandbox if quota callback is configured
     if (this.config.quotaCheckCallback) {
-      // Estimated cost: ~$0.03 for 5 minutes at standard tier ($0.0001/sec)
-      const estimatedCostUsd = 0.03;
+      await withSpan(
+        'e2b.quota_check',
+        {
+          'e2b.tenant_id': input.tenantId,
+          'e2b.estimated_cost': 0.03,
+        },
+        async () => {
+          // Estimated cost: ~$0.03 for 5 minutes at standard tier ($0.0001/sec)
+          const estimatedCostUsd = 0.03;
 
-      this.logger.debug({
-        tenantId: input.tenantId,
-        estimatedCostUsd,
-      }, 'Checking E2B quota before sandbox creation');
+          this.logger.debug({
+            tenantId: input.tenantId,
+            estimatedCostUsd,
+          }, 'Checking E2B quota before sandbox creation');
 
-      const quotaResult = await this.config.quotaCheckCallback(input.tenantId, estimatedCostUsd);
+          const quotaResult = await this.config.quotaCheckCallback(input.tenantId, estimatedCostUsd);
 
-      if (!quotaResult.allowed) {
-        this.logger.error('E2B quota exceeded, cannot create sandbox', {
-          tenantId: input.tenantId,
-          estimatedCostUsd,
-          reason: quotaResult.reason,
-        });
+          if (!quotaResult.allowed) {
+            this.logger.error('E2B quota exceeded, cannot create sandbox', {
+              tenantId: input.tenantId,
+              estimatedCostUsd,
+              reason: quotaResult.reason,
+            });
 
-        throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
-      }
+            throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
+          }
 
-      this.logger.debug({
-        tenantId: input.tenantId,
-        quotaCheckPassed: true,
-      }, 'E2B quota check passed');
+          this.logger.debug({
+            tenantId: input.tenantId,
+            quotaCheckPassed: true,
+          }, 'E2B quota check passed');
+        }
+      );
     } else {
       this.logger.debug(
         'E2B quota check callback not configured, proceeding without quota validation'
@@ -405,22 +414,41 @@ export class ExecutionContextManager {
     let sandbox;
 
     try {
-      sandbox = await this.config.e2bClient.create({
-        apiKey: this.config.e2bApiKey,
-        timeout: this.sandboxTimeout,
-      });
+      sandbox = await withSpan(
+        'e2b.sandbox.create',
+        {
+          'e2b.tenant_id': input.tenantId,
+          'e2b.conversation_id': input.conversationId,
+          'e2b.path_id': input.pathId,
+          'e2b.timeout_ms': this.sandboxTimeout,
+        },
+        async () =>
+          this.config.e2bClient.create({
+            apiKey: this.config.e2bApiKey,
+            timeout: this.sandboxTimeout,
+          })
+      );
 
       // Record successful sandbox creation (Phase 4)
       const createDurationMs = Date.now() - createStartTime;
-      recordE2BSandboxOperation(createDurationMs, {
-        operation: 'create',
-        sandboxId: sandbox.sandboxId,
-        tier: 'standard', // TODO: Get from config
-        success: true,
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        pathId: input.pathId,
-      });
+      await withSpan(
+        'e2b.record_operation',
+        {
+          'e2b.operation': 'create',
+          'e2b.sandbox_id': sandbox.sandboxId,
+          'e2b.success': true,
+        },
+        async () =>
+          recordE2BSandboxOperation(createDurationMs, {
+            operation: 'create',
+            sandboxId: sandbox.sandboxId,
+            tier: 'standard', // TODO: Get from config
+            success: true,
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+          })
+      );
 
       this.logger.debug({
         sandboxId: sandbox.sandboxId,
@@ -429,23 +457,33 @@ export class ExecutionContextManager {
     } catch (createError) {
       // Record failed sandbox creation (Phase 4)
       const createDurationMs = Date.now() - createStartTime;
-      recordE2BSandboxOperation(createDurationMs, {
-        operation: 'create',
-        tier: 'standard',
-        success: false,
-        errorType: createError instanceof Error ? createError.name : 'UnknownError',
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        pathId: input.pathId,
-      });
+      await withSpan(
+        'e2b.record_operation',
+        {
+          'e2b.operation': 'create',
+          'e2b.success': false,
+          'e2b.error': createError instanceof Error ? createError.name : 'UnknownError',
+        },
+        async () => {
+          recordE2BSandboxOperation(createDurationMs, {
+            operation: 'create',
+            tier: 'standard',
+            success: false,
+            errorType: createError instanceof Error ? createError.name : 'UnknownError',
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+          });
 
-      recordE2BError({
-        operation: 'create',
-        errorType: createError instanceof Error ? createError.name : 'UnknownError',
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        pathId: input.pathId,
-      });
+          recordE2BError({
+            operation: 'create',
+            errorType: createError instanceof Error ? createError.name : 'UnknownError',
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+          });
+        }
+      );
 
       throw createError;
     }
@@ -457,13 +495,24 @@ export class ExecutionContextManager {
     let wasRaceCondition = false;
 
     try {
-      newContext = await this.config.store.createContext({
-        tenantId: input.tenantId,
-        conversationId: input.conversationId,
-        pathId: input.pathId,
-        sandboxId: sandbox.sandboxId,
-        ttlMinutes: this.defaultTtl,
-      });
+      newContext = await withSpan(
+        'e2b.context.create',
+        {
+          'e2b.tenant_id': input.tenantId,
+          'e2b.conversation_id': input.conversationId,
+          'e2b.path_id': input.pathId,
+          'e2b.sandbox_id': sandbox.sandboxId,
+          'e2b.ttl_minutes': this.defaultTtl,
+        },
+        async () =>
+          this.config.store.createContext({
+            tenantId: input.tenantId,
+            conversationId: input.conversationId,
+            pathId: input.pathId,
+            sandboxId: sandbox.sandboxId,
+            ttlMinutes: this.defaultTtl,
+          })
+      );
 
       // Check if the returned context has a different sandbox ID
       // This indicates another instance won the race
