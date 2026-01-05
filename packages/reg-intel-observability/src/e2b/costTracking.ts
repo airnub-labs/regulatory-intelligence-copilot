@@ -289,3 +289,60 @@ export async function calculateAndRecordE2BCost(
 
   return costCalc.totalCostUsd;
 }
+
+// Global E2B cost tracking service instances
+let globalE2BPricingService: E2BPricingService | null = null;
+let globalE2BCostTrackingService: E2BCostTrackingService | null = null;
+
+/**
+ * Initialize global E2B cost tracking services
+ *
+ * Should be called at application startup with a Supabase client.
+ * Enables database-backed cost calculation and quota tracking for E2B sandboxes.
+ *
+ * @param pricingService - E2B pricing service (typically SupabaseE2BPricingService)
+ * @param costTrackingService - E2B cost tracking service (typically SupabaseE2BCostTrackingService)
+ */
+export const initE2BCostTracking = (
+  pricingService: E2BPricingService,
+  costTrackingService: E2BCostTrackingService
+): void => {
+  globalE2BPricingService = pricingService;
+  globalE2BCostTrackingService = costTrackingService;
+};
+
+/**
+ * Get the global E2B pricing service
+ * @throws Error if E2B cost tracking has not been initialized
+ */
+export const getE2BPricingService = (): E2BPricingService => {
+  if (!globalE2BPricingService) {
+    throw new Error('E2B cost tracking not initialized. Call initE2BCostTracking() first.');
+  }
+  return globalE2BPricingService;
+};
+
+/**
+ * Get the global E2B cost tracking service
+ * @throws Error if E2B cost tracking has not been initialized
+ */
+export const getE2BCostTrackingService = (): E2BCostTrackingService => {
+  if (!globalE2BCostTrackingService) {
+    throw new Error('E2B cost tracking not initialized. Call initE2BCostTracking() first.');
+  }
+  return globalE2BCostTrackingService;
+};
+
+/**
+ * Get the global E2B pricing service if initialized, otherwise null
+ */
+export const getE2BPricingServiceIfInitialized = (): E2BPricingService | null => {
+  return globalE2BPricingService;
+};
+
+/**
+ * Get the global E2B cost tracking service if initialized, otherwise null
+ */
+export const getE2BCostTrackingServiceIfInitialized = (): E2BCostTrackingService | null => {
+  return globalE2BCostTrackingService;
+};

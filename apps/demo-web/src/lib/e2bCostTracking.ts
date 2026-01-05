@@ -14,6 +14,7 @@
 import {
   SupabaseE2BPricingService,
   SupabaseE2BCostTrackingService,
+  initE2BCostTracking,
   createLogger,
   type NotificationService,
   initNotificationServiceFromEnv,
@@ -96,6 +97,10 @@ export const initializeE2BCostTracking = (): void => {
     // Initialize services
     e2bPricingService = new SupabaseE2BPricingService(client);
     e2bCostTrackingService = new SupabaseE2BCostTrackingService(client, e2bPricingService);
+
+    // Register services globally in the observability package
+    // This enables database-backed cost calculation in recordE2BCost()
+    initE2BCostTracking(e2bPricingService, e2bCostTrackingService);
 
     // Configure quota enforcement from environment
     enforceE2BQuotas = process.env.ENFORCE_E2B_QUOTAS !== 'false'; // Default: true

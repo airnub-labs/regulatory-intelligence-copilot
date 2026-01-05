@@ -551,38 +551,122 @@ export const recordE2BCost = async (attributes: {
   isEstimated?: boolean;
 }): Promise<void> => {
   try {
-    // This function records E2B costs to OpenTelemetry metrics for real-time observability.
-    // For full cost tracking with database persistence and quota management,
-    // use the E2B cost tracking services from apps/demo-web/src/lib/e2bCostTracking.ts
-    //
-    // The services are initialized at app startup and handle:
-    // - Precise cost calculation using E2B pricing tables
-    // - Database persistence in Supabase
-    // - Quota management and enforcement
-    // - Alerting and notifications
-    //
-    // This metrics function provides a lightweight fallback that estimates costs
-    // based on execution time when the full services aren't available.
+    // Import dynamically to avoid circular dependencies
+    const {
+      getE2BPricingServiceIfInitialized,
+      getE2BCostTrackingServiceIfInitialized,
+    } = await import('./e2b/costTracking.js');
 
-    // Estimate cost based on execution time (simplified calculation for metrics)
-    // Standard tier: ~$0.001 per second of execution time
-    // This is a rough estimate for metrics - actual costs use pricing tables
-    const estimatedCostUsd = attributes.executionTimeSeconds * 0.001;
+    const pricingService = getE2BPricingServiceIfInitialized();
+    const costTrackingService = getE2BCostTrackingServiceIfInitialized();
 
-    // Record to OpenTelemetry metrics (real-time observability)
-    e2bCostCounter?.add(estimatedCostUsd, {
-      sandboxId: attributes.sandboxId,
-      tier: attributes.tier,
-      region: attributes.region || 'us-east-1',
-      tenantId: attributes.tenantId,
-      userId: attributes.userId,
-      conversationId: attributes.conversationId,
-      pathId: attributes.pathId,
-      isEstimated: attributes.isEstimated ?? true,
-    } as Attributes);
+    // If services are initialized, use database-backed cost calculation
+    if (pricingService && costTrackingService) {
+      // Calculate cost using actual pricing tables from database
+      const costCalculation = await pricingService.calculateCost({
+        tier: attributes.tier,
+        region: attributes.region || 'us-east-1',
+        resourceUsage: {
+          executionTimeSeconds: attributes.executionTimeSeconds,
+          cpuCoreSeconds: attributes.cpuCoreSeconds,
+          memoryGbSeconds: attributes.memoryGbSeconds,
+          diskIoGb: attributes.diskIoGb,
+        },
+      });
+
+      // Record to OpenTelemetry metrics (real-time observability)
+      e2bCostCounter?.add(costCalculation.totalCostUsd, {
+        sandboxId: attributes.sandboxId,
+        tier: attributes.tier,
+        region: attributes.region || 'us-east-1',
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        conversationId: attributes.conversationId,
+        pathId: attributes.pathId,
+        isEstimated: costCalculation.isEstimated,
+      } as Attributes);
+
+      // Also record separate execution and resource costs for detailed analysis
+      if (costCalculation.executionCostUsd > 0) {
+        e2bCostCounter?.add(costCalculation.executionCostUsd, {
+          sandboxId: attributes.sandboxId,
+          tier: attributes.tier,
+          costType: 'execution',
+          tenantId: attributes.tenantId,
+          userId: attributes.userId,
+          conversationId: attributes.conversationId,
+          pathId: attributes.pathId,
+          isEstimated: costCalculation.isEstimated,
+        } as Attributes);
+      }
+
+      if (costCalculation.resourceCostUsd > 0) {
+        e2bCostCounter?.add(costCalculation.resourceCostUsd, {
+          sandboxId: attributes.sandboxId,
+          tier: attributes.tier,
+          costType: 'resource',
+          tenantId: attributes.tenantId,
+          userId: attributes.userId,
+          conversationId: attributes.conversationId,
+          pathId: attributes.pathId,
+          isEstimated: costCalculation.isEstimated,
+        } as Attributes);
+      }
+
+      // Record to cost tracking service (storage & quota management)
+      if (attributes.tenantId) {
+        // Only record to database if we have tenant attribution
+        // (Platform-wide costs without attribution go to metrics only)
+        await costTrackingService.recordCost({
+          sandboxId: attributes.sandboxId,
+          tier: attributes.tier,
+          region: attributes.region || 'us-east-1',
+          executionTimeSeconds: attributes.executionTimeSeconds,
+          cpuCoreSeconds: attributes.cpuCoreSeconds,
+          memoryGbSeconds: attributes.memoryGbSeconds,
+          diskIoGb: attributes.diskIoGb,
+          executionCostUsd: costCalculation.executionCostUsd,
+          resourceCostUsd: costCalculation.resourceCostUsd,
+          totalCostUsd: costCalculation.totalCostUsd,
+          isEstimated: costCalculation.isEstimated,
+          tenantId: attributes.tenantId,
+          userId: attributes.userId,
+          conversationId: attributes.conversationId,
+          pathId: attributes.pathId,
+          success: attributes.success ?? true,
+        });
+
+        // Update quota
+        await costTrackingService.incrementQuotaSpend(attributes.tenantId, costCalculation.totalCostUsd);
+      }
+    } else {
+      // Services not initialized - gracefully degrade to metrics-only recording
+      // NOTE: This should NOT happen in production if E2B is enabled
+      // E2B cost tracking must be initialized at app startup via initE2BCostTracking()
+      console.warn(
+        'E2B cost tracking services not initialized. ' +
+        'Recording to metrics only without database persistence. ' +
+        'Call initE2BCostTracking() at application startup for full cost tracking.'
+      );
+
+      // Fallback: record basic metrics using simple estimation
+      // This ensures we don't lose all observability if initialization fails
+      const estimatedCostUsd = attributes.executionTimeSeconds * 0.001; // ~$0.001/sec estimate
+
+      e2bCostCounter?.add(estimatedCostUsd, {
+        sandboxId: attributes.sandboxId,
+        tier: attributes.tier,
+        region: attributes.region || 'us-east-1',
+        tenantId: attributes.tenantId,
+        userId: attributes.userId,
+        conversationId: attributes.conversationId,
+        pathId: attributes.pathId,
+        isEstimated: true,
+      } as Attributes);
+    }
   } catch (error) {
     // Silently fail to prevent metrics recording from blocking E2B operations
-    console.warn('Failed to record E2B cost metrics:', error);
+    console.warn('Failed to record E2B cost:', error);
   }
 };
 
