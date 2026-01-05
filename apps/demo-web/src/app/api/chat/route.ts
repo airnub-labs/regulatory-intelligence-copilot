@@ -19,6 +19,8 @@ import {
   conversationStore,
   executionContextManager,
 } from '@/lib/server/conversations';
+import { checkLLMQuotaBeforeRequest } from '@/lib/costTracking';
+import { createQuotaExceededStreamResponse, calculateRetryAfter } from '@/lib/quotaErrors';
 
 // Force dynamic rendering to avoid build-time initialization
 export const dynamic = 'force-dynamic';
@@ -49,6 +51,29 @@ export async function POST(request: Request) {
   headers.set('x-user-id', session.user.id);
 
   const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+
+  // PRE-REQUEST QUOTA CHECK (Phase 3)
+  // Check LLM quota BEFORE processing chat request
+  // This provides fast failure with proper HTTP 429 response instead of failing mid-stream
+  const quotaCheck = await checkLLMQuotaBeforeRequest(tenantId);
+
+  if (!quotaCheck.allowed) {
+    logger.warn({
+      tenantId,
+      userId: session.user.id,
+      reason: quotaCheck.reason,
+    }, 'Chat request denied due to LLM quota exceeded');
+
+    const retryAfter = quotaCheck.quotaDetails?.period
+      ? calculateRetryAfter(quotaCheck.quotaDetails.period)
+      : undefined;
+
+    return createQuotaExceededStreamResponse(
+      'llm',
+      quotaCheck.reason || 'LLM quota exceeded. Please try again later.',
+      quotaCheck.quotaDetails,
+    );
+  }
 
   let body: unknown;
   try {

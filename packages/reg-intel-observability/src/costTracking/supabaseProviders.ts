@@ -20,6 +20,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { withSpan } from '../tracing.js';
 import type {
   CostAggregate,
   CostAggregateQuery,
@@ -141,93 +142,133 @@ export class SupabaseCostStorage implements CostStorageProvider {
   }
 
   async storeCostRecord(record: Omit<LlmCostRecord, 'id'>): Promise<LlmCostRecord> {
-    const { data, error } = await this.client
-      .from('llm_cost_records')
-      .insert({
-        timestamp: record.timestamp.toISOString(),
-        provider: record.provider,
-        model: record.model,
-        input_tokens: record.inputTokens,
-        output_tokens: record.outputTokens,
-        total_tokens: record.totalTokens,
-        input_cost_usd: record.inputCostUsd,
-        output_cost_usd: record.outputCostUsd,
-        total_cost_usd: record.totalCostUsd,
-        is_estimated: record.isEstimated,
-        tenant_id: record.tenantId ?? null,
-        user_id: record.userId ?? null,
-        task: record.task ?? null,
-        conversation_id: record.conversationId ?? null,
-        cached: record.cached ?? null,
-        streaming: record.streaming ?? null,
-        duration_ms: record.durationMs ?? null,
-        success: record.success ?? null,
-      })
-      .select()
-      .single();
+    return withSpan(
+      'cost.store_record',
+      {
+        'cost.provider': record.provider,
+        'cost.model': record.model,
+        'cost.total_cost': record.totalCostUsd,
+        'cost.tenant_id': record.tenantId ?? '',
+        'cost.conversation_id': record.conversationId ?? '',
+      },
+      async () => {
+        const { data, error } = await withSpan(
+          'cost.db.insert',
+          {
+            'db.table': 'llm_cost_records',
+            'cost.provider': record.provider,
+            'cost.total_cost': record.totalCostUsd,
+          },
+          async () =>
+            this.client
+              .from('llm_cost_records')
+              .insert({
+                timestamp: record.timestamp.toISOString(),
+                provider: record.provider,
+                model: record.model,
+                input_tokens: record.inputTokens,
+                output_tokens: record.outputTokens,
+                total_tokens: record.totalTokens,
+                input_cost_usd: record.inputCostUsd,
+                output_cost_usd: record.outputCostUsd,
+                total_cost_usd: record.totalCostUsd,
+                is_estimated: record.isEstimated,
+                tenant_id: record.tenantId ?? null,
+                user_id: record.userId ?? null,
+                task: record.task ?? null,
+                conversation_id: record.conversationId ?? null,
+                cached: record.cached ?? null,
+                streaming: record.streaming ?? null,
+                duration_ms: record.durationMs ?? null,
+                success: record.success ?? null,
+              })
+              .select()
+              .single()
+        );
 
-    if (error) {
-      throw new Error(`Failed to store cost record: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to store cost record: ${error.message}`);
+        }
 
-    return rowToRecord(data as LlmCostRecordRow);
+        return rowToRecord(data as LlmCostRecordRow);
+      }
+    );
   }
 
   async queryCostRecords(query: CostAggregateQuery): Promise<LlmCostRecord[]> {
-    let q = this.client.from('llm_cost_records').select('*');
+    return withSpan(
+      'cost.query_records',
+      {
+        'cost.query.tenant_ids': query.tenantIds?.join(',') ?? '',
+        'cost.query.conversation_ids': query.conversationIds?.join(',') ?? '',
+        'cost.query.has_time_range': !!(query.startTime || query.endTime),
+        'cost.query.limit': query.limit ?? 0,
+      },
+      async () => {
+        let q = this.client.from('llm_cost_records').select('*');
 
-    // Apply time range filters
-    if (query.startTime) {
-      q = q.gte('timestamp', query.startTime.toISOString());
-    }
-    if (query.endTime) {
-      q = q.lte('timestamp', query.endTime.toISOString());
-    }
+        // Apply time range filters
+        if (query.startTime) {
+          q = q.gte('timestamp', query.startTime.toISOString());
+        }
+        if (query.endTime) {
+          q = q.lte('timestamp', query.endTime.toISOString());
+        }
 
-    // Apply dimension filters
-    if (query.tenantIds && query.tenantIds.length > 0) {
-      q = q.in('tenant_id', query.tenantIds);
-    }
-    if (query.userIds && query.userIds.length > 0) {
-      q = q.in('user_id', query.userIds);
-    }
-    if (query.tasks && query.tasks.length > 0) {
-      q = q.in('task', query.tasks);
-    }
-    if (query.conversationIds && query.conversationIds.length > 0) {
-      q = q.in('conversation_id', query.conversationIds);
-    }
-    if (query.providers && query.providers.length > 0) {
-      q = q.in('provider', query.providers);
-    }
-    if (query.models && query.models.length > 0) {
-      q = q.in('model', query.models);
-    }
+        // Apply dimension filters
+        if (query.tenantIds && query.tenantIds.length > 0) {
+          q = q.in('tenant_id', query.tenantIds);
+        }
+        if (query.userIds && query.userIds.length > 0) {
+          q = q.in('user_id', query.userIds);
+        }
+        if (query.tasks && query.tasks.length > 0) {
+          q = q.in('task', query.tasks);
+        }
+        if (query.conversationIds && query.conversationIds.length > 0) {
+          q = q.in('conversation_id', query.conversationIds);
+        }
+        if (query.providers && query.providers.length > 0) {
+          q = q.in('provider', query.providers);
+        }
+        if (query.models && query.models.length > 0) {
+          q = q.in('model', query.models);
+        }
 
-    // Apply sorting
-    const sortBy = query.sortBy ?? 'time_desc';
-    if (sortBy === 'cost_desc') {
-      q = q.order('total_cost_usd', { ascending: false });
-    } else if (sortBy === 'cost_asc') {
-      q = q.order('total_cost_usd', { ascending: true });
-    } else if (sortBy === 'time_desc') {
-      q = q.order('timestamp', { ascending: false });
-    } else if (sortBy === 'time_asc') {
-      q = q.order('timestamp', { ascending: true });
-    }
+        // Apply sorting
+        const sortBy = query.sortBy ?? 'time_desc';
+        if (sortBy === 'cost_desc') {
+          q = q.order('total_cost_usd', { ascending: false });
+        } else if (sortBy === 'cost_asc') {
+          q = q.order('total_cost_usd', { ascending: true });
+        } else if (sortBy === 'time_desc') {
+          q = q.order('timestamp', { ascending: false });
+        } else if (sortBy === 'time_asc') {
+          q = q.order('timestamp', { ascending: true });
+        }
 
-    // Apply limit
-    if (query.limit) {
-      q = q.limit(query.limit);
-    }
+        // Apply limit
+        if (query.limit) {
+          q = q.limit(query.limit);
+        }
 
-    const { data, error } = await q;
+        const { data, error } = await withSpan(
+          'cost.db.query',
+          {
+            'db.table': 'llm_cost_records',
+            'cost.query.sort': sortBy,
+            'cost.query.limit': query.limit ?? 0,
+          },
+          async () => q
+        );
 
-    if (error) {
-      throw new Error(`Failed to query cost records: ${error.message}`);
-    }
+        if (error) {
+          throw new Error(`Failed to query cost records: ${error.message}`);
+        }
 
-    return (data as LlmCostRecordRow[]).map(rowToRecord);
+        return (data as LlmCostRecordRow[]).map(rowToRecord);
+      }
+    );
   }
 
   async getAggregatedCosts(query: CostAggregateQuery): Promise<CostAggregate[]> {
@@ -422,25 +463,57 @@ export class SupabaseQuotaProvider implements QuotaProvider {
   }
 
   async checkQuota(request: QuotaCheckRequest): Promise<QuotaCheckResult> {
-    const quota = await this.getQuota(request.scope, request.scopeId);
+    return withSpan(
+      'quota.check',
+      {
+        'quota.scope': request.scope,
+        'quota.scope_id': request.scopeId ?? '',
+        'quota.estimated_cost': request.estimatedCostUsd,
+      },
+      async () => {
+        const quota = await withSpan(
+          'quota.get',
+          {
+            'quota.scope': request.scope,
+            'quota.scope_id': request.scopeId ?? '',
+          },
+          async () => this.getQuota(request.scope, request.scopeId)
+        );
 
-    if (!quota) {
-      // No quota configured = allow
-      return { allowed: true };
-    }
+        if (!quota) {
+          // No quota configured = allow
+          return { allowed: true };
+        }
 
-    // Check if we need to reset for new period
-    const now = new Date();
-    if (now >= quota.periodEnd) {
-      await this.resetQuota(request.scope, request.scopeId);
-      // Get refreshed quota
-      const refreshedQuota = await this.getQuota(request.scope, request.scopeId);
-      if (refreshedQuota) {
-        return this.checkAgainstQuota(refreshedQuota, request.estimatedCostUsd);
+        // Check if we need to reset for new period
+        const now = new Date();
+        if (now >= quota.periodEnd) {
+          await withSpan(
+            'quota.reset',
+            {
+              'quota.scope': request.scope,
+              'quota.scope_id': request.scopeId ?? '',
+              'quota.period': quota.period,
+            },
+            async () => this.resetQuota(request.scope, request.scopeId)
+          );
+          // Get refreshed quota
+          const refreshedQuota = await withSpan(
+            'quota.get',
+            {
+              'quota.scope': request.scope,
+              'quota.scope_id': request.scopeId ?? '',
+            },
+            async () => this.getQuota(request.scope, request.scopeId)
+          );
+          if (refreshedQuota) {
+            return this.checkAgainstQuota(refreshedQuota, request.estimatedCostUsd);
+          }
+        }
+
+        return this.checkAgainstQuota(quota, request.estimatedCostUsd);
       }
-    }
-
-    return this.checkAgainstQuota(quota, request.estimatedCostUsd);
+    );
   }
 
   private checkAgainstQuota(quota: CostQuota, estimatedCostUsd: number): QuotaCheckResult {
@@ -583,5 +656,180 @@ export class SupabaseQuotaProvider implements QuotaProvider {
     if (error) {
       throw new Error(`Failed to reset quota: ${error.message}`);
     }
+  }
+
+  /**
+   * Atomically check and record quota in a single database transaction
+   *
+   * This method uses database-level locking (SELECT FOR UPDATE) to prevent
+   * race conditions during concurrent quota checks. The check and update
+   * happen atomically, preventing quota overruns.
+   *
+   * @param scope - Quota scope (platform, tenant, or user)
+   * @param scopeId - Scope identifier (required for tenant/user)
+   * @param costUsd - Cost to record
+   * @returns Quota check result with updated state
+   *
+   * @example
+   * ```typescript
+   * const result = await quotaProvider.checkAndRecordQuotaAtomic(
+   *   'tenant',
+   *   'tenant-123',
+   *   5.50
+   * );
+   *
+   * if (result.allowed) {
+   *   console.log('Operation allowed, quota updated');
+   * } else {
+   *   console.log('Operation denied:', result.denialReason);
+   * }
+   * ```
+   */
+  async checkAndRecordQuotaAtomic(
+    scope: 'platform' | 'tenant' | 'user',
+    scopeId: string | undefined,
+    costUsd: number
+  ): Promise<{
+    allowed: boolean;
+    currentSpendUsd: number;
+    limitUsd: number;
+    remainingUsd: number;
+    utilizationPercent: number;
+    denialReason?: string;
+    period?: string;
+    periodEnd?: Date;
+  }> {
+    return withSpan(
+      'quota.check_and_record_atomic',
+      {
+        'quota.scope': scope,
+        'quota.scope_id': scopeId ?? '',
+        'quota.cost': costUsd,
+      },
+      async () => {
+        try {
+          const { data, error } = await withSpan(
+            'quota.db.atomic_function',
+            {
+              'db.function': 'check_and_record_quota_atomic',
+              'quota.scope': scope,
+              'quota.scope_id': scopeId ?? '',
+              'quota.cost': costUsd,
+            },
+            async () =>
+              this.client.rpc('check_and_record_quota_atomic', {
+                p_scope: scope,
+                p_scope_id: scopeId ?? null,
+                p_cost_usd: costUsd,
+              })
+          );
+
+          if (error) {
+            // If function doesn't exist, fall back to non-atomic implementation
+            if (error.code === 'PGRST202' || error.code === '42883') {
+              console.warn(
+                'Atomic quota function not available, falling back to non-atomic check. ' +
+                  'Run migration 20260104000002_atomic_quota_operations.sql to enable atomic operations.'
+              );
+              return await withSpan(
+                'quota.fallback',
+                {
+                  'quota.scope': scope,
+                  'quota.scope_id': scopeId ?? '',
+                },
+                async () => this.checkAndRecordQuotaFallback(scope, scopeId, costUsd)
+              );
+            }
+            throw new Error(`Failed to check and record quota atomically: ${error.message}`);
+          }
+
+          // Extract result from first row
+          const result = (data as any[])[0];
+
+          return {
+            allowed: result.allowed,
+            currentSpendUsd: Number(result.current_spend_usd),
+            limitUsd: Number(result.limit_usd),
+            remainingUsd: Number(result.remaining_usd),
+            utilizationPercent: Number(result.utilization_percent),
+            denialReason: result.reason || undefined,
+            period: result.period || undefined,
+            periodEnd: result.period_end ? new Date(result.period_end) : undefined,
+          };
+        } catch (error) {
+          // On error, fall back to non-atomic implementation
+          console.error('Error in atomic quota operation, falling back:', error);
+          return await withSpan(
+            'quota.fallback',
+            {
+              'quota.scope': scope,
+              'quota.scope_id': scopeId ?? '',
+              'error': error instanceof Error ? error.message : 'Unknown error',
+            },
+            async () => this.checkAndRecordQuotaFallback(scope, scopeId, costUsd)
+          );
+        }
+      }
+    );
+  }
+
+  /**
+   * Fallback implementation for quota check + record
+   * Used when atomic function is not available
+   * WARNING: This implementation is NOT atomic and subject to race conditions
+   */
+  private async checkAndRecordQuotaFallback(
+    scope: 'platform' | 'tenant' | 'user',
+    scopeId: string | undefined,
+    costUsd: number
+  ): Promise<{
+    allowed: boolean;
+    currentSpendUsd: number;
+    limitUsd: number;
+    remainingUsd: number;
+    utilizationPercent: number;
+    denialReason?: string;
+    period?: string;
+    periodEnd?: Date;
+  }> {
+    // Check quota
+    const checkResult = await this.checkQuota({
+      scope,
+      scopeId,
+      estimatedCostUsd: costUsd,
+    });
+
+    if (!checkResult.allowed) {
+      return {
+        allowed: false,
+        currentSpendUsd: checkResult.quota?.currentSpendUsd || 0,
+        limitUsd: checkResult.quota?.limitUsd || 0,
+        remainingUsd: checkResult.remainingBudgetUsd || 0,
+        utilizationPercent: checkResult.quota
+          ? (checkResult.quota.currentSpendUsd / checkResult.quota.limitUsd) * 100
+          : 0,
+        denialReason: checkResult.reason,
+        period: checkResult.quota?.period,
+        periodEnd: checkResult.quota?.periodEnd,
+      };
+    }
+
+    // Record cost (WARNING: Not atomic with check!)
+    await this.recordCost(scope, scopeId, costUsd);
+
+    // Get updated quota
+    const updatedQuota = await this.getQuota(scope, scopeId);
+
+    return {
+      allowed: true,
+      currentSpendUsd: updatedQuota?.currentSpendUsd || costUsd,
+      limitUsd: updatedQuota?.limitUsd || 0,
+      remainingUsd: updatedQuota ? updatedQuota.limitUsd - updatedQuota.currentSpendUsd : 0,
+      utilizationPercent: updatedQuota
+        ? (updatedQuota.currentSpendUsd / updatedQuota.limitUsd) * 100
+        : 0,
+      period: updatedQuota?.period,
+      periodEnd: updatedQuota?.periodEnd,
+    };
   }
 }
