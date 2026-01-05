@@ -1,1094 +1,2060 @@
-# Tenant ID Security Fix - Implementation Plan
+# Multi-Tenant Architecture: Phased Implementation Plan
 
-**Created**: 2026-01-05
-**Target Completion**: 2026-01-12 (1 week)
-**Owner**: Security/Engineering Team
+**Version**: 1.0 Final
+**Date**: 2026-01-05
+**Estimated Duration**: 3-4 weeks
+**Success Metric**: Seed data with multiple users/tenants, working UI with tenant switching
+
+---
+
+## Table of Contents
+
+1. [Overview](#overview)
+2. [Success Criteria](#success-criteria)
+3. [Phase 0: Preparation](#phase-0-preparation-day-1-2)
+4. [Phase 1: Database Foundation](#phase-1-database-foundation-day-3-5)
+5. [Phase 2: Authentication Layer](#phase-2-authentication-layer-day-6-8)
+6. [Phase 3: API Routes](#phase-3-api-routes-day-9-12)
+7. [Phase 4: UI Components](#phase-4-ui-components-day-13-17)
+8. [Phase 5: Seed Data & Testing](#phase-5-seed-data--testing-day-18-20)
+9. [Phase 6: Deployment](#phase-6-deployment-day-21-23)
+10. [Appendix: Complete Code Examples](#appendix-complete-code-examples)
 
 ---
 
 ## Overview
 
-This plan addresses the critical security vulnerability where users without a `tenant_id` are incorrectly granted access to the demo tenant's data.
+This plan implements the **Personal Tenant Model** multi-tenant architecture with the following end goal:
 
-**Related Documents**:
-- [TENANT_ID_SECURITY_ANALYSIS.md](./TENANT_ID_SECURITY_ANALYSIS.md) - Full vulnerability analysis
-- [scripts/audit_tenant_assignments.sql](./scripts/audit_tenant_assignments.sql) - Audit queries
-
----
-
-## Pre-Implementation Checklist
-
-Before starting any code changes:
-
-- [ ] **Read the security analysis**: [TENANT_ID_SECURITY_ANALYSIS.md](./TENANT_ID_SECURITY_ANALYSIS.md)
-- [ ] **Run audit script**: `scripts/audit_tenant_assignments.sql`
-- [ ] **Document findings**: Create incident report with audit results
-- [ ] **Get stakeholder approval**: Security, Product, Engineering leads
-- [ ] **Prepare communication**: Draft user communication if needed
-- [ ] **Set up monitoring**: Ensure logging/alerting ready for deployment
-
----
-
-## Implementation Phases
-
-### Phase 1: Assessment & Immediate Mitigation (Day 1)
-
-**Objective**: Understand scope and prevent further exposure
-
-#### Tasks
-
-1. **Run Comprehensive Audit** (2 hours)
-   ```bash
-   # Connect to production database (read-only first!)
-   psql $DATABASE_URL < scripts/audit_tenant_assignments.sql > audit_results.txt
-
-   # Review results
-   cat audit_results.txt
-   ```
-
-   **Deliverable**: `audit_results.txt` with:
-   - List of users without tenant_id
-   - Their activity in demo tenant
-   - Cost impact
-   - Timeline of exposure
-
-2. **Determine User Disposition** (1 hour)
-
-   For each user without tenant_id, decide:
-   - **Delete**: Test/invalid users
-   - **Assign to existing tenant**: Legitimate users
-   - **Create new tenant**: New customer discovery
-
-   **Deliverable**: `user_disposition.csv`:
-   ```csv
-   user_id,email,action,tenant_id,notes
-   <uuid>,user@example.com,assign,<tenant-uuid>,Legitimate user from Acme Corp
-   <uuid>,test@example.com,delete,N/A,Test account
-   ```
-
-3. **Execute User Remediation** (2 hours)
-
-   ```sql
-   -- For users to be assigned to existing tenant
-   UPDATE auth.users
-   SET raw_user_meta_data = jsonb_set(
-     COALESCE(raw_user_meta_data, '{}'::jsonb),
-     '{tenant_id}',
-     '"<TENANT_UUID>"'
-   )
-   WHERE id = '<USER_UUID>';
-
-   -- For users to be deleted
-   -- First check they have no critical data
-   SELECT COUNT(*) FROM copilot_internal.conversations WHERE user_id = '<USER_UUID>';
-
-   -- Then soft-delete
-   UPDATE auth.users
-   SET deleted_at = NOW()
-   WHERE id = '<USER_UUID>';
-   ```
-
-   **Deliverable**: SQL script `remediate_users.sql` (executed in transaction)
-
-4. **Verify Remediation** (30 min)
-
-   ```sql
-   -- Should return 0 rows
-   SELECT COUNT(*)
-   FROM auth.users
-   WHERE (raw_user_meta_data->>'tenant_id' IS NULL
-          AND raw_app_meta_data->>'tenant_id' IS NULL)
-     AND deleted_at IS NULL;
-   ```
-
-   **Deliverable**: Screenshot/log showing 0 users without tenant_id
-
-#### Phase 1 Exit Criteria
-
-- ✅ All active users have valid tenant_id
-- ✅ Audit trail documented
-- ✅ No ongoing data exposure
-
----
-
-### Phase 2: Code Remediation (Day 2-3)
-
-**Objective**: Remove unsafe fallback and enforce tenant_id validation
-
-#### Task 2.1: Update Authentication Options (2 hours)
-
-**File**: `apps/demo-web/src/lib/auth/options.ts`
-
-**Changes**:
-
-```typescript
-// REMOVE this line entirely (currently line 50):
-// const fallbackTenantId = process.env.SUPABASE_DEMO_TENANT_ID ?? 'default'
-
-// UPDATE authorize() callback (currently lines 112-116):
-async authorize(credentials) {
-  // ... existing Supabase auth code ...
-
-  if (!data.user) {
-    return null
-  }
-
-  // Extract tenant_id
-  const tenantId =
-    (data.user.user_metadata as { tenant_id?: string } | null)?.tenant_id ??
-    data.user.app_metadata?.tenant_id;
-
-  // CRITICAL: Reject users without tenant_id
-  if (!tenantId) {
-    logger.error(
-      {
-        userId: data.user.id,
-        email: data.user.email,
-      },
-      'Authentication denied: User missing tenant_id in user_metadata or app_metadata'
-    );
-    return null; // Deny login
-  }
-
-  // Record successful login
-  authMetrics.recordLogin(data.user.id);
-
-  return {
-    id: data.user.id,
-    email: data.user.email,
-    name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email,
-    tenantId: tenantId, // No fallback!
-  };
-}
-
-// UPDATE jwt() callback - remove all fallbackTenantId references (lines 133, 177):
-async jwt({ token, user }) {
-  // ... existing code ...
-
-  // Line 133: REMOVE fallback
-  if (extendedUser) {
-    // ... existing code ...
-    extendedToken.tenantId = extendedUser.tenantId; // Remove: ?? fallbackTenantId
-    // ... existing code ...
-  }
-
-  // Line 177: REMOVE fallback
-  if (validation.user) {
-    extendedToken.tenantId = validation.user.tenantId; // Remove: ?? extendedToken.tenantId
-  }
-
-  return token;
-}
-
-// UPDATE session() callback - remove fallback (line 215):
-async session({ session, token }) {
-  // ... existing code ...
-
-  if (sessionWithUser.user) {
-    // ... existing code ...
-    sessionWithUser.user.tenantId = extendedToken.tenantId; // Remove: ?? fallbackTenantId
-  }
-
-  return sessionWithUser;
-}
+**🎯 Final Success Demonstration**:
+```
+1. Run seed data script
+2. Open UI at localhost:3000
+3. Log in as alice@example.com
+4. See tenant dropdown showing: "Alice's Workspace", "Acme Corp", "Startup XYZ"
+5. Click dropdown and switch to "Acme Corp"
+6. See Acme Corp's conversations (created by Alice and Bob)
+7. Switch to "Startup XYZ"
+8. See Startup XYZ's conversations (created by Alice and Charlie)
+9. Log out, log in as bob@example.com
+10. See tenant dropdown showing: "Bob's Workspace", "Acme Corp"
+11. Switch between them seamlessly
 ```
 
-**Testing**:
+**If this works: ✅ IMPLEMENTATION COMPLETE**
+
+---
+
+## Success Criteria
+
+### Phase Completion Criteria
+
+Each phase has specific deliverables and tests that must pass before moving to the next phase.
+
+### Final Acceptance Criteria
+
+**Database**:
+- ✅ All migrations applied successfully
+- ✅ All tables created with correct schema
+- ✅ All indexes and functions working
+- ✅ RLS policies active and tested
+- ✅ Seed data loaded successfully
+
+**Authentication**:
+- ✅ Users can log in with email/password
+- ✅ Personal workspace auto-created on first login
+- ✅ JWT includes activeTenantId
+- ✅ Session persists across page reloads
+
+**Multi-Tenancy**:
+- ✅ Users can belong to multiple tenants
+- ✅ Tenant membership enforced via RLS
+- ✅ No access to non-member tenants
+- ✅ getTenantContext() verifies membership
+
+**UI**:
+- ✅ Tenant switcher visible in header
+- ✅ Shows all user's tenants
+- ✅ Switching updates active tenant
+- ✅ Data refreshes after switch
+- ✅ No UI errors
+
+**Data Isolation**:
+- ✅ Alice sees only her tenants' data
+- ✅ Bob sees only his tenants' data
+- ✅ Switching shows different data
+- ✅ Cannot access other users' personal workspaces
+
+---
+
+## Phase 0: Preparation (Day 1-2)
+
+### Objective
+Understand current state, prepare environment, and get stakeholder alignment.
+
+### Tasks
+
+#### Task 0.1: Repository Setup (30 min)
+
 ```bash
-# Test 1: User with tenant_id can log in
-npm run dev
-# Navigate to /login
-# Login with user that has tenant_id
-# Should succeed
+# Ensure you're on the correct branch
+git checkout claude/fix-tenant-id-leak-0XgJH
+git pull origin claude/fix-tenant-id-leak-0XgJH
 
-# Test 2: User without tenant_id cannot log in (after Phase 1, there should be none)
-# Create test user without tenant_id in Supabase
-# Attempt login
-# Should see error and be denied
+# Verify all architecture documents are present
+ls -la *.md
+# Should see:
+# - MULTI_TENANT_ARCHITECTURE.md
+# - IMPLEMENTATION_PLAN.md (this file)
 
-# Test 3: Session with tenant_id works
-# Make API call as authenticated user
-# Check logs for tenant_id
-# Should show proper tenant_id, no fallback
+# Verify migrations exist
+ls -la supabase/migrations/202601050*
+# Should see:
+# - 20260105000000_multi_tenant_user_model.sql
+# - 20260105000001_backfill_personal_tenants.sql
 ```
 
-#### Task 2.2: Update API Routes (4 hours)
+**Deliverable**: ✅ Repository in correct state
 
-**Affected Files**: All 31 API route files
+#### Task 0.2: Local Environment Setup (1 hour)
 
-**Strategy**: Create reusable helper function first
+```bash
+# Start local Supabase
+cd supabase
+supabase start
 
-**New File**: `apps/demo-web/src/lib/auth/tenantValidation.ts`
+# Note the output - you'll need these:
+# - API URL
+# - anon key
+# - service_role key
+# - Database URL
+
+# Update .env.local
+cp apps/demo-web/.env.local.example apps/demo-web/.env.local
+
+# Edit apps/demo-web/.env.local with Supabase values:
+NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
+NEXTAUTH_SECRET=<generate-with-openssl-rand-base64-32>
+NEXTAUTH_URL=http://localhost:3000
+
+# Remove old demo tenant ID (if present)
+# DELETE this line if it exists:
+# SUPABASE_DEMO_TENANT_ID=...
+```
+
+**Deliverable**: ✅ Local Supabase running, .env.local configured
+
+#### Task 0.3: Audit Current State (1 hour)
+
+```bash
+# Run audit script
+psql postgresql://postgres:postgres@localhost:54322/postgres < scripts/audit_tenant_assignments.sql > audit_results.txt
+
+# Review results
+cat audit_results.txt
+
+# Document findings:
+# - How many users exist?
+# - Do any have tenant_id in metadata?
+# - Any existing data to preserve?
+```
+
+**Deliverable**: ✅ Audit results documented
+
+#### Task 0.4: Review Architecture (1 hour)
+
+```bash
+# Read the architecture document
+cat MULTI_TENANT_ARCHITECTURE.md
+
+# Verify understanding:
+# - Personal Tenant Model concept
+# - Database schema (tenants, memberships, preferences)
+# - Authentication flow (NextAuth + tenant assignment)
+# - User flows (signup, switch, invite)
+
+# Ask questions if anything unclear
+```
+
+**Deliverable**: ✅ Architecture understood
+
+### Phase 0 Exit Criteria
+
+- ✅ Local environment running
+- ✅ Audit completed
+- ✅ Architecture reviewed
+- ✅ Ready to start implementation
+
+**Estimated Time**: 4 hours
+
+---
+
+## Phase 1: Database Foundation (Day 3-5)
+
+### Objective
+Apply database migrations and verify all tables, functions, and RLS policies are working.
+
+### Tasks
+
+#### Task 1.1: Apply Core Migration (1 hour)
+
+```bash
+# Reset database to clean state (WARNING: Destroys all data)
+cd supabase
+supabase db reset
+
+# This applies ALL migrations including the new ones:
+# - 20260105000000_multi_tenant_user_model.sql
+# - 20260105000001_backfill_personal_tenants.sql
+
+# Verify migrations applied
+psql postgresql://postgres:postgres@localhost:54322/postgres
+
+# In psql:
+\dt copilot_internal.tenant*
+# Should show:
+# - tenants
+# - tenant_memberships
+
+\dt copilot_internal.user_preferences
+# Should show user_preferences table
+
+\df public.*tenant*
+# Should show:
+# - get_active_tenant_id
+# - get_user_tenants
+# - create_personal_tenant
+# - switch_tenant
+# - verify_tenant_access
+```
+
+**Deliverable**: ✅ All tables and functions created
+
+#### Task 1.2: Verify RLS Policies (30 min)
+
+```sql
+-- In psql, check RLS is enabled
+SELECT tablename, rowsecurity
+FROM pg_tables
+WHERE schemaname = 'copilot_internal'
+  AND tablename IN ('tenants', 'tenant_memberships', 'user_preferences');
+
+-- Should show rowsecurity = true for all
+
+-- Check policies exist
+SELECT schemaname, tablename, policyname
+FROM pg_policies
+WHERE schemaname = 'copilot_internal'
+ORDER BY tablename, policyname;
+
+-- Should show multiple policies per table
+```
+
+**Deliverable**: ✅ RLS enabled and policies active
+
+#### Task 1.3: Test Database Functions (1 hour)
+
+Create a test script to verify all functions work:
+
+```sql
+-- test_functions.sql
+
+-- Create a test user
+INSERT INTO auth.users (
+    id,
+    instance_id,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    created_at,
+    updated_at,
+    raw_user_meta_data
+) VALUES (
+    gen_random_uuid(),
+    '00000000-0000-0000-0000-000000000000',
+    'test@example.com',
+    crypt('password123', gen_salt('bf')),
+    NOW(),
+    NOW(),
+    NOW(),
+    '{"full_name": "Test User"}'::jsonb
+) RETURNING id \gset test_user_
+
+-- Test: create_personal_tenant
+SELECT public.create_personal_tenant(:'test_user_id', 'test@example.com') AS tenant_id \gset
+
+-- Verify tenant created
+SELECT id, name, type, owner_id
+FROM copilot_internal.tenants
+WHERE id = :'tenant_id';
+
+-- Expected: 1 row, type = 'personal', owner_id = test_user_id
+
+-- Test: get_user_tenants
+SELECT * FROM public.get_user_tenants(:'test_user_id');
+
+-- Expected: 1 row showing the personal tenant
+
+-- Test: get_active_tenant_id
+SELECT public.get_active_tenant_id(:'test_user_id') AS active_id \gset
+
+-- Expected: Returns tenant_id
+
+-- Verify it matches
+SELECT :'active_id' = :'tenant_id' AS is_active;
+
+-- Expected: true
+
+-- Create a second tenant for testing switch
+INSERT INTO copilot_internal.tenants (name, slug, type, owner_id, plan)
+VALUES ('Test Team', 'test-team', 'team', :'test_user_id', 'pro')
+RETURNING id \gset team_id
+
+-- Add membership
+INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at)
+VALUES (:'team_id', :'test_user_id', 'owner', 'active', NOW());
+
+-- Test: get_user_tenants (should show 2 now)
+SELECT * FROM public.get_user_tenants(:'test_user_id');
+
+-- Expected: 2 rows
+
+-- Test: switch_tenant
+SELECT public.switch_tenant(:'team_id');
+
+-- Expected: true
+
+-- Verify active tenant changed
+SELECT public.get_active_tenant_id(:'test_user_id');
+
+-- Expected: Returns team_id
+
+-- Test: verify_tenant_access
+SELECT * FROM public.verify_tenant_access(:'test_user_id', :'team_id');
+
+-- Expected: has_access = true, role = 'owner'
+
+-- Test negative case: access to non-existent tenant
+SELECT * FROM public.verify_tenant_access(:'test_user_id', gen_random_uuid());
+
+-- Expected: 0 rows (no access)
+
+-- Cleanup
+DELETE FROM auth.users WHERE id = :'test_user_id';
+
+\echo 'All function tests passed! ✓'
+```
+
+Run the test:
+
+```bash
+psql postgresql://postgres:postgres@localhost:54322/postgres < test_functions.sql
+```
+
+**Expected output**: All tests pass with "All function tests passed! ✓"
+
+**Deliverable**: ✅ All database functions working correctly
+
+#### Task 1.4: Test RLS Enforcement (1 hour)
+
+```sql
+-- test_rls.sql
+
+-- Create two test users
+INSERT INTO auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+VALUES
+    ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000000', 'alice@test.com', crypt('pass', gen_salt('bf')), NOW(), NOW(), NOW()),
+    ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000000', 'bob@test.com', crypt('pass', gen_salt('bf')), NOW(), NOW(), NOW());
+
+-- Create tenants for both
+SELECT public.create_personal_tenant('11111111-1111-1111-1111-111111111111', 'alice@test.com') AS alice_tenant \gset
+SELECT public.create_personal_tenant('22222222-2222-2222-2222-222222222222', 'bob@test.com') AS bob_tenant \gset
+
+-- Create a shared team tenant
+INSERT INTO copilot_internal.tenants (id, name, slug, type, owner_id, plan)
+VALUES ('33333333-3333-3333-3333-333333333333', 'Shared Team', 'shared-team', 'team', '11111111-1111-1111-1111-111111111111', 'pro');
+
+-- Add both as members
+INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at) VALUES
+    ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111', 'owner', 'active', NOW()),
+    ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 'member', 'active', NOW());
+
+-- Test 1: Alice should see 2 tenants (personal + shared)
+SET LOCAL role = authenticated;
+SET LOCAL request.jwt.claims = '{"sub": "11111111-1111-1111-1111-111111111111"}'::json;
+
+SELECT COUNT(*) AS alice_tenant_count
+FROM copilot_internal.tenants;
+
+-- Expected: 2
+
+-- Test 2: Bob should see 2 tenants (personal + shared)
+SET LOCAL request.jwt.claims = '{"sub": "22222222-2222-2222-2222-222222222222"}'::json;
+
+SELECT COUNT(*) AS bob_tenant_count
+FROM copilot_internal.tenants;
+
+-- Expected: 2
+
+-- Test 3: Alice should NOT see Bob's personal tenant
+SET LOCAL request.jwt.claims = '{"sub": "11111111-1111-1111-1111-111111111111"}'::json;
+
+SELECT COUNT(*) AS alice_sees_bob_personal
+FROM copilot_internal.tenants
+WHERE id = :'bob_tenant';
+
+-- Expected: 0
+
+-- Test 4: Bob should NOT see Alice's personal tenant
+SET LOCAL request.jwt.claims = '{"sub": "22222222-2222-2222-2222-222222222222"}'::json;
+
+SELECT COUNT(*) AS bob_sees_alice_personal
+FROM copilot_internal.tenants
+WHERE id = :'alice_tenant';
+
+-- Expected: 0
+
+-- Test 5: Both should see shared tenant
+SET LOCAL request.jwt.claims = '{"sub": "11111111-1111-1111-1111-111111111111"}'::json;
+SELECT COUNT(*) FROM copilot_internal.tenants WHERE id = '33333333-3333-3333-3333-333333333333';
+-- Expected: 1
+
+SET LOCAL request.jwt.claims = '{"sub": "22222222-2222-2222-2222-222222222222"}'::json;
+SELECT COUNT(*) FROM copilot_internal.tenants WHERE id = '33333333-3333-3333-3333-333333333333';
+-- Expected: 1
+
+-- Cleanup
+RESET role;
+DELETE FROM auth.users WHERE id IN ('11111111-1111-1111-1111-111111111111', '22222222-2222-2222-2222-222222222222');
+
+\echo 'All RLS tests passed! ✓'
+```
+
+Run the test:
+
+```bash
+psql postgresql://postgres:postgres@localhost:54322/postgres < test_rls.sql
+```
+
+**Deliverable**: ✅ RLS properly isolates tenant data
+
+### Phase 1 Exit Criteria
+
+- ✅ All migrations applied
+- ✅ All tables created
+- ✅ All functions working
+- ✅ RLS policies active
+- ✅ RLS tests passing
+- ✅ Database foundation solid
+
+**Estimated Time**: 3-4 hours
+
+---
+
+## Phase 2: Authentication Layer (Day 6-8)
+
+### Objective
+Update NextAuth to work with the new tenant system.
+
+### Tasks
+
+#### Task 2.1: Update TypeScript Types (30 min)
+
+Create new auth types file:
 
 ```typescript
+// apps/demo-web/src/types/auth.ts
+
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  type: 'personal' | 'team' | 'enterprise';
+  plan: 'free' | 'pro' | 'enterprise';
+  role: 'owner' | 'admin' | 'member' | 'viewer';
+  isActive: boolean;
+  joinedAt: string;
+}
+
+export interface ExtendedUser {
+  id: string;
+  email: string;
+  name?: string;
+  activeTenantId?: string;
+}
+
+export interface ExtendedSession {
+  user: ExtendedUser;
+  expires: string;
+}
+
+export interface ExtendedJWT {
+  sub: string;
+  email: string;
+  name?: string;
+  activeTenantId?: string;
+  lastValidated?: number;
+}
+```
+
+**Deliverable**: ✅ Types file created
+
+#### Task 2.2: Create Tenant Context Helper (1 hour)
+
+```typescript
+// apps/demo-web/src/lib/auth/tenantContext.ts
+
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
+import type { ExtendedSession } from '@/types/auth';
 
-const logger = createLogger('TenantValidation');
+const logger = createLogger('TenantContext');
 
-export interface ValidatedTenantContext {
-  tenantId: string;
+export interface TenantContext {
   userId: string;
+  tenantId: string;
+  role: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
 /**
  * Validates and extracts tenant context from session
  *
- * SECURITY: This function enforces tenant_id presence.
- * It will throw an error if tenant_id is missing.
+ * SECURITY: This function enforces tenant membership via RLS-protected query.
+ * Users must be active members of the tenant they're trying to access.
  *
- * @throws {Error} If tenant_id is missing from session
+ * @throws {Error} If user is not authenticated or not a member of active tenant
  */
-export function getValidatedTenantContext(session: {
-  user?: {
-    id?: string;
-    tenantId?: string;
-  };
-} | null): ValidatedTenantContext {
+export async function getTenantContext(
+  session: ExtendedSession | null
+): Promise<TenantContext> {
   const userId = session?.user?.id;
-  const tenantId = session?.user?.tenantId;
+  const activeTenantId = session?.user?.activeTenantId;
 
   if (!userId) {
     logger.error('Missing user ID in session');
-    throw new Error('Unauthorized: Missing user ID');
+    throw new Error('Unauthorized: No user ID in session');
   }
 
-  if (!tenantId) {
+  if (!activeTenantId) {
+    logger.error({ userId }, 'Missing active tenant ID in session');
+    throw new Error('No active tenant selected - please select a workspace');
+  }
+
+  // Verify membership using RLS-protected query
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase configuration missing');
+  }
+
+  const cookieStore = await cookies();
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookies) {
+        cookies.forEach(({ name, value, options }) => {
+          cookieStore.set(name, value, options);
+        });
+      },
+    },
+  });
+
+  const { data: access, error } = await supabase
+    .rpc('verify_tenant_access', {
+      p_user_id: userId,
+      p_tenant_id: activeTenantId,
+    })
+    .single();
+
+  if (error || !access?.has_access) {
     logger.error(
-      { userId },
-      'SECURITY: User session missing tenant_id - possible configuration error'
+      { userId, activeTenantId, error },
+      'Tenant access verification failed'
     );
-    throw new Error('Unauthorized: Missing tenant ID - please contact support');
+    throw new Error('Access denied: Not a member of this workspace');
   }
 
-  logger.debug({ userId, tenantId }, 'Validated tenant context');
+  logger.debug(
+    { userId, tenantId: activeTenantId, role: access.role },
+    'Tenant context verified'
+  );
 
-  return { tenantId, userId };
+  return {
+    userId,
+    tenantId: activeTenantId,
+    role: access.role,
+  };
 }
 ```
 
-**Update Pattern for All Route Files**:
+**Test the helper**:
 
 ```typescript
-// BEFORE:
-const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+// Test in a simple API route
+// apps/demo-web/src/app/api/test-tenant-context/route.ts
 
-// AFTER:
-import { getValidatedTenantContext } from '@/lib/auth/tenantValidation';
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 
-// In route handler:
-export async function GET(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-
+export async function GET() {
   try {
-    const { tenantId, userId } = getValidatedTenantContext(session);
+    const session = await getServerSession(authOptions);
+    const context = await getTenantContext(session);
 
-    // Rest of route logic...
+    return NextResponse.json({
+      success: true,
+      context,
+    });
   } catch (error) {
-    logger.error({ error }, 'Tenant validation failed');
     return NextResponse.json(
-      { error: 'Unauthorized: Invalid tenant context' },
+      { error: error.message },
       { status: 401 }
     );
   }
 }
 ```
 
-**Files to Update** (use search/replace):
+**Deliverable**: ✅ Tenant context helper created and tested
 
-```bash
-# Find all occurrences
-grep -r "process.env.SUPABASE_DEMO_TENANT_ID" apps/demo-web/src/app/api --include="*.ts"
+#### Task 2.3: Update NextAuth Options (2-3 hours)
 
-# Update each file:
-# 1. Add import for getValidatedTenantContext
-# 2. Replace tenant extraction logic
-# 3. Wrap in try-catch for error handling
-```
-
-**Create Script**: `scripts/update_api_routes.sh`
-
-```bash
-#!/bin/bash
-# Helper script to update API routes
-# Review changes before applying!
-
-API_DIR="apps/demo-web/src/app/api"
-
-# List of files to update
-FILES=(
-  "$API_DIR/chat/route.ts"
-  "$API_DIR/conversations/route.ts"
-  # ... add all 31 files
-)
-
-for file in "${FILES[@]}"; do
-  echo "Updating: $file"
-  # Add import at top of file
-  # sed command to add import (careful with this!)
-
-  # Replace tenant extraction
-  # sed command to replace pattern (careful with this!)
-done
-
-echo "Manual review required before commit!"
-```
-
-**Testing**:
-```bash
-# For each updated route:
-# 1. Test with valid session (has tenant_id)
-# 2. Test with missing tenant_id (should fail with 401)
-# 3. Verify error message is logged
-```
-
-#### Task 2.3: Remove Environment Variable (30 min)
-
-**Files to Update**:
-
-1. `.env.local.example`:
-   ```diff
-   - SUPABASE_DEMO_TENANT_ID=replace_with_seeded_demo_tenant_id
-   + # REMOVED: SUPABASE_DEMO_TENANT_ID (security vulnerability)
-   + # Users must have tenant_id in their user_metadata or app_metadata
-   ```
-
-2. `docs/ENV_SETUP.md`:
-   - Remove references to `SUPABASE_DEMO_TENANT_ID`
-   - Add note about tenant_id requirement
-
-3. `PRODUCTION_DEPLOYMENT.md`:
-   - Remove `SUPABASE_DEMO_TENANT_ID` from environment variables
-   - Add tenant assignment documentation
-
-#### Phase 2 Exit Criteria
-
-- ✅ No code references to `SUPABASE_DEMO_TENANT_ID` as fallback
-- ✅ All API routes validate tenant_id presence
-- ✅ Authentication rejects users without tenant_id
-- ✅ Error messages are informative
-- ✅ Logging captures validation failures
-
----
-
-### Phase 3: Testing & Validation (Day 4)
-
-**Objective**: Comprehensive testing before production deployment
-
-#### Test Suite 1: Unit Tests
-
-**New File**: `apps/demo-web/src/lib/auth/__tests__/tenantValidation.test.ts`
+**IMPORTANT**: This is a critical file. Make changes carefully.
 
 ```typescript
-import { getValidatedTenantContext } from '../tenantValidation';
+// apps/demo-web/src/lib/auth/options.ts
 
-describe('getValidatedTenantContext', () => {
-  it('should return context when tenant_id present', () => {
-    const session = {
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { NextAuthOptions, Session } from 'next-auth';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+import { getCachedValidationResult, validateUserExists } from './sessionValidation';
+import { authMetrics } from './authMetrics';
+import type { ExtendedJWT, ExtendedUser, ExtendedSession } from '@/types/auth';
+
+const logger = createLogger('AuthOptions');
+
+const SESSION_VALIDATION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// REMOVE this line (unsafe fallback):
+// const fallbackTenantId = process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  logger.warn('Supabase URL or anon key missing');
+}
+
+export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
+  session: {
+    strategy: 'jwt' as const,
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
+  providers: [
+    CredentialsProvider({
+      name: 'Supabase',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password || !supabaseUrl || !supabaseAnonKey) {
+          return null;
+        }
+
+        const cookieStore = await cookies();
+        const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll();
+            },
+            setAll(cookies) {
+              cookies.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              });
+            },
+          },
+        });
+
+        // Authenticate with Supabase
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: credentials.email,
+          password: credentials.password,
+        });
+
+        if (error || !data.user) {
+          logger.warn(
+            {
+              email: credentials.email,
+              supabaseError: error?.message ?? 'Unknown error',
+            },
+            'Supabase credential sign-in failed'
+          );
+          return null;
+        }
+
+        const userId = data.user.id;
+
+        // Get or create personal tenant
+        const supabaseAdmin = createServerClient(supabaseUrl, supabaseServiceKey!, {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll();
+            },
+            setAll(cookies) {
+              cookies.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options);
+              });
+            },
+          },
+        });
+
+        let activeTenantId: string | null = null;
+
+        // Check if user has active tenant
+        const { data: activeId } = await supabaseAdmin
+          .rpc('get_active_tenant_id', { p_user_id: userId })
+          .single();
+
+        if (activeId) {
+          activeTenantId = activeId;
+          logger.debug({ userId, activeTenantId }, 'User has existing active tenant');
+        } else {
+          // New user - create personal tenant
+          logger.info({ userId, email: data.user.email }, 'Creating personal tenant for new user');
+
+          const { data: newTenantId, error: createError } = await supabaseAdmin
+            .rpc('create_personal_tenant', {
+              p_user_id: userId,
+              p_user_email: data.user.email!,
+            });
+
+          if (createError || !newTenantId) {
+            logger.error(
+              { userId, error: createError },
+              'Failed to create personal tenant'
+            );
+            return null;
+          }
+
+          activeTenantId = newTenantId;
+          logger.info({ userId, activeTenantId }, 'Created personal tenant');
+        }
+
+        if (!activeTenantId) {
+          logger.error({ userId }, 'No active tenant available');
+          return null;
+        }
+
+        // Record successful login
+        authMetrics.recordLogin(userId);
+
+        return {
+          id: userId,
+          email: data.user.email!,
+          name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email!,
+          activeTenantId: activeTenantId,
+        };
+      },
+    }),
+  ],
+  pages: {
+    signIn: '/login',
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      const extendedToken = token as ExtendedJWT;
+      const extendedUser = user as ExtendedUser | undefined;
+
+      // On initial sign in
+      if (extendedUser) {
+        extendedToken.sub = extendedUser.id;
+        extendedToken.email = extendedUser.email;
+        extendedToken.name = extendedUser.name;
+        extendedToken.activeTenantId = extendedUser.activeTenantId; // NEW
+        extendedToken.lastValidated = Date.now();
+        return token;
+      }
+
+      // Periodic validation
+      const now = Date.now();
+      const lastValidated = extendedToken.lastValidated ?? 0;
+      const needsValidation = now - lastValidated > SESSION_VALIDATION_INTERVAL_MS;
+
+      if (!needsValidation && extendedToken.sub) {
+        const cachedValidation = await getCachedValidationResult(extendedToken.sub);
+
+        if (cachedValidation) {
+          if (!cachedValidation.isValid) {
+            logger.warn({ userId: extendedToken.sub }, 'Cached validation failure');
+            return {} as typeof token;
+          }
+
+          if (cachedValidation.user) {
+            extendedToken.email = cachedValidation.user.email ?? extendedToken.email;
+            extendedToken.activeTenantId = cachedValidation.user.activeTenantId ?? extendedToken.activeTenantId;
+          }
+        }
+      }
+
+      if (needsValidation && extendedToken.sub) {
+        try {
+          const validation = await validateUserExists(extendedToken.sub);
+
+          if (!validation.isValid) {
+            logger.warn(
+              { userId: extendedToken.sub, error: validation.error },
+              'User validation failed - invalidating session'
+            );
+            return {} as typeof token;
+          }
+
+          if (validation.user) {
+            extendedToken.email = validation.user.email ?? extendedToken.email;
+            extendedToken.activeTenantId = validation.user.activeTenantId ?? extendedToken.activeTenantId;
+          }
+
+          extendedToken.lastValidated = now;
+        } catch (error) {
+          logger.error({ userId: extendedToken.sub, error }, 'Error validating user session');
+        }
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
+      const sessionWithUser = session as Session & ExtendedSession;
+      const extendedToken = token as ExtendedJWT;
+
+      if (!extendedToken.sub) {
+        logger.warn('Attempted to create session with invalid token');
+        return {
+          ...sessionWithUser,
+          user: {
+            id: '',
+            email: '',
+            name: '',
+            activeTenantId: undefined,
+          },
+        };
+      }
+
+      if (sessionWithUser.user) {
+        sessionWithUser.user.id = extendedToken.sub;
+        sessionWithUser.user.email = extendedToken.email ?? '';
+        sessionWithUser.user.name = extendedToken.name ?? '';
+        sessionWithUser.user.activeTenantId = extendedToken.activeTenantId; // NEW
+      }
+
+      return sessionWithUser;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      const extendedToken = token as ExtendedJWT;
+      logger.info({ userId: extendedToken.sub }, 'User signed out');
+    },
+    async session({ token }) {
+      const extendedToken = token as ExtendedJWT;
+      if (!extendedToken.sub) {
+        logger.warn('Session accessed with invalid user ID');
+      }
+    },
+  },
+};
+```
+
+**Deliverable**: ✅ NextAuth updated to use tenant system
+
+#### Task 2.4: Update Session Validation (1 hour)
+
+```typescript
+// apps/demo-web/src/lib/auth/sessionValidation.ts
+
+// Update the ValidateUserResult interface:
+interface ValidateUserResult {
+  isValid: boolean;
+  user?: {
+    id: string;
+    email?: string | null;
+    activeTenantId?: string; // CHANGED from tenantId
+  };
+  error?: string;
+}
+
+// In validateUserExists function, add:
+export async function validateUserExists(userId: string): Promise<ValidateUserResult> {
+  // ... existing cache logic ...
+
+  try {
+    // ... existing getUserById call ...
+
+    if (!data.user) {
+      // ... existing invalid logic ...
+    }
+
+    // NEW: Get user's active tenant ID
+    const { data: activeTenantId } = await adminSupabase
+      .rpc('get_active_tenant_id', { p_user_id: userId })
+      .single();
+
+    // Cache result with activeTenantId
+    await validationCache.set(userId, true, activeTenantId);
+    authMetrics.recordCacheMiss(userId, validationDuration, true);
+
+    return {
+      isValid: true,
       user: {
-        id: 'user-123',
-        tenantId: 'tenant-456',
+        id: data.user.id,
+        email: data.user.email,
+        activeTenantId, // NEW
       },
     };
-
-    const result = getValidatedTenantContext(session);
-
-    expect(result).toEqual({
-      userId: 'user-123',
-      tenantId: 'tenant-456',
-    });
-  });
-
-  it('should throw when tenant_id missing', () => {
-    const session = {
-      user: {
-        id: 'user-123',
-        // tenantId missing
-      },
-    };
-
-    expect(() => getValidatedTenantContext(session)).toThrow(
-      'Unauthorized: Missing tenant ID'
-    );
-  });
-
-  it('should throw when user_id missing', () => {
-    const session = {
-      user: {
-        tenantId: 'tenant-456',
-        // id missing
-      },
-    };
-
-    expect(() => getValidatedTenantContext(session)).toThrow(
-      'Unauthorized: Missing user ID'
-    );
-  });
-
-  it('should throw when session is null', () => {
-    expect(() => getValidatedTenantContext(null)).toThrow();
-  });
-});
-```
-
-**Run Tests**:
-```bash
-npm test -- tenantValidation.test.ts
-```
-
-#### Test Suite 2: Integration Tests
-
-**Staging Environment Testing**:
-
-```bash
-# Deploy to staging
-vercel deploy --preview
-
-# Test scenarios:
-# 1. Login with valid user (has tenant_id)
-# 2. Create conversation
-# 3. Verify tenant isolation
-# 4. Check logs for any fallback usage
-# 5. Test all major API endpoints
-```
-
-**Test Checklist**:
-
-- [ ] Login with valid tenant_id succeeds
-- [ ] Login without tenant_id fails (should not exist after Phase 1)
-- [ ] API requests with valid session succeed
-- [ ] API requests return proper tenant-scoped data
-- [ ] No "default" or demo tenant ID in logs
-- [ ] Error logging working for validation failures
-- [ ] Performance not degraded
-
-#### Test Suite 3: Security Validation
-
-**File**: `scripts/security_validation.sql`
-
-```sql
--- Verify no conversations with 'default' tenant
-SELECT COUNT(*) as default_tenant_count
-FROM copilot_internal.conversations
-WHERE tenant_id::text = 'default';
--- Expected: 0
-
--- Verify all users have tenant_id
-SELECT COUNT(*) as users_without_tenant
-FROM auth.users
-WHERE (raw_user_meta_data->>'tenant_id' IS NULL
-       AND raw_app_meta_data->>'tenant_id' IS NULL)
-  AND deleted_at IS NULL;
--- Expected: 0
-
--- Verify tenant isolation
--- Each conversation's tenant_id should match creating user's tenant_id
-SELECT
-  c.id,
-  c.tenant_id as conversation_tenant,
-  u.raw_user_meta_data->>'tenant_id' as user_tenant,
-  CASE
-    WHEN c.tenant_id::text = u.raw_user_meta_data->>'tenant_id' THEN 'OK'
-    ELSE 'MISMATCH'
-  END as status
-FROM copilot_internal.conversations c
-JOIN auth.users u ON u.id = c.user_id
-WHERE u.deleted_at IS NULL
-  AND c.tenant_id::text != COALESCE(u.raw_user_meta_data->>'tenant_id', u.raw_app_meta_data->>'tenant_id')
-LIMIT 10;
--- Expected: 0 rows with MISMATCH
-```
-
-#### Phase 3 Exit Criteria
-
-- ✅ All unit tests passing
-- ✅ Integration tests passing in staging
-- ✅ Security validation queries show clean data
-- ✅ No performance degradation
-- ✅ Logging/monitoring confirmed working
-
----
-
-### Phase 4: Documentation (Day 5)
-
-**Objective**: Update all documentation to reflect new requirements
-
-#### Task 4.1: Update Onboarding Checklist
-
-**File**: `docs/operations/TENANT_ONBOARDING_CHECKLIST.md`
-
-**Add to Phase 1 (after line 31)**:
-
-```markdown
-### ⚠️ CRITICAL: User Creation Requirements
-
-**When creating users, you MUST assign a tenant_id**
-
-- [ ] **Create initial admin user WITH tenant_id**:
-
-  **Option 1: Via Supabase Dashboard**
-  ```
-  1. Go to Authentication > Users > Add User
-  2. Fill in email and password
-  3. Under "User Metadata" (expandable section), add JSON:
-     {
-       "tenant_id": "<TENANT_ID>",
-       "full_name": "Admin User Name"
-     }
-  4. Click "Create User"
-  ```
-
-  **Option 2: Via SQL** (if you have direct database access)
-  ```sql
-  -- Insert user with tenant_id in user_metadata
-  INSERT INTO auth.users (
-    instance_id,
-    id,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_user_meta_data,
-    created_at,
-    updated_at
-  )
-  VALUES (
-    '00000000-0000-0000-0000-000000000000',
-    gen_random_uuid(),
-    'admin@tenant.com',
-    crypt('CHANGE_THIS_PASSWORD', gen_salt('bf')),
-    NOW(),
-    jsonb_build_object(
-      'tenant_id', '<TENANT_ID>',
-      'full_name', 'Admin User Name'
-    ),
-    NOW(),
-    NOW()
-  );
-  ```
-
-- [ ] **Verify tenant_id is set** (CRITICAL):
-  ```sql
-  SELECT
-    id,
-    email,
-    raw_user_meta_data->>'tenant_id' as tenant_id,
-    created_at
-  FROM auth.users
-  WHERE email = 'admin@tenant.com';
-
-  -- VERIFY:
-  -- ✅ tenant_id column shows your TENANT_ID (UUID format)
-  -- ❌ If NULL: STOP! Delete user and recreate with tenant_id
-  ```
-
-- [ ] **Test authentication**:
-  ```bash
-  # User should be able to log in
-  # Check application logs for:
-  # - No "missing tenant_id" errors
-  # - Tenant ID matches expected value
-  ```
-
-### 🚨 SECURITY WARNING
-
-**Users created without tenant_id will be DENIED access.**
-
-This is a security feature to prevent tenant isolation violations.
-
-If a user cannot log in, check their tenant_id assignment:
-```sql
-SELECT
-  id,
-  email,
-  raw_user_meta_data->>'tenant_id' as user_tenant,
-  raw_app_meta_data->>'tenant_id' as app_tenant
-FROM auth.users
-WHERE email = 'user@example.com';
-```
-
-If both are NULL, update the user:
-```sql
-UPDATE auth.users
-SET raw_user_meta_data = jsonb_set(
-  COALESCE(raw_user_meta_data, '{}'::jsonb),
-  '{tenant_id}',
-  '"<CORRECT_TENANT_ID>"'
-)
-WHERE email = 'user@example.com';
-```
-```
-
-#### Task 4.2: Update Auth Specification
-
-**File**: `apps/demo-web/docs/AUTH_SPECIFICATION.md`
-
-**Add new section after "Authentication Flow" (line 217)**:
-
-```markdown
-## Tenant ID Requirements
-
-### Mandatory Tenant Assignment
-
-**SECURITY**: Every user MUST have a `tenant_id` in their user_metadata or app_metadata.
-
-**Enforcement Points**:
-1. **Authentication**: Users without `tenant_id` cannot log in
-2. **API Routes**: All routes validate `tenant_id` presence
-3. **Session**: Sessions without `tenant_id` are invalidated
-
-### Tenant ID Sources
-
-The authentication system checks for `tenant_id` in this order:
-1. `user_metadata.tenant_id` (preferred)
-2. `app_metadata.tenant_id` (alternative)
-
-**If neither exists**: Authentication is **DENIED**.
-
-### Setting Tenant ID
-
-**During User Creation** (Supabase Dashboard):
-```json
-{
-  "tenant_id": "<UUID>",
-  "full_name": "User Name"
+  } catch (error) {
+    // ... existing error handling ...
+  }
 }
 ```
 
-**Via SQL**:
+**Deliverable**: ✅ Session validation updated
+
+#### Task 2.5: Test Authentication Flow (1 hour)
+
+```bash
+# Start the dev server
+npm run dev
+
+# Test 1: Login with existing user
+# - Visit http://localhost:3000/login
+# - Enter credentials
+# - Should redirect to /
+# - Check browser console for logs
+
+# Test 2: Check JWT
+# - Open browser DevTools
+# - Application > Cookies
+# - Find next-auth.session-token
+# - Copy value
+# - Go to jwt.io
+# - Paste token
+# - Verify payload has: sub, email, activeTenantId
+
+# Test 3: API test
+# - Visit http://localhost:3000/api/test-tenant-context
+# - Should return: { success: true, context: { userId, tenantId, role } }
+
+# Test 4: Create new user in Supabase
+# - Supabase Dashboard > Authentication > Users > Add User
+# - Email: newuser@test.com, Password: password123
+# - Login with this user
+# - Check logs - should see "Creating personal tenant for new user"
+# - User should be logged in successfully
+```
+
+**Deliverable**: ✅ Authentication working with tenant system
+
+### Phase 2 Exit Criteria
+
+- ✅ TypeScript types defined
+- ✅ Tenant context helper working
+- ✅ NextAuth updated
+- ✅ Session validation updated
+- ✅ Login flow working
+- ✅ JWT includes activeTenantId
+- ✅ Personal tenant auto-created for new users
+
+**Estimated Time**: 6-8 hours
+
+---
+
+## Phase 3: API Routes (Day 9-12)
+
+### Objective
+Update all API routes to use the new tenant context system.
+
+### Tasks
+
+#### Task 3.1: Create Route Update Checklist (30 min)
+
+List all API routes that need updating:
+
+```bash
+# Find all route files
+find apps/demo-web/src/app/api -name "route.ts" | sort > api_routes_checklist.txt
+
+# Review the list
+cat api_routes_checklist.txt
+
+# Should show ~31 files
+```
+
+Create tracking spreadsheet:
+
+| File | Updated | Tested | Notes |
+|------|---------|--------|-------|
+| `/api/conversations/route.ts` | ⬜ | ⬜ | |
+| `/api/conversations/[id]/route.ts` | ⬜ | ⬜ | |
+| ... | | | |
+
+**Deliverable**: ✅ Checklist created
+
+#### Task 3.2: Update Route Pattern (15-30 min per route)
+
+**Before**:
+```typescript
+const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+```
+
+**After**:
+```typescript
+import { getTenantContext } from '@/lib/auth/tenantContext';
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
+
+    // Use tenantId in queries...
+
+    return NextResponse.json({ data });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 401 }
+    );
+  }
+}
+```
+
+**Example: Update /api/conversations/route.ts**:
+
+```typescript
+// apps/demo-web/src/app/api/conversations/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
+import { conversationStore } from '@/lib/server/conversations';
+import { toClientConversation } from '@/lib/server/conversationPresenter';
+import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext'; // NEW
+
+export const dynamic = 'force-dynamic';
+
+const logger = createLogger('ConversationsRoute');
+
+export async function GET(request: NextRequest) {
+  try {
+    // Get session
+    const session = await getServerSession(authOptions);
+
+    // Verify tenant context (NEW - replaces old tenant extraction)
+    const { userId, tenantId, role } = await getTenantContext(session);
+
+    const url = new URL(request.url);
+    const statusParam = url.searchParams.get('status');
+    const status = statusParam === 'archived' || statusParam === 'all'
+      ? (statusParam as 'archived' | 'all')
+      : 'active';
+    const limitParam = url.searchParams.get('limit');
+    const limit = Math.min(
+      Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam || '50', 10)),
+      100
+    );
+    const cursor = url.searchParams.get('cursor') || null;
+
+    return requestContext.run(
+      { tenantId, userId },
+      () =>
+        withSpan(
+          'api.conversations.list',
+          {
+            'app.route': '/api/conversations',
+            'app.tenant.id': tenantId,
+            'app.user.id': userId,
+            'app.pagination.limit': limit,
+            'app.pagination.has_cursor': Boolean(cursor),
+          },
+          async () => {
+            const result = await conversationStore.listConversations({
+              tenantId,
+              limit,
+              userId,
+              status,
+              cursor,
+            });
+
+            logger.info({
+              tenantId,
+              userId,
+              status,
+              count: result.conversations.length,
+              hasMore: result.hasMore,
+              hasCursor: Boolean(cursor),
+            }, 'Fetched conversations');
+
+            return NextResponse.json({
+              conversations: result.conversations.map(toClientConversation),
+              nextCursor: result.nextCursor,
+              hasMore: result.hasMore,
+            });
+          },
+        ),
+    );
+  } catch (error) {
+    logger.error({ error }, 'Failed to fetch conversations');
+    return NextResponse.json(
+      { error: error.message || 'Failed to fetch conversations' },
+      { status: error.message?.includes('Unauthorized') ? 401 : 500 }
+    );
+  }
+}
+```
+
+**Update all 31 routes** following this pattern.
+
+**Deliverable**: ✅ All API routes updated
+
+#### Task 3.3: Test Each Route (5-10 min per route)
+
+For each updated route:
+
+```bash
+# Start dev server
+npm run dev
+
+# Test the route via UI or curl
+
+# Example: Test conversations list
+curl http://localhost:3000/api/conversations \
+  -H "Cookie: next-auth.session-token=<your-session-token>"
+
+# Should return conversations for active tenant
+
+# Example: Test with invalid session
+curl http://localhost:3000/api/conversations
+
+# Should return 401 Unauthorized
+```
+
+Create test checklist:
+
+- ✅ Route returns data when authenticated
+- ✅ Route returns 401 when not authenticated
+- ✅ Route returns 401 when active tenant missing
+- ✅ Route filters data by active tenant
+- ✅ No errors in console
+
+**Deliverable**: ✅ All routes tested
+
+#### Task 3.4: Remove Environment Variable References (30 min)
+
+```bash
+# Search for any remaining references
+grep -r "SUPABASE_DEMO_TENANT_ID" apps/demo-web/src
+
+# Should return NO results from .ts/.tsx files
+
+# Update .env.local.example
+# Remove or comment out:
+# SUPABASE_DEMO_TENANT_ID=...
+
+# Add comment explaining removal:
+# REMOVED: SUPABASE_DEMO_TENANT_ID (security vulnerability fixed)
+# Tenant IDs now managed via database tenant_memberships table
+```
+
+**Deliverable**: ✅ No SUPABASE_DEMO_TENANT_ID references in code
+
+### Phase 3 Exit Criteria
+
+- ✅ All 31 API routes updated
+- ✅ All routes tested
+- ✅ Environment variable removed
+- ✅ No tenant isolation bugs
+- ✅ Error handling in place
+
+**Estimated Time**: 8-12 hours
+
+---
+
+## Phase 4: UI Components (Day 13-17)
+
+### Objective
+Build UI components for tenant switching and workspace management.
+
+### Tasks
+
+#### Task 4.1: Tenant Switcher Component (3-4 hours)
+
+Full implementation in MULTI_TENANT_ARCHITECTURE.md, Component 1.
+
+Key features:
+- Dropdown showing all user's tenants
+- Active tenant highlighted
+- Switches tenant on selection
+- Refreshes page after switch
+
+**File**: `apps/demo-web/src/components/TenantSwitcher.tsx`
+
+**Test**:
+```bash
+# Import component in header
+# Should see dropdown with user's workspaces
+# Selecting different workspace should reload with new data
+```
+
+**Deliverable**: ✅ Tenant switcher working
+
+#### Task 4.2: Integrate Tenant Switcher in Header (1 hour)
+
+```typescript
+// apps/demo-web/src/components/Header.tsx or Layout
+
+import { TenantSwitcher } from './TenantSwitcher';
+
+export function Header() {
+  return (
+    <header className="...">
+      <div className="flex items-center justify-between">
+        <div>
+          {/* Logo, nav, etc. */}
+        </div>
+
+        <div className="flex items-center space-x-4">
+          {/* Tenant Switcher */}
+          <TenantSwitcher />
+
+          {/* User menu, etc. */}
+        </div>
+      </div>
+    </header>
+  );
+}
+```
+
+**Deliverable**: ✅ Tenant switcher visible in UI
+
+#### Task 4.3: Create Workspace Modal (2-3 hours)
+
+Full implementation in MULTI_TENANT_ARCHITECTURE.md, Component 2.
+
+**File**: `apps/demo-web/src/components/CreateWorkspaceModal.tsx`
+
+Also create API endpoint:
+
+```typescript
+// apps/demo-web/src/app/api/workspaces/route.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
+import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId } = await getTenantContext(session);
+
+    const { name, slug, type } = await request.json();
+
+    if (!name || !slug || !type) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+    const cookieStore = await cookies();
+    const supabase = createServerClient(supabaseUrl, supabaseServiceKey, {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookies) {
+          cookies.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        },
+      },
+    });
+
+    // Create tenant
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .insert({
+        name,
+        slug,
+        type,
+        owner_id: userId,
+        plan: type === 'enterprise' ? 'enterprise' : 'pro',
+      })
+      .select()
+      .single();
+
+    if (tenantError) {
+      return NextResponse.json(
+        { error: 'Failed to create workspace' },
+        { status: 500 }
+      );
+    }
+
+    // Add owner membership
+    const { error: membershipError } = await supabase
+      .from('tenant_memberships')
+      .insert({
+        tenant_id: tenant.id,
+        user_id: userId,
+        role: 'owner',
+        status: 'active',
+        joined_at: new Date().toISOString(),
+      });
+
+    if (membershipError) {
+      return NextResponse.json(
+        { error: 'Failed to create membership' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ tenant });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.message?.includes('Unauthorized') ? 401 : 500 }
+    );
+  }
+}
+```
+
+**Deliverable**: ✅ Create workspace modal working
+
+#### Task 4.4: Team Members Page (2-3 hours)
+
+Full implementation in MULTI_TENANT_ARCHITECTURE.md, Component 3.
+
+**File**: `apps/demo-web/src/app/settings/team/page.tsx`
+
+**Deliverable**: ✅ Team members page showing all members
+
+#### Task 4.5: Add "New Workspace" Button (30 min)
+
+```typescript
+// In TenantSwitcher or separate button
+
+const [showCreateModal, setShowCreateModal] = useState(false);
+
+return (
+  <>
+    <button
+      onClick={() => setShowCreateModal(true)}
+      className="..."
+    >
+      + New Workspace
+    </button>
+
+    <CreateWorkspaceModal
+      isOpen={showCreateModal}
+      onClose={() => setShowCreateModal(false)}
+    />
+  </>
+);
+```
+
+**Deliverable**: ✅ Can create new workspace from UI
+
+### Phase 4 Exit Criteria
+
+- ✅ Tenant switcher visible and working
+- ✅ Can switch between tenants
+- ✅ Data refreshes after switch
+- ✅ Can create new workspace
+- ✅ Can view team members
+- ✅ UI is polished and bug-free
+
+**Estimated Time**: 10-12 hours
+
+---
+
+## Phase 5: Seed Data & Testing (Day 18-20)
+
+### Objective
+Create comprehensive seed data and test the full end-to-end flow.
+
+### Tasks
+
+#### Task 5.1: Create Seed Data Script (2-3 hours)
+
 ```sql
-UPDATE auth.users
-SET raw_user_meta_data = jsonb_set(
-  COALESCE(raw_user_meta_data, '{}'::jsonb),
-  '{tenant_id}',
-  '"<UUID>"'
-)
-WHERE id = '<user_id>';
-```
+-- scripts/seed_multi_tenant_demo.sql
 
-### Error Handling
+-- ========================================
+-- Multi-Tenant Demo Seed Data
+-- ========================================
+-- Creates 3 users with multiple tenant memberships
+-- Demonstrates full multi-tenant functionality
+-- ========================================
 
-**User without tenant_id attempts login**:
-```
-Status: 401 Unauthorized
-Log: "Authentication denied: User missing tenant_id"
-User sees: Login failed
-```
+-- Clean up existing demo data (if any)
+DELETE FROM copilot_internal.conversation_messages WHERE conversation_id IN (
+  SELECT id FROM copilot_internal.conversations WHERE tenant_id IN (
+    SELECT id FROM copilot_internal.tenants WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz')
+  )
+);
+DELETE FROM copilot_internal.conversations WHERE tenant_id IN (
+  SELECT id FROM copilot_internal.tenants WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz')
+);
+DELETE FROM copilot_internal.tenant_memberships WHERE tenant_id IN (
+  SELECT id FROM copilot_internal.tenants WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz')
+);
+DELETE FROM copilot_internal.user_preferences WHERE user_id IN (
+  SELECT id FROM auth.users WHERE email IN ('alice@example.com', 'bob@example.com', 'charlie@example.com')
+);
+DELETE FROM copilot_internal.tenants WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz');
+DELETE FROM auth.users WHERE email IN ('alice@example.com', 'bob@example.com', 'charlie@example.com');
 
-**API request with missing tenant_id**:
-```
-Status: 401 Unauthorized
-Response: { "error": "Unauthorized: Invalid tenant context" }
-Log: "SECURITY: User session missing tenant_id"
-```
+-- ========================================
+-- Create Users
+-- ========================================
 
-### Troubleshooting
-
-**Issue**: User cannot log in
-
-**Check**:
-```sql
-SELECT
+INSERT INTO auth.users (
   id,
+  instance_id,
   email,
-  raw_user_meta_data->>'tenant_id' as user_tenant,
-  raw_app_meta_data->>'tenant_id' as app_tenant
+  encrypted_password,
+  email_confirmed_at,
+  created_at,
+  updated_at,
+  raw_user_meta_data,
+  raw_app_meta_data,
+  aud,
+  role
+) VALUES
+  (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    '00000000-0000-0000-0000-000000000000',
+    'alice@example.com',
+    crypt('password123', gen_salt('bf')),
+    NOW(),
+    NOW(),
+    NOW(),
+    '{"full_name": "Alice Anderson"}'::jsonb,
+    '{}'::jsonb,
+    'authenticated',
+    'authenticated'
+  ),
+  (
+    'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    '00000000-0000-0000-0000-000000000000',
+    'bob@example.com',
+    crypt('password123', gen_salt('bf')),
+    NOW(),
+    NOW(),
+    NOW(),
+    '{"full_name": "Bob Builder"}'::jsonb,
+    '{}'::jsonb,
+    'authenticated',
+    'authenticated'
+  ),
+  (
+    'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    '00000000-0000-0000-0000-000000000000',
+    'charlie@example.com',
+    crypt('password123', gen_salt('bf')),
+    NOW(),
+    NOW(),
+    NOW(),
+    '{"full_name": "Charlie Chen"}'::jsonb,
+    '{}'::jsonb,
+    'authenticated',
+    'authenticated'
+  );
+
+-- ========================================
+-- Create Tenants
+-- ========================================
+
+-- Personal workspaces
+INSERT INTO copilot_internal.tenants (id, name, slug, type, owner_id, plan) VALUES
+  ('11111111-1111-1111-1111-111111111111', 'Alice''s Workspace', 'alice-personal', 'personal', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'free'),
+  ('22222222-2222-2222-2222-222222222222', 'Bob''s Workspace', 'bob-personal', 'personal', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'free'),
+  ('33333333-3333-3333-3333-333333333333', 'Charlie''s Workspace', 'charlie-personal', 'personal', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'free');
+
+-- Team workspaces
+INSERT INTO copilot_internal.tenants (id, name, slug, type, owner_id, plan) VALUES
+  ('aaaacccc-1111-2222-3333-444444444444', 'Acme Corp', 'acme-corp', 'team', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'pro'),
+  ('bbbbeee0-5555-6666-7777-888888888888', 'Startup XYZ', 'startup-xyz', 'team', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'pro');
+
+-- ========================================
+-- Create Memberships
+-- ========================================
+
+-- Personal workspace memberships (owners)
+INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at) VALUES
+  ('11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'owner', 'active', NOW()),
+  ('22222222-2222-2222-2222-222222222222', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'owner', 'active', NOW()),
+  ('33333333-3333-3333-3333-333333333333', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'owner', 'active', NOW());
+
+-- Acme Corp memberships (Alice owner, Bob member)
+INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at) VALUES
+  ('aaaacccc-1111-2222-3333-444444444444', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'owner', 'active', NOW()),
+  ('aaaacccc-1111-2222-3333-444444444444', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'member', 'active', NOW());
+
+-- Startup XYZ memberships (Charlie owner, Alice admin)
+INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at) VALUES
+  ('bbbbeee0-5555-6666-7777-888888888888', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'owner', 'active', NOW()),
+  ('bbbbeee0-5555-6666-7777-888888888888', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'admin', 'active', NOW());
+
+-- ========================================
+-- Set Active Tenants
+-- ========================================
+
+INSERT INTO copilot_internal.user_preferences (user_id, active_tenant_id) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111'), -- Alice -> Personal
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222'), -- Bob -> Personal
+  ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333'); -- Charlie -> Personal
+
+-- ========================================
+-- Create Sample Conversations
+-- ========================================
+
+-- Alice's personal workspace conversations
+INSERT INTO copilot_internal.conversations (id, tenant_id, user_id, title, created_at) VALUES
+  (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Alice Personal Project 1', NOW() - INTERVAL '2 days'),
+  (gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Alice Personal Project 2', NOW() - INTERVAL '1 day');
+
+-- Bob's personal workspace conversations
+INSERT INTO copilot_internal.conversations (id, tenant_id, user_id, title, created_at) VALUES
+  (gen_random_uuid(), '22222222-2222-2222-2222-222222222222', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Bob Personal Notes', NOW() - INTERVAL '3 days');
+
+-- Charlie's personal workspace conversations
+INSERT INTO copilot_internal.conversations (id, tenant_id, user_id, title, created_at) VALUES
+  (gen_random_uuid(), '33333333-3333-3333-3333-333333333333', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'Charlie Ideas', NOW() - INTERVAL '1 day');
+
+-- Acme Corp conversations (Alice and Bob)
+INSERT INTO copilot_internal.conversations (id, tenant_id, user_id, title, created_at) VALUES
+  (gen_random_uuid(), 'aaaacccc-1111-2222-3333-444444444444', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme Corp Q1 Strategy', NOW() - INTERVAL '5 days'),
+  (gen_random_uuid(), 'aaaacccc-1111-2222-3333-444444444444', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Acme Corp Product Roadmap', NOW() - INTERVAL '4 days'),
+  (gen_random_uuid(), 'aaaacccc-1111-2222-3333-444444444444', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme Corp Team Meeting Notes', NOW() - INTERVAL '1 day');
+
+-- Startup XYZ conversations (Charlie and Alice)
+INSERT INTO copilot_internal.conversations (id, tenant_id, user_id, title, created_at) VALUES
+  (gen_random_uuid(), 'bbbbeee0-5555-6666-7777-888888888888', 'cccccccc-cccc-cccc-cccc-cccccccccccc', 'Startup XYZ MVP Features', NOW() - INTERVAL '6 days'),
+  (gen_random_uuid(), 'bbbbeee0-5555-6666-7777-888888888888', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Startup XYZ Investor Pitch', NOW() - INTERVAL '2 days');
+
+-- ========================================
+-- Verification
+-- ========================================
+
+-- Count users
+SELECT 'Users created:' AS metric, COUNT(*)::text AS value
 FROM auth.users
-WHERE email = '<user_email>';
+WHERE email IN ('alice@example.com', 'bob@example.com', 'charlie@example.com');
+
+-- Count tenants
+SELECT 'Tenants created:' AS metric, COUNT(*)::text AS value
+FROM copilot_internal.tenants
+WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz');
+
+-- Count memberships
+SELECT 'Memberships created:' AS metric, COUNT(*)::text AS value
+FROM copilot_internal.tenant_memberships
+WHERE tenant_id IN (SELECT id FROM copilot_internal.tenants WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz'));
+
+-- Show Alice's tenants
+SELECT 'Alice''s Tenants:' AS info;
+SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+FROM copilot_internal.tenants t
+JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
+LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
+WHERE tm.user_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+ORDER BY is_active DESC, t.name;
+
+-- Show Bob's tenants
+SELECT 'Bob''s Tenants:' AS info;
+SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+FROM copilot_internal.tenants t
+JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
+LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
+WHERE tm.user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+ORDER BY is_active DESC, t.name;
+
+-- Show Charlie's tenants
+SELECT 'Charlie''s Tenants:' AS info;
+SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+FROM copilot_internal.tenants t
+JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
+LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
+WHERE tm.user_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc'
+ORDER BY is_active DESC, t.name;
+
+-- Count conversations per tenant
+SELECT t.name, COUNT(c.id) AS conversation_count
+FROM copilot_internal.tenants t
+LEFT JOIN copilot_internal.conversations c ON c.tenant_id = t.id
+WHERE t.slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz')
+GROUP BY t.name
+ORDER BY t.name;
+
+\echo ''
+\echo '========================================='
+\echo 'Seed data created successfully!'
+\echo '========================================='
+\echo ''
+\echo 'Test credentials:'
+\echo '  alice@example.com / password123'
+\echo '  bob@example.com / password123'
+\echo '  charlie@example.com / password123'
+\echo ''
+\echo 'Alice has access to:'
+\echo '  - Alice''s Workspace (personal)'
+\echo '  - Acme Corp (owner)'
+\echo '  - Startup XYZ (admin)'
+\echo ''
+\echo 'Bob has access to:'
+\echo '  - Bob''s Workspace (personal)'
+\echo '  - Acme Corp (member)'
+\echo ''
+\echo 'Charlie has access to:'
+\echo '  - Charlie''s Workspace (personal)'
+\echo '  - Startup XYZ (owner)'
+\echo ''
 ```
 
-**Fix**: Assign tenant_id using SQL above.
+**Run the seed script**:
+
+```bash
+psql postgresql://postgres:postgres@localhost:54322/postgres < scripts/seed_multi_tenant_demo.sql
 ```
 
-#### Task 4.3: Create Security Runbook
+**Deliverable**: ✅ Seed data loaded successfully
 
-**New File**: `docs/operations/TENANT_SECURITY_RUNBOOK.md`
+#### Task 5.2: End-to-End Acceptance Test (2-3 hours)
+
+**Test Script**:
 
 ```markdown
-# Tenant Security Runbook
+# Multi-Tenant Acceptance Test
 
-## Handling Users Without Tenant ID
+## Setup
+1. ✅ Seed data loaded
+2. ✅ Dev server running (npm run dev)
+3. ✅ Browser open to localhost:3000
 
-### Symptom
-User reports: "Cannot log in" or "Login failed"
+## Test 1: Alice Login and Tenant Switching
 
-### Diagnosis
-```sql
-SELECT
-  id,
-  email,
-  raw_user_meta_data->>'tenant_id' as user_tenant,
-  raw_app_meta_data->>'tenant_id' as app_tenant,
-  created_at,
-  last_sign_in_at
-FROM auth.users
-WHERE email = '<user_email>';
+### Step 1.1: Login as Alice
+- Go to http://localhost:3000/login
+- Email: alice@example.com
+- Password: password123
+- Click "Sign In"
+- **Expected**: Redirected to home page
+
+### Step 1.2: Verify Alice's Tenants
+- Look at tenant switcher dropdown in header
+- **Expected**: Shows 3 tenants:
+  - Alice's Workspace ✓ (active)
+  - Acme Corp
+  - Startup XYZ
+
+### Step 1.3: Verify Personal Workspace Data
+- Check conversations list
+- **Expected**: Shows 2 conversations:
+  - Alice Personal Project 1
+  - Alice Personal Project 2
+
+### Step 1.4: Switch to Acme Corp
+- Click tenant dropdown
+- Select "Acme Corp"
+- Wait for page reload
+- **Expected**:
+  - Page reloads
+  - Tenant dropdown now shows "Acme Corp ✓"
+  - Conversations list shows 3 conversations:
+    - Acme Corp Q1 Strategy (Alice)
+    - Acme Corp Product Roadmap (Bob)
+    - Acme Corp Team Meeting Notes (Alice)
+
+### Step 1.5: Switch to Startup XYZ
+- Click tenant dropdown
+- Select "Startup XYZ"
+- Wait for page reload
+- **Expected**:
+  - Page reloads
+  - Tenant dropdown shows "Startup XYZ ✓"
+  - Conversations list shows 2 conversations:
+    - Startup XYZ MVP Features (Charlie)
+    - Startup XYZ Investor Pitch (Alice)
+
+### Step 1.6: Verify Isolation
+- **Expected**: Alice cannot see:
+  - Bob's personal workspace
+  - Charlie's personal workspace
+
+## Test 2: Bob Login and Tenant Switching
+
+### Step 2.1: Logout and Login as Bob
+- Click user menu → Logout
+- Login with bob@example.com / password123
+- **Expected**: Logged in successfully
+
+### Step 2.2: Verify Bob's Tenants
+- Check tenant dropdown
+- **Expected**: Shows 2 tenants:
+  - Bob's Workspace ✓ (active)
+  - Acme Corp
+
+### Step 2.3: Verify Personal Workspace
+- **Expected**: Shows 1 conversation:
+  - Bob Personal Notes
+
+### Step 2.4: Switch to Acme Corp
+- Select "Acme Corp" from dropdown
+- **Expected**: Shows same 3 Acme Corp conversations as Alice saw
+
+### Step 2.5: Verify Isolation
+- **Expected**: Bob cannot see:
+  - Alice's personal workspace
+  - Charlie's personal workspace
+  - Startup XYZ (not a member)
+
+## Test 3: Charlie Login
+
+### Step 3.1: Login as Charlie
+- Logout
+- Login with charlie@example.com / password123
+
+### Step 3.2: Verify Charlie's Tenants
+- **Expected**: Shows 2 tenants:
+  - Charlie's Workspace ✓
+  - Startup XYZ
+
+### Step 3.3: Verify No Access to Acme Corp
+- **Expected**: Charlie does NOT see Acme Corp in dropdown
+
+## Test 4: Data Isolation Verification
+
+### Step 4.1: Create Conversation in Personal Workspace
+- Login as Alice
+- Select "Alice's Workspace"
+- Create new conversation: "Test Personal Conversation"
+- **Expected**: Conversation created
+
+### Step 4.2: Verify Not Visible to Others
+- Logout, login as Bob
+- Check Bob's conversations
+- **Expected**: Does NOT see "Test Personal Conversation"
+
+### Step 4.3: Create Conversation in Shared Workspace
+- Still as Bob
+- Switch to "Acme Corp"
+- Create new conversation: "Bob's Acme Conversation"
+- **Expected**: Conversation created
+
+### Step 4.4: Verify Visible to Team Members
+- Logout, login as Alice
+- Switch to "Acme Corp"
+- **Expected**: DOES see "Bob's Acme Conversation"
+
+## Test 5: Create New Workspace (if implemented)
+
+### Step 5.1: Create Team Workspace
+- Login as Alice
+- Click "+ New Workspace"
+- Enter:
+  - Name: "Test Team"
+  - Slug: "test-team"
+  - Type: team
+- Click "Create"
+- **Expected**: Workspace created, auto-switched to it
+
+### Step 5.2: Verify in Tenant List
+- Check dropdown
+- **Expected**: Shows "Test Team ✓" as active
+
+## Success Criteria
+
+ALL tests above must pass:
+- ✅ Users can log in
+- ✅ Users see correct tenants in dropdown
+- ✅ Switching tenants updates data
+- ✅ Data properly isolated per tenant
+- ✅ Team members see shared data
+- ✅ Personal workspaces are private
+- ✅ New workspaces can be created
+
+If ALL pass: 🎉 **IMPLEMENTATION SUCCESSFUL**
 ```
 
-### Resolution
-If both `user_tenant` and `app_tenant` are NULL:
+**Execute the test script** and document results.
 
-1. **Identify correct tenant**:
-   - Check CRM/ticketing system
-   - Contact account owner
-   - DO NOT guess or use demo tenant
+**Deliverable**: ✅ All acceptance tests passing
 
-2. **Assign tenant_id**:
-   ```sql
-   UPDATE auth.users
-   SET raw_user_meta_data = jsonb_set(
-     COALESCE(raw_user_meta_data, '{}'::jsonb),
-     '{tenant_id}',
-     '"<CORRECT_TENANT_ID>"'
-   )
-   WHERE email = '<user_email>';
-   ```
+#### Task 5.3: Performance Testing (1 hour)
 
-3. **Verify**:
-   ```sql
-   SELECT
-     email,
-     raw_user_meta_data->>'tenant_id' as tenant_id
-   FROM auth.users
-   WHERE email = '<user_email>';
-   ```
+```bash
+# Test 1: Login Performance
+# - Time from login submit to home page load
+# - Target: <2 seconds
 
-4. **Test**: Have user log in again
+# Test 2: Tenant Switching Performance
+# - Time from dropdown selection to data reload
+# - Target: <1 second
 
-## Preventing Tenant Isolation Violations
+# Test 3: API Response Times
+# - Test /api/conversations with different tenant sizes
+# - Target: <500ms for typical data sets
 
-### Regular Audits
-Run monthly:
-```sql
--- Should return 0 rows
-SELECT id, email, created_at
-FROM auth.users
-WHERE (raw_user_meta_data->>'tenant_id' IS NULL
-       AND raw_app_meta_data->>'tenant_id' IS NULL)
-  AND deleted_at IS NULL;
+# Test 4: Concurrent Users
+# - Open 3 browser tabs, login as different users
+# - All should work simultaneously
+# - No session conflicts
+
+# Document results
 ```
 
-### Monitoring
-Set up alerts for:
-- Log message: "missing tenant_id"
-- Authentication failures spike
-- 401 errors on API routes
+**Deliverable**: ✅ Performance acceptable
 
-## Incident Response
+### Phase 5 Exit Criteria
 
-### Suspected Tenant Isolation Breach
+- ✅ Seed data script created
+- ✅ Seed data loaded successfully
+- ✅ All acceptance tests passing
+- ✅ Performance tests passing
+- ✅ No critical bugs
+- ✅ Ready for deployment
 
-1. **Immediate**: Run audit script
-2. **Identify**: Users with access to wrong tenant
-3. **Contain**: Disable affected accounts
-4. **Remediate**: Fix tenant assignments
-5. **Audit**: Review all actions by affected users
-6. **Report**: Document incident
-
-### Audit Script
-[scripts/audit_tenant_assignments.sql](../../scripts/audit_tenant_assignments.sql)
-```
-
-#### Phase 4 Exit Criteria
-
-- ✅ Onboarding checklist updated
-- ✅ Auth specification updated
-- ✅ Security runbook created
-- ✅ All documentation reviewed
-- ✅ Team trained on new procedures
+**Estimated Time**: 6-8 hours
 
 ---
 
-### Phase 5: Deployment (Day 6-7)
+## Phase 6: Deployment (Day 21-23)
 
-**Objective**: Safe production deployment with rollback capability
+### Objective
+Deploy to production safely with monitoring.
 
-#### Pre-Deployment Checklist
+### Tasks
 
-- [ ] All Phase 1-4 exit criteria met
-- [ ] Stakeholder approval obtained
-- [ ] Rollback plan documented
-- [ ] Monitoring/alerting configured
-- [ ] On-call engineer assigned
-- [ ] Communication draft prepared
+#### Task 6.1: Pre-Deployment Checklist (1 hour)
 
-#### Deployment Steps
+```markdown
+## Pre-Deployment Checklist
 
-**Step 1: Final Staging Validation** (2 hours)
+### Code Review
+- ✅ All 31 API routes updated
+- ✅ No SUPABASE_DEMO_TENANT_ID references in code
+- ✅ All UI components implemented
+- ✅ All tests passing
+- ✅ No console errors
+- ✅ Code reviewed
+
+### Database
+- ✅ Migrations tested in local
+- ✅ Migrations tested in staging
+- ✅ Backfill script tested
+- ✅ RLS policies active
+- ✅ Indexes created
+
+### Documentation
+- ✅ Architecture doc complete
+- ✅ Implementation plan complete
+- ✅ Seed data script documented
+- ✅ Deployment guide ready
+
+### Environment Variables
+- ✅ Production .env configured
+- ✅ SUPABASE_DEMO_TENANT_ID removed
+- ✅ NEXTAUTH_SECRET set
+- ✅ Supabase keys configured
+```
+
+**Deliverable**: ✅ All pre-deployment checks pass
+
+#### Task 6.2: Staging Deployment (2-3 hours)
 
 ```bash
-# Deploy to staging
-git checkout main
-git pull
-git checkout -b fix/tenant-id-security
-# ... apply all changes ...
-git push origin fix/tenant-id-security
+# Deploy database to staging
+supabase db push --linked-project staging
 
-# Deploy to staging
+# Deploy application to staging
 vercel deploy --preview
 
-# Run full test suite
-npm run test:integration
+# Run seed data in staging
+psql $STAGING_DATABASE_URL < scripts/seed_multi_tenant_demo.sql
 
-# Manual testing
-# - Login with various users
-# - Create conversations
-# - Check tenant isolation
-# - Review logs
+# Test in staging
+# - Run full acceptance test
+# - Verify no errors
+# - Check performance
+
+# Monitor for 2 hours
+# - No errors in logs
+# - Performance acceptable
+# - All features working
 ```
 
-**Step 2: Production Deployment** (1 hour)
+**Deliverable**: ✅ Staging deployment successful
+
+#### Task 6.3: Production Deployment (2 hours)
 
 ```bash
-# Merge to main
-git checkout main
-git merge fix/tenant-id-security
-git push origin main
+# Backup production database
+pg_dump $PRODUCTION_DATABASE_URL > backup_before_multi_tenant.sql
 
-# Deploy to production
+# Apply migrations
+supabase db push --linked-project production
+
+# Verify migrations
+psql $PRODUCTION_DATABASE_URL -c "\dt copilot_internal.tenant*"
+
+# Deploy application
 vercel deploy --prod
 
-# Or if using other deployment:
-# npm run deploy:production
+# Load seed data (optional, for demo)
+# psql $PRODUCTION_DATABASE_URL < scripts/seed_multi_tenant_demo.sql
+
+# Monitor logs
+vercel logs --prod --follow
 ```
 
-**Step 3: Post-Deployment Monitoring** (4 hours active monitoring)
+**Deliverable**: ✅ Production deployment successful
+
+#### Task 6.4: Post-Deployment Validation (4 hours)
 
 ```bash
-# Watch logs for errors
-vercel logs --follow
+# Test 1: Login with production user
+# - Should work
+# - Personal tenant created if needed
 
-# Or application logs:
-# kubectl logs -f deployment/app -n production
+# Test 2: Check logs for errors
+# - No "missing tenant_id" errors
+# - No 401 unauthorized errors (unless legitimate)
 
-# Monitor metrics:
-# - Authentication success rate
-# - 401 error rate
-# - API latency
-# - User complaints
+# Test 3: Verify database
+psql $PRODUCTION_DATABASE_URL
+
+# Count tenants created
+SELECT COUNT(*) FROM copilot_internal.tenants;
+
+# Count active memberships
+SELECT COUNT(*) FROM copilot_internal.tenant_memberships WHERE status = 'active';
+
+# Test 4: Performance monitoring
+# - API response times normal
+# - No degradation vs baseline
+
+# Test 5: User feedback
+# - Monitor support tickets
+# - Check for tenant-related issues
 ```
 
-**Monitor for**:
-- ❌ Spike in authentication failures
-- ❌ Increase in 401 errors
-- ❌ Log messages: "missing tenant_id"
-- ✅ Normal authentication flow
-- ✅ No fallback to demo tenant in logs
+**Deliverable**: ✅ Production validated, no critical issues
 
-#### Rollback Procedure
+### Phase 6 Exit Criteria
 
-**If critical issues detected**:
+- ✅ Staging deployment successful
+- ✅ Production deployment successful
+- ✅ All migrations applied
+- ✅ No errors in logs
+- ✅ User testing successful
+- ✅ Performance acceptable
+- ✅ Monitoring in place
 
-```bash
-# Option 1: Revert deployment (fastest)
-vercel rollback
-
-# Option 2: Revert code
-git revert <commit-hash>
-git push origin main
-vercel deploy --prod
-
-# Option 3: Hot-fix (if minor issue)
-# Fix issue in new branch
-# Fast-track through testing
-# Deploy
-```
-
-**Rollback Decision Criteria**:
-- Authentication failure rate >5%
-- Unable to create new conversations
-- Tenant isolation violated
-- Critical bug discovered
-
-#### Post-Deployment Validation
-
-**After 4 hours of monitoring**:
-
-```bash
-# Run security validation
-psql $DATABASE_URL < scripts/security_validation.sql
-
-# Check error rates
-# (implementation depends on monitoring tool)
-
-# Verify logging
-grep "tenant_id" /var/log/app.log | grep -i error
-```
-
-**After 24 hours**:
-
-- [ ] Review all error logs
-- [ ] Check authentication metrics
-- [ ] Verify no tenant isolation issues
-- [ ] Collect user feedback
-- [ ] Document any issues encountered
-
-#### Phase 5 Exit Criteria
-
-- ✅ Deployed to production successfully
-- ✅ No critical issues in first 24 hours
-- ✅ Authentication working normally
-- ✅ Tenant isolation validated
-- ✅ Monitoring confirms expected behavior
-- ✅ Team trained on new validation logic
+**Estimated Time**: 8-10 hours
 
 ---
 
-## Communication Plan
+## Appendix: Complete Code Examples
 
-### Internal Communication
+### A1: Supabase Client Utilities
 
-**Pre-Deployment** (1 day before):
-```
-To: Engineering, Operations, Support teams
-Subject: Security Fix Deployment - Tenant ID Validation
+```typescript
+// apps/demo-web/src/lib/supabase/client.ts
 
-We will be deploying a security fix on [DATE] at [TIME] to address
-tenant isolation concerns.
+import { createBrowserClient } from '@supabase/ssr';
 
-What's changing:
-- Users without tenant_id assignment will be unable to log in
-- This should not affect any existing users (all have been validated)
-- Error messages will indicate "contact support" if issues occur
-
-What to watch for:
-- Users reporting login issues
-- Check user's tenant_id assignment if issues reported
-
-Runbook: docs/operations/TENANT_SECURITY_RUNBOOK.md
-Slack: #incidents for any issues
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 ```
 
-**During Deployment**:
-```
-#engineering Slack channel:
-"🚀 Deploying tenant ID security fix now. Monitoring for 4 hours. #security"
-```
+### A2: Example API Route (Complete)
 
-**Post-Deployment** (24 hours after):
-```
-To: All teams
-Subject: Tenant ID Security Fix - Deployment Complete
+See Phase 3, Task 3.2 for complete `/api/conversations/route.ts`
 
-The security fix has been successfully deployed and validated.
+### A3: Environment Variables Template
 
-Results:
-- ✅ No authentication issues
-- ✅ Tenant isolation working correctly
-- ✅ All monitoring green
+```bash
+# apps/demo-web/.env.local
 
-Changes are permanent. Any users reporting login issues should be
-directed to support for tenant ID validation.
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-Runbook: docs/operations/TENANT_SECURITY_RUNBOOK.md
-```
+# NextAuth
+NEXTAUTH_SECRET=your-secret-here
+NEXTAUTH_URL=http://localhost:3000
 
-### External Communication
+# Redis (optional, for distributed caching)
+REDIS_URL=redis://localhost:6379
 
-**Only if needed** (users were affected):
-
-```
-Subject: Account Security Update
-
-We recently identified and fixed a configuration issue that could
-have affected your account's data isolation.
-
-What we did:
-- Identified all affected accounts
-- Corrected tenant assignments
-- Deployed additional security controls
-
-What you need to do:
-- Nothing - all issues have been resolved
-- If you experience login issues, contact support
-
-We take security seriously and have implemented additional safeguards
-to prevent similar issues in the future.
-
-Questions? Contact: support@company.com
+# REMOVED (security vulnerability fixed):
+# SUPABASE_DEMO_TENANT_ID=...
 ```
 
 ---
 
-## Success Metrics
+## Summary
 
-### Security Metrics
-- **Zero** users without tenant_id after Phase 1
-- **Zero** API calls using demo tenant as fallback
-- **Zero** tenant isolation violations
+**Total Estimated Time**: 3-4 weeks (with team of 1-2 developers)
 
-### Operational Metrics
-- Authentication success rate maintained >99%
-- API latency impact <5%
-- Zero rollbacks required
-- All tests passing
+**Phase Breakdown**:
+- Phase 0: Preparation (4 hours)
+- Phase 1: Database (3-4 hours)
+- Phase 2: Authentication (6-8 hours)
+- Phase 3: API Routes (8-12 hours)
+- Phase 4: UI Components (10-12 hours)
+- Phase 5: Seed Data & Testing (6-8 hours)
+- Phase 6: Deployment (8-10 hours)
 
-### Documentation Metrics
-- Onboarding checklist updated ✅
-- Auth specification updated ✅
-- Security runbook created ✅
-- Team training completed ✅
+**Success Metric**: Seed data loaded, UI working, tenant switching functional.
 
----
-
-## Lessons Learned (Post-Implementation)
-
-**To be filled out after deployment**:
-
-### What Went Well
--
--
-
-### What Could Be Improved
--
--
-
-### Action Items
--
--
-
-### Future Preventions
--
--
-
----
-
-## Appendix
-
-### Quick Reference Commands
-
-**Check user's tenant assignment**:
-```sql
-SELECT email, raw_user_meta_data->>'tenant_id' as tenant_id
-FROM auth.users WHERE email = '<email>';
-```
-
-**Assign tenant_id**:
-```sql
-UPDATE auth.users
-SET raw_user_meta_data = jsonb_set(
-  COALESCE(raw_user_meta_data, '{}'::jsonb),
-  '{tenant_id}',
-  '"<TENANT_UUID>"'
-)
-WHERE email = '<email>';
-```
-
-**Audit all users**:
+**Final Test**:
 ```bash
-psql $DATABASE_URL < scripts/audit_tenant_assignments.sql
+# Run seed data
+psql < scripts/seed_multi_tenant_demo.sql
+
+# Start app
+npm run dev
+
+# Test
+# 1. Login as alice@example.com
+# 2. See 3 workspaces in dropdown
+# 3. Switch between them
+# 4. See different data in each
+# 5. ✅ SUCCESS!
 ```
-
-**Check logs for validation errors**:
-```bash
-grep "missing tenant_id" /var/log/app.log
-```
-
-### Related Files
-
-- [TENANT_ID_SECURITY_ANALYSIS.md](./TENANT_ID_SECURITY_ANALYSIS.md)
-- [scripts/audit_tenant_assignments.sql](./scripts/audit_tenant_assignments.sql)
-- [docs/operations/TENANT_ONBOARDING_CHECKLIST.md](./docs/operations/TENANT_ONBOARDING_CHECKLIST.md)
-- [apps/demo-web/docs/AUTH_SPECIFICATION.md](./apps/demo-web/docs/AUTH_SPECIFICATION.md)
 
 ---
 
 **End of Implementation Plan**
+
+This plan provides a complete roadmap from current state to fully functional multi-tenant architecture with UI-based tenant switching.
