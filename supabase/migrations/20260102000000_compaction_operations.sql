@@ -199,22 +199,25 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION copilot_internal.get_recent_compaction_operations(
     p_limit integer DEFAULT 10,
     p_tenant_id uuid DEFAULT NULL
-) RETURNS TABLE (
+)
+RETURNS TABLE (
     id uuid,
     conversation_id uuid,
-    timestamp timestamptz,
+    operation_timestamp timestamptz,
     strategy text,
     tokens_saved integer,
     compression_ratio numeric,
     duration_ms integer,
     success boolean
-) AS $$
+)
+LANGUAGE plpgsql
+AS $$
 BEGIN
     RETURN QUERY
     SELECT
         co.id,
         co.conversation_id,
-        co.timestamp,
+        co."timestamp" AS operation_timestamp,
         co.strategy,
         co.tokens_saved,
         co.compression_ratio,
@@ -222,7 +225,7 @@ BEGIN
         co.success
     FROM copilot_internal.compaction_operations co
     WHERE (p_tenant_id IS NULL OR co.tenant_id = p_tenant_id)
-    ORDER BY co.timestamp DESC
-    LIMIT p_limit;
+    ORDER BY co."timestamp" DESC
+    LIMIT GREATEST(COALESCE(p_limit, 10), 0);
 END;
-$$ LANGUAGE plpgsql;
+$$;

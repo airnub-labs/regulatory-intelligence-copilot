@@ -56,7 +56,7 @@ export class SupabaseSnapshotStorage implements SnapshotStorageProvider {
 
   async save(snapshot: CompactionSnapshot): Promise<void> {
     const row = this.mapSnapshotToRow(snapshot);
-    const { error } = await this.supabase.from(this.table).upsert(row);
+    const { error } = await this.supabase.from(this.table).upsert(row as unknown as Record<string, unknown>);
 
     if (error) {
       logger.error({ snapshotId: snapshot.id, error: error.message }, 'Failed to save compaction snapshot');

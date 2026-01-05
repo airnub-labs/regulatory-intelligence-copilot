@@ -1,8 +1,9 @@
 /**
  * Pricing Service Initialization
  *
- * Sets up the dynamic pricing service with Supabase storage.
+ * Sets up the dynamic pricing service with Supabase storage and Redis/Upstash caching.
  * Supabase is required in both local development and production environments.
+ * Redis/Upstash caching is optional but highly recommended for performance.
  *
  * Usage:
  * Import this module at app startup to initialize pricing:
@@ -17,6 +18,12 @@ import {
   createLogger,
 } from '@reg-copilot/reg-intel-observability';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  createKeyValueClient,
+  resolveRedisBackend,
+  createTransparentCache,
+  type TransparentCache,
+} from '@reg-copilot/reg-intel-cache';
 
 const logger = createLogger('PricingInit');
 
@@ -53,11 +60,13 @@ function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } 
  * Initialize pricing service
  *
  * Uses Supabase for dynamic pricing in both local development and production.
+ * Uses Redis/Upstash for caching when available.
  * For local development, ensure you have a local Supabase instance running.
  *
  * Environment variables:
  * - SUPABASE_URL: Supabase project URL
  * - SUPABASE_SERVICE_ROLE_KEY: Service role key for server-side operations
+ * - REDIS_URL or UPSTASH_REDIS_REST_URL: Redis/Upstash for caching (optional)
  */
 export const initializePricingService = (): void => {
   try {
@@ -82,8 +91,36 @@ export const initializePricingService = (): void => {
       db: { schema: 'copilot_internal' },
     }) as unknown as SupabaseClient;
 
-    // Initialize pricing service with Supabase backend
-    const pricingService = new SupabasePricingService(client);
+    // Set up Redis/Upstash caching for pricing data
+    const redisBackend = resolveRedisBackend('cache');
+    const redisClient = createKeyValueClient(redisBackend);
+
+    let cache: TransparentCache<any> | undefined;
+
+    if (redisClient && redisBackend) {
+      // Redis is available - pass client directly to TransparentCache
+      cache = createTransparentCache(
+        redisClient,
+        redisBackend.backend,
+        { defaultTtlSeconds: 3600 } // 1 hour TTL
+      );
+
+      logger.info(
+        { backend: redisBackend.backend, ttl: 3600 },
+        'LLM pricing service will use Redis/Upstash caching'
+      );
+    } else {
+      logger.warn(
+        'Redis/Upstash not configured - pricing service will query database on every request. ' +
+        'Configure REDIS_URL or UPSTASH_REDIS_REST_URL for optimal performance.'
+      );
+    }
+
+    // Initialize pricing service with Supabase backend and optional Redis cache
+    const pricingService = new SupabasePricingService(client, {
+      cache,
+      cacheTtlSeconds: 3600, // 1 hour TTL
+    });
     initPricingService(pricingService);
 
     logger.info(
@@ -91,6 +128,7 @@ export const initializePricingService = (): void => {
         supabaseUrl: credentials.supabaseUrl,
         backend: 'supabase',
         table: 'copilot_internal.model_pricing',
+        caching: cache ? 'enabled' : 'disabled',
       },
       'Dynamic pricing service initialized successfully with Supabase'
     );

@@ -7,9 +7,14 @@ const logger = createLogger('RedisClientFactory');
 
 const require = createRequire(import.meta.url);
 
+/**
+ * Upstash Redis client interface
+ * Maps to underlying @upstash/redis library methods
+ */
 interface UpstashRedisInstance {
   get(key: string): Promise<string | null>;
-  setex(key: string, ttlSeconds: number, value: string): Promise<void>;
+  setex(key: string, ttlSeconds: number, value: string): Promise<void>; // Low-level Redis command
+  set?(key: string, value: string, options?: { ex?: number }): Promise<void>; // Alternative set method
   del(...keys: string[]): Promise<number | void>;
   ping(): Promise<string>;
   publish?(channel: string, message: string): Promise<number | void>;
@@ -71,6 +76,10 @@ function getUpstashRedis(
   return client;
 }
 
+/**
+ * IORedis adapter implementing industry-standard cache interface
+ * Wraps low-level Redis commands (setex) into high-level cache API (set)
+ */
 class IORedisKeyValueClient implements RedisKeyValueClient {
   constructor(private readonly client: Redis) {}
 
@@ -78,12 +87,19 @@ class IORedisKeyValueClient implements RedisKeyValueClient {
     return this.client.get(key);
   }
 
-  async setex(key: string, ttlSeconds: number, value: string): Promise<void> {
-    await this.client.setex(key, ttlSeconds, value);
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    if (ttlSeconds !== undefined) {
+      // Use SETEX for TTL-based storage
+      await this.client.setex(key, ttlSeconds, value);
+    } else {
+      // Use SETEX with very long TTL (1 year) for permanent-ish storage
+      // Note: Redis doesn't have true permanent keys with SET in cluster mode
+      await this.client.setex(key, 31536000, value);
+    }
   }
 
-  async del(...keys: string[]): Promise<void> {
-    await this.client.del(...keys);
+  async del(key: string): Promise<void> {
+    await this.client.del(key);
   }
 
   async ping(): Promise<string> {
@@ -91,6 +107,10 @@ class IORedisKeyValueClient implements RedisKeyValueClient {
   }
 }
 
+/**
+ * Upstash Redis adapter implementing industry-standard cache interface
+ * Wraps low-level Redis commands (setex) into high-level cache API (set)
+ */
 class UpstashKeyValueClient implements RedisKeyValueClient {
   constructor(private readonly client: UpstashRedisInstance) {}
 
@@ -98,12 +118,23 @@ class UpstashKeyValueClient implements RedisKeyValueClient {
     return this.client.get(key);
   }
 
-  async setex(key: string, ttlSeconds: number, value: string): Promise<void> {
-    await this.client.setex(key, ttlSeconds, value);
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    if (ttlSeconds !== undefined) {
+      // Use SETEX for TTL-based storage
+      await this.client.setex(key, ttlSeconds, value);
+    } else {
+      // Use SET for permanent storage (if available)
+      if (this.client.set) {
+        await this.client.set(key, value);
+      } else {
+        // Fallback: use SETEX with very long TTL
+        await this.client.setex(key, 31536000, value); // 1 year
+      }
+    }
   }
 
-  async del(...keys: string[]): Promise<number | void> {
-    return this.client.del(...keys);
+  async del(key: string): Promise<void> {
+    await this.client.del(key);
   }
 
   async ping(): Promise<string> {

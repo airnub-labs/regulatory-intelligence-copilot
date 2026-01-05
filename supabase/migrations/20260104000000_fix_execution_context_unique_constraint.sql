@@ -44,11 +44,13 @@ BEGIN
     WHERE conrelid = 'copilot_internal.execution_contexts'::regclass
       AND contype = 'u'  -- unique constraint
       AND array_length(conkey, 1) = 3  -- has 3 columns
+      -- NOTE: conkey is an int2vector (smallint-based). To avoid integer[] = smallint[] issues,
+      --       cast both sides to int[] and cast attnum to int.
       AND conkey::int[] = ARRAY[
-          (SELECT attnum FROM pg_attribute WHERE attrelid = 'copilot_internal.execution_contexts'::regclass AND attname = 'tenant_id'),
-          (SELECT attnum FROM pg_attribute WHERE attrelid = 'copilot_internal.execution_contexts'::regclass AND attname = 'conversation_id'),
-          (SELECT attnum FROM pg_attribute WHERE attrelid = 'copilot_internal.execution_contexts'::regclass AND attname = 'path_id')
-      ];
+          (SELECT attnum::int FROM pg_attribute WHERE attrelid = 'copilot_internal.execution_contexts'::regclass AND attname = 'tenant_id'),
+          (SELECT attnum::int FROM pg_attribute WHERE attrelid = 'copilot_internal.execution_contexts'::regclass AND attname = 'conversation_id'),
+          (SELECT attnum::int FROM pg_attribute WHERE attrelid = 'copilot_internal.execution_contexts'::regclass AND attname = 'path_id')
+      ]::int[];
 
     IF constraint_name_var IS NOT NULL THEN
         RAISE NOTICE 'Dropping UNIQUE constraint: %', constraint_name_var;
@@ -93,12 +95,20 @@ DECLARE
     delete_count integer;
 BEGIN
     -- Delete terminated contexts older than p_days_old days
-    WITH deleted AS (
-        DELETE FROM copilot_internal.execution_contexts
+    -- NOTE: PostgreSQL does not support LIMIT directly on DELETE.
+    --       Select candidate rows first, then delete via USING.
+    WITH to_delete AS (
+        SELECT id
+        FROM copilot_internal.execution_contexts
         WHERE terminated_at IS NOT NULL
           AND terminated_at < now() - (p_days_old || ' days')::interval
-        LIMIT p_limit
-        RETURNING id
+        ORDER BY terminated_at ASC
+        LIMIT GREATEST(COALESCE(p_limit, 100), 0)
+    ), deleted AS (
+        DELETE FROM copilot_internal.execution_contexts ec
+        USING to_delete td
+        WHERE ec.id = td.id
+        RETURNING ec.id
     )
     SELECT array_agg(id), count(*)::integer
     INTO deleted_id_array, delete_count

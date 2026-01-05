@@ -57,4 +57,37 @@ export async function register() {
   } catch (error) {
     console.error('[Instrumentation] Failed to initialize cost tracking:', error);
   }
+
+  // Initialize compaction system with snapshot support
+  console.log('[Instrumentation] Initializing compaction system...');
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.warn('[Instrumentation] Supabase credentials not found, skipping compaction system initialization');
+    } else {
+      const { createClient } = await import('@supabase/supabase-js');
+      const { SupabaseSnapshotStorage } = await import('@reg-copilot/reg-intel-conversations/compaction');
+      const { initializeCompactionSystem } = await import('./src/lib/compactionInit');
+
+      // Create Supabase client for snapshot storage
+      const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      // Create snapshot storage provider
+      const snapshotStorage = new SupabaseSnapshotStorage(supabase);
+
+      // Initialize compaction system
+      await initializeCompactionSystem({
+        snapshotStorage,
+        snapshotTTLHours: 24, // Snapshots expire after 24 hours
+      });
+
+      console.log('[Instrumentation] Compaction system initialized successfully');
+    }
+  } catch (error) {
+    console.error('[Instrumentation] Failed to initialize compaction system:', error);
+  }
 }

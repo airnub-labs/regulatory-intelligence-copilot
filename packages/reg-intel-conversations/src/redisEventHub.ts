@@ -130,7 +130,7 @@ export class RedisConversationEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, message => {
+        await this.subscriber.subscribe(channel, (message: string) => {
           if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
             return;
           }
@@ -313,7 +313,7 @@ export class RedisConversationListEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, message => {
+        await this.subscriber.subscribe(channel, (message: string) => {
           if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
             return;
           }
@@ -440,7 +440,7 @@ export function createEventHubs(config?: EventHubFactoryConfig): {
   conversationListEventHub: RedisConversationListEventHub | SupabaseRealtimeConversationListEventHub;
 } {
   const redisConfig =
-    (config && 'clients' in config ? config : 'redis' in (config ?? {}) ? config?.redis : undefined) ?? undefined;
+    (config && 'clients' in config ? config : (config && 'redis' in config) ? config.redis : undefined) ?? undefined;
   const supabaseConfig = (config && 'supabase' in config ? config.supabase : undefined) ?? undefined;
 
   if (redisConfig?.clients) {

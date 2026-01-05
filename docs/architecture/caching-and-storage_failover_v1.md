@@ -1,8 +1,8 @@
 # Caching & Storage Layer with Transparent Failover
 
-**Status:** Current (v1.0.0)
-**Date:** 2026-01-04
-**Implementation Status:** Phases 1-3 Complete
+**Status:** Current (v1.1.0)
+**Date:** 2026-01-05
+**Implementation Status:** Phases 1-4 Complete
 
 ---
 
@@ -26,7 +26,7 @@ This is the **canonical reference** for:
 | **Phase 1** | **COMPLETE** | TransparentCache & TransparentRateLimiter infrastructure |
 | **Phase 2** | **COMPLETE** | Auth Validation Cache using transparent failover |
 | **Phase 3** | **COMPLETE** | Rate Limiter using transparent failover |
-| Phase 4+ | Pending | Factory function consistency (minor refactoring) |
+| **Phase 4** | **COMPLETE** | Interface alignment - RedisKeyValueClient matches industry standards |
 
 The **transparent failover pattern** is fully implemented in production code. All new cache and rate limiter implementations must follow this pattern.
 
@@ -173,6 +173,48 @@ export function createTransparentCache<T>(
 | `PassThroughCache<T>` | Redis unavailable | get() → null, set() → no-op, del() → no-op |
 | `RedisBackedCache<T>` | Redis available | Real caching with internal try-catch |
 
+### 4.3.1 Simplified Architecture: No Adapter Needed (Phase 4)
+
+**RedisKeyValueClient IS CacheBackend**
+As of Phase 4, `RedisKeyValueClient` has been aligned with industry-standard cache library interfaces (cache-manager, node-cache, keyv). This eliminates the need for any adapter pattern.
+
+```typescript
+// RedisKeyValueClient interface (types.ts)
+export interface RedisKeyValueClient {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;  // Industry standard
+  del(key: string): Promise<void>;
+  ping?(): Promise<string>;
+}
+
+// CacheBackend interface (transparentCache.ts) - IDENTICAL
+export interface CacheBackend {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;  // Same signature!
+  del(key: string): Promise<void>;
+}
+```
+
+**Direct Usage - No Adapter**
+`RedisKeyValueClient` can be passed directly to `createTransparentCache()`:
+
+```typescript
+// ✅ CORRECT: Direct usage (Phase 4)
+const redisClient = createKeyValueClient(backend);
+const cache = createTransparentCache(redisClient, backend.backend, { ttl: 3600 });
+
+// ❌ LEGACY: Adapter pattern (pre-Phase 4) - NO LONGER NEEDED
+// const adapter = createRedisCacheBackend(redisClient);  // DELETED
+// const cache = createTransparentCache(adapter, backend.backend, { ttl: 3600 });
+```
+
+**Benefits of Interface Alignment:**
+- ✅ Zero adapter code - simpler architecture
+- ✅ Industry-standard API - familiar to developers
+- ✅ Better DX - intuitive `set(key, value, ttl)` parameter order
+- ✅ Single interface - no maintaining parallel types
+- ✅ True transparency - app doesn't know Redis exists
+
 ### 4.4 Other Key Abstractions
 
 | Abstraction | Location | Purpose |
@@ -232,7 +274,7 @@ export class CachingConversationStore implements ConversationStore {
     // Cache the result
     if (record) {
       try {
-        await this.redis.setex(key, this.ttlSeconds, JSON.stringify(record));
+        await this.redis.set(key, JSON.stringify(record), this.ttlSeconds);
       } catch {
         // ✅ TRANSPARENT: Cache write error - don't fail the request
       }

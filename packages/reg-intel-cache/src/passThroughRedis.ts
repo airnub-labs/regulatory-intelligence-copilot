@@ -12,7 +12,7 @@
  * // redisClient is NEVER null - always a valid RedisKeyValueClient
  *
  * const value = await redisClient.get(key);  // null (always cache miss)
- * await redisClient.setex(key, ttl, value);  // no-op
+ * await redisClient.set(key, value, ttl);    // no-op
  * ```
  */
 
@@ -29,7 +29,7 @@ const logger = createLogger('PassThroughRedis');
  *
  * Behavior:
  * - get() returns null (simulates cache miss)
- * - setex() is no-op (writes are ignored)
+ * - set() is no-op (writes are ignored)
  * - del() is no-op (deletes are ignored)
  * - ping() returns "PASSTHROUGH" (identifies type)
  */
@@ -44,11 +44,11 @@ export class PassThroughRedis implements RedisKeyValueClient {
     return null; // Always cache miss
   }
 
-  async setex(_key: string, _ttlSeconds: number, _value: string): Promise<void> {
+  async set(_key: string, _value: string, _ttlSeconds?: number): Promise<void> {
     // No-op - write ignored
   }
 
-  async del(..._keys: string[]): Promise<void> {
+  async del(_key: string): Promise<void> {
     // No-op - delete ignored
   }
 

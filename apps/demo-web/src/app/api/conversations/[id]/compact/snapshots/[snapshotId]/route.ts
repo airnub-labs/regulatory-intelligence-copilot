@@ -19,30 +19,6 @@ export async function GET(
   try {
     const { id: conversationId, snapshotId } = await context.params;
 
-    // Example response - replace with actual implementation
-    return NextResponse.json({
-      message: 'Example data - integrate with snapshot service for production',
-      snapshot: {
-        id: snapshotId,
-        conversationId,
-        createdAt: new Date('2024-01-15T10:30:00Z'),
-        strategy: 'semantic',
-        tokensBefore: 125000,
-        messageCount: 150,
-        expiresAt: new Date('2024-01-16T10:30:00Z'),
-        compactionResult: {
-          tokensAfter: 62500,
-          messagesRemoved: 75,
-          compressionRatio: 0.5,
-          durationMs: 2341,
-        },
-        // Note: actual messages are not included in this example
-        // In production, you may want to include them or provide a separate endpoint
-      },
-    }, { status: 501 }); // 501 Not Implemented
-
-    // Production implementation:
-    /*
     const { getSnapshotService } = await import('@reg-copilot/reg-intel-conversations/compaction');
     const snapshotService = getSnapshotService();
 
@@ -71,7 +47,6 @@ export async function GET(
         // messages: snapshot.messages,
       },
     });
-    */
   } catch (error) {
     console.error('Snapshot GET API error:', error);
     return NextResponse.json(
@@ -88,17 +63,6 @@ export async function DELETE(
   try {
     const { id: conversationId, snapshotId } = await context.params;
 
-    // Example response - replace with actual implementation
-    return NextResponse.json({
-      message: 'Example data - integrate with snapshot service for production',
-      success: true,
-      conversationId,
-      snapshotId,
-      deletedAt: new Date().toISOString(),
-    }, { status: 501 }); // 501 Not Implemented
-
-    // Production implementation:
-    /*
     const { getSnapshotService } = await import('@reg-copilot/reg-intel-conversations/compaction');
     const snapshotService = getSnapshotService();
 
@@ -119,7 +83,6 @@ export async function DELETE(
       snapshotId,
       deletedAt: new Date().toISOString(),
     });
-    */
   } catch (error) {
     console.error('Snapshot DELETE API error:', error);
     return NextResponse.json(

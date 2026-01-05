@@ -340,9 +340,9 @@ exporters:
 | `regintel.llm.request.duration` | Histogram | LLM request latency (ms) | ✅ Wired in all LLM providers (`llmRouter.ts`) |
 | `regintel.egressguard.scan.total` | Counter | Egress guard scans | ✅ Wired in `egressGuard.ts` |
 | `regintel.egressguard.block.total` | Counter | PII/sensitive data blocks | ✅ Wired in `egressGuard.ts` |
-| `regintel.ui.breadcrumb.navigate.total` | Counter | Breadcrumb navigation | ⚠️ Pending (UI component needed) |
+| `regintel.ui.breadcrumb.navigate.total` | Counter | Breadcrumb navigation | ✅ Wired in `path-breadcrumb-nav.tsx` |
 | `regintel.ui.branch.create.total` | Counter | Branch creations | ✅ Wired in `/api/conversations/[id]/branch/route.ts` |
-| `regintel.ui.path.switch.total` | Counter | Path switches | ⚠️ Pending (UI component needed) |
+| `regintel.ui.path.switch.total` | Counter | Path switches | ✅ Wired in `path-breadcrumb-nav.tsx` |
 | `regintel.ui.merge.execute.total` | Counter | Merge operations | ✅ Wired in `/api/conversations/[id]/paths/[pathId]/merge/route.ts` |
 
 ### 4.2 Usage Example

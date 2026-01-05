@@ -35,10 +35,13 @@ const cacheErrorCounter = meter.createCounter('cache.errors.total', {
 
 /**
  * Backend interface for cache operations
+ *
+ * Note: RedisKeyValueClient from types.ts implements this interface exactly.
+ * You can pass RedisKeyValueClient directly to createTransparentCache without an adapter.
  */
 export interface CacheBackend {
   get(key: string): Promise<string | null>;
-  set(key: string, value: string, ttlSeconds: number): Promise<void>;
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;
   del(key: string): Promise<void>;
 }
 

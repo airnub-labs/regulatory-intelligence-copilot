@@ -21,6 +21,12 @@ export {
   recordMergePreview,
   recordMessageScroll,
   recordMessageEdit,
+  // E2B metrics
+  recordE2BSandboxOperation,
+  recordE2BExecution,
+  recordE2BCost,
+  recordE2BResourceUsage,
+  recordE2BError,
 } from './businessMetrics.js';
 
 // Compaction Metrics
@@ -108,3 +114,44 @@ export {
   type EmailConfig,
   type PagerDutyConfig,
 } from './costTracking/index.js';
+
+// E2B Pricing & Cost Tracking
+export {
+  SupabaseE2BPricingService,
+  SupabaseE2BCostTrackingService,
+  type E2BPricingService,
+  type E2BCostTrackingService,
+  type E2BResourceUsage,
+  type E2BCostCalculation,
+  type E2BCostRecord,
+  type E2BQuotaCheckResult,
+  estimateE2BCost,
+  calculateAndRecordE2BCost,
+  initE2BCostTracking,
+  getE2BPricingService,
+  getE2BCostTrackingService,
+  getE2BPricingServiceIfInitialized,
+  getE2BCostTrackingServiceIfInitialized,
+} from './e2b/index.js';
+
+// Cost Estimation (Pre-Operation Quota Checks)
+export {
+  type CostEstimationService,
+  type ConfidenceLevel,
+  type LLMOperationType,
+  type E2BOperationType,
+  type LLMCostEstimateParams,
+  type E2BCostEstimateParams,
+  type LLMCostEstimate,
+  type E2BCostEstimate,
+  SupabaseCostEstimationService,
+  initCostEstimationService,
+  getCostEstimationService,
+  getCostEstimationServiceIfInitialized,
+  FALLBACK_LLM_COST_ESTIMATES,
+  FALLBACK_E2B_COST_ESTIMATES,
+  DEFAULT_LLM_COST_ESTIMATE,
+  DEFAULT_E2B_COST_ESTIMATE,
+  getLLMCostEstimateFallback,
+  getE2BCostEstimateFallback,
+} from './costEstimation/index.js';
