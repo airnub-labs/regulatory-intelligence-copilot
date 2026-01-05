@@ -1061,7 +1061,7 @@ export class CachingConversationStore implements ConversationStore {
     // Cache the result
     if (record) {
       try {
-        await this.redis.setex(key, this.ttlSeconds, JSON.stringify(record));
+        await this.redis.set(key, JSON.stringify(record), this.ttlSeconds);
       } catch {
         // Ignore cache write errors
       }

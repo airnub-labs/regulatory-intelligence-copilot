@@ -25,7 +25,6 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   createKeyValueClient,
   resolveRedisBackend,
-  createRedisCacheBackend,
   createTransparentCache,
   type TransparentCache,
 } from '@reg-copilot/reg-intel-cache';
@@ -109,11 +108,9 @@ export const initializeE2BCostTracking = (): void => {
     let cache: TransparentCache<any> | undefined;
 
     if (redisClient && redisBackend) {
-      // Redis is available - create cache with adapter
-      const cacheBackend = createRedisCacheBackend(redisClient);
-
+      // Redis is available - pass client directly to TransparentCache
       cache = createTransparentCache(
-        cacheBackend,
+        redisClient,
         redisBackend.backend,
         { defaultTtlSeconds: 3600 } // 1 hour TTL
       );

@@ -18,7 +18,6 @@ import {
 import {
   createKeyValueClient,
   resolveRedisBackend,
-  createRedisCacheBackend,
   createTransparentCache,
   type TransparentCache,
 } from '@reg-copilot/reg-intel-cache';
@@ -72,17 +71,15 @@ export const initializeCostEstimation = (): void => {
     let e2bCache: TransparentCache<number> | undefined;
 
     if (redisClient && redisBackend) {
-      // Redis is available - create caches with adapter
-      const cacheBackend = createRedisCacheBackend(redisClient);
-
+      // Redis is available - pass client directly to TransparentCache
       llmCache = createTransparentCache(
-        cacheBackend,
+        redisClient,
         redisBackend.backend,
         { defaultTtlSeconds: 3600 } // 1 hour TTL
       );
 
       e2bCache = createTransparentCache(
-        cacheBackend,
+        redisClient,
         redisBackend.backend,
         { defaultTtlSeconds: 3600 } // 1 hour TTL
       );

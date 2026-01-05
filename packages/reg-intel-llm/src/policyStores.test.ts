@@ -80,13 +80,13 @@ function createMockRedisClient(options: { shouldFail?: boolean } = {}): RedisKey
       }
       return entry.value;
     }),
-    setex: vi.fn(async (key: string, seconds: number, value: string) => {
+    set: vi.fn(async (key: string, value: string, seconds?: number) => {
       if (shouldFail) {
         throw new Error('Redis connection failed');
       }
       cache[key] = {
         value,
-        expiresAt: Date.now() + seconds * 1000,
+        expiresAt: seconds ? Date.now() + seconds * 1000 : Date.now() + 31536000 * 1000, // Default 1 year
       };
       return 'OK';
     }),
@@ -192,10 +192,10 @@ describe('CachingPolicyStore', () => {
 
       // Verify cache was populated
       expect(redis.get).toHaveBeenCalledWith('copilot:llm:policy:tenant-1');
-      expect(redis.setex).toHaveBeenCalledWith(
+      expect(redis.set).toHaveBeenCalledWith(
         'copilot:llm:policy:tenant-1',
-        300,
-        JSON.stringify(policy)
+        JSON.stringify(policy),
+        300
       );
     });
 
@@ -317,7 +317,7 @@ describe('CachingPolicyStore', () => {
       expect(result).toEqual(policy);
 
       // Verify cache was populated
-      expect(redis.setex).toHaveBeenCalled();
+      expect(redis.set).toHaveBeenCalled();
     });
   });
 
@@ -389,10 +389,10 @@ describe('Store Construction', () => {
     await cachingStore.setPolicy(policy);
     await cachingStore.getPolicy('tenant-9');
 
-    expect(redis.setex).toHaveBeenCalledWith(
+    expect(redis.set).toHaveBeenCalledWith(
       'copilot:llm:policy:tenant-9',
-      600,
-      expect.any(String)
+      expect.any(String),
+      600
     );
   });
 });

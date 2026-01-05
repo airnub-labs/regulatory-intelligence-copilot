@@ -21,7 +21,6 @@ import {
   describeRedisBackendSelection,
   resolveRedisBackend,
   createTransparentCache,
-  createRedisCacheBackend,
   type RedisKeyValueClient,
   type CacheBackend,
   type TransparentCache as BaseTransparentCache,
@@ -192,7 +191,8 @@ function createDistributedCache(): DistributedCache {
     const client = backend ? createKeyValueClient(backend) : null;
 
     if (backend && client) {
-      cacheBackend = createRedisCacheBackend(client);
+      // RedisKeyValueClient implements CacheBackend directly - no adapter needed
+      cacheBackend = client;
       backendType = backend.backend; // 'redis' or 'upstash' from ResolvedBackend discriminant
 
       const summary = describeRedisBackendSelection(backend);
