@@ -2419,3 +2419,312 @@ interface CostAnomalyDetectionService {
 - Updated all performance benchmarks and test results
 - Documented 9-stage lifecycle attribution
 - Documented default quota auto-seeding trigger
+- Updated with Cost Estimation Service (Phase 3 Extension)
+
+---
+
+## Cost Estimation Service (Phase 3 Extension)
+
+**Status**: ✅ IMPLEMENTED
+**Date**: 2026-01-05
+**Purpose**: Database-backed cost estimates for pre-request quota checks
+
+### Overview
+
+The Cost Estimation Service provides cost estimates for quota checks BEFORE operations begin. This is separate from actual cost recording (billing), which happens AFTER operations complete.
+
+### Key Distinction
+
+| Aspect | Cost Estimation (PRE-request) | Cost Recording (POST-request) |
+|--------|-------------------------------|-------------------------------|
+| **When** | Before operation starts | After operation completes |
+| **Purpose** | Quota enforcement | Billing/accounting |
+| **Accuracy** | Conservative estimates OK | Must be exact |
+| **Fallback** | ✅ Uses ENUM constants | ❌ No fallbacks |
+| **Failure Mode** | Use fallback, quota enforced | Skip recording, warn only |
+| **Tables** | `*_cost_estimates` | `*_cost_records` |
+| **Module** | `costEstimation/` | `costTracking/` |
+
+### Architecture
+
+```
+┌──────────────────────┐
+│ LLM Request or       │
+│ E2B Sandbox Creation │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ CostEstimationService.getEstimate()     │
+│ 1. Check in-memory cache (1hr TTL)      │
+│ 2. Query database                        │
+│ 3. Fallback to ENUM constants            │
+│ 4. Return number (NEVER null)            │
+└──────────┬───────────────────────────────┘
+           │ estimate: number
+           ▼
+┌──────────────────────────────────────────┐
+│ Quota Check (ALWAYS happens)             │
+│ - checkLLMQuotaBeforeRequest()           │
+│ - E2B quotaCheckCallback()               │
+└──────────┬───────────────────────────────┘
+           │
+           ▼
+┌──────────────────────────────────────────┐
+│ Operation Proceeds or 429 Response       │
+└──────────────────────────────────────────┘
+```
+
+### Database Tables
+
+#### LLM Cost Estimates
+
+```sql
+copilot_internal.llm_cost_estimates
+  ├── provider (text)           -- 'anthropic', 'openai'
+  ├── model (text)               -- 'claude-3-sonnet-20240229'
+  ├── operation_type (text)     -- 'chat', 'tool_use', 'embedding'
+  ├── estimated_cost_usd (numeric)
+  ├── confidence_level (text)   -- 'conservative', 'typical', 'optimistic'
+  ├── description (text)
+  ├── assumptions (text)
+  ├── effective_date (timestamptz)
+  └── expires_at (timestamptz)
+
+UNIQUE(provider, model, operation_type, confidence_level)
+```
+
+#### E2B Cost Estimates
+
+```sql
+copilot_internal.e2b_cost_estimates
+  ├── tier (text)                    -- 'standard', 'gpu', 'high-memory'
+  ├── region (text)                  -- 'us-east-1'
+  ├── operation_type (text)          -- 'standard_session', 'quick_task'
+  ├── expected_duration_seconds (int)
+  ├── estimated_cost_usd (numeric)
+  ├── confidence_level (text)
+  ├── description (text)
+  ├── assumptions (text)
+  ├── effective_date (timestamptz)
+  └── expires_at (timestamptz)
+
+UNIQUE(tier, region, operation_type, confidence_level)
+```
+
+### Fallback ENUM Constants
+
+When database unavailable, service falls back to hardcoded constants in code:
+
+**Location**: `packages/reg-intel-observability/src/costEstimation/fallbacks.ts`
+
+**Structure**:
+```typescript
+// LLM: provider → model → operation → confidence → cost
+FALLBACK_LLM_COST_ESTIMATES = {
+  anthropic: {
+    'claude-3-sonnet-20240229': {
+      chat: { conservative: 0.05, typical: 0.03, optimistic: 0.02 },
+      tool_use: { conservative: 0.08, typical: 0.05, optimistic: 0.03 },
+    },
+  },
+  // ... more providers
+};
+
+// E2B: tier → region → operation → confidence → cost
+FALLBACK_E2B_COST_ESTIMATES = {
+  standard: {
+    'us-east-1': {
+      standard_session: { conservative: 0.03, typical: 0.025, optimistic: 0.02 },
+      quick_task: { conservative: 0.006, typical: 0.005, optimistic: 0.004 },
+    },
+  },
+  // ... more tiers
+};
+```
+
+**Critical**: Fallback ENUMs ensure quota enforcement NEVER disabled.
+
+### Service Implementation
+
+```typescript
+export class SupabaseCostEstimationService {
+  async getLLMCostEstimate(params): Promise<number> {
+    // 1. Check cache
+    const cached = this.cache.get(key);
+    if (cached !== null) return cached;
+
+    // 2. Query database
+    try {
+      const dbValue = await this.client
+        .from('copilot_internal.llm_cost_estimates')
+        .select('estimated_cost_usd')
+        .eq('provider', params.provider)
+        .eq('model', params.model)
+        .eq('operation_type', params.operationType)
+        .eq('confidence_level', params.confidenceLevel)
+        .maybeSingle();
+
+      if (dbValue) {
+        this.cache.set(key, dbValue);
+        return dbValue; // Database value (preferred)
+      }
+    } catch (error) {
+      logger.warn('Database query failed, using fallback');
+    }
+
+    // 3. Fallback to ENUM
+    const fallback = getLLMCostEstimateFallback(params);
+    this.cache.set(key, fallback);
+    return fallback; // ALWAYS returns a number
+  }
+}
+```
+
+### Integration Points
+
+#### Chat API (LLM Quota Check)
+
+```typescript
+// apps/demo-web/src/app/api/chat/route.ts
+const costEstimator = getCostEstimationService();
+let estimatedCost: number;
+
+if (costEstimator) {
+  // Database-backed service available
+  estimatedCost = await costEstimator.getLLMCostEstimate({
+    provider: 'anthropic',
+    model: 'claude-3-sonnet-20240229',
+    operationType: 'chat',
+    confidenceLevel: 'conservative',
+  });
+} else {
+  // Fallback directly to ENUM
+  estimatedCost = getLLMCostEstimateFallback(...);
+}
+
+// Quota check ALWAYS happens
+const quotaCheck = await checkLLMQuotaBeforeRequest(tenantId, estimatedCost);
+```
+
+#### E2B Sandbox (E2B Quota Check)
+
+```typescript
+// packages/reg-intel-conversations/src/executionContextManager.ts
+const costEstimator = getCostEstimationServiceIfInitialized();
+let estimatedCostUsd: number;
+
+if (costEstimator) {
+  estimatedCostUsd = await costEstimator.getE2BCostEstimate({
+    tier: 'standard',
+    region: 'us-east-1',
+    operationType: 'standard_session',
+    confidenceLevel: 'conservative',
+  });
+} else {
+  estimatedCostUsd = getE2BCostEstimateFallback(...);
+}
+
+// Quota check ALWAYS happens
+await quotaCheckCallback(tenantId, estimatedCostUsd);
+```
+
+### Caching Strategy
+
+- **Type**: In-memory cache per service instance
+- **TTL**: 1 hour (3600 seconds)
+- **Key Format**: `${provider}:${model}:${operation}:${confidence}`
+- **Invalidation**: Automatic TTL expiration
+- **Manual Clear**: `service.clearCache()`
+
+### Maintenance Operations
+
+#### Update Database Estimate
+
+```sql
+-- Update existing estimate
+UPDATE copilot_internal.llm_cost_estimates
+SET estimated_cost_usd = 0.06, updated_at = NOW()
+WHERE provider = 'anthropic'
+  AND model = 'claude-3-sonnet-20240229'
+  AND operation_type = 'chat'
+  AND confidence_level = 'conservative';
+
+-- Add new model
+INSERT INTO copilot_internal.llm_cost_estimates
+  (provider, model, operation_type, estimated_cost_usd, confidence_level, description)
+VALUES
+  ('anthropic', 'claude-4-sonnet', 'chat', 0.07, 'conservative', 'Claude 4 Sonnet estimate');
+```
+
+#### Update Fallback ENUM
+
+```typescript
+// Edit: packages/reg-intel-observability/src/costEstimation/fallbacks.ts
+'claude-3-sonnet-20240229': {
+  chat: { conservative: 0.06, typical: 0.04, optimistic: 0.03 }, // Updated
+},
+```
+
+Deploy code change.
+
+### Monitoring
+
+**Key Metrics**:
+- Fallback usage rate (target: <1%)
+- Database query success rate (target: >99%)
+- Cache hit rate (target: >80%)
+- Estimate accuracy vs actual costs
+
+**Log Patterns**:
+```
+INFO: "LLM cost estimate retrieved from database"
+WARN: "Failed to query cost estimate, using fallback"
+INFO: "Cost estimation service not initialized, using fallback ENUM"
+```
+
+### Troubleshooting
+
+**Issue**: Fallback usage rate >5%
+**Action**: Check database connectivity, verify table permissions
+
+**Issue**: Estimates inaccurate
+**Action**: Compare to actual costs, update database values and fallback ENUMs
+
+**Issue**: Quota not enforced
+**Action**: Verify service initialized, check fallback ENUMs deployed
+
+### Migration
+
+Migration: `supabase/migrations/20260105000002_cost_estimates.sql`
+
+Tables created:
+- `copilot_internal.llm_cost_estimates` (seeded with common models)
+- `copilot_internal.e2b_cost_estimates` (seeded with all tiers)
+
+Helper functions:
+- `copilot_internal.get_llm_cost_estimate()`
+- `copilot_internal.get_e2b_cost_estimate()`
+
+### Documentation
+
+- **Implementation Guide**: `docs/implementation/COST_ESTIMATION_SERVICE_IMPLEMENTATION.md`
+- **DevOps Guide**: `docs/devops/COST_ESTIMATION_MANAGEMENT.md`
+- **Migration**: `supabase/migrations/20260105000002_cost_estimates.sql`
+
+### Code Locations
+
+**Service**:
+- `packages/reg-intel-observability/src/costEstimation/service.ts`
+- `packages/reg-intel-observability/src/costEstimation/fallbacks.ts`
+- `packages/reg-intel-observability/src/costEstimation/types.ts`
+
+**Initialization**:
+- `apps/demo-web/src/lib/costEstimation.ts`
+
+**Integration**:
+- `apps/demo-web/src/app/api/chat/route.ts` (LLM)
+- `packages/reg-intel-conversations/src/executionContextManager.ts` (E2B)
+- `apps/demo-web/src/lib/costTracking.ts` (quota check function)
+
+---

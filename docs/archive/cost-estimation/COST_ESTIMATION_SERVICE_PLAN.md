@@ -1,5 +1,31 @@
 # Cost Estimation Service Implementation Plan
 
+> **⚠️ IMPORTANT - ACTUAL IMPLEMENTATION DIFFERS FROM THIS PLAN**
+>
+> This plan document has been **ARCHIVED** because the actual implementation took a different approach based on clarified requirements:
+>
+> **This Plan Said (INCORRECT)**:
+> - "No hardcoded fallbacks"
+> - "Return null and skip quota checks when database unavailable"
+> - "No data is better than inaccurate data" for quota estimation
+>
+> **Actual Implementation (CORRECT)**:
+> - **Fallback ENUM constants ARE used** when database unavailable (in `fallbacks.ts`)
+> - **Quota checks ALWAYS happen** - never skipped
+> - Service ALWAYS returns a `number`, never `null`
+> - "No data is better than inaccurate data" applies ONLY to actual cost recording for billing, NOT to pre-request quota estimation
+>
+> **See Actual Documentation**:
+> - Implementation: `docs/implementation/COST_ESTIMATION_SERVICE_IMPLEMENTATION.md`
+> - DevOps Guide: `docs/devops/COST_ESTIMATION_MANAGEMENT.md`
+> - Architecture: `docs/architecture/COST_TRACKING_ARCHITECTURE.md` (Cost Estimation section)
+>
+> **Archived on**: 2026-01-05
+>
+> ---
+>
+> ## Original Plan (DO NOT USE - See note above)
+
 ## Overview
 
 Replace all hardcoded cost estimates with database-backed estimates using transparent caching. **No hardcoded fallbacks** - if database estimates are unavailable, return null and skip quota checks (no data is better than inaccurate data).
