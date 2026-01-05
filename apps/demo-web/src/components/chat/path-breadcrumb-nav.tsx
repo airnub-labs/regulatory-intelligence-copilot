@@ -7,6 +7,7 @@ import {
   scrollToMessage,
   type NavigateOptions,
 } from '@reg-copilot/reg-intel-ui';
+import { recordBreadcrumbNavigate, recordPathSwitch } from '@reg-copilot/reg-intel-observability';
 
 interface PathBreadcrumbNavProps {
   /** Called when user navigates to a different path */
@@ -45,14 +46,33 @@ function PathBreadcrumbNavContent({
     activePath,
     messages,
     switchPath,
+    conversationId,
   } = useConversationPaths();
 
   const handleBreadcrumbNavigate = async (
     pathId: string,
     options?: NavigateOptions
   ) => {
+    const fromPathId = activePath?.id ?? 'unknown';
+
+    // Record breadcrumb navigation metric
+    recordBreadcrumbNavigate({
+      fromPathId,
+      toPathId: pathId,
+      pathDepth: paths.length,
+      conversationId,
+    });
+
     // Switch to the selected path
     await switchPath(pathId);
+
+    // Record path switch metric
+    recordPathSwitch({
+      fromPathId,
+      toPathId: pathId,
+      switchMethod: 'breadcrumb',
+      conversationId,
+    });
 
     // Notify parent if callback provided
     if (onPathSwitch) {
