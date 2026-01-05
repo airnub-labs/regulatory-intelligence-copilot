@@ -21,6 +21,12 @@ export {
   recordMergePreview,
   recordMessageScroll,
   recordMessageEdit,
+  // E2B metrics
+  recordE2BSandboxOperation,
+  recordE2BExecution,
+  recordE2BCost,
+  recordE2BResourceUsage,
+  recordE2BError,
 } from './businessMetrics.js';
 
 // Compaction Metrics
@@ -108,3 +114,17 @@ export {
   type EmailConfig,
   type PagerDutyConfig,
 } from './costTracking/index.js';
+
+// E2B Pricing & Cost Tracking
+export {
+  SupabaseE2BPricingService,
+  SupabaseE2BCostTrackingService,
+  type E2BPricingService,
+  type E2BCostTrackingService,
+  type E2BResourceUsage,
+  type E2BCostCalculation,
+  type E2BCostRecord,
+  type E2BQuotaCheckResult,
+  estimateE2BCost,
+  calculateAndRecordE2BCost,
+} from './e2b/index.js';

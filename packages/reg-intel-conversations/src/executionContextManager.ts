@@ -404,9 +404,7 @@ export class ExecutionContextManager {
         }
       );
     } else {
-      this.logger.debug(
-        'E2B quota check callback not configured, proceeding without quota validation'
-      );
+      this.logger.debug({}, 'E2B quota check callback not configured, proceeding without quota validation');
     }
 
     // Track sandbox creation duration for Phase 4 metrics

@@ -12,7 +12,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { createLogger } from '../logging.js';
+import { createLogger } from '../logger.js';
 
 const logger = createLogger('CostAnomalyDetection');
 
@@ -185,12 +185,12 @@ export class CostAnomalyDetectionService {
       });
 
       if (error) {
-        logger.error('Failed to calculate cost baseline', { error, tenantId, resourceType });
+        logger.error({ error, tenantId, resourceType }, 'Failed to calculate cost baseline');
         return null;
       }
 
       if (!data || data.length === 0 || data[0].sample_size === 0) {
-        logger.info('Insufficient data for baseline calculation', { tenantId, resourceType, lookbackDays });
+        logger.info({ tenantId, resourceType, lookbackDays }, 'Insufficient data for baseline calculation');
         return null;
       }
 
@@ -213,7 +213,7 @@ export class CostAnomalyDetectionService {
         calculatedAt: now,
       };
     } catch (error) {
-      logger.error('Error calculating baseline', { error, tenantId, resourceType });
+      logger.error({ error, tenantId, resourceType }, 'Error calculating baseline');
       return null;
     }
   }
@@ -234,7 +234,7 @@ export class CostAnomalyDetectionService {
       // Get baseline
       const baseline = await this.calculateBaseline(tenantId, resourceType);
       if (!baseline || baseline.stdDev === 0) {
-        logger.debug('No baseline available for anomaly detection', { tenantId, resourceType });
+        logger.debug({ tenantId, resourceType }, 'No baseline available for anomaly detection');
         return [];
       }
 
@@ -261,7 +261,7 @@ export class CostAnomalyDetectionService {
       });
 
       if (todayError || !todayData || todayData.length === 0) {
-        logger.error('Failed to get today cost', { error: todayError, tenantId });
+        logger.error({ error: todayError, tenantId }, 'Failed to get today cost');
         return [];
       }
 
@@ -290,18 +290,18 @@ export class CostAnomalyDetectionService {
         });
       }
 
-      logger.debug('Anomaly detection completed', {
+      logger.debug({
         tenantId,
         resourceType,
         anomaliesFound: anomalies.length,
         todayCost,
         baseline: baseline.mean,
         deviation,
-      });
+      }, 'Anomaly detection completed');
 
       return anomalies;
     } catch (error) {
-      logger.error('Error detecting anomalies', { error, tenantId, resourceType });
+      logger.error({ error, tenantId, resourceType }, 'Error detecting anomalies');
       return [];
     }
   }
@@ -393,7 +393,7 @@ export class CostAnomalyDetectionService {
         trendDescription,
       };
     } catch (error) {
-      logger.error('Error forecasting costs', { error, tenantId, resourceType });
+      logger.error({ error, tenantId, resourceType }, 'Error forecasting costs');
       return null;
     }
   }
@@ -481,11 +481,11 @@ export class CostAnomalyDetectionService {
         });
       }
 
-      logger.debug('Generated cost recommendations', { tenantId, count: recommendations.length });
+      logger.debug({ tenantId, count: recommendations.length }, 'Generated cost recommendations');
 
       return recommendations;
     } catch (error) {
-      logger.error('Error generating recommendations', { error, tenantId });
+      logger.error({ error, tenantId }, 'Error generating recommendations');
       return [];
     }
   }

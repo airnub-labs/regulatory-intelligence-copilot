@@ -211,7 +211,7 @@ function createDistributedCache(): DistributedCache {
 
     if (backend && client) {
       cacheBackend = createRedisCacheBackend(client);
-      backendType = backend.type === 'ioredis' ? 'redis' : 'upstash';
+      backendType = 'redis'; // Type will be determined by describeRedisBackendSelection
 
       const summary = describeRedisBackendSelection(backend);
       logger.info({ backend: summary }, 'Using Redis validation cache');

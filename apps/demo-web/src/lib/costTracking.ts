@@ -11,6 +11,7 @@
  * ```
  */
 
+import type { QuotaDetails } from './quotaErrors';
 import {
   initCostTracking,
   SupabaseCostStorage,
@@ -270,7 +271,7 @@ export const getCostTracking = () => {
 export const checkLLMQuotaBeforeRequest = async (
   tenantId: string,
   estimatedCostUsd: number = 0.05 // Default estimate for typical chat request
-): Promise<{ allowed: boolean; reason?: string; quotaDetails?: any }> => {
+): Promise<{ allowed: boolean; reason?: string; quotaDetails?: QuotaDetails }> => {
   try {
     // Get cost tracking service
     const costService = getCostTracking();

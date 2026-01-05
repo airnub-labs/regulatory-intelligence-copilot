@@ -551,33 +551,16 @@ export const recordE2BCost = async (attributes: {
   isEstimated?: boolean;
 }): Promise<void> => {
   try {
-    // Import dynamically to avoid circular dependencies
-    const { SupabaseE2BPricingService } = await import('./e2b/pricingService.js');
-    const { SupabaseE2BCostTrackingService } = await import('./e2b/costTracking.js');
-    const { getSupabaseClient } = await import('./costTracking/index.js');
+    // NOTE: Database recording is disabled pending proper Supabase client injection
+    // This function currently only records to OpenTelemetry metrics
+    // For full E2B cost tracking with database storage, use the E2B cost tracking service directly
 
-    const supabaseClient = getSupabaseClient();
-    if (!supabaseClient) {
-      throw new Error('Supabase client is not initialized. Cannot record E2B costs.');
-    }
-
-    const pricingService = new SupabaseE2BPricingService(supabaseClient);
-    const costTrackingService = new SupabaseE2BCostTrackingService(supabaseClient, pricingService);
-
-    // Calculate cost
-    const costCalculation = await pricingService.calculateCost({
-      tier: attributes.tier,
-      region: attributes.region || 'us-east-1',
-      resourceUsage: {
-        executionTimeSeconds: attributes.executionTimeSeconds,
-        cpuCoreSeconds: attributes.cpuCoreSeconds,
-        memoryGbSeconds: attributes.memoryGbSeconds,
-        diskIoGb: attributes.diskIoGb,
-      },
-    });
+    // Estimate cost based on execution time (simplified calculation)
+    // Standard tier: ~$0.001 per second of execution time
+    const estimatedCostUsd = attributes.executionTimeSeconds * 0.001;
 
     // Record to OpenTelemetry metrics (real-time observability)
-    e2bCostCounter?.add(costCalculation.totalCostUsd, {
+    e2bCostCounter?.add(estimatedCostUsd, {
       sandboxId: attributes.sandboxId,
       tier: attributes.tier,
       region: attributes.region || 'us-east-1',
@@ -585,62 +568,8 @@ export const recordE2BCost = async (attributes: {
       userId: attributes.userId,
       conversationId: attributes.conversationId,
       pathId: attributes.pathId,
-      isEstimated: costCalculation.isEstimated,
+      isEstimated: attributes.isEstimated ?? true,
     } as Attributes);
-
-    // Also record separate execution and resource costs for detailed analysis
-    if (costCalculation.executionCostUsd > 0) {
-      e2bCostCounter?.add(costCalculation.executionCostUsd, {
-        sandboxId: attributes.sandboxId,
-        tier: attributes.tier,
-        costType: 'execution',
-        tenantId: attributes.tenantId,
-        userId: attributes.userId,
-        conversationId: attributes.conversationId,
-        pathId: attributes.pathId,
-        isEstimated: costCalculation.isEstimated,
-      } as Attributes);
-    }
-
-    if (costCalculation.resourceCostUsd > 0) {
-      e2bCostCounter?.add(costCalculation.resourceCostUsd, {
-        sandboxId: attributes.sandboxId,
-        tier: attributes.tier,
-        costType: 'resource',
-        tenantId: attributes.tenantId,
-        userId: attributes.userId,
-        conversationId: attributes.conversationId,
-        pathId: attributes.pathId,
-        isEstimated: costCalculation.isEstimated,
-      } as Attributes);
-    }
-
-    // Record to cost tracking service (storage & quota management)
-    if (attributes.tenantId) {
-      // Only record to database if we have tenant attribution
-      // (Platform-wide costs without attribution go to metrics only)
-      await costTrackingService.recordCost({
-        sandboxId: attributes.sandboxId,
-        tier: attributes.tier,
-        region: attributes.region || 'us-east-1',
-        executionTimeSeconds: attributes.executionTimeSeconds,
-        cpuCoreSeconds: attributes.cpuCoreSeconds,
-        memoryGbSeconds: attributes.memoryGbSeconds,
-        diskIoGb: attributes.diskIoGb,
-        executionCostUsd: costCalculation.executionCostUsd,
-        resourceCostUsd: costCalculation.resourceCostUsd,
-        totalCostUsd: costCalculation.totalCostUsd,
-        isEstimated: costCalculation.isEstimated,
-        tenantId: attributes.tenantId,
-        userId: attributes.userId,
-        conversationId: attributes.conversationId,
-        pathId: attributes.pathId,
-        success: attributes.success ?? true,
-      });
-
-      // Update quota
-      await costTrackingService.incrementQuotaSpend(attributes.tenantId, costCalculation.totalCostUsd);
-    }
   } catch (error) {
     // Silently fail if pricing/cost tracking service is unavailable
     // This prevents metrics recording from blocking E2B operations

@@ -20,7 +20,7 @@ import {
   executionContextManager,
 } from '@/lib/server/conversations';
 import { checkLLMQuotaBeforeRequest } from '@/lib/costTracking';
-import { createQuotaExceededStreamResponse, calculateRetryAfter } from '@/lib/quotaErrors';
+import { createQuotaExceededStreamResponse } from '@/lib/quotaErrors';
 
 // Force dynamic rendering to avoid build-time initialization
 export const dynamic = 'force-dynamic';
@@ -63,10 +63,6 @@ export async function POST(request: Request) {
       userId: session.user.id,
       reason: quotaCheck.reason,
     }, 'Chat request denied due to LLM quota exceeded');
-
-    const retryAfter = quotaCheck.quotaDetails?.period
-      ? calculateRetryAfter(quotaCheck.quotaDetails.period)
-      : undefined;
 
     return createQuotaExceededStreamResponse(
       'llm',
