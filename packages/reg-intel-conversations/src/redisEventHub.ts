@@ -130,7 +130,7 @@ export class RedisConversationEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, message => {
+        await this.subscriber.subscribe(channel, (message: string) => {
           if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
             return;
           }
@@ -313,7 +313,7 @@ export class RedisConversationListEventHub {
   private async subscribeToChannel(channel: string, key: string): Promise<void> {
     await this.activeChannels.getOrCreate(channel, async () => {
       try {
-        await this.subscriber.subscribe(channel, message => {
+        await this.subscriber.subscribe(channel, (message: string) => {
           if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
             return;
           }

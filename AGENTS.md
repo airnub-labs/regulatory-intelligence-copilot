@@ -36,6 +36,14 @@ v0.6 updates the v0.4 agent design by:
 - Fix TypeScript and lint errors instead of masking them with `typescript.ignoreBuildErrors` (or similar) in `next.config.js`.
 - When addressing TypeScript type errors, do not "fix" them by changing types to `any` unless a design decision explicitly requires `any`.
 - Never use `// eslint-disable-next-line` or similar comments to suppress linting errors or warnings. Instead, refactor the code to address the underlying design or architecture issue causing the warning. If a pattern genuinely requires deviation from lint rules, it indicates a need to reconsider the design, improve type safety, or update the lint configuration appropriately.
+- **Code removal discipline:** Never remove code that appears unused, unwired, or incomplete without first verifying its purpose through appropriate documentation and/or explicit confirmation. Code may be intentionally staged for future integration once dependent components are implemented. When encountering code that looks like dead code or incomplete wiring:
+  1. Search for related documentation explaining the implementation roadmap
+  2. Check for comments indicating the code is staged for future use
+  3. Look for related issues, PRs, or design documents
+  4. If unclear after investigation, explicitly ask before removing
+  5. Never assume incomplete wiring means code should be deleted - it may be waiting for other dependencies
+
+  This prevents accidental removal of deliberately staged functionality and ensures intentional architecture decisions are preserved.
 
 **Package organization and open-source readiness:**
 

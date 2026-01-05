@@ -211,7 +211,7 @@ function createDistributedCache(): DistributedCache {
 
     if (backend && client) {
       cacheBackend = createRedisCacheBackend(client);
-      backendType = 'redis'; // Type will be determined by describeRedisBackendSelection
+      backendType = backend.backend; // 'redis' or 'upstash' from ResolvedBackend discriminant
 
       const summary = describeRedisBackendSelection(backend);
       logger.info({ backend: summary }, 'Using Redis validation cache');
