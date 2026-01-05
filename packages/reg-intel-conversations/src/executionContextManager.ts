@@ -22,6 +22,7 @@ import {
   recordE2BSandboxOperation,
   recordE2BError,
   getCostEstimationServiceIfInitialized,
+  getE2BCostEstimateFallback,
 } from '@reg-copilot/reg-intel-observability';
 import type {
   ExecutionContextStore,
@@ -371,12 +372,12 @@ export class ExecutionContextManager {
     // PRE-REQUEST QUOTA CHECK (Phase 3)
     // Check E2B quota BEFORE creating expensive sandbox if quota callback is configured
     if (this.config.quotaCheckCallback) {
-      // Get cost estimation service
+      // Get cost estimate (database or fallback)
       const costEstimator = getCostEstimationServiceIfInitialized();
-      let estimatedCostUsd: number | null = null;
+      let estimatedCostUsd: number;
 
       if (costEstimator) {
-        // Query database for cost estimate
+        // Use service (will query database and fallback to ENUM if unavailable)
         estimatedCostUsd = await costEstimator.getE2BCostEstimate({
           tier: 'standard',
           region: 'us-east-1',
@@ -384,55 +385,49 @@ export class ExecutionContextManager {
           confidenceLevel: 'conservative',
         });
       } else {
-        this.logger.warn(
-          'Cost estimation service not initialized - quota check will be skipped. ' +
-          'Initialize cost estimation service at application startup for quota enforcement.'
+        // Service not initialized - use fallback ENUM directly
+        this.logger.info('Cost estimation service not initialized, using fallback ENUM constant for quota check');
+        estimatedCostUsd = getE2BCostEstimateFallback(
+          'standard',
+          'us-east-1',
+          'standard_session',
+          'conservative'
         );
       }
 
-      if (estimatedCostUsd === null) {
-        // No cost estimate available - skip quota check
-        // Per requirement: no data is better than inaccurate data
-        this.logger.warn(
-          'E2B cost estimate unavailable - skipping quota check. ' +
-          'Ensure cost estimates are seeded in database (copilot_internal.e2b_cost_estimates table).'
-        );
-      } else {
-        // Cost estimate available - perform quota check
-        // Capture callback in local const to preserve type narrowing in async context
-        const quotaCheckCallback = this.config.quotaCheckCallback;
+      // Capture callback in local const to preserve type narrowing in async context
+      const quotaCheckCallback = this.config.quotaCheckCallback;
 
-        await withSpan(
-          'e2b.quota_check',
-          {
-            'e2b.tenant_id': input.tenantId,
-            'e2b.estimated_cost': estimatedCostUsd,
-          },
-          async () => {
-            this.logger.debug({
+      await withSpan(
+        'e2b.quota_check',
+        {
+          'e2b.tenant_id': input.tenantId,
+          'e2b.estimated_cost': estimatedCostUsd,
+        },
+        async () => {
+          this.logger.debug({
+            tenantId: input.tenantId,
+            estimatedCostUsd,
+          }, 'Checking E2B quota before sandbox creation');
+
+          const quotaResult = await quotaCheckCallback(input.tenantId, estimatedCostUsd);
+
+          if (!quotaResult.allowed) {
+            this.logger.error('E2B quota exceeded, cannot create sandbox', {
               tenantId: input.tenantId,
               estimatedCostUsd,
-            }, 'Checking E2B quota before sandbox creation');
+              reason: quotaResult.reason,
+            });
 
-            const quotaResult = await quotaCheckCallback(input.tenantId, estimatedCostUsd!);
-
-            if (!quotaResult.allowed) {
-              this.logger.error('E2B quota exceeded, cannot create sandbox', {
-                tenantId: input.tenantId,
-                estimatedCostUsd,
-                reason: quotaResult.reason,
-              });
-
-              throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
-            }
-
-            this.logger.debug({
-              tenantId: input.tenantId,
-              quotaCheckPassed: true,
-            }, 'E2B quota check passed');
+            throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
           }
-        );
-      }
+
+          this.logger.debug({
+            tenantId: input.tenantId,
+            quotaCheckPassed: true,
+          }, 'E2B quota check passed');
+        }
+      );
     } else {
       this.logger.debug({}, 'E2B quota check callback not configured, proceeding without quota validation');
     }

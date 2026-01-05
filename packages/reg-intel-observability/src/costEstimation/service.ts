@@ -4,7 +4,13 @@
  * Provides database-backed cost estimates for quota checks BEFORE operations.
  * Uses in-memory caching with TTL to reduce database queries.
  *
- * IMPORTANT: Returns null when estimates unavailable - no data is better than inaccurate data.
+ * IMPORTANT: ALWAYS returns a value for quota enforcement.
+ * - First tries database (most accurate, updateable)
+ * - Falls back to manually-updateable ENUM constants if database unavailable
+ * - Never returns null/undefined (would disable quota enforcement)
+ *
+ * Note: This is for PRE-REQUEST quota estimation only. Actual cost recording
+ * (businessMetrics.ts) must use database-backed pricing, never fallbacks.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,6 +20,10 @@ import type {
   E2BCostEstimateParams,
   ConfidenceLevel,
 } from './types.js';
+import {
+  getLLMCostEstimateFallback,
+  getE2BCostEstimateFallback,
+} from './fallbacks.js';
 
 const logger = createLogger('CostEstimationService');
 
@@ -68,15 +78,17 @@ class MemoryCache<T> {
 export interface CostEstimationService {
   /**
    * Get LLM cost estimate from database with caching
-   * @returns Estimated cost in USD, or null if unavailable
+   * Falls back to ENUM constants if database unavailable
+   * @returns Estimated cost in USD (ALWAYS returns a value for quota enforcement)
    */
-  getLLMCostEstimate(params: LLMCostEstimateParams): Promise<number | null>;
+  getLLMCostEstimate(params: LLMCostEstimateParams): Promise<number>;
 
   /**
    * Get E2B cost estimate from database with caching
-   * @returns Estimated cost in USD, or null if unavailable
+   * Falls back to ENUM constants if database unavailable
+   * @returns Estimated cost in USD (ALWAYS returns a value for quota enforcement)
    */
-  getE2BCostEstimate(params: E2BCostEstimateParams): Promise<number | null>;
+  getE2BCostEstimate(params: E2BCostEstimateParams): Promise<number>;
 
   /**
    * Clear all cached estimates
@@ -103,17 +115,17 @@ interface E2BCostEstimateRow {
  */
 export class SupabaseCostEstimationService implements CostEstimationService {
   private readonly client: SupabaseClient<any, any, any>;
-  private readonly llmCache: MemoryCache<number | null>;
-  private readonly e2bCache: MemoryCache<number | null>;
+  private readonly llmCache: MemoryCache<number>;
+  private readonly e2bCache: MemoryCache<number>;
 
   constructor(client: SupabaseClient<any, any, any>, options?: { cacheTtlSeconds?: number }) {
     this.client = client;
     const ttl = options?.cacheTtlSeconds ?? 3600; // Default 1 hour
-    this.llmCache = new MemoryCache<number | null>(ttl);
-    this.e2bCache = new MemoryCache<number | null>(ttl);
+    this.llmCache = new MemoryCache<number>(ttl);
+    this.e2bCache = new MemoryCache<number>(ttl);
   }
 
-  async getLLMCostEstimate(params: LLMCostEstimateParams): Promise<number | null> {
+  async getLLMCostEstimate(params: LLMCostEstimateParams): Promise<number> {
     const operationType = params.operationType ?? 'chat';
     const confidenceLevel = params.confidenceLevel ?? 'conservative';
 
@@ -122,7 +134,7 @@ export class SupabaseCostEstimationService implements CostEstimationService {
 
     // Check cache
     const cached = this.llmCache.get(cacheKey);
-    if (cached !== undefined) {
+    if (cached !== null) {
       logger.debug({ cacheKey, estimate: cached }, 'LLM cost estimate cache hit');
       return cached;
     }
@@ -143,35 +155,53 @@ export class SupabaseCostEstimationService implements CostEstimationService {
         .maybeSingle();
 
       if (error) {
-        logger.error({ error, params }, 'Failed to query LLM cost estimate');
-        // Cache null to avoid repeated failed queries
-        this.llmCache.set(cacheKey, null);
-        return null;
-      }
-
-      const estimate = data?.estimated_cost_usd ? Number(data.estimated_cost_usd) : null;
-
-      // Cache result (even if null)
-      this.llmCache.set(cacheKey, estimate);
-
-      if (estimate === null) {
-        logger.warn(
-          { params },
-          'LLM cost estimate not found in database - quota check will be skipped'
+        logger.warn({ error, params }, 'Failed to query LLM cost estimate from database, using fallback');
+        const fallback = getLLMCostEstimateFallback(
+          params.provider,
+          params.model,
+          operationType,
+          confidenceLevel
         );
-      } else {
-        logger.debug({ params, estimate }, 'LLM cost estimate retrieved from database');
+        this.llmCache.set(cacheKey, fallback);
+        return fallback;
       }
 
-      return estimate;
+      const dbEstimate = data?.estimated_cost_usd ? Number(data.estimated_cost_usd) : null;
+
+      if (dbEstimate !== null) {
+        // Database value available - use it
+        logger.debug({ params, estimate: dbEstimate }, 'LLM cost estimate retrieved from database');
+        this.llmCache.set(cacheKey, dbEstimate);
+        return dbEstimate;
+      } else {
+        // No database value - use fallback
+        logger.info(
+          { params },
+          'LLM cost estimate not found in database, using fallback ENUM constant'
+        );
+        const fallback = getLLMCostEstimateFallback(
+          params.provider,
+          params.model,
+          operationType,
+          confidenceLevel
+        );
+        this.llmCache.set(cacheKey, fallback);
+        return fallback;
+      }
     } catch (error) {
-      logger.error({ error, params }, 'Exception while querying LLM cost estimate');
-      this.llmCache.set(cacheKey, null);
-      return null;
+      logger.warn({ error, params }, 'Exception while querying LLM cost estimate, using fallback');
+      const fallback = getLLMCostEstimateFallback(
+        params.provider,
+        params.model,
+        operationType,
+        confidenceLevel
+      );
+      this.llmCache.set(cacheKey, fallback);
+      return fallback;
     }
   }
 
-  async getE2BCostEstimate(params: E2BCostEstimateParams): Promise<number | null> {
+  async getE2BCostEstimate(params: E2BCostEstimateParams): Promise<number> {
     const region = params.region ?? 'us-east-1';
     const operationType = params.operationType ?? 'standard_session';
     const confidenceLevel = params.confidenceLevel ?? 'conservative';
@@ -181,7 +211,7 @@ export class SupabaseCostEstimationService implements CostEstimationService {
 
     // Check cache
     const cached = this.e2bCache.get(cacheKey);
-    if (cached !== undefined) {
+    if (cached !== null) {
       logger.debug({ cacheKey, estimate: cached }, 'E2B cost estimate cache hit');
       return cached;
     }
@@ -202,31 +232,49 @@ export class SupabaseCostEstimationService implements CostEstimationService {
         .maybeSingle();
 
       if (error) {
-        logger.error({ error, params }, 'Failed to query E2B cost estimate');
-        // Cache null to avoid repeated failed queries
-        this.e2bCache.set(cacheKey, null);
-        return null;
-      }
-
-      const estimate = data?.estimated_cost_usd ? Number(data.estimated_cost_usd) : null;
-
-      // Cache result (even if null)
-      this.e2bCache.set(cacheKey, estimate);
-
-      if (estimate === null) {
-        logger.warn(
-          { params },
-          'E2B cost estimate not found in database - quota check will be skipped'
+        logger.warn({ error, params }, 'Failed to query E2B cost estimate from database, using fallback');
+        const fallback = getE2BCostEstimateFallback(
+          params.tier,
+          region,
+          operationType,
+          confidenceLevel
         );
-      } else {
-        logger.debug({ params, estimate }, 'E2B cost estimate retrieved from database');
+        this.e2bCache.set(cacheKey, fallback);
+        return fallback;
       }
 
-      return estimate;
+      const dbEstimate = data?.estimated_cost_usd ? Number(data.estimated_cost_usd) : null;
+
+      if (dbEstimate !== null) {
+        // Database value available - use it
+        logger.debug({ params, estimate: dbEstimate }, 'E2B cost estimate retrieved from database');
+        this.e2bCache.set(cacheKey, dbEstimate);
+        return dbEstimate;
+      } else {
+        // No database value - use fallback
+        logger.info(
+          { params },
+          'E2B cost estimate not found in database, using fallback ENUM constant'
+        );
+        const fallback = getE2BCostEstimateFallback(
+          params.tier,
+          region,
+          operationType,
+          confidenceLevel
+        );
+        this.e2bCache.set(cacheKey, fallback);
+        return fallback;
+      }
     } catch (error) {
-      logger.error({ error, params }, 'Exception while querying E2B cost estimate');
-      this.e2bCache.set(cacheKey, null);
-      return null;
+      logger.warn({ error, params }, 'Exception while querying E2B cost estimate, using fallback');
+      const fallback = getE2BCostEstimateFallback(
+        params.tier,
+        region,
+        operationType,
+        confidenceLevel
+      );
+      this.e2bCache.set(cacheKey, fallback);
+      return fallback;
     }
   }
 

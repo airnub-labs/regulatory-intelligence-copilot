@@ -2,6 +2,7 @@
  * Cost Estimation Module
  *
  * Provides database-backed cost estimates for quota checks BEFORE operations.
+ * Falls back to manually-updateable ENUM constants when database unavailable.
  */
 
 export type {
@@ -21,3 +22,12 @@ export {
   getCostEstimationService,
   getCostEstimationServiceIfInitialized,
 } from './service.js';
+
+export {
+  FALLBACK_LLM_COST_ESTIMATES,
+  FALLBACK_E2B_COST_ESTIMATES,
+  DEFAULT_LLM_COST_ESTIMATE,
+  DEFAULT_E2B_COST_ESTIMATE,
+  getLLMCostEstimateFallback,
+  getE2BCostEstimateFallback,
+} from './fallbacks.js';

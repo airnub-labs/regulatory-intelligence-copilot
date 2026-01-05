@@ -148,4 +148,10 @@ export {
   initCostEstimationService,
   getCostEstimationService,
   getCostEstimationServiceIfInitialized,
+  FALLBACK_LLM_COST_ESTIMATES,
+  FALLBACK_E2B_COST_ESTIMATES,
+  DEFAULT_LLM_COST_ESTIMATE,
+  DEFAULT_E2B_COST_ESTIMATE,
+  getLLMCostEstimateFallback,
+  getE2BCostEstimateFallback,
 } from './costEstimation/index.js';

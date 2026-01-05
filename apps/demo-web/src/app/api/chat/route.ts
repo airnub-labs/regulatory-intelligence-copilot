@@ -22,6 +22,7 @@ import {
 import { checkLLMQuotaBeforeRequest } from '@/lib/costTracking';
 import { createQuotaExceededStreamResponse, calculateRetryAfter } from '@/lib/quotaErrors';
 import { getCostEstimationService } from '@/lib/costEstimation';
+import { getLLMCostEstimateFallback } from '@reg-copilot/reg-intel-observability';
 
 // Force dynamic rendering to avoid build-time initialization
 export const dynamic = 'force-dynamic';
@@ -57,18 +58,27 @@ export async function POST(request: Request) {
   // Check LLM quota BEFORE processing chat request
   // This provides fast failure with proper HTTP 429 response instead of failing mid-stream
 
-  // Get cost estimate from database (replaces hardcoded 0.05 default)
+  // Get cost estimate (database or fallback)
   const costEstimator = getCostEstimationService();
-  let estimatedCost: number | undefined;
+  let estimatedCost: number;
 
   if (costEstimator) {
-    const estimate = await costEstimator.getLLMCostEstimate({
+    // Use service (will query database and fallback to ENUM if unavailable)
+    estimatedCost = await costEstimator.getLLMCostEstimate({
       provider: 'anthropic',
       model: 'claude-3-sonnet-20240229', // TODO: Get from actual model being used
       operationType: 'chat',
       confidenceLevel: 'conservative',
     });
-    estimatedCost = estimate ?? undefined;
+  } else {
+    // Service not initialized - use fallback ENUM directly
+    logger.info('Cost estimation service not initialized, using fallback ENUM constant for quota check');
+    estimatedCost = getLLMCostEstimateFallback(
+      'anthropic',
+      'claude-3-sonnet-20240229',
+      'chat',
+      'conservative'
+    );
   }
 
   const quotaCheck = await checkLLMQuotaBeforeRequest(tenantId, estimatedCost);
