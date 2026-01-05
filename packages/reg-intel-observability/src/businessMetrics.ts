@@ -640,29 +640,14 @@ export const recordE2BCost = async (attributes: {
         await costTrackingService.incrementQuotaSpend(attributes.tenantId, costCalculation.totalCostUsd);
       }
     } else {
-      // Services not initialized - gracefully degrade to metrics-only recording
-      // NOTE: This should NOT happen in production if E2B is enabled
-      // E2B cost tracking must be initialized at app startup via initE2BCostTracking()
+      // Services not initialized - skip cost recording entirely
+      // No data is better than inaccurate data
       console.warn(
         'E2B cost tracking services not initialized. ' +
-        'Recording to metrics only without database persistence. ' +
+        'Skipping cost recording - no data is better than inaccurate data. ' +
         'Call initE2BCostTracking() at application startup for full cost tracking.'
       );
-
-      // Fallback: record basic metrics using simple estimation
-      // This ensures we don't lose all observability if initialization fails
-      const estimatedCostUsd = attributes.executionTimeSeconds * 0.001; // ~$0.001/sec estimate
-
-      e2bCostCounter?.add(estimatedCostUsd, {
-        sandboxId: attributes.sandboxId,
-        tier: attributes.tier,
-        region: attributes.region || 'us-east-1',
-        tenantId: attributes.tenantId,
-        userId: attributes.userId,
-        conversationId: attributes.conversationId,
-        pathId: attributes.pathId,
-        isEstimated: true,
-      } as Attributes);
+      // No metrics recorded when services unavailable
     }
   } catch (error) {
     // Silently fail to prevent metrics recording from blocking E2B operations

@@ -264,15 +264,28 @@ export const getCostTracking = () => {
  * This provides better UX by rejecting the request immediately with HTTP 429
  * instead of starting the stream and failing mid-response.
  *
+ * IMPORTANT: If no cost estimate is provided, the quota check is SKIPPED.
+ * Per requirement: "no data is better than inaccurate data"
+ *
  * @param tenantId - Tenant ID to check quota for
- * @param estimatedCostUsd - Estimated cost of the LLM request (default: $0.05 for typical chat)
+ * @param estimatedCostUsd - Estimated cost of the LLM request (optional - if not provided, quota check is skipped)
  * @returns Quota check result with allowed status and optional reason
  */
 export const checkLLMQuotaBeforeRequest = async (
   tenantId: string,
-  estimatedCostUsd: number = 0.05 // Default estimate for typical chat request
+  estimatedCostUsd?: number
 ): Promise<{ allowed: boolean; reason?: string; quotaDetails?: QuotaDetails }> => {
   try {
+    // If no cost estimate provided, skip quota check
+    // Per requirement: no data is better than inaccurate data
+    if (estimatedCostUsd === undefined) {
+      logger.warn(
+        'No LLM cost estimate provided - skipping quota check. ' +
+        'Ensure cost estimates are seeded in database (copilot_internal.llm_cost_estimates table).'
+      );
+      return { allowed: true };
+    }
+
     // Get cost tracking service
     const costService = getCostTracking();
 

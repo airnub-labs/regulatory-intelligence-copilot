@@ -127,4 +127,25 @@ export {
   type E2BQuotaCheckResult,
   estimateE2BCost,
   calculateAndRecordE2BCost,
+  initE2BCostTracking,
+  getE2BPricingService,
+  getE2BCostTrackingService,
+  getE2BPricingServiceIfInitialized,
+  getE2BCostTrackingServiceIfInitialized,
 } from './e2b/index.js';
+
+// Cost Estimation (Pre-Operation Quota Checks)
+export {
+  type CostEstimationService,
+  type ConfidenceLevel,
+  type LLMOperationType,
+  type E2BOperationType,
+  type LLMCostEstimateParams,
+  type E2BCostEstimateParams,
+  type LLMCostEstimate,
+  type E2BCostEstimate,
+  SupabaseCostEstimationService,
+  initCostEstimationService,
+  getCostEstimationService,
+  getCostEstimationServiceIfInitialized,
+} from './costEstimation/index.js';

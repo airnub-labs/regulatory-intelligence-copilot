@@ -21,6 +21,7 @@ import {
   withSpan,
   recordE2BSandboxOperation,
   recordE2BError,
+  getCostEstimationServiceIfInitialized,
 } from '@reg-copilot/reg-intel-observability';
 import type {
   ExecutionContextStore,
@@ -370,42 +371,68 @@ export class ExecutionContextManager {
     // PRE-REQUEST QUOTA CHECK (Phase 3)
     // Check E2B quota BEFORE creating expensive sandbox if quota callback is configured
     if (this.config.quotaCheckCallback) {
-      // Capture callback in local const to preserve type narrowing in async context
-      const quotaCheckCallback = this.config.quotaCheckCallback;
+      // Get cost estimation service
+      const costEstimator = getCostEstimationServiceIfInitialized();
+      let estimatedCostUsd: number | null = null;
 
-      await withSpan(
-        'e2b.quota_check',
-        {
-          'e2b.tenant_id': input.tenantId,
-          'e2b.estimated_cost': 0.03,
-        },
-        async () => {
-          // Estimated cost: ~$0.03 for 5 minutes at standard tier ($0.0001/sec)
-          const estimatedCostUsd = 0.03;
+      if (costEstimator) {
+        // Query database for cost estimate
+        estimatedCostUsd = await costEstimator.getE2BCostEstimate({
+          tier: 'standard',
+          region: 'us-east-1',
+          operationType: 'standard_session',
+          confidenceLevel: 'conservative',
+        });
+      } else {
+        this.logger.warn(
+          'Cost estimation service not initialized - quota check will be skipped. ' +
+          'Initialize cost estimation service at application startup for quota enforcement.'
+        );
+      }
 
-          this.logger.debug({
-            tenantId: input.tenantId,
-            estimatedCostUsd,
-          }, 'Checking E2B quota before sandbox creation');
+      if (estimatedCostUsd === null) {
+        // No cost estimate available - skip quota check
+        // Per requirement: no data is better than inaccurate data
+        this.logger.warn(
+          'E2B cost estimate unavailable - skipping quota check. ' +
+          'Ensure cost estimates are seeded in database (copilot_internal.e2b_cost_estimates table).'
+        );
+      } else {
+        // Cost estimate available - perform quota check
+        // Capture callback in local const to preserve type narrowing in async context
+        const quotaCheckCallback = this.config.quotaCheckCallback;
 
-          const quotaResult = await quotaCheckCallback(input.tenantId, estimatedCostUsd);
-
-          if (!quotaResult.allowed) {
-            this.logger.error('E2B quota exceeded, cannot create sandbox', {
+        await withSpan(
+          'e2b.quota_check',
+          {
+            'e2b.tenant_id': input.tenantId,
+            'e2b.estimated_cost': estimatedCostUsd,
+          },
+          async () => {
+            this.logger.debug({
               tenantId: input.tenantId,
               estimatedCostUsd,
-              reason: quotaResult.reason,
-            });
+            }, 'Checking E2B quota before sandbox creation');
 
-            throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
+            const quotaResult = await quotaCheckCallback(input.tenantId, estimatedCostUsd!);
+
+            if (!quotaResult.allowed) {
+              this.logger.error('E2B quota exceeded, cannot create sandbox', {
+                tenantId: input.tenantId,
+                estimatedCostUsd,
+                reason: quotaResult.reason,
+              });
+
+              throw new Error(`E2B quota exceeded: ${quotaResult.reason || 'Cannot create sandbox due to quota limits'}`);
+            }
+
+            this.logger.debug({
+              tenantId: input.tenantId,
+              quotaCheckPassed: true,
+            }, 'E2B quota check passed');
           }
-
-          this.logger.debug({
-            tenantId: input.tenantId,
-            quotaCheckPassed: true,
-          }, 'E2B quota check passed');
-        }
-      );
+        );
+      }
     } else {
       this.logger.debug({}, 'E2B quota check callback not configured, proceeding without quota validation');
     }

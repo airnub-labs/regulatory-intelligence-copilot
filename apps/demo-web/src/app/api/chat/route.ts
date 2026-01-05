@@ -21,6 +21,7 @@ import {
 } from '@/lib/server/conversations';
 import { checkLLMQuotaBeforeRequest } from '@/lib/costTracking';
 import { createQuotaExceededStreamResponse, calculateRetryAfter } from '@/lib/quotaErrors';
+import { getCostEstimationService } from '@/lib/costEstimation';
 
 // Force dynamic rendering to avoid build-time initialization
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,22 @@ export async function POST(request: Request) {
   // PRE-REQUEST QUOTA CHECK (Phase 3)
   // Check LLM quota BEFORE processing chat request
   // This provides fast failure with proper HTTP 429 response instead of failing mid-stream
-  const quotaCheck = await checkLLMQuotaBeforeRequest(tenantId);
+
+  // Get cost estimate from database (replaces hardcoded 0.05 default)
+  const costEstimator = getCostEstimationService();
+  let estimatedCost: number | undefined;
+
+  if (costEstimator) {
+    const estimate = await costEstimator.getLLMCostEstimate({
+      provider: 'anthropic',
+      model: 'claude-3-sonnet-20240229', // TODO: Get from actual model being used
+      operationType: 'chat',
+      confidenceLevel: 'conservative',
+    });
+    estimatedCost = estimate ?? undefined;
+  }
+
+  const quotaCheck = await checkLLMQuotaBeforeRequest(tenantId, estimatedCost);
 
   if (!quotaCheck.allowed) {
     logger.warn({
