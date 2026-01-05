@@ -1,8 +1,9 @@
 /**
  * E2B Cost Tracking Initialization
  *
- * Sets up the E2B cost tracking system with Supabase storage and quota management.
- * Integrates with the execution context lifecycle for automatic cost recording.
+ * Sets up the E2B cost tracking system with Supabase storage, Redis/Upstash caching,
+ * and quota management. Integrates with the execution context lifecycle for automatic
+ * cost recording.
  *
  * Usage:
  * Import this module at app startup to initialize E2B cost tracking:
@@ -21,6 +22,13 @@ import {
   createCostAlert,
 } from '@reg-copilot/reg-intel-observability';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  createKeyValueClient,
+  resolveRedisBackend,
+  RedisCacheBackendAdapter,
+  createTransparentCache,
+  type TransparentCache,
+} from '@reg-copilot/reg-intel-cache';
 
 const logger = createLogger('E2BCostTracking');
 
@@ -94,8 +102,38 @@ export const initializeE2BCostTracking = (): void => {
       'Using Supabase for E2B cost tracking storage'
     );
 
-    // Initialize services
-    e2bPricingService = new SupabaseE2BPricingService(client);
+    // Set up Redis/Upstash caching for E2B pricing data
+    const redisBackend = resolveRedisBackend('cache');
+    const redisClient = createKeyValueClient(redisBackend);
+
+    let cache: TransparentCache<any> | undefined;
+
+    if (redisClient && redisBackend) {
+      // Redis is available - create cache with adapter
+      const cacheBackend = new RedisCacheBackendAdapter(redisClient);
+
+      cache = createTransparentCache(
+        cacheBackend,
+        redisBackend.backend,
+        { defaultTtlSeconds: 3600 } // 1 hour TTL
+      );
+
+      logger.info(
+        { backend: redisBackend.backend, ttl: 3600 },
+        'E2B pricing service will use Redis/Upstash caching'
+      );
+    } else {
+      logger.warn(
+        'Redis/Upstash not configured - E2B pricing will query database on every request. ' +
+        'Configure REDIS_URL or UPSTASH_REDIS_REST_URL for optimal performance.'
+      );
+    }
+
+    // Initialize services with optional Redis cache
+    e2bPricingService = new SupabaseE2BPricingService(client, {
+      cache,
+      cacheTtlSeconds: 3600, // 1 hour TTL
+    });
     e2bCostTrackingService = new SupabaseE2BCostTrackingService(client, e2bPricingService);
 
     // Register services globally in the observability package

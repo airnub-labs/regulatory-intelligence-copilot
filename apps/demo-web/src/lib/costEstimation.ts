@@ -5,6 +5,7 @@
  * used in quota checks BEFORE operations (E2B sandbox creation, LLM requests).
  *
  * IMPORTANT: This replaces all hardcoded cost estimates with database lookups.
+ * Uses Redis/Upstash caching when available for optimal performance.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -14,16 +15,23 @@ import {
   createLogger,
   type CostEstimationService,
 } from '@reg-copilot/reg-intel-observability';
+import {
+  createKeyValueClient,
+  resolveRedisBackend,
+  RedisCacheBackendAdapter,
+  createTransparentCache,
+  type TransparentCache,
+} from '@reg-copilot/reg-intel-cache';
 
 const logger = createLogger('CostEstimation');
 
 let costEstimationService: SupabaseCostEstimationService | null = null;
 
 /**
- * Initialize cost estimation service with Supabase backend
+ * Initialize cost estimation service with Supabase backend and Redis caching
  *
  * This should be called at application startup to enable database-backed
- * cost estimates for quota checks.
+ * cost estimates for quota checks with Redis caching for performance.
  */
 export const initializeCostEstimation = (): void => {
   try {
@@ -39,7 +47,7 @@ export const initializeCostEstimation = (): void => {
     if (!supabaseUrl || !supabaseKey) {
       logger.warn(
         'Supabase credentials not available, skipping cost estimation initialization. ' +
-        'Quota checks will be skipped when cost estimates unavailable. ' +
+        'Quota checks will use fallback ENUM constants. ' +
         'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.'
       );
       return;
@@ -56,9 +64,45 @@ export const initializeCostEstimation = (): void => {
       },
     });
 
+    // Set up Redis/Upstash caching for cost estimates
+    const redisBackend = resolveRedisBackend('cache');
+    const redisClient = createKeyValueClient(redisBackend);
+
+    let llmCache: TransparentCache<number> | undefined;
+    let e2bCache: TransparentCache<number> | undefined;
+
+    if (redisClient && redisBackend) {
+      // Redis is available - create caches with adapter
+      const cacheBackend = new RedisCacheBackendAdapter(redisClient);
+
+      llmCache = createTransparentCache(
+        cacheBackend,
+        redisBackend.backend,
+        { defaultTtlSeconds: 3600 } // 1 hour TTL
+      );
+
+      e2bCache = createTransparentCache(
+        cacheBackend,
+        redisBackend.backend,
+        { defaultTtlSeconds: 3600 } // 1 hour TTL
+      );
+
+      logger.info(
+        { backend: redisBackend.backend, ttl: 3600 },
+        'Cost estimation service will use Redis/Upstash caching'
+      );
+    } else {
+      logger.warn(
+        'Redis/Upstash not configured - cost estimation will query database on every request. ' +
+        'Configure REDIS_URL or UPSTASH_REDIS_REST_URL for optimal performance.'
+      );
+    }
+
     // Create and initialize service
     costEstimationService = new SupabaseCostEstimationService(client, {
       cacheTtlSeconds: 3600, // 1 hour cache TTL
+      llmCache,
+      e2bCache,
     });
 
     initCostEstimationService(costEstimationService);
