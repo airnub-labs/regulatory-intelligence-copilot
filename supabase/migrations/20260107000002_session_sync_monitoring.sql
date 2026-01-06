@@ -75,9 +75,11 @@ COMMENT ON FUNCTION public.log_session_mismatch IS
 -- =====================================================
 -- 3. Function: Get Current Tenant ID
 -- =====================================================
+-- Note: Keeps DEFAULT auth.uid() from original definition in 20260105000003
+-- (PostgreSQL doesn't allow removing defaults with CREATE OR REPLACE)
 
 CREATE OR REPLACE FUNCTION public.get_current_tenant_id(
-  p_user_id uuid
+  p_user_id uuid DEFAULT auth.uid()
 )
 RETURNS uuid
 LANGUAGE plpgsql
