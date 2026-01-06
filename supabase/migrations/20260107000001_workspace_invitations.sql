@@ -22,11 +22,14 @@ CREATE TABLE copilot_internal.workspace_invitations (
   token text NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex'),
   expires_at timestamptz NOT NULL DEFAULT (NOW() + INTERVAL '7 days'),
   accepted_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT NOW(),
-
-  CONSTRAINT unique_pending_invitation UNIQUE (tenant_id, email)
-    WHERE accepted_at IS NULL AND expires_at > NOW()
+  created_at timestamptz NOT NULL DEFAULT NOW()
 );
+
+-- Partial unique index: one pending invitation per tenant+email
+-- (PostgreSQL doesn't support WHERE clauses in table-level UNIQUE constraints)
+CREATE UNIQUE INDEX unique_pending_invitation
+  ON copilot_internal.workspace_invitations(tenant_id, email)
+  WHERE accepted_at IS NULL AND expires_at > NOW();
 
 CREATE INDEX idx_workspace_invitations_token ON copilot_internal.workspace_invitations(token)
   WHERE accepted_at IS NULL;
