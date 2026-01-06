@@ -339,8 +339,10 @@ CREATE INDEX IF NOT EXISTS idx_e2b_cost_records_conversation
     WHERE conversation_id IS NOT NULL;
 
 -- Cost quotas indexes
-CREATE INDEX IF NOT EXISTS idx_cost_quotas_tenant_user
-    ON copilot_internal.cost_quotas(tenant_id, user_id);
+-- Note: cost_quotas uses scope/scope_id pattern, not tenant_id/user_id
+CREATE INDEX IF NOT EXISTS idx_cost_quotas_scope_resource
+    ON copilot_internal.cost_quotas(scope, scope_id, resource_type)
+    WHERE scope_id IS NOT NULL;
 
 -- ========================================
 -- Migration Complete
