@@ -51,7 +51,8 @@ create table if not exists copilot_internal.conversation_contexts (
 alter table copilot_internal.conversation_contexts enable row level security;
 
 -- Service role full access for maintenance and background jobs
-create policy if not exists conversation_contexts_service_role_full_access
+drop policy if exists conversation_contexts_service_role_full_access on copilot_internal.conversation_contexts;
+create policy conversation_contexts_service_role_full_access
   on copilot_internal.conversation_contexts
   for all
   to service_role
@@ -59,19 +60,22 @@ create policy if not exists conversation_contexts_service_role_full_access
   with check (true);
 
 -- Tenant-scoped access mirroring conversations table
-create policy if not exists conversation_contexts_tenant_read
+drop policy if exists conversation_contexts_tenant_read on copilot_internal.conversation_contexts;
+create policy conversation_contexts_tenant_read
   on copilot_internal.conversation_contexts
   for select
   to authenticated
   using (tenant_id = public.current_tenant_id());
 
-create policy if not exists conversation_contexts_tenant_write
+drop policy if exists conversation_contexts_tenant_write on copilot_internal.conversation_contexts;
+create policy conversation_contexts_tenant_write
   on copilot_internal.conversation_contexts
   for insert
   to authenticated
   with check (tenant_id = public.current_tenant_id());
 
-create policy if not exists conversation_contexts_tenant_update
+drop policy if exists conversation_contexts_tenant_update on copilot_internal.conversation_contexts;
+create policy conversation_contexts_tenant_update
   on copilot_internal.conversation_contexts
   for update
   to authenticated
