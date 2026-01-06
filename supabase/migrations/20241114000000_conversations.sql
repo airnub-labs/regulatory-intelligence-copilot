@@ -47,6 +47,37 @@ create table if not exists copilot_internal.conversation_contexts (
   updated_at timestamptz not null default now()
 );
 
+-- Enable RLS on conversation_contexts (enforces tenant isolation)
+alter table copilot_internal.conversation_contexts enable row level security;
+
+-- Service role full access for maintenance and background jobs
+create policy if not exists conversation_contexts_service_role_full_access
+  on copilot_internal.conversation_contexts
+  for all
+  to service_role
+  using (true)
+  with check (true);
+
+-- Tenant-scoped access mirroring conversations table
+create policy if not exists conversation_contexts_tenant_read
+  on copilot_internal.conversation_contexts
+  for select
+  to authenticated
+  using (tenant_id = public.current_tenant_id());
+
+create policy if not exists conversation_contexts_tenant_write
+  on copilot_internal.conversation_contexts
+  for insert
+  to authenticated
+  with check (tenant_id = public.current_tenant_id());
+
+create policy if not exists conversation_contexts_tenant_update
+  on copilot_internal.conversation_contexts
+  for update
+  to authenticated
+  using (tenant_id = public.current_tenant_id())
+  with check (tenant_id = public.current_tenant_id());
+
 create table if not exists copilot_internal.personas (
   id text primary key,
   label text not null,
