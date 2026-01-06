@@ -101,7 +101,86 @@ begin
   end if;
 
   ---------------------------------------------------------------------------
-  -- 2. Ensure an email identity exists (with provider_id)
+  -- 2. Create/update personal tenant for demo user (NEW: Multi-tenant architecture)
+  ---------------------------------------------------------------------------
+  -- Check if tenant exists
+  perform 1
+    from copilot_internal.tenants
+   where id = demo_tenant_id;
+
+  if not found then
+    -- Create personal tenant
+    insert into copilot_internal.tenants (
+      id,
+      name,
+      slug,
+      type,
+      owner_id,
+      plan,
+      created_at,
+      updated_at
+    )
+    values (
+      demo_tenant_id,
+      'Demo User''s Workspace',
+      'demo-user-workspace',
+      'personal',
+      demo_user_id,
+      'free',
+      demo_now,
+      demo_now
+    );
+
+    raise notice 'Created personal tenant for demo user: %', demo_tenant_id;
+  end if;
+
+  -- Ensure membership exists
+  insert into copilot_internal.tenant_memberships (
+    tenant_id,
+    user_id,
+    role,
+    status,
+    joined_at,
+    created_at,
+    updated_at
+  )
+  values (
+    demo_tenant_id,
+    demo_user_id,
+    'owner',
+    'active',
+    demo_now,
+    demo_now,
+    demo_now
+  )
+  on conflict (tenant_id, user_id) do update
+    set role = 'owner',
+        status = 'active',
+        updated_at = demo_now;
+
+  -- Ensure user preference exists (set demo tenant as active)
+  insert into copilot_internal.user_preferences (
+    user_id,
+    active_tenant_id,
+    preferences,
+    created_at,
+    updated_at
+  )
+  values (
+    demo_user_id,
+    demo_tenant_id,
+    '{}'::jsonb,
+    demo_now,
+    demo_now
+  )
+  on conflict (user_id) do update
+    set active_tenant_id = demo_tenant_id,
+        updated_at = demo_now;
+
+  raise notice 'Demo user tenant setup complete: user=%, tenant=%', demo_user_id, demo_tenant_id;
+
+  ---------------------------------------------------------------------------
+  -- 3. Ensure an email identity exists (with provider_id)
   ---------------------------------------------------------------------------
   perform 1
     from auth.identities
@@ -129,7 +208,7 @@ begin
   end if;
 
   ---------------------------------------------------------------------------
-  -- 3. Seed personas (idempotent)
+  -- 4. Seed personas (idempotent)
   ---------------------------------------------------------------------------
   insert into copilot_internal.personas (id, label, description, jurisdictions)
   values (
@@ -144,7 +223,7 @@ begin
         jurisdictions = excluded.jurisdictions;
 
   ---------------------------------------------------------------------------
-  -- 4. Seed quick prompts (idempotent)
+  -- 5. Seed quick prompts (idempotent)
   ---------------------------------------------------------------------------
   insert into copilot_internal.quick_prompts (
     id,
@@ -170,7 +249,7 @@ begin
         jurisdictions = excluded.jurisdictions;
 
   ---------------------------------------------------------------------------
-  -- 5. Ensure demo conversation exists
+  -- 6. Ensure demo conversation exists
   ---------------------------------------------------------------------------
   select id
     into demo_conv_id
@@ -204,7 +283,7 @@ begin
   end if;
 
   ---------------------------------------------------------------------------
-  -- 6. Ensure a primary path exists for the demo conversation
+  -- 7. Ensure a primary path exists for the demo conversation
   ---------------------------------------------------------------------------
   select id
     into demo_path_id
@@ -235,7 +314,7 @@ begin
   end if;
 
   ---------------------------------------------------------------------------
-  -- 7. Seed demo messages with valid path_id
+  -- 8. Seed demo messages with valid path_id
   ---------------------------------------------------------------------------
   delete from copilot_internal.conversation_messages
    where conversation_id = demo_conv_id;
@@ -270,7 +349,7 @@ begin
     );
 
   ---------------------------------------------------------------------------
-  -- 8. Seed / refresh conversation context
+  -- 9. Seed / refresh conversation context
   ---------------------------------------------------------------------------
   insert into copilot_internal.conversation_contexts (
     conversation_id,
