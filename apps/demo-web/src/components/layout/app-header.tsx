@@ -1,10 +1,15 @@
+"use client"
+
 import Link from "next/link"
+import { useState } from "react"
 import { LogOut, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "../theme/theme-toggle"
 import { Badge } from "../ui/badge"
 import { Button } from "../ui/button"
+import { TenantSwitcher } from "../TenantSwitcher"
+import { CreateWorkspaceModal } from "../CreateWorkspaceModal"
 
 interface HeaderAction {
   label: string
@@ -31,7 +36,10 @@ export function AppHeader({
   onSignOut,
   className,
 }: AppHeaderProps) {
+  const [showCreateWorkspace, setShowCreateWorkspace] = useState(false)
+
   return (
+    <>
     <header
       className={cn(
         "sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/70",
@@ -65,18 +73,26 @@ export function AppHeader({
             </Button>
           )}
           {userEmail && (
-            <div className="hidden items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground sm:flex">
-              <span className="truncate">{userEmail}</span>
-              {onSignOut && (
-                <Button size="icon" variant="ghost" onClick={onSignOut} title="Sign out">
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
+            <>
+              <TenantSwitcher onCreateWorkspace={() => setShowCreateWorkspace(true)} />
+              <div className="hidden items-center gap-2 rounded-full border px-3 py-1 text-xs text-muted-foreground sm:flex">
+                <span className="truncate">{userEmail}</span>
+                {onSignOut && (
+                  <Button size="icon" variant="ghost" onClick={onSignOut} title="Sign out">
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </>
           )}
           <ThemeToggle />
         </div>
       </div>
     </header>
+    <CreateWorkspaceModal
+      isOpen={showCreateWorkspace}
+      onClose={() => setShowCreateWorkspace(false)}
+    />
+    </>
   )
 }
