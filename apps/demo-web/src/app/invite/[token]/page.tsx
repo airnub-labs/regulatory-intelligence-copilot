@@ -93,7 +93,7 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
             <div>
               <h1 className="text-xl font-semibold">Workspace Invitation</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                You've been invited to join a workspace. Please sign in to accept.
+                You&apos;ve been invited to join a workspace. Please sign in to accept.
               </p>
             </div>
             <Button

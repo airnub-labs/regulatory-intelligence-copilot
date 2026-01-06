@@ -86,7 +86,7 @@ export function RestoreWorkspaceModal({
             <Info className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
             <div className="text-sm">
               <p className="font-medium text-blue-900 dark:text-blue-100">
-                Restore "{workspaceName}"
+                Restore &quot;{workspaceName}&quot;
               </p>
               <ul className="mt-2 space-y-1 text-blue-700 dark:text-blue-300">
                 <li>• Deleted on: {deletedDate}</li>
