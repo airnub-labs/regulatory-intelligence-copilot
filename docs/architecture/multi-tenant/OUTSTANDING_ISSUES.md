@@ -11,7 +11,7 @@
 - ✅ **HIGH-1**: Workspace Deletion Flow (COMPLETED 2026-01-06)
 - ✅ **HIGH-2**: Complete Workspace Invitation Flow (COMPLETED 2026-01-06)
 - ✅ **MEDIUM-1**: Session/DB Consistency on Workspace Switch (COMPLETED 2026-01-06)
-- 🔴 **MEDIUM-2**: Stale Active Tenant After Membership Removal (PENDING)
+- ✅ **MEDIUM-2**: Stale Active Tenant After Membership Removal (COMPLETED 2026-01-06)
 - 🔴 **LOW-1**: RLS Policy Performance Optimization (PENDING)
 
 ---
@@ -3015,6 +3015,7 @@ describe('Session Sync', () => {
 ### MEDIUM-2: Stale Active Tenant After Membership Removal 🔐
 
 **Priority**: 🟡 MEDIUM
+**Status**: ✅ **COMPLETED** (2026-01-06)
 **Estimated Effort**: 2-3 days
 **Risk**: User access to workspace after removal, confusing UX
 
@@ -3616,6 +3617,39 @@ describe('Membership Change Handling', () => {
 - `apps/demo-web/src/components/MembershipNotification.tsx` (NEW)
 - `apps/demo-web/src/lib/auth/sessionValidation.ts` (UPDATE)
 - `apps/demo-web/src/app/layout.tsx` (UPDATE - add MembershipNotification)
+
+#### Implementation Summary (2026-01-06)
+
+**Files Created/Modified:**
+- ✅ `supabase/migrations/20260107000003_membership_change_webhooks.sql` - Database trigger and event tracking
+- ✅ `apps/demo-web/src/hooks/useMembershipMonitor.ts` - Client-side monitoring hook with auto-switch
+- ✅ `apps/demo-web/src/components/MembershipNotification.tsx` - UI notification component
+- ✅ `apps/demo-web/src/lib/auth/sessionValidation.ts` - Added membership verification and auto-switch
+- ✅ `apps/demo-web/src/app/providers.tsx` - Integrated MembershipNotification
+- ✅ `apps/demo-web/src/hooks/useMembershipMonitor.test.ts` - Hook tests
+- ✅ `apps/demo-web/src/app/api/membership-events/route.test.ts` - Database function tests
+
+**Key Features Implemented:**
+- Database trigger tracks all membership changes (INSERT, UPDATE, DELETE)
+- Real-time event detection via 10-second polling
+- Automatic workspace switching when removed from active workspace
+- Toast-style notifications for membership changes (added, removed, role changed, suspended)
+- Session validation auto-switches workspace if access lost
+- Graceful handling: prefers personal workspace when auto-switching
+- Event acknowledgment system to prevent notification spam
+- Concurrent handling protection to prevent race conditions
+
+**Database Functions:**
+- `get_pending_membership_events(p_user_id)` - Returns unprocessed membership events
+- `mark_membership_events_processed(p_user_id, p_event_ids)` - Marks events as acknowledged
+- `verify_tenant_access(p_user_id, p_tenant_id)` - Checks if user has active access to workspace
+- `cleanup_old_membership_events()` - Removes old processed/stale events
+
+**Security Improvements:**
+- Prevents stale session access after membership removal
+- Forces workspace switch within 10 seconds (vs 5 minute validation interval)
+- No 401 errors - graceful auto-switch before user notices
+- Session validation double-checks membership on every auth check
 
 ---
 

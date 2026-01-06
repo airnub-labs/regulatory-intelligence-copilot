@@ -212,6 +212,67 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       .rpc('get_current_tenant_id', { p_user_id: userId })
       .single()
 
+    // MEDIUM-2: Verify user still has access to current tenant
+    // If removed from active workspace, auto-switch to another workspace
+    if (currentTenantId) {
+      const { data: access } = await adminSupabase
+        .rpc('verify_tenant_access', {
+          p_user_id: userId,
+          p_tenant_id: currentTenantId,
+        })
+        .single()
+
+      // If no longer has access, switch to another workspace
+      if (!access || !access.has_access) {
+        logger.warn(
+          { userId, tenantId: currentTenantId },
+          'User lost access to active tenant, auto-switching...'
+        )
+
+        // Get other workspaces
+        const { data: tenants } = await adminSupabase
+          .rpc('get_user_tenants')
+
+        if (tenants && tenants.length > 0) {
+          // Switch to first available workspace (prefer personal)
+          const personalWorkspace = tenants.find((t) => t.tenant_type === 'personal')
+          const targetWorkspace = personalWorkspace || tenants[0]
+          const newTenantId = targetWorkspace.tenant_id
+
+          logger.info(
+            { userId, oldTenantId: currentTenantId, newTenantId },
+            'Auto-switching to available workspace'
+          )
+
+          await adminSupabase.rpc('switch_tenant', {
+            p_tenant_id: newTenantId,
+          })
+
+          // Update cache with new tenant
+          await validationCache.set(userId, true, newTenantId)
+          authMetrics.recordCacheMiss(userId, validationDuration, true)
+
+          return {
+            isValid: true,
+            user: {
+              id: data.user.id,
+              email: data.user.email,
+              currentTenantId: newTenantId,
+            },
+          }
+        } else {
+          // No workspaces left - invalidate session
+          logger.warn({ userId }, 'User has no accessible workspaces remaining')
+          await validationCache.set(userId, false)
+          authMetrics.recordCacheMiss(userId, validationDuration, false)
+          return {
+            isValid: false,
+            error: 'No accessible workspaces',
+          }
+        }
+      }
+    }
+
     await validationCache.set(userId, true, currentTenantId)
     authMetrics.recordCacheMiss(userId, validationDuration, true)
 
