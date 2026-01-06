@@ -8,6 +8,18 @@ create schema if not exists copilot_internal;
 -- `identities_provider_provider_id_idx` created by Supabase instead of
 -- re-creating it here.
 
+-- Create helper function first (needed by RLS policies)
+create or replace function public.current_tenant_id()
+returns uuid
+language sql
+stable
+as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb -> 'app_metadata' ->> 'tenant_id',
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb -> 'user_metadata' ->> 'tenant_id'
+  )::uuid;
+$$;
+
 create table if not exists copilot_internal.conversations (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
@@ -97,17 +109,6 @@ create table if not exists copilot_internal.quick_prompts (
   persona_filter text[] null,
   jurisdictions text[] null
 );
-
-create or replace function public.current_tenant_id()
-returns uuid
-language sql
-stable
-as $$
-  select coalesce(
-    nullif(current_setting('request.jwt.claims', true), '')::jsonb -> 'app_metadata' ->> 'tenant_id',
-    nullif(current_setting('request.jwt.claims', true), '')::jsonb -> 'user_metadata' ->> 'tenant_id'
-  )::uuid;
-$$;
 
 create or replace view public.conversations_view as
   with request_context as (
