@@ -486,6 +486,60 @@ echo "✅ Tenant onboarding complete!"
 
 ---
 
+## Future: Adaptive Cost Estimation
+
+> **Status**: 📋 Proposed Enhancement
+> **Impact**: More accurate quota utilization tracking
+
+### What's Coming
+
+A future enhancement will introduce **Adaptive Output Token Estimation** that learns from user behavior to improve cost estimation accuracy. This will affect quota operations in the following ways:
+
+### Benefits for Operations
+
+| Aspect | Current | With Adaptive Estimation |
+|--------|---------|--------------------------|
+| Pre-request cost estimates | Static per-model | Personalized per-user |
+| Quota utilization accuracy | ~60% | >85% (target) |
+| False quota blocks | Higher (conservative) | Lower (accurate) |
+| User experience | Same limits for all | Tailored to usage patterns |
+
+### What Operations Teams Should Know
+
+1. **New Database Tables**: Three new tables will be added for token patterns:
+   - `user_token_patterns` - Per-user learned patterns
+   - `tenant_token_patterns` - Aggregated tenant patterns
+   - `platform_token_patterns` - Platform-wide defaults
+
+2. **New Monitoring Metrics**:
+   - `estimation_accuracy_ratio` - Compare estimated vs actual costs
+   - `token_pattern_source` - Track which fallback level is used
+   - `adaptive_cache_hit_rate` - Pattern lookup performance
+
+3. **New Environment Variables**:
+   ```bash
+   ADAPTIVE_TOKEN_ESTIMATION_ENABLED=true/false
+   ADAPTIVE_EMA_SMOOTHING_FACTOR=0.2
+   ADAPTIVE_ROLLOUT_PERCENT=10
+   ```
+
+4. **Aggregation Jobs**: New scheduled jobs will aggregate patterns:
+   - Tenant aggregation: Hourly
+   - Platform aggregation: Every 6 hours
+
+### Migration Impact
+
+- **Non-breaking**: Existing quota configuration unchanged
+- **Gradual rollout**: Feature-flagged, opt-in initially
+- **Fallback safe**: Falls back to current static estimates if disabled
+
+### Related Documentation
+
+- **Implementation Plan**: [`ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+- **Architecture**: [`COST_TRACKING_ARCHITECTURE.md`](../architecture/COST_TRACKING_ARCHITECTURE.md#future-enhancement-adaptive-output-token-estimation)
+
+---
+
 **END OF OPERATIONAL GUIDE**
 
 **Remember: NO QUOTA = UNLIMITED ACCESS. Always verify quota configuration during onboarding!**
