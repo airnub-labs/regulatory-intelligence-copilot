@@ -8,7 +8,7 @@
 ## Implementation Status
 
 - ✅ **CRITICAL-1**: Service Role Security Audit & Wrapper (COMPLETED 2026-01-06)
-- 🔴 **HIGH-1**: Workspace Deletion Flow (PENDING)
+- ✅ **HIGH-1**: Workspace Deletion Flow (COMPLETED 2026-01-06)
 - 🔴 **HIGH-2**: Complete Workspace Invitation Flow (PENDING)
 - 🔴 **MEDIUM-1**: Session/DB Consistency on Workspace Switch (PENDING)
 - 🔴 **MEDIUM-2**: Stale Active Tenant After Membership Removal (PENDING)
@@ -427,6 +427,7 @@ it('should log warning when creating unrestricted client', () => {
 ### HIGH-1: Workspace Deletion Flow 🗑️
 
 **Priority**: 🔴 HIGH
+**Status**: ✅ **COMPLETED** (2026-01-06)
 **Estimated Effort**: 3-4 days
 **Risk**: Orphaned data, broken references, user confusion
 
@@ -1046,6 +1047,50 @@ export function DeleteWorkspaceModal({
 - ✅ UI shows confirmation modal with workspace name verification
 - ✅ RLS policies exclude deleted workspaces
 - ✅ Audit log records deletions
+
+#### Implementation Summary (2026-01-06)
+
+**Files Created:**
+- `supabase/migrations/20260107000000_workspace_deletion.sql` - Database schema and functions
+- `apps/demo-web/src/app/api/workspaces/[id]/route.ts` - API endpoints for deletion/restoration/details
+- `apps/demo-web/src/components/DeleteWorkspaceModal.tsx` - Deletion confirmation UI
+- `apps/demo-web/src/components/RestoreWorkspaceModal.tsx` - Restoration UI
+- `apps/demo-web/src/app/api/workspaces/[id]/route.test.ts` - Comprehensive API tests
+
+**Database Changes:**
+1. **Soft Delete Columns**: Added `deleted_at` and `deleted_by` to `tenants` and `tenant_memberships` tables
+2. **RLS Policies**: Updated to exclude deleted workspaces from normal queries
+3. **Functions**:
+   - `delete_workspace()` - Validates and soft-deletes workspace
+   - `restore_workspace()` - Restores within 30-day grace period
+   - `cleanup_expired_deleted_workspaces()` - Hard deletes after grace period
+
+**API Endpoints:**
+- `DELETE /api/workspaces/[id]` - Soft delete workspace
+- `PATCH /api/workspaces/[id]` (action: restore) - Restore workspace
+- `GET /api/workspaces/[id]` - Get workspace details with deletion status
+
+**Key Features Implemented:**
+1. **Soft Delete with Grace Period** - 30 days to restore before permanent deletion
+2. **Validation** - Personal workspace protection, owner-only deletion, active context checks
+3. **Auto-Switch** - Users automatically switched to alternative workspace if deleting active one
+4. **Audit Trail** - All deletions logged with timestamp and user
+5. **Cost Record Preservation** - Cost records marked but NOT deleted (compliance requirement)
+6. **Member Notification** - Returns count of affected members
+7. **UI Components** - Full confirmation modal with workspace name verification
+8. **Restoration Flow** - Complete UI and API for workspace recovery
+
+**Security Safeguards:**
+- ✅ RLS policies automatically hide deleted workspaces
+- ✅ Personal workspaces cannot be deleted (prevents user lock-out)
+- ✅ Only owners can delete (prevents unauthorized deletion)
+- ✅ Active execution contexts block deletion (data integrity)
+- ✅ All operations use unrestricted service client with documented reasons
+
+**Testing:**
+- ✅ API route tests cover all validation scenarios
+- ✅ Error handling for unauthorized access, invalid workspaces, grace period expiry
+- ✅ Success paths for deletion and restoration
 
 #### Testing Requirements
 
