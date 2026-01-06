@@ -5,6 +5,7 @@ import { NextAuthOptions, Session } from 'next-auth'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { getCachedValidationResult, validateUserExists } from './sessionValidation'
 import { authMetrics } from './authMetrics'
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient'
 import type { ExtendedJWT, ExtendedUser, ExtendedSession } from '@/types/auth'
 
 const logger = createLogger('AuthOptions')
@@ -81,24 +82,15 @@ export const authOptions: NextAuthOptions = {
 
         const userId = data.user.id
 
-        // Get or create personal tenant using service role
-        if (!supabaseServiceKey) {
-          logger.error('Service role key not configured - cannot manage tenants')
-          return null
-        }
-
-        const supabaseAdmin = createServerClient(supabaseUrl, supabaseServiceKey, {
-          cookies: {
-            getAll() {
-              return cookieStore.getAll()
-            },
-            setAll(cookies) {
-              cookies.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options)
-              })
-            },
-          },
-        })
+        // SECURITY: Get or create personal tenant using unrestricted service client
+        // This is a valid use case for unrestricted access:
+        // - Getting current tenant (RPC call, no tenant filtering needed)
+        // - Creating personal tenant (new tenant, no tenant_id exists yet)
+        const supabaseAdmin = createUnrestrictedServiceClient(
+          'Get or create personal tenant during authentication',
+          userId,
+          cookieStore
+        )
 
         let currentTenantId: string | null = null
 

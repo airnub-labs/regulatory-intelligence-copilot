@@ -624,6 +624,129 @@ CREATE POLICY memberships_admin_insert
   );
 ```
 
+### Service Role Security
+
+⚠️ **CRITICAL**: The Supabase service role bypasses ALL Row-Level Security (RLS) policies. Any code using `SUPABASE_SERVICE_ROLE_KEY` must manually enforce tenant isolation.
+
+#### The Problem
+
+```typescript
+// ❌ VULNERABLE - Service role query without tenant filter
+const supabase = createServerClient(supabaseUrl, supabaseServiceKey, {...});
+const { data } = await supabase
+  .from('conversations')
+  .select('*')
+  .eq('user_id', userId);  // ← Missing tenant_id filter!
+// Returns conversations from ALL tenants for this user
+```
+
+**Attack Scenario**: If a user has the same `user_id` across multiple tenants (possible in Personal Tenant Model), this query leaks cross-tenant data.
+
+#### The Solution: Tenant-Scoped Service Client Wrappers
+
+We provide two wrapper functions that enforce tenant isolation:
+
+**1. Tenant-Scoped Service Client** (for operations within a tenant):
+
+```typescript
+import { createTenantScopedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
+
+const supabase = createTenantScopedServiceClient(
+  { tenantId, userId, operation: 'fetch-conversations' },
+  cookies()
+);
+
+// tenant_id filter automatically injected for tenant-scoped tables
+const { data } = await supabase
+  .from('conversations')
+  .select('*')
+  .eq('user_id', userId);
+```
+
+**2. Unrestricted Service Client** (for cross-tenant operations):
+
+```typescript
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
+
+// SECURITY: Creating NEW tenant requires unrestricted access (no tenant_id exists yet)
+const supabase = createUnrestrictedServiceClient(
+  'Creating new tenant - no tenant_id exists yet',
+  userId,
+  cookies()
+);
+
+const { data: tenant } = await supabase
+  .from('tenants')
+  .insert({ name, slug, owner_id: userId })
+  .select()
+  .single();
+```
+
+#### Valid Use Cases for Unrestricted Client
+
+✅ **Allowed**:
+- Creating new tenants (no tenant_id exists yet)
+- Auth operations (`auth.users` table has no tenant_id)
+- Admin operations with explicit tenant iteration
+- Background jobs that process all tenants
+
+❌ **Never Allowed**:
+- Querying tenant-scoped data without proper filtering
+- Convenience when you're too lazy to pass tenantId
+- "I'll add the filter later" (use scoped client now!)
+
+#### ESLint Protection
+
+We enforce this with a custom ESLint rule:
+
+```javascript
+// .eslintrc.js includes:
+"tenant-security/no-unsafe-service-role": "error"
+```
+
+This rule prevents direct usage of `SUPABASE_SERVICE_ROLE_KEY` and flags unsafe `createServerClient()` calls.
+
+**Example Error**:
+```
+❌ Direct service role usage detected.
+   Use createTenantScopedServiceClient() or createUnrestrictedServiceClient() instead.
+```
+
+#### Tenant-Scoped Tables
+
+The following tables automatically get `tenant_id` filters injected:
+- `conversations`
+- `conversation_messages`
+- `conversation_paths`
+- `llm_cost_records`
+- `e2b_cost_records`
+- `cost_quotas`
+- `execution_contexts`
+- `compaction_operations`
+
+#### Testing Service Role Security
+
+```typescript
+// Test 1: Verify tenant filter auto-injection
+describe('TenantScopedServiceClient', () => {
+  it('should auto-inject tenant_id filter on SELECT', async () => {
+    const client = createTenantScopedServiceClient({
+      tenantId: 'tenant-123',
+      userId: 'user-456',
+      operation: 'test',
+    }, mockCookies);
+
+    // Verify query includes tenant_id = 'tenant-123'
+    const { data } = await client
+      .from('conversations')
+      .select('*');
+
+    // All returned data should have tenant_id = 'tenant-123'
+    expect(data.every(row => row.tenant_id === 'tenant-123')).toBe(true);
+  });
+});
+```
+
 ### Security Vulnerability Fixed
 
 **Before** (CRITICAL VULNERABILITY):

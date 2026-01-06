@@ -1,9 +1,18 @@
 # Multi-Tenant Architecture: Outstanding Issues & Implementation Guide
 
-**Version**: 1.0
+**Version**: 1.1
 **Date**: 2026-01-06
-**Status**: 🔴 Requires Implementation
+**Status**: 🟡 Partially Implemented
 **Priority**: Critical architectural gaps identified during documentation review
+
+## Implementation Status
+
+- ✅ **CRITICAL-1**: Service Role Security Audit & Wrapper (COMPLETED 2026-01-06)
+- 🔴 **HIGH-1**: Workspace Deletion Flow (PENDING)
+- 🔴 **HIGH-2**: Complete Workspace Invitation Flow (PENDING)
+- 🔴 **MEDIUM-1**: Session/DB Consistency on Workspace Switch (PENDING)
+- 🔴 **MEDIUM-2**: Stale Active Tenant After Membership Removal (PENDING)
+- 🔴 **LOW-1**: RLS Policy Performance Optimization (PENDING)
 
 ---
 
@@ -23,6 +32,7 @@
 ### CRITICAL-1: Service Role Security Audit & Wrapper 🔐
 
 **Priority**: 🔴 CRITICAL
+**Status**: ✅ **COMPLETED** (2026-01-06)
 **Estimated Effort**: 2-3 days
 **Risk**: Tenant isolation bypass via service role misuse
 
@@ -321,6 +331,35 @@ const { data } = await supabase
 - ✅ All existing service role usage audited and updated
 - ✅ Documentation updated with usage patterns
 - ✅ Code review checklist item added for service role usage
+
+#### Implementation Summary (2026-01-06)
+
+**Files Created:**
+- `apps/demo-web/src/lib/supabase/tenantScopedServiceClient.ts` - Main wrapper implementation
+- `apps/demo-web/eslint-plugin-tenant-security.mjs` - Custom ESLint plugin
+- `apps/demo-web/src/lib/supabase/tenantScopedServiceClient.test.ts` - Unit tests
+
+**Files Updated:**
+- `apps/demo-web/eslint.config.mjs` - Added tenant-security plugin and rule
+- `apps/demo-web/src/app/api/workspaces/route.ts` - Now uses `createUnrestrictedServiceClient()`
+- `apps/demo-web/src/lib/auth/options.ts` - Now uses `createUnrestrictedServiceClient()`
+- `apps/demo-web/src/lib/auth/sessionValidation.ts` - Now uses `createUnrestrictedServiceClient()`
+- `docs/architecture/multi-tenant/README.md` - Added "Service Role Security" section
+- `docs/architecture/multi-tenant/OUTSTANDING_ISSUES.md` - Marked as completed
+
+**Key Features Implemented:**
+1. **Automatic tenant filtering** - `createTenantScopedServiceClient()` auto-injects `tenant_id` filters on SELECT/UPDATE/DELETE for tenant-scoped tables
+2. **Documented reasons** - `createUnrestrictedServiceClient()` requires explicit reason string for audit trail
+3. **Warning logging** - All unrestricted client usage logged with userId and reason
+4. **ESLint enforcement** - Custom rule prevents direct `SUPABASE_SERVICE_ROLE_KEY` usage
+5. **Comprehensive tests** - Unit tests verify client creation, filtering, and security validation
+6. **Updated documentation** - Multi-tenant README now includes complete service role security guide
+
+**Security Impact:**
+- ✅ Prevents accidental cross-tenant data leakage
+- ✅ Forces developers to explicitly justify unrestricted access
+- ✅ Provides audit trail via logging
+- ✅ Catches violations at lint time before code review
 
 #### Testing Requirements
 

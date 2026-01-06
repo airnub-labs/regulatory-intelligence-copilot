@@ -24,6 +24,7 @@ import { cookies } from 'next/headers'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { getValidationCache } from './distributedValidationCache'
 import { authMetrics } from './authMetrics'
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient'
 
 const logger = createLogger('SessionValidation')
 
@@ -102,11 +103,8 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       },
     })
 
-    // Use Supabase Admin API to check if user exists
-    // Note: We use the service role key for this check to bypass RLS
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!serviceRoleKey) {
+    // Check if service role key is configured
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       // Fallback: Try to get user from auth.users table via RPC or direct query
       // This requires a database function or RLS policy that allows checking user existence
       logger.warn('Service role key not configured - using limited validation')
@@ -146,19 +144,14 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       }
     }
 
-    // Use service role client for admin operations
-    const adminSupabase = createServerClient(supabaseUrl, serviceRoleKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        },
-      },
-    })
+    // SECURITY: Use unrestricted service client for auth admin operations
+    // This is a valid use case - checking auth.users table and calling RPC functions
+    // that don't have tenant_id (auth operations are cross-tenant by nature)
+    const adminSupabase = createUnrestrictedServiceClient(
+      'Session validation - checking auth.users and tenant RPC',
+      userId,
+      cookieStore
+    )
 
     // Check if user exists in auth.users
     const { data, error } = await adminSupabase.auth.admin.getUserById(userId)
