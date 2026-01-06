@@ -372,3 +372,311 @@ begin
         updated_at = excluded.updated_at;
 
 end $$;
+
+-- ========================================
+-- Multi-Tenant Test Users and Workspaces
+-- ========================================
+-- Creates 3 additional test users with multiple tenant memberships
+-- to demonstrate and test full multi-tenant functionality.
+--
+-- Test credentials:
+--   alice@example.com / password123
+--   bob@example.com / password123
+--   charlie@example.com / password123
+--
+-- Alice has access to:
+--   - Alice's Workspace (personal)
+--   - Acme Corp (owner)
+--   - Startup XYZ (admin)
+--
+-- Bob has access to:
+--   - Bob's Workspace (personal)
+--   - Acme Corp (member)
+--
+-- Charlie has access to:
+--   - Charlie's Workspace (personal)
+--   - Startup XYZ (owner)
+-- ========================================
+
+do $$
+declare
+  -- User IDs
+  alice_id uuid := 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  bob_id uuid := 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  charlie_id uuid := 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+  -- Tenant IDs
+  alice_personal_id uuid := '11111111-1111-1111-1111-111111111111';
+  bob_personal_id uuid := '22222222-2222-2222-2222-222222222222';
+  charlie_personal_id uuid := '33333333-3333-3333-3333-333333333333';
+  acme_corp_id uuid := 'aaaacccc-1111-2222-3333-444444444444';
+  startup_xyz_id uuid := 'bbbbeee0-5555-6666-7777-888888888888';
+
+  -- Pre-computed bcrypt hash for 'password123'
+  -- Generated using bcryptjs with saltRounds=6 for consistency with demo user
+  test_password_hash text := '$2b$06$PQS.8RLKqtXK0LZjCZy9muBBvQxGlEI7xVKqL8mGvQR2Z7WCVz7Su';
+
+  demo_now timestamptz := now();
+begin
+
+  ---------------------------------------------------------------------------
+  -- 1. Create Test Users (Alice, Bob, Charlie)
+  ---------------------------------------------------------------------------
+
+  -- Alice Anderson
+  insert into auth.users (
+    id,
+    instance_id,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    created_at,
+    updated_at,
+    raw_user_meta_data,
+    raw_app_meta_data,
+    aud,
+    role
+  ) values (
+    alice_id,
+    '00000000-0000-0000-0000-000000000000',
+    'alice@example.com',
+    test_password_hash,
+    demo_now,
+    demo_now,
+    demo_now,
+    jsonb_build_object('full_name', 'Alice Anderson'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated'
+  )
+  on conflict (id) do update
+    set encrypted_password = test_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Bob Builder
+  insert into auth.users (
+    id,
+    instance_id,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    created_at,
+    updated_at,
+    raw_user_meta_data,
+    raw_app_meta_data,
+    aud,
+    role
+  ) values (
+    bob_id,
+    '00000000-0000-0000-0000-000000000000',
+    'bob@example.com',
+    test_password_hash,
+    demo_now,
+    demo_now,
+    demo_now,
+    jsonb_build_object('full_name', 'Bob Builder'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated'
+  )
+  on conflict (id) do update
+    set encrypted_password = test_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Charlie Chen
+  insert into auth.users (
+    id,
+    instance_id,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    created_at,
+    updated_at,
+    raw_user_meta_data,
+    raw_app_meta_data,
+    aud,
+    role
+  ) values (
+    charlie_id,
+    '00000000-0000-0000-0000-000000000000',
+    'charlie@example.com',
+    test_password_hash,
+    demo_now,
+    demo_now,
+    demo_now,
+    jsonb_build_object('full_name', 'Charlie Chen'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated'
+  )
+  on conflict (id) do update
+    set encrypted_password = test_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Create email identities for test users
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data)
+  values
+    (gen_random_uuid(), alice_id, 'email', 'alice@example.com',
+     jsonb_build_object('sub', 'alice@example.com', 'email', 'alice@example.com'))
+  on conflict (provider, provider_id) do nothing;
+
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data)
+  values
+    (gen_random_uuid(), bob_id, 'email', 'bob@example.com',
+     jsonb_build_object('sub', 'bob@example.com', 'email', 'bob@example.com'))
+  on conflict (provider, provider_id) do nothing;
+
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data)
+  values
+    (gen_random_uuid(), charlie_id, 'email', 'charlie@example.com',
+     jsonb_build_object('sub', 'charlie@example.com', 'email', 'charlie@example.com'))
+  on conflict (provider, provider_id) do nothing;
+
+  raise notice 'Created/updated test users: Alice, Bob, Charlie';
+
+  ---------------------------------------------------------------------------
+  -- 2. Create Personal Workspaces
+  ---------------------------------------------------------------------------
+
+  insert into copilot_internal.tenants (id, name, slug, type, owner_id, plan, created_at, updated_at)
+  values
+    (alice_personal_id, 'Alice''s Workspace', 'alice-personal', 'personal', alice_id, 'free', demo_now, demo_now),
+    (bob_personal_id, 'Bob''s Workspace', 'bob-personal', 'personal', bob_id, 'free', demo_now, demo_now),
+    (charlie_personal_id, 'Charlie''s Workspace', 'charlie-personal', 'personal', charlie_id, 'free', demo_now, demo_now)
+  on conflict (id) do update
+    set name = excluded.name,
+        slug = excluded.slug,
+        updated_at = demo_now;
+
+  raise notice 'Created/updated personal workspaces for Alice, Bob, Charlie';
+
+  ---------------------------------------------------------------------------
+  -- 3. Create Team Workspaces
+  ---------------------------------------------------------------------------
+
+  insert into copilot_internal.tenants (id, name, slug, type, owner_id, plan, created_at, updated_at)
+  values
+    (acme_corp_id, 'Acme Corp', 'acme-corp', 'team', alice_id, 'pro', demo_now, demo_now),
+    (startup_xyz_id, 'Startup XYZ', 'startup-xyz', 'team', charlie_id, 'pro', demo_now, demo_now)
+  on conflict (id) do update
+    set name = excluded.name,
+        slug = excluded.slug,
+        updated_at = demo_now;
+
+  raise notice 'Created/updated team workspaces: Acme Corp, Startup XYZ';
+
+  ---------------------------------------------------------------------------
+  -- 4. Create Tenant Memberships
+  ---------------------------------------------------------------------------
+
+  -- Personal workspace memberships (owners)
+  insert into copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
+  values
+    (alice_personal_id, alice_id, 'owner', 'active', demo_now, demo_now, demo_now),
+    (bob_personal_id, bob_id, 'owner', 'active', demo_now, demo_now, demo_now),
+    (charlie_personal_id, charlie_id, 'owner', 'active', demo_now, demo_now, demo_now)
+  on conflict (tenant_id, user_id) do update
+    set role = excluded.role,
+        status = excluded.status,
+        updated_at = demo_now;
+
+  -- Acme Corp memberships (Alice owner, Bob member)
+  insert into copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
+  values
+    (acme_corp_id, alice_id, 'owner', 'active', demo_now, demo_now, demo_now),
+    (acme_corp_id, bob_id, 'member', 'active', demo_now, demo_now, demo_now)
+  on conflict (tenant_id, user_id) do update
+    set role = excluded.role,
+        status = excluded.status,
+        updated_at = demo_now;
+
+  -- Startup XYZ memberships (Charlie owner, Alice admin)
+  insert into copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
+  values
+    (startup_xyz_id, charlie_id, 'owner', 'active', demo_now, demo_now, demo_now),
+    (startup_xyz_id, alice_id, 'admin', 'active', demo_now, demo_now, demo_now)
+  on conflict (tenant_id, user_id) do update
+    set role = excluded.role,
+        status = excluded.status,
+        updated_at = demo_now;
+
+  raise notice 'Created/updated tenant memberships';
+
+  ---------------------------------------------------------------------------
+  -- 5. Set Active Tenants (User Preferences)
+  ---------------------------------------------------------------------------
+
+  insert into copilot_internal.user_preferences (user_id, current_tenant_id, preferences, created_at, updated_at)
+  values
+    (alice_id, alice_personal_id, '{}'::jsonb, demo_now, demo_now),
+    (bob_id, bob_personal_id, '{}'::jsonb, demo_now, demo_now),
+    (charlie_id, charlie_personal_id, '{}'::jsonb, demo_now, demo_now)
+  on conflict (user_id) do update
+    set current_tenant_id = excluded.current_tenant_id,
+        updated_at = demo_now;
+
+  raise notice 'Set active tenants for test users';
+
+  ---------------------------------------------------------------------------
+  -- 6. Create Sample Conversations
+  ---------------------------------------------------------------------------
+
+  -- Alice's personal workspace conversations
+  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  values
+    (alice_personal_id, alice_id, 'Alice Personal Project 1', demo_now - interval '2 days', demo_now),
+    (alice_personal_id, alice_id, 'Alice Personal Project 2', demo_now - interval '1 day', demo_now)
+  on conflict do nothing;
+
+  -- Bob's personal workspace conversations
+  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  values
+    (bob_personal_id, bob_id, 'Bob Personal Notes', demo_now - interval '3 days', demo_now)
+  on conflict do nothing;
+
+  -- Charlie's personal workspace conversations
+  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  values
+    (charlie_personal_id, charlie_id, 'Charlie Ideas', demo_now - interval '1 day', demo_now)
+  on conflict do nothing;
+
+  -- Acme Corp conversations (Alice and Bob)
+  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  values
+    (acme_corp_id, alice_id, 'Acme Corp Q1 Strategy', demo_now - interval '5 days', demo_now),
+    (acme_corp_id, bob_id, 'Acme Corp Product Roadmap', demo_now - interval '4 days', demo_now),
+    (acme_corp_id, alice_id, 'Acme Corp Team Meeting Notes', demo_now - interval '1 day', demo_now)
+  on conflict do nothing;
+
+  -- Startup XYZ conversations (Charlie and Alice)
+  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  values
+    (startup_xyz_id, charlie_id, 'Startup XYZ MVP Features', demo_now - interval '6 days', demo_now),
+    (startup_xyz_id, alice_id, 'Startup XYZ Investor Pitch', demo_now - interval '2 days', demo_now)
+  on conflict do nothing;
+
+  raise notice 'Created sample conversations across all workspaces';
+
+  ---------------------------------------------------------------------------
+  -- Summary
+  ---------------------------------------------------------------------------
+  raise notice '========================================';
+  raise notice 'Multi-tenant seed data complete!';
+  raise notice '========================================';
+  raise notice '';
+  raise notice 'Test accounts created:';
+  raise notice '  alice@example.com / password123 (3 workspaces)';
+  raise notice '  bob@example.com / password123 (2 workspaces)';
+  raise notice '  charlie@example.com / password123 (2 workspaces)';
+  raise notice '';
+  raise notice 'Workspaces created:';
+  raise notice '  - 3 personal workspaces';
+  raise notice '  - 2 team workspaces (Acme Corp, Startup XYZ)';
+  raise notice '';
+  raise notice 'Sample conversations: 9 total';
+  raise notice '========================================';
+
+end $$;
