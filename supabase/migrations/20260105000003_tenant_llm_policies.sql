@@ -7,7 +7,7 @@
 -- Create tenant_llm_policies table
 CREATE TABLE IF NOT EXISTS copilot_internal.tenant_llm_policies (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id uuid NOT NULL UNIQUE,
+    tenant_id uuid NOT NULL UNIQUE REFERENCES copilot_internal.tenants(id) ON DELETE CASCADE,
 
     -- Default routing
     default_model text NOT NULL,
