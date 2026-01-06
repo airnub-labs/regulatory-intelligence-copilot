@@ -12,12 +12,11 @@
 -- Part of: HIGH-1 Implementation (OUTSTANDING_ISSUES.md)
 -- ============================================================================
 
--- Add soft delete columns to tenants table
+-- Add soft delete columns to tenants table (deleted_at already exists from 20260105000003)
 ALTER TABLE copilot_internal.tenants
-  ADD COLUMN deleted_at timestamptz DEFAULT NULL,
-  ADD COLUMN deleted_by uuid REFERENCES auth.users(id);
+  ADD COLUMN IF NOT EXISTS deleted_by uuid REFERENCES auth.users(id);
 
-CREATE INDEX idx_tenants_deleted_at ON copilot_internal.tenants(deleted_at)
+CREATE INDEX IF NOT EXISTS idx_tenants_deleted_at ON copilot_internal.tenants(deleted_at)
   WHERE deleted_at IS NOT NULL;
 
 COMMENT ON COLUMN copilot_internal.tenants.deleted_at IS
@@ -28,9 +27,9 @@ COMMENT ON COLUMN copilot_internal.tenants.deleted_by IS
 
 -- Add soft delete to tenant_memberships
 ALTER TABLE copilot_internal.tenant_memberships
-  ADD COLUMN deleted_at timestamptz DEFAULT NULL;
+  ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
 
-CREATE INDEX idx_tenant_memberships_deleted_at ON copilot_internal.tenant_memberships(deleted_at)
+CREATE INDEX IF NOT EXISTS idx_tenant_memberships_deleted_at ON copilot_internal.tenant_memberships(deleted_at)
   WHERE deleted_at IS NOT NULL;
 
 COMMENT ON COLUMN copilot_internal.tenant_memberships.deleted_at IS
