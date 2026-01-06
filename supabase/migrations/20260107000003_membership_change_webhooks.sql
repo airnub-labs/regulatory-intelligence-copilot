@@ -237,6 +237,8 @@ COMMENT ON FUNCTION public.mark_membership_events_processed IS
 -- =====================================================
 -- 6. Function: Verify Tenant Access
 -- =====================================================
+-- Drop function first to allow changing return type (adding status column)
+DROP FUNCTION IF EXISTS public.verify_tenant_access(uuid, uuid);
 
 CREATE OR REPLACE FUNCTION public.verify_tenant_access(
   p_user_id uuid,
