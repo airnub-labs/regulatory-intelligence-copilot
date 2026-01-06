@@ -22,8 +22,10 @@ const ENABLE_LLM_POLICY_CACHE = process.env.ENABLE_LLM_POLICY_CACHE !== 'false';
 // ============================================================================
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+// eslint-disable-next-line tenant-security/no-unsafe-service-role -- System infrastructure: LLM policy store initialization
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
+// eslint-disable-next-line tenant-security/no-unsafe-service-role -- System infrastructure: LLM policy store client
 const supabaseInternalClient =
   supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {

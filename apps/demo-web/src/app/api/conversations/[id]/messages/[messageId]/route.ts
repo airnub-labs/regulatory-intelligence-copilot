@@ -5,23 +5,12 @@ import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-o
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
 import { conversationStore, conversationEventHub } from '@/lib/server/conversations';
-import { createClient } from '@supabase/supabase-js';
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 const logger = createLogger('MessageRoute');
-
-// Create a Supabase client for direct message operations
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase configuration missing');
-  }
-
-  return createClient(supabaseUrl, supabaseKey);
-}
 
 /**
  * GET /api/conversations/[id]/messages/[messageId]
@@ -63,7 +52,11 @@ export async function GET(
           }
 
           try {
-            const supabase = getSupabaseClient();
+            const cookieStore = await cookies();
+            const supabase = createUnrestrictedServiceClient(cookieStore, {
+              operation: 'get-message',
+              userId,
+            });
 
             const { data: message, error } = await supabase
               .from('conversation_messages_view')
@@ -171,7 +164,11 @@ export async function PATCH(
           }
 
           try {
-            const supabase = getSupabaseClient();
+            const cookieStore = await cookies();
+            const supabase = createUnrestrictedServiceClient(cookieStore, {
+              operation: 'update-message-metadata',
+              userId,
+            });
 
             // First verify the message exists and belongs to this conversation
             const { data: existingMessage, error: fetchError } = await supabase

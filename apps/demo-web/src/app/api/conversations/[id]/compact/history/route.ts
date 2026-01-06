@@ -32,7 +32,8 @@ import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
 import { conversationStore } from '@/lib/server/conversations';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
-import { createClient } from '@supabase/supabase-js';
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
+import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -106,23 +107,12 @@ export async function GET(
               return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
             }
 
-            // Fetch compaction history from Supabase
-            const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-            const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-
-            if (!supabaseUrl || !supabaseKey) {
-              logger.warn('Supabase credentials not configured');
-              return NextResponse.json({
-                conversationId,
-                history: [],
-                totalCompactions: 0,
-                totalTokensSaved: 0,
-                message: 'Compaction history not available (database not configured)',
-              });
-            }
-
-            const supabase = createClient(supabaseUrl, supabaseKey, {
-              db: { schema: 'copilot_internal' },
+            // Fetch compaction history from Supabase using unrestricted service client
+            // (already validated user has access to this conversation above)
+            const cookieStore = await cookies();
+            const supabase = createUnrestrictedServiceClient(cookieStore, {
+              operation: 'fetch-compaction-history',
+              userId,
             });
 
             // Query compaction_operations table for this conversation
