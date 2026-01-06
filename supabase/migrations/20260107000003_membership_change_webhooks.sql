@@ -285,6 +285,7 @@ SET search_path = public, copilot_internal
 AS $$
 DECLARE
   v_deleted_count integer;
+  v_temp_count integer;
 BEGIN
   -- Delete processed events older than 30 days
   DELETE FROM copilot_internal.membership_change_events
@@ -298,7 +299,8 @@ BEGIN
   WHERE processed_at IS NULL
     AND created_at < NOW() - INTERVAL '90 days';
 
-  GET DIAGNOSTICS v_deleted_count = v_deleted_count + ROW_COUNT;
+  GET DIAGNOSTICS v_temp_count = ROW_COUNT;
+  v_deleted_count := v_deleted_count + v_temp_count;
 
   RETURN v_deleted_count;
 END;
