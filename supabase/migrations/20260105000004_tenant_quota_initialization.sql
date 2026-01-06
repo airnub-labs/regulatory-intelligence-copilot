@@ -91,26 +91,26 @@ COMMENT ON FUNCTION copilot_internal.initialize_tenant_quotas() IS
   'Automatically creates default cost quotas when a new tenant is created. Sets $100/month for LLM, $50/month for E2B, and $150/month total spend limit.';
 
 -- Create trigger on tenants table (if it exists)
--- Note: Adjust table name and schema if different in your setup
+-- Note: Tenants table is in copilot_internal schema
 DO $$
 BEGIN
   -- Check if tenants table exists before creating trigger
   IF EXISTS (
     SELECT 1
     FROM information_schema.tables
-    WHERE table_schema = 'public'
+    WHERE table_schema = 'copilot_internal'
     AND table_name = 'tenants'
   ) THEN
     -- Drop trigger if it already exists
-    DROP TRIGGER IF EXISTS tenants_quota_init_trigger ON public.tenants;
+    DROP TRIGGER IF EXISTS tenants_quota_init_trigger ON copilot_internal.tenants;
 
     -- Create trigger to initialize quotas after tenant insert
     CREATE TRIGGER tenants_quota_init_trigger
-      AFTER INSERT ON public.tenants
+      AFTER INSERT ON copilot_internal.tenants
       FOR EACH ROW
       EXECUTE FUNCTION copilot_internal.initialize_tenant_quotas();
 
-    RAISE NOTICE 'Created quota initialization trigger on public.tenants';
+    RAISE NOTICE 'Created quota initialization trigger on copilot_internal.tenants';
   ELSE
     RAISE NOTICE 'Tenants table not found. Trigger will need to be created manually.';
   END IF;

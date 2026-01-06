@@ -137,7 +137,7 @@ INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, statu
 -- Set Active Tenants
 -- ========================================
 
-INSERT INTO copilot_internal.user_preferences (user_id, active_tenant_id) VALUES
+INSERT INTO copilot_internal.user_preferences (user_id, current_tenant_id) VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111'), -- Alice -> Personal
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222'), -- Bob -> Personal
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333'); -- Charlie -> Personal
@@ -191,7 +191,7 @@ WHERE tenant_id IN (SELECT id FROM copilot_internal.tenants WHERE slug IN ('alic
 
 -- Show Alice's tenants
 SELECT 'Alice''s Tenants:' AS info;
-SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+SELECT t.name, tm.role, (up.current_tenant_id = t.id) AS is_active
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
 LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
@@ -200,7 +200,7 @@ ORDER BY is_active DESC, t.name;
 
 -- Show Bob's tenants
 SELECT 'Bob''s Tenants:' AS info;
-SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+SELECT t.name, tm.role, (up.current_tenant_id = t.id) AS is_active
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
 LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
@@ -209,7 +209,7 @@ ORDER BY is_active DESC, t.name;
 
 -- Show Charlie's tenants
 SELECT 'Charlie''s Tenants:' AS info;
-SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+SELECT t.name, tm.role, (up.current_tenant_id = t.id) AS is_active
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
 LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
