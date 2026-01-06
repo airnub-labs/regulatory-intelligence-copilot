@@ -121,6 +121,7 @@ export {
   SupabaseE2BCostTrackingService,
   type E2BPricingService,
   type E2BCostTrackingService,
+  type E2BPricing,
   type E2BResourceUsage,
   type E2BCostCalculation,
   type E2BCostRecord,
