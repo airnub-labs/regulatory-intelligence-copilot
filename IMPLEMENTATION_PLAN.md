@@ -63,7 +63,7 @@ Each phase has specific deliverables and tests that must pass before moving to t
 **Authentication**:
 - ✅ Users can log in with email/password
 - ✅ Personal workspace auto-created on first login
-- ✅ JWT includes activeTenantId
+- ✅ JWT includes currentTenantId
 - ✅ Session persists across page reloads
 
 **Multi-Tenancy**:
@@ -205,9 +205,11 @@ Apply database migrations and verify all tables, functions, and RLS policies are
 cd supabase
 supabase db reset
 
-# This applies ALL migrations including the new ones:
-# - 20260105000000_multi_tenant_user_model.sql
-# - 20260105000001_backfill_personal_tenants.sql
+# This applies ALL migrations including the new one:
+# - 20260105000003_multi_tenant_user_model.sql
+#
+# NOTE: No backfill migration needed - this is development only.
+# Seed data creates fresh tenant relationships with proper structure.
 
 # Verify migrations applied
 psql postgresql://postgres:postgres@localhost:54322/postgres
@@ -223,7 +225,7 @@ psql postgresql://postgres:postgres@localhost:54322/postgres
 
 \df public.*tenant*
 # Should show:
-# - get_active_tenant_id
+# - get_current_tenant_id
 # - get_user_tenants
 # - create_personal_tenant
 # - switch_tenant
@@ -297,8 +299,8 @@ SELECT * FROM public.get_user_tenants(:'test_user_id');
 
 -- Expected: 1 row showing the personal tenant
 
--- Test: get_active_tenant_id
-SELECT public.get_active_tenant_id(:'test_user_id') AS active_id \gset
+-- Test: get_current_tenant_id
+SELECT public.get_current_tenant_id(:'test_user_id') AS active_id \gset
 
 -- Expected: Returns tenant_id
 
@@ -327,7 +329,7 @@ SELECT public.switch_tenant(:'team_id');
 -- Expected: true
 
 -- Verify active tenant changed
-SELECT public.get_active_tenant_id(:'test_user_id');
+SELECT public.get_current_tenant_id(:'test_user_id');
 
 -- Expected: Returns team_id
 
@@ -897,7 +899,7 @@ export interface ExtendedUser {
   id: string;
   email: string;
   name?: string;
-  activeTenantId?: string;
+  currentTenantId?: string;
 }
 
 export interface ExtendedSession {
@@ -909,7 +911,7 @@ export interface ExtendedJWT {
   sub: string;
   email: string;
   name?: string;
-  activeTenantId?: string;
+  currentTenantId?: string;
   lastValidated?: number;
 }
 ```
@@ -946,14 +948,14 @@ export async function getTenantContext(
   session: ExtendedSession | null
 ): Promise<TenantContext> {
   const userId = session?.user?.id;
-  const activeTenantId = session?.user?.activeTenantId;
+  const currentTenantId = session?.user?.currentTenantId;
 
   if (!userId) {
     logger.error('Missing user ID in session');
     throw new Error('Unauthorized: No user ID in session');
   }
 
-  if (!activeTenantId) {
+  if (!currentTenantId) {
     logger.error({ userId }, 'Missing active tenant ID in session');
     throw new Error('No active tenant selected - please select a workspace');
   }
@@ -983,26 +985,26 @@ export async function getTenantContext(
   const { data: access, error } = await supabase
     .rpc('verify_tenant_access', {
       p_user_id: userId,
-      p_tenant_id: activeTenantId,
+      p_tenant_id: currentTenantId,
     })
     .single();
 
   if (error || !access?.has_access) {
     logger.error(
-      { userId, activeTenantId, error },
+      { userId, currentTenantId, error },
       'Tenant access verification failed'
     );
     throw new Error('Access denied: Not a member of this workspace');
   }
 
   logger.debug(
-    { userId, tenantId: activeTenantId, role: access.role },
+    { userId, tenantId: currentTenantId, role: access.role },
     'Tenant context verified'
   );
 
   return {
     userId,
-    tenantId: activeTenantId,
+    tenantId: currentTenantId,
     role: access.role,
   };
 }
@@ -1135,16 +1137,16 @@ export const authOptions: NextAuthOptions = {
           },
         });
 
-        let activeTenantId: string | null = null;
+        let currentTenantId: string | null = null;
 
         // Check if user has active tenant
         const { data: activeId } = await supabaseAdmin
-          .rpc('get_active_tenant_id', { p_user_id: userId })
+          .rpc('get_current_tenant_id', { p_user_id: userId })
           .single();
 
         if (activeId) {
-          activeTenantId = activeId;
-          logger.debug({ userId, activeTenantId }, 'User has existing active tenant');
+          currentTenantId = activeId;
+          logger.debug({ userId, currentTenantId }, 'User has existing active tenant');
         } else {
           // New user - create personal tenant
           logger.info({ userId, email: data.user.email }, 'Creating personal tenant for new user');
@@ -1163,11 +1165,11 @@ export const authOptions: NextAuthOptions = {
             return null;
           }
 
-          activeTenantId = newTenantId;
-          logger.info({ userId, activeTenantId }, 'Created personal tenant');
+          currentTenantId = newTenantId;
+          logger.info({ userId, currentTenantId }, 'Created personal tenant');
         }
 
-        if (!activeTenantId) {
+        if (!currentTenantId) {
           logger.error({ userId }, 'No active tenant available');
           return null;
         }
@@ -1179,7 +1181,7 @@ export const authOptions: NextAuthOptions = {
           id: userId,
           email: data.user.email!,
           name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email!,
-          activeTenantId: activeTenantId,
+          currentTenantId: currentTenantId,
         };
       },
     }),
@@ -1197,7 +1199,7 @@ export const authOptions: NextAuthOptions = {
         extendedToken.sub = extendedUser.id;
         extendedToken.email = extendedUser.email;
         extendedToken.name = extendedUser.name;
-        extendedToken.activeTenantId = extendedUser.activeTenantId; // NEW
+        extendedToken.currentTenantId = extendedUser.currentTenantId; // NEW
         extendedToken.lastValidated = Date.now();
         return token;
       }
@@ -1218,7 +1220,7 @@ export const authOptions: NextAuthOptions = {
 
           if (cachedValidation.user) {
             extendedToken.email = cachedValidation.user.email ?? extendedToken.email;
-            extendedToken.activeTenantId = cachedValidation.user.activeTenantId ?? extendedToken.activeTenantId;
+            extendedToken.currentTenantId = cachedValidation.user.currentTenantId ?? extendedToken.currentTenantId;
           }
         }
       }
@@ -1237,7 +1239,7 @@ export const authOptions: NextAuthOptions = {
 
           if (validation.user) {
             extendedToken.email = validation.user.email ?? extendedToken.email;
-            extendedToken.activeTenantId = validation.user.activeTenantId ?? extendedToken.activeTenantId;
+            extendedToken.currentTenantId = validation.user.currentTenantId ?? extendedToken.currentTenantId;
           }
 
           extendedToken.lastValidated = now;
@@ -1260,7 +1262,7 @@ export const authOptions: NextAuthOptions = {
             id: '',
             email: '',
             name: '',
-            activeTenantId: undefined,
+            currentTenantId: undefined,
           },
         };
       }
@@ -1269,7 +1271,7 @@ export const authOptions: NextAuthOptions = {
         sessionWithUser.user.id = extendedToken.sub;
         sessionWithUser.user.email = extendedToken.email ?? '';
         sessionWithUser.user.name = extendedToken.name ?? '';
-        sessionWithUser.user.activeTenantId = extendedToken.activeTenantId; // NEW
+        sessionWithUser.user.currentTenantId = extendedToken.currentTenantId; // NEW
       }
 
       return sessionWithUser;
@@ -1303,7 +1305,7 @@ interface ValidateUserResult {
   user?: {
     id: string;
     email?: string | null;
-    activeTenantId?: string; // CHANGED from tenantId
+    currentTenantId?: string; // CHANGED from tenantId
   };
   error?: string;
 }
@@ -1320,12 +1322,12 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     }
 
     // NEW: Get user's active tenant ID
-    const { data: activeTenantId } = await adminSupabase
-      .rpc('get_active_tenant_id', { p_user_id: userId })
+    const { data: currentTenantId } = await adminSupabase
+      .rpc('get_current_tenant_id', { p_user_id: userId })
       .single();
 
-    // Cache result with activeTenantId
-    await validationCache.set(userId, true, activeTenantId);
+    // Cache result with currentTenantId
+    await validationCache.set(userId, true, currentTenantId);
     authMetrics.recordCacheMiss(userId, validationDuration, true);
 
     return {
@@ -1333,7 +1335,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       user: {
         id: data.user.id,
         email: data.user.email,
-        activeTenantId, // NEW
+        currentTenantId, // NEW
       },
     };
   } catch (error) {
@@ -1363,7 +1365,7 @@ npm run dev
 # - Copy value
 # - Go to jwt.io
 # - Paste token
-# - Verify payload has: sub, email, activeTenantId
+# - Verify payload has: sub, email, currentTenantId
 
 # Test 3: API test
 # - Visit http://localhost:3000/api/test-tenant-context
@@ -1386,7 +1388,7 @@ npm run dev
 - ✅ NextAuth updated
 - ✅ Session validation updated
 - ✅ Login flow working
-- ✅ JWT includes activeTenantId
+- ✅ JWT includes currentTenantId
 - ✅ Personal tenant auto-created for new users
 
 **Estimated Time**: 6-8 hours
@@ -1938,7 +1940,7 @@ INSERT INTO copilot_internal.tenant_memberships (tenant_id, user_id, role, statu
 -- Set Active Tenants
 -- ========================================
 
-INSERT INTO copilot_internal.user_preferences (user_id, active_tenant_id) VALUES
+INSERT INTO copilot_internal.user_preferences (user_id, current_tenant_id) VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111'), -- Alice -> Personal
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '22222222-2222-2222-2222-222222222222'), -- Bob -> Personal
   ('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333'); -- Charlie -> Personal
@@ -1992,7 +1994,7 @@ WHERE tenant_id IN (SELECT id FROM copilot_internal.tenants WHERE slug IN ('alic
 
 -- Show Alice's tenants
 SELECT 'Alice''s Tenants:' AS info;
-SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+SELECT t.name, tm.role, (up.current_tenant_id = t.id) AS is_active
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
 LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
@@ -2001,7 +2003,7 @@ ORDER BY is_active DESC, t.name;
 
 -- Show Bob's tenants
 SELECT 'Bob''s Tenants:' AS info;
-SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+SELECT t.name, tm.role, (up.current_tenant_id = t.id) AS is_active
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
 LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id
@@ -2010,7 +2012,7 @@ ORDER BY is_active DESC, t.name;
 
 -- Show Charlie's tenants
 SELECT 'Charlie''s Tenants:' AS info;
-SELECT t.name, tm.role, (up.active_tenant_id = t.id) AS is_active
+SELECT t.name, tm.role, (up.current_tenant_id = t.id) AS is_active
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
 LEFT JOIN copilot_internal.user_preferences up ON up.user_id = tm.user_id

@@ -166,7 +166,7 @@ user_metadata: {
 │  Authentication Layer (NextAuth)                             │
 │  - Handles: Who you are                                      │
 │  - Providers: Email, Google, GitHub, Auth0, etc.             │
-│  - Session: JWT with user_id + active_tenant_id              │
+│  - Session: JWT with user_id + current_tenant_id              │
 └────────────────────────┬─────────────────────────────────────┘
                          │
                          ↓
@@ -180,7 +180,7 @@ user_metadata: {
                          ↓
 ┌──────────────────────────────────────────────────────────────┐
 │  Data Layer (Application Tables)                             │
-│  - Filtered by: active_tenant_id from session                │
+│  - Filtered by: current_tenant_id from session                │
 │  - Tables: conversations, messages, contexts, etc.           │
 │  - RLS: Optional enforcement via policies                    │
 └──────────────────────────────────────────────────────────────┘
@@ -200,8 +200,8 @@ user_metadata: {
 
 3. **Active Tenant Selection**
    - User selects which tenant is currently active
-   - Stored in `user_preferences.active_tenant_id`
-   - Included in JWT as `activeTenantId` claim
+   - Stored in `user_preferences.current_tenant_id`
+   - Included in JWT as `currentTenantId` claim
    - All queries filter by active tenant
 
 4. **Role-Based Access**
@@ -285,7 +285,7 @@ CREATE TABLE copilot_internal.user_preferences (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
 
     -- Currently selected tenant
-    active_tenant_id UUID REFERENCES copilot_internal.tenants(id) ON DELETE SET NULL,
+    current_tenant_id UUID REFERENCES copilot_internal.tenants(id) ON DELETE SET NULL,
 
     -- UI and other preferences
     preferences JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -299,9 +299,9 @@ CREATE TABLE copilot_internal.user_preferences (
 
 ```sql
 -- Get user's currently active tenant ID
-CREATE FUNCTION public.get_active_tenant_id(p_user_id UUID DEFAULT auth.uid())
+CREATE FUNCTION public.get_current_tenant_id(p_user_id UUID DEFAULT auth.uid())
 RETURNS UUID AS $$
-    SELECT active_tenant_id
+    SELECT current_tenant_id
     FROM copilot_internal.user_preferences
     WHERE user_id = p_user_id;
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
@@ -325,7 +325,7 @@ RETURNS TABLE (
         t.type,
         t.plan,
         tm.role,
-        (t.id = up.active_tenant_id),
+        (t.id = up.current_tenant_id),
         tm.joined_at
     FROM copilot_internal.tenants t
     JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
@@ -333,7 +333,7 @@ RETURNS TABLE (
     WHERE tm.user_id = p_user_id
       AND tm.status = 'active'
       AND t.deleted_at IS NULL
-    ORDER BY (t.id = up.active_tenant_id) DESC, t.created_at ASC;
+    ORDER BY (t.id = up.current_tenant_id) DESC, t.created_at ASC;
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- Create personal tenant for new user
@@ -370,9 +370,9 @@ BEGIN
     VALUES (v_tenant_id, p_user_id, 'owner', 'active', NOW());
 
     -- Set as active tenant
-    INSERT INTO copilot_internal.user_preferences (user_id, active_tenant_id)
+    INSERT INTO copilot_internal.user_preferences (user_id, current_tenant_id)
     VALUES (p_user_id, v_tenant_id)
-    ON CONFLICT (user_id) DO UPDATE SET active_tenant_id = v_tenant_id;
+    ON CONFLICT (user_id) DO UPDATE SET current_tenant_id = v_tenant_id;
 
     RETURN v_tenant_id;
 END;
@@ -397,10 +397,10 @@ BEGIN
     END IF;
 
     -- Update active tenant
-    INSERT INTO copilot_internal.user_preferences (user_id, active_tenant_id)
+    INSERT INTO copilot_internal.user_preferences (user_id, current_tenant_id)
     VALUES (v_user_id, p_tenant_id)
     ON CONFLICT (user_id) DO UPDATE SET
-        active_tenant_id = p_tenant_id,
+        current_tenant_id = p_tenant_id,
         updated_at = NOW();
 
     RETURN TRUE;
@@ -436,7 +436,7 @@ CREATE INDEX idx_tenant_memberships_tenant ON copilot_internal.tenant_membership
 CREATE INDEX idx_tenant_memberships_status ON copilot_internal.tenant_memberships(tenant_id, status);
 
 -- User preferences
-CREATE INDEX idx_user_preferences_active_tenant ON copilot_internal.user_preferences(active_tenant_id) WHERE active_tenant_id IS NOT NULL;
+CREATE INDEX idx_user_preferences_active_tenant ON copilot_internal.user_preferences(current_tenant_id) WHERE current_tenant_id IS NOT NULL;
 ```
 
 ---
@@ -460,7 +460,7 @@ interface ExtendedJWT {
     sub: string;              // User ID (from auth provider)
     email: string;            // User email
     name?: string;            // User name
-    activeTenantId: string;   // Currently selected tenant
+    currentTenantId: string;   // Currently selected tenant
     lastValidated?: number;   // Last validation timestamp (for periodic checks)
 }
 ```
@@ -478,11 +478,11 @@ async authorize(credentials) {
     const userId = data.user.id;
 
     // 2. Get or create personal tenant
-    let activeTenantId = await getActiveTenantId(userId);
+    let currentTenantId = await getActiveTenantId(userId);
 
-    if (!activeTenantId) {
+    if (!currentTenantId) {
         // New user - create personal workspace
-        activeTenantId = await createPersonalTenant(userId, data.user.email);
+        currentTenantId = await createPersonalTenant(userId, data.user.email);
     }
 
     // 3. Return user with active tenant
@@ -490,7 +490,7 @@ async authorize(credentials) {
         id: userId,
         email: data.user.email,
         name: data.user.name,
-        activeTenantId: activeTenantId,
+        currentTenantId: currentTenantId,
     };
 }
 
@@ -499,10 +499,10 @@ async jwt({ token, user }) {
     if (user) {
         token.sub = user.id;
         token.email = user.email;
-        token.activeTenantId = user.activeTenantId;
+        token.currentTenantId = user.currentTenantId;
     }
 
-    // Periodic validation (every 5 min) can refresh activeTenantId
+    // Periodic validation (every 5 min) can refresh currentTenantId
     // if user switched tenants in another session
 
     return token;
@@ -512,7 +512,7 @@ async jwt({ token, user }) {
 async session({ session, token }) {
     session.user.id = token.sub;
     session.user.email = token.email;
-    session.user.activeTenantId = token.activeTenantId;
+    session.user.currentTenantId = token.currentTenantId;
     return session;
 }
 ```
@@ -609,9 +609,9 @@ export async function getTenantContext(session: Session): Promise<{
     role: string;
 }> {
     const userId = session?.user?.id;
-    const activeTenantId = session?.user?.activeTenantId;
+    const currentTenantId = session?.user?.currentTenantId;
 
-    if (!userId || !activeTenantId) {
+    if (!userId || !currentTenantId) {
         throw new Error('Unauthorized: Missing credentials');
     }
 
@@ -626,7 +626,7 @@ export async function getTenantContext(session: Session): Promise<{
         .from('tenant_memberships')  // ✅ Protected by RLS
         .select('role')
         .eq('user_id', userId)
-        .eq('tenant_id', activeTenantId)
+        .eq('tenant_id', currentTenantId)
         .eq('status', 'active')
         .single();
 
@@ -637,7 +637,7 @@ export async function getTenantContext(session: Session): Promise<{
     // Return verified context
     return {
         userId,
-        tenantId: activeTenantId,
+        tenantId: currentTenantId,
         role: membership.role,
     };
 }
@@ -732,9 +732,9 @@ export async function GET(request: NextRequest) {
    ↓
 6. Calls switch_tenant(acme_tenant_id)
    ↓
-7. Updates active_tenant_id
+7. Updates current_tenant_id
    ↓
-8. Refreshes JWT (includes new activeTenantId)
+8. Refreshes JWT (includes new currentTenantId)
    ↓
 9. Page reloads with Acme Corp data
    ↓
@@ -782,13 +782,13 @@ export async function GET(request: NextRequest) {
    ↓
 4. Frontend calls: await supabase.rpc('switch_tenant', { p_tenant_id: acme_id })
    ↓
-5. Database updates user_preferences.active_tenant_id = acme_id
+5. Database updates user_preferences.current_tenant_id = acme_id
    ↓
 6. Frontend calls: await update() // Refresh NextAuth session
    ↓
 7. NextAuth jwt() callback:
-   - Fetches new active_tenant_id from database
-   - Updates JWT with new activeTenantId
+   - Fetches new current_tenant_id from database
+   - Updates JWT with new currentTenantId
    ↓
 8. Frontend reloads page: window.location.reload()
    ↓
@@ -838,9 +838,9 @@ export interface TenantContext {
 
 export async function getTenantContext(session: Session | null): Promise<TenantContext> {
     const userId = session?.user?.id;
-    const activeTenantId = session?.user?.activeTenantId;
+    const currentTenantId = session?.user?.currentTenantId;
 
-    if (!userId || !activeTenantId) {
+    if (!userId || !currentTenantId) {
         throw new Error('Unauthorized: Missing user ID or active tenant');
     }
 
@@ -864,7 +864,7 @@ export async function getTenantContext(session: Session | null): Promise<TenantC
     const { data: access, error } = await supabase
         .rpc('verify_tenant_access', {
             p_user_id: userId,
-            p_tenant_id: activeTenantId,
+            p_tenant_id: currentTenantId,
         })
         .single();
 
@@ -874,7 +874,7 @@ export async function getTenantContext(session: Session | null): Promise<TenantC
 
     return {
         userId,
-        tenantId: activeTenantId,
+        tenantId: currentTenantId,
         role: access.role,
     };
 }
@@ -1206,7 +1206,7 @@ export default function TeamMembersPage() {
     async function loadMembers() {
         try {
             const supabase = createClient();
-            const tenantId = session?.user?.activeTenantId;
+            const tenantId = session?.user?.currentTenantId;
 
             const { data, error } = await supabase
                 .from('tenant_memberships')
@@ -1355,7 +1355,7 @@ All existing conversations, messages, etc. remain unchanged:
    - ✅ Shows all user's workspaces
    - ✅ Switching completes in <1 second
    - ✅ Data refreshes to show selected tenant
-   - ✅ JWT updated with new activeTenantId
+   - ✅ JWT updated with new currentTenantId
 
 4. **Team Management**
    - ✅ Owners can invite members
@@ -1398,7 +1398,7 @@ All existing conversations, messages, etc. remain unchanged:
 
 2. **Authentication**
    - ✅ NextAuth working with new tenant system
-   - ✅ JWT includes activeTenantId
+   - ✅ JWT includes currentTenantId
    - ✅ Session validation still working
    - ✅ Login flow completes successfully
 

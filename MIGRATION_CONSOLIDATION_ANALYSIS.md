@@ -1,582 +1,349 @@
-# Comprehensive Migration Consolidation Analysis
+# Migration Analysis & Consolidation Recommendations
 
 **Date**: 2026-01-06
-**Status**: Option A Complete ✅ | Option B Integrated into Multi-Tenant Plan
-**Purpose**: Identify and fix migration ordering issues, consolidate scattered schemas, improve maintainability
+**Purpose**: Review all migrations for ordering, schema consistency, and consolidation opportunities
+**Context**: Development only - no production data to preserve
 
 ---
 
-## Table of Contents
+## 📊 Current Migration Inventory (20 files)
 
-1. [Executive Summary](#executive-summary)
-2. [Critical Issues Found](#critical-issues-found)
-3. [Option A: Critical Fixes (COMPLETED)](#option-a-critical-fixes-completed)
-4. [Option B: Full Consolidation (In Multi-Tenant Plan)](#option-b-full-consolidation-in-multi-tenant-plan)
-5. [Current Migration Inventory](#current-migration-inventory)
-6. [Consolidation Recommendations](#consolidation-recommendations)
-7. [Impact Analysis](#impact-analysis)
-
----
-
-## Executive Summary
-
-**Analysis Date**: 2026-01-06
-**Total Migrations**: 23 files
-**Critical Issues**: 4 identified
-**Priority**: HIGH (data integrity risk)
-
-### Key Findings
-
-1. ⚠️ **Migration Ordering Issue** (FIXED ✅)
-   - `tenant_llm_policies` was running BEFORE `tenants` table creation
-   - No foreign key enforcement → data integrity risk
-   - **Status**: FIXED - Renamed to `20260105000003_tenant_llm_policies.sql`
-
-2. 💰 **Cost/Metrics Schema Scattered** (In Plan)
-   - 5 separate migration files
-   - No unified metrics schema
-   - Difficult to grant read-only access for analytics
-   - **Status**: Will be consolidated in Phase 1.5 of multi-tenant implementation
-
-3. 🔧 **Unnecessary Fix Migrations** (In Plan)
-   - `20260104000000_fix_execution_context_unique_constraint.sql`
-   - `20250314000000_conversation_contexts_rls_fix.sql`
-   - **Status**: Will be removed and incorporated in Phase 1.5
-
-4. 🏗️ **Schema Inconsistency** (In Plan)
-   - Mixed use of `copilot_internal.*` and `public.*`
-   - No analytics schema for read-only views
-   - **Status**: Will be standardized in Phase 1.5
-
----
-
-## Critical Issues Found
-
-### Issue 1: Migration Ordering Dependency Violation ⚠️ (FIXED ✅)
-
-**Problem**:
+### Cost & Metrics Migrations (5 files) 💰
 ```
-20251229000000_tenant_llm_policies.sql     ← Uses tenant_id (no FK)
-...
-20260105000000_multi_tenant_user_model.sql ← Creates tenants table
-```
-
-**Impact**:
-- No foreign key constraint on `tenant_id`
-- Database cannot enforce referential integrity
-- Orphaned records possible
-- Cascading deletes won't work
-
-**Root Cause**:
-- Migration created before multi-tenant architecture was designed
-- Incorrectly dated as Dec 29, 2025 instead of Jan 5, 2026
-
-**Fix Applied** ✅:
-```bash
-# Renamed migration file
-mv 20251229000000_tenant_llm_policies.sql \
-   20260105000003_tenant_llm_policies.sql
-
-# Added foreign key constraint
-tenant_id uuid NOT NULL UNIQUE
-  REFERENCES copilot_internal.tenants(id) ON DELETE CASCADE
-```
-
-**Verification**:
-```bash
-# Migration now runs in correct order
-20260105000000_multi_tenant_user_model.sql   # 1. Creates tenants
-20260105000001_backfill_personal_tenants.sql # 2. Backfills data
-20260105000002_cost_estimates.sql            # 3. Cost estimates
-20260105000003_tenant_llm_policies.sql       # 4. ✅ FK constraint works!
-```
-
-**Status**: ✅ **COMPLETE**
-
----
-
-### Issue 2: Cost/Metrics Schema Fragmentation 💰
-
-**Problem**: Cost tracking scattered across 5 separate migration files:
-
-```
-20260101000000_llm_cost_tracking.sql       # LLM costs
-20260104000001_e2b_cost_tracking.sql       # E2B costs
-20260104000002_atomic_quota_operations.sql # Quota operations
-20260104000003_llm_model_pricing.sql       # Model pricing
-20260105000002_cost_estimates.sql          # Cost estimates
-```
-
-**Current Architecture**:
-```sql
--- All in copilot_internal schema
-copilot_internal.llm_cost_records
-copilot_internal.e2b_cost_records
-copilot_internal.cost_quotas
-copilot_internal.llm_model_pricing
-copilot_internal.cost_estimates
-```
-
-**Problems**:
-1. No unified metrics schema
-2. Can't grant read-only access to analytics team
-3. Direct table access required (risky)
-4. Difficult to maintain
-5. Hard to add new cost sources (e.g., graph database costs)
-6. No separation between operational and analytical access
-
-**Proposed Solution** (Phase 1.5):
-
-```sql
--- Step 1: Keep existing tables in copilot_internal (operational)
-copilot_internal.llm_cost_records        -- Unchanged
-copilot_internal.e2b_cost_records        -- Unchanged
-copilot_internal.cost_quotas             -- Unchanged
-copilot_internal.llm_model_pricing       -- Unchanged
-copilot_internal.cost_estimates          -- Unchanged
-
--- Step 2: Create new metrics schema (analytical)
-CREATE SCHEMA metrics;
-
--- Step 3: Create unified read-only views
-CREATE VIEW metrics.all_costs AS
-  SELECT
-    'llm' AS cost_type,
-    tenant_id,
-    user_id,
-    cost_usd,
-    created_at,
-    metadata
-  FROM copilot_internal.llm_cost_records
-  UNION ALL
-  SELECT
-    'e2b' AS cost_type,
-    tenant_id,
-    user_id,
-    cost_usd,
-    created_at,
-    metadata
-  FROM copilot_internal.e2b_cost_records;
-
-CREATE VIEW metrics.quota_status AS
-  SELECT
-    tenant_id,
-    user_id,
-    quota_type,
-    limit_value,
-    current_usage,
-    (current_usage::float / NULLIF(limit_value, 0) * 100) AS usage_percent,
-    created_at
-  FROM copilot_internal.cost_quotas;
-
-CREATE VIEW metrics.llm_costs AS
-  SELECT * FROM copilot_internal.llm_cost_records;
-
-CREATE VIEW metrics.e2b_costs AS
-  SELECT * FROM copilot_internal.e2b_cost_records;
-
--- Step 4: Grant read-only access (BI tools, analytics)
-GRANT USAGE ON SCHEMA metrics TO authenticated;
-GRANT SELECT ON ALL TABLES IN SCHEMA metrics TO authenticated;
-```
-
-**Benefits**:
-- ✅ Clean separation: operational vs analytical
-- ✅ Future apps can query `metrics.*` without accessing raw tables
-- ✅ Easy to grant read-only access
-- ✅ Better for BI tools/dashboards (Tableau, Metabase, etc.)
-- ✅ Unified cost view across all sources
-- ✅ Can add computed metrics (usage %, burn rate, etc.)
-
-**Status**: 📋 **Planned for Phase 1.5**
-
----
-
-### Issue 3: Unnecessary Fix Migrations 🔧
-
-**Problem**: Two migrations exist only to fix issues from previous migrations:
-
-**Fix Migration 1**: `20260104000000_fix_execution_context_unique_constraint.sql`
-```sql
--- Fixes unique constraint issue from:
--- 20251210000000_execution_contexts.sql
-
--- Original (wrong):
-UNIQUE(conversation_id, sandbox_id)  -- ❌ Allows duplicates
-
--- Fix (correct):
-UNIQUE(conversation_id, message_id, sandbox_id)  -- ✅ Prevents duplicates
-```
-
-**Fix Migration 2**: `20250314000000_conversation_contexts_rls_fix.sql`
-```sql
--- Fixes RLS policy from earlier migration
--- Should have been part of original migration
-```
-
-**Why This is Bad**:
-- Clutters migration history
-- Harder to understand schema evolution
-- Increases migration count unnecessarily
-- Can cause confusion about which version is "correct"
-
-**Proposed Solution** (Phase 1.5):
-
-Since we have no production data yet:
-
-1. **Remove fix migrations**:
-   ```bash
-   rm 20260104000000_fix_execution_context_unique_constraint.sql
-   rm 20250314000000_conversation_contexts_rls_fix.sql
-   ```
-
-2. **Incorporate fixes into original migrations**:
-   ```sql
-   -- Update 20251210000000_execution_contexts.sql directly
-   UNIQUE(conversation_id, message_id, sandbox_id)  -- ✅ Correct from start
-   ```
-
-3. **Test with clean migration**:
-   ```bash
-   supabase db reset  # Should work perfectly
-   ```
-
-**Benefits**:
-- ✅ Cleaner migration history
-- ✅ Fewer files to maintain
-- ✅ Correct schema from the start
-- ✅ Easier to understand for new developers
-
-**Status**: 📋 **Planned for Phase 1.5** (no production data to preserve)
-
----
-
-### Issue 4: Schema Inconsistency 🏗️
-
-**Problem**: Inconsistent schema references across migrations:
-
-**Correct Usage** ✅:
-```sql
--- Tables in copilot_internal
-copilot_internal.tenants
-copilot_internal.tenant_memberships
-copilot_internal.conversations
-copilot_internal.llm_cost_records
-
--- Helper functions in public (for user access)
-public.get_active_tenant_id()
-public.get_user_tenants()
-public.switch_tenant()
-```
-
-**Incorrect Usage** ❌ (found in some migrations):
-```sql
-public.tenants  -- ❌ Should be copilot_internal.tenants
-```
-
-**Proposed Solution** (Phase 1.5):
-
-1. **Audit all migrations**:
-   ```bash
-   grep -r "public\\.tenant" supabase/migrations/
-   ```
-
-2. **Fix incorrect references**:
-   ```sql
-   -- Change all instances
-   public.tenants → copilot_internal.tenants
-   ```
-
-3. **Add schema consistency check**:
-   ```sql
-   -- In a new migration validation script
-   SELECT
-     schemaname,
-     tablename
-   FROM pg_tables
-   WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-   ORDER BY schemaname, tablename;
-   ```
-
-**Expected Result**:
-```
-copilot_internal | tenants                    ✅
-copilot_internal | tenant_memberships         ✅
-copilot_internal | conversations              ✅
-copilot_internal | llm_cost_records          ✅
-metrics          | (views only)               ✅
-public           | (functions only)           ✅
-```
-
-**Status**: 📋 **Planned for Phase 1.5**
-
----
-
-## Option A: Critical Fixes (COMPLETED ✅)
-
-**Objective**: Fix migration ordering to prevent data integrity issues.
-
-**Duration**: 30 minutes
-**Status**: ✅ **COMPLETE** (2026-01-06)
-
-### Changes Made
-
-#### 1. Renamed Migration File ✅
-```bash
-# Before
-supabase/migrations/20251229000000_tenant_llm_policies.sql
-
-# After
-supabase/migrations/20260105000003_tenant_llm_policies.sql
-```
-
-**Result**: Migration now runs AFTER `tenants` table is created.
-
-#### 2. Added Foreign Key Constraint ✅
-```sql
--- Before
-tenant_id uuid NOT NULL UNIQUE,
-
--- After
-tenant_id uuid NOT NULL UNIQUE
-  REFERENCES copilot_internal.tenants(id) ON DELETE CASCADE,
-```
-
-**Result**: Database enforces referential integrity.
-
-#### 3. Verified Migration Order ✅
-```bash
-$ ls -1 supabase/migrations/202601* | sort
-
 20260101000000_llm_cost_tracking.sql
-20260102000000_compaction_operations.sql
-20260104000000_fix_execution_context_unique_constraint.sql
 20260104000001_e2b_cost_tracking.sql
 20260104000002_atomic_quota_operations.sql
 20260104000003_llm_model_pricing.sql
-20260105000000_auto_compaction_query.sql
-20260105000000_multi_tenant_user_model.sql          ← Creates tenants
-20260105000001_backfill_personal_tenants.sql
-20260105000001_tenant_quota_initialization.sql
 20260105000002_cost_estimates.sql
-20260105000003_tenant_llm_policies.sql              ← ✅ FK constraint works!
 ```
 
-**Result**: Correct dependency order established.
+### Tenant & Multi-Tenant (3 files) 🏢
+```
+20251229000000_tenant_llm_policies.sql
+20260105000003_multi_tenant_user_model.sql
+20260105000004_tenant_quota_initialization.sql
+```
 
-### Testing
+### Conversation Core (9 files) 💬
+```
+20241114000000_conversations.sql
+20241207000000_conversation_paths_consolidated.sql
+20250205000000_conversation_archival.sql
+20250314000000_conversation_contexts_rls_fix.sql
+20251210000001_conversation_configs.sql
+20251210000002_message_pinning.sql
+20251210000003_conversation_context_trace_spans.sql
+20260102000000_compaction_operations.sql
+20260105000000_auto_compaction_query.sql
+```
 
-**Expected Behavior**:
+### Execution & Tracing (2 files) 🔍
+```
+20250319000000_trace_columns.sql
+20251210000000_execution_contexts.sql
+```
+
+### Bug Fixes (1 file) 🐛
+```
+20260104000000_fix_execution_context_unique_constraint.sql
+```
+
+---
+
+## 🚨 Critical Issues Found
+
+### Issue 1: Schema Inconsistency ⚠️
+
+**Problem**: Migrations reference both `public` and `copilot_internal` schemas inconsistently
+
+**Examples**:
+- Multi-tenant tables use `copilot_internal.tenants`
+- Helper functions use `public.get_current_tenant_id()`
+- Some migrations check for `public.tenants` (wrong schema)
+
+**Impact**: Confusing, prone to errors, RLS policies may be in wrong places
+
+**Recommendation**:
+- **Data tables** → `copilot_internal.*` (protected by RLS)
+- **Helper functions** → `public.*` (accessible to users)
+- **Metrics views** → `metrics.*` (new read-only schema)
+
+### Issue 2: Cost/Metrics Tables Scattered 💰
+
+**Problem**: 5 separate migrations for cost tracking, spread across different dates
+
+**Tables Created**:
+```sql
+copilot_internal.llm_cost_records
+copilot_internal.e2b_cost_records
+copilot_internal.cost_quotas
+copilot_internal.model_pricing
+copilot_internal.e2b_pricing
+copilot_internal.llm_cost_estimates
+copilot_internal.e2b_cost_estimates
+```
+
+**Issues**:
+- No unified metrics schema
+- Direct table access required for reads
+- No isolation between write operations and read queries
+- Difficult to grant read-only access
+
+**Recommendation**: Consolidate into single migration + metrics views
+
+### Issue 3: Unnecessary Backfill/Fix Migrations 🔧
+
+**Files to Remove** (no production data):
+- `20260104000000_fix_execution_context_unique_constraint.sql` - Fix for a previous migration
+- `20250314000000_conversation_contexts_rls_fix.sql` - RLS policy fix
+- Any "DROP IF EXISTS" logic that's fixing previous migrations
+
+**Recommendation**: Incorporate fixes directly into original migrations
+
+### Issue 4: Compaction Scattered Across 2 Files 📦
+
+**Files**:
+- `20260102000000_compaction_operations.sql` - Tables and functions
+- `20260105000000_auto_compaction_query.sql` - Query function only
+
+**Recommendation**: Consolidate into single compaction migration
+
+### Issue 5: Tenant Dependencies Out of Order 🔀
+
+**Current Order**:
+```
+20251229000000_tenant_llm_policies.sql    ← References tenants (doesn't exist yet!)
+...
+20260105000003_multi_tenant_user_model.sql ← Creates tenants table
+20260105000004_tenant_quota_initialization.sql ← Uses tenants table
+```
+
+**Problem**: `tenant_llm_policies` runs before tenants table exists!
+
+**Recommendation**: Renumber tenant_llm_policies to run after multi_tenant_user_model
+
+---
+
+## 🎯 Consolidation Plan
+
+### Phase 1: Remove Unnecessary Files
+
+**Delete** (fixes can be incorporated):
+1. `20260104000000_fix_execution_context_unique_constraint.sql`
+   - Incorporate fix into `20251210000000_execution_contexts.sql`
+2. `20250314000000_conversation_contexts_rls_fix.sql`
+   - Incorporate into `20241114000000_conversations.sql`
+
+### Phase 2: Fix Migration Ordering
+
+**Rename**:
+1. `20251229000000_tenant_llm_policies.sql` → `20260105000005_tenant_llm_policies.sql`
+   - Must run AFTER tenants table is created
+
+**New Order**:
+```
+20260105000003_multi_tenant_user_model.sql      ← Creates tenants
+20260105000004_tenant_quota_initialization.sql  ← Uses tenants
+20260105000005_tenant_llm_policies.sql          ← Uses tenants ✅
+```
+
+### Phase 3: Consolidate Cost/Metrics
+
+**Current** (5 files):
+```
+20260101000000_llm_cost_tracking.sql
+20260104000001_e2b_cost_tracking.sql
+20260104000002_atomic_quota_operations.sql
+20260104000003_llm_model_pricing.sql
+20260105000002_cost_estimates.sql
+```
+
+**Consolidated** → `20260101000000_cost_and_metrics_consolidated.sql`:
+
+```sql
+-- Part 1: Core Cost Tables
+CREATE TABLE copilot_internal.llm_cost_records (...)
+CREATE TABLE copilot_internal.e2b_cost_records (...)
+CREATE TABLE copilot_internal.cost_quotas (...)
+CREATE TABLE copilot_internal.model_pricing (...)
+CREATE TABLE copilot_internal.e2b_pricing (...)
+CREATE TABLE copilot_internal.llm_cost_estimates (...)
+CREATE TABLE copilot_internal.e2b_cost_estimates (...)
+
+-- Part 2: Metrics Schema (NEW - Read-Only Views)
+CREATE SCHEMA IF NOT EXISTS metrics;
+
+CREATE VIEW metrics.llm_costs AS
+SELECT
+  tenant_id,
+  model_provider,
+  model_name,
+  SUM(cost_usd) as total_cost,
+  SUM(input_tokens) as total_input_tokens,
+  SUM(output_tokens) as total_output_tokens,
+  COUNT(*) as request_count
+FROM copilot_internal.llm_cost_records
+GROUP BY tenant_id, model_provider, model_name;
+
+CREATE VIEW metrics.e2b_costs AS
+SELECT
+  tenant_id,
+  sandbox_type,
+  SUM(cost_usd) as total_cost,
+  SUM(duration_seconds) as total_duration,
+  COUNT(*) as session_count
+FROM copilot_internal.e2b_cost_records
+GROUP BY tenant_id, sandbox_type;
+
+CREATE VIEW metrics.quota_status AS
+SELECT
+  scope,
+  scope_id,
+  resource_type,
+  limit_usd,
+  current_spend_usd,
+  (current_spend_usd / NULLIF(limit_usd, 0) * 100) as usage_percentage,
+  CASE
+    WHEN current_spend_usd >= limit_usd THEN 'EXCEEDED'
+    WHEN current_spend_usd >= limit_usd * warning_threshold THEN 'WARNING'
+    ELSE 'OK'
+  END as status
+FROM copilot_internal.cost_quotas
+WHERE period_start <= NOW() AND period_end >= NOW();
+
+-- Grant read access to metrics schema
+GRANT USAGE ON SCHEMA metrics TO authenticated, service_role;
+GRANT SELECT ON ALL TABLES IN SCHEMA metrics TO authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA metrics GRANT SELECT ON TABLES TO authenticated, service_role;
+
+-- Part 3: Helper Functions (keep in public schema)
+CREATE FUNCTION public.get_tenant_cost_summary(p_tenant_id UUID) ...
+CREATE FUNCTION public.check_quota_before_operation(...) ...
+```
+
+**Benefits**:
+- All cost/metrics in one place
+- Read-only `metrics` schema for analytics/reporting
+- Can grant read access without exposing write operations
+- Future apps can query `metrics.*` without direct table access
+
+### Phase 4: Consolidate Compaction
+
+**Current** (2 files):
+```
+20260102000000_compaction_operations.sql
+20260105000000_auto_compaction_query.sql
+```
+
+**Consolidated** → `20260102000000_compaction_operations.sql`:
+- Merge both files
+- Delete `20260105000000_auto_compaction_query.sql`
+
+### Phase 5: Review All Schema References
+
+**Audit Required**:
+1. Check all migrations for `public.tenants` → should be `copilot_internal.tenants`
+2. Verify all RLS policies are on `copilot_internal.*` tables
+3. Ensure helper functions are in `public.*`
+
+---
+
+## 📋 Specific Actions Needed
+
+### Action 1: Check tenant_llm_policies Dependencies
+
 ```bash
-# When you run supabase db reset
-# 1. multi_tenant_user_model.sql creates tenants table
-# 2. tenant_llm_policies.sql can now reference it with FK
-# 3. No errors, full referential integrity
+# Check what this migration references
+grep -i "tenant" supabase/migrations/20251229000000_tenant_llm_policies.sql
 ```
 
-**Status**: ✅ **VERIFIED** (manually)
+If it references `tenants` table, rename to run after multi-tenant migration.
 
----
+### Action 2: Audit All Schema References
 
-## Option B: Full Consolidation (In Multi-Tenant Plan)
+```bash
+# Find all public.* references
+grep -n "FROM public\." supabase/migrations/*.sql
 
-**Objective**: Consolidate cost/metrics schema, remove fix migrations, standardize schema usage.
-
-**Duration**: 2-3 hours
-**Status**: 📋 **Integrated into Phase 1.5** of multi-tenant implementation
-
-### Changes Planned
-
-#### 1. Consolidate Cost/Metrics Schema
-- Create `metrics` schema
-- Add unified analytical views
-- Grant read-only access
-- **Timeline**: Phase 1.5 (after Phase 1 database foundation)
-
-#### 2. Remove Fix Migrations
-- Delete `fix_execution_context_unique_constraint.sql`
-- Delete `conversation_contexts_rls_fix.sql`
-- Incorporate fixes into original migrations
-- **Timeline**: Phase 1.5
-
-#### 3. Audit Schema References
-- Find all `public.tenant*` references
-- Change to `copilot_internal.tenant*`
-- Add validation script
-- **Timeline**: Phase 1.5
-
-#### 4. Create Migration Validation Script
-- Check schema consistency
-- Verify foreign key constraints
-- Validate RLS policies
-- **Timeline**: Phase 1.5
-
-### Integration with Multi-Tenant Plan
-
-Option B will be implemented as **Phase 1.5** in the multi-tenant implementation:
-
-```
-Phase 0: Preparation ✅
-Phase 1: Database Foundation (in progress)
-Phase 1.5: Migration Consolidation ← NEW PHASE (Option B)
-Phase 2: Authentication Layer
-Phase 3: API Routes
-Phase 4: UI Components
-Phase 5: Seed Data & Testing
-Phase 6: Deployment
+# Find all WHERE clauses checking for public schema
+grep -n "table_schema = 'public'" supabase/migrations/*.sql
 ```
 
-**Rationale**:
-- Complete Phase 1 first to establish core multi-tenant tables
-- Then consolidate related schemas (cost, metrics) in Phase 1.5
-- Proceed with auth/API/UI implementation in Phases 2-4
+### Action 3: Consolidate Cost Migrations
+
+Would you like me to:
+1. Create consolidated `cost_and_metrics_consolidated.sql`
+2. Create new `metrics` schema with read-only views
+3. Delete the 4 separate cost migrations
+4. Update implementation plan
+
+### Action 4: Fix Migration Order
+
+1. Rename `tenant_llm_policies` to `20260105000005_*`
+2. Test `supabase db reset`
+3. Verify no "table not found" errors
 
 ---
 
-## Current Migration Inventory
+## 🎨 Proposed New Schema Structure
 
-### Total: 23 Migration Files
+### Schemas:
+```
+copilot_internal.*    - All data tables (conversations, tenants, costs, etc.)
+  ↓
+public.*              - Helper functions for authenticated users
+  ↓
+metrics.*             - Read-only views for analytics/reporting (NEW)
+  ↓
+auth.*                - Supabase auth (existing)
+```
 
-| Date       | File | Purpose | Schema | Status |
-|------------|------|---------|--------|--------|
-| 2024-11-14 | `conversations.sql` | Core conversations | `copilot_internal` | ✅ Good |
-| 2024-12-07 | `conversation_paths_consolidated.sql` | Path system | `copilot_internal` | ✅ Good |
-| 2025-02-05 | `conversation_archival.sql` | Archival | `copilot_internal` | ✅ Good |
-| 2025-03-14 | `conversation_contexts_rls_fix.sql` | RLS fix | `copilot_internal` | ⚠️ Remove in Phase 1.5 |
-| 2025-03-19 | `trace_columns.sql` | Tracing | `copilot_internal` | ✅ Good |
-| 2025-12-10 | `execution_contexts.sql` | E2B contexts | `copilot_internal` | ⚠️ Has unique constraint issue |
-| 2025-12-10 | `conversation_configs.sql` | Configs | `copilot_internal` | ✅ Good |
-| 2025-12-10 | `message_pinning.sql` | Pinning | `copilot_internal` | ✅ Good |
-| 2025-12-10 | `conversation_context_trace_spans.sql` | Trace spans | `copilot_internal` | ✅ Good |
-| 2026-01-01 | `llm_cost_tracking.sql` | LLM costs | `copilot_internal` | ⚠️ Consolidate in Phase 1.5 |
-| 2026-01-02 | `compaction_operations.sql` | Compaction | `copilot_internal` | ✅ Good |
-| 2026-01-04 | `fix_execution_context_unique_constraint.sql` | Fix | `copilot_internal` | ⚠️ Remove in Phase 1.5 |
-| 2026-01-04 | `e2b_cost_tracking.sql` | E2B costs | `copilot_internal` | ⚠️ Consolidate in Phase 1.5 |
-| 2026-01-04 | `atomic_quota_operations.sql` | Quotas | `copilot_internal` | ⚠️ Consolidate in Phase 1.5 |
-| 2026-01-04 | `llm_model_pricing.sql` | Pricing | `copilot_internal` | ⚠️ Consolidate in Phase 1.5 |
-| 2026-01-05 | `auto_compaction_query.sql` | Compaction | `copilot_internal` | ✅ Good |
-| 2026-01-05 | `multi_tenant_user_model.sql` | Multi-tenant | `copilot_internal` | ✅ Good |
-| 2026-01-05 | `backfill_personal_tenants.sql` | Backfill | `copilot_internal` | ✅ Good |
-| 2026-01-05 | `tenant_quota_initialization.sql` | Quotas | `copilot_internal` | ⚠️ Consolidate in Phase 1.5 |
-| 2026-01-05 | `cost_estimates.sql` | Cost estimates | `copilot_internal` | ⚠️ Consolidate in Phase 1.5 |
-| 2026-01-05 | `tenant_llm_policies.sql` | LLM policies | `copilot_internal` | ✅ **FIXED** |
+### Access Control:
+```
+authenticated role:
+  - READ:  copilot_internal.* (via RLS)
+  - READ:  metrics.* (via GRANTs)
+  - EXECUTE: public.* functions
 
----
+service_role:
+  - FULL ACCESS: all schemas
 
-## Consolidation Recommendations
-
-### Priority 1: Fix Tenant Dependencies (COMPLETE ✅)
-- ✅ Rename `tenant_llm_policies` to correct order
-- ✅ Add foreign key constraint
-- ✅ Verify migration order
-- **Status**: COMPLETE
-
-### Priority 2: Create Metrics Schema (Phase 1.5)
-- Consolidate 5 cost/metrics files → 1 unified schema
-- Create read-only `metrics` schema with views
-- Grant SELECT to authenticated users
-- **Benefit**: Clean analytics access, easier BI tool integration
-
-### Priority 3: Remove Fix Migrations (Phase 1.5)
-- Delete fix migrations
-- Incorporate fixes into original migrations
-- **Benefit**: Cleaner migration history, less confusion
-
-### Priority 4: Audit Schema References (Phase 1.5)
-- Fix all `public.tenant*` → `copilot_internal.tenant*`
-- Add schema validation script
-- **Benefit**: Consistent schema usage, easier to maintain
+future_analytics_role:
+  - READ ONLY: metrics.* (no access to underlying tables)
+```
 
 ---
 
-## Impact Analysis
+## ✅ Benefits of Consolidation
 
-### Before Consolidation (Current)
-- **Migration Count**: 23 files
-- **Critical Issues**: 1 (ordering) ← **FIXED ✅**
-- **Schema Organization**: Scattered
-- **Analytics Access**: Direct table access (risky)
-- **Maintainability**: Medium (scattered files, inconsistent schemas)
-
-### After Option A (Current State ✅)
-- **Migration Count**: 23 files
-- **Critical Issues**: 0 ← **FIXED ✅**
-- **Schema Organization**: Scattered (unchanged)
-- **Analytics Access**: Direct table access (unchanged)
-- **Maintainability**: Medium+ (correct dependency order)
-- **Data Integrity**: ✅ Enforced via foreign keys
-
-### After Option B (Phase 1.5 - Planned)
-- **Migration Count**: ~18 files (5 fewer)
-- **Critical Issues**: 0
-- **Schema Organization**: ✅ Unified (`copilot_internal` + `metrics`)
-- **Analytics Access**: ✅ Read-only `metrics` schema
-- **Maintainability**: HIGH ✅
-  - Correct dependency ordering
-  - Unified cost/metrics schema
-  - No fix migrations
-  - Consistent schema usage
-  - Analytics-ready
-
-### Benefits Summary
-
-**Option A (Complete ✅)**:
-- ✅ Data integrity enforced
-- ✅ No orphaned records
-- ✅ Cascading deletes work
-- ✅ Foreign key constraints active
-- ⏱️ **Time**: 30 minutes
-
-**Option B (Phase 1.5 - Planned)**:
-- ✅ Unified cost/metrics analytics
-- ✅ Read-only access for BI tools
-- ✅ Cleaner migration history
-- ✅ Consistent schema usage
-- ✅ Easier to onboard new developers
-- ✅ Better for multi-tenant SaaS architecture
-- ⏱️ **Time**: 2-3 hours (integrated into multi-tenant plan)
+1. **Fewer Files**: 20 → ~15 migrations
+2. **Clearer Organization**: Related tables together
+3. **Better Schema Design**: Separate read-only metrics
+4. **Easier Maintenance**: Fixes incorporated, not separate
+5. **Correct Ordering**: Dependencies resolved
+6. **No Production Baggage**: Clean slate without backfill complexity
 
 ---
 
-## Next Steps
+## 🚀 Next Steps
 
-### Immediate (Complete ✅)
-1. ✅ Option A fixes applied
-2. ✅ Migration order verified
-3. ✅ Foreign key constraint added
-4. ✅ Documentation created
+**Would you like me to:**
+1. ✅ Create consolidated cost/metrics migration with new `metrics` schema
+2. ✅ Fix tenant_llm_policies ordering
+3. ✅ Remove unnecessary fix migrations
+4. ✅ Audit and fix all schema references (public vs copilot_internal)
+5. ✅ Test full migration reset
 
-### Phase 1.5 (Integrated into Multi-Tenant Plan)
-1. Complete Phase 1 (Database Foundation)
-2. Implement Option B consolidation:
-   - Create `metrics` schema
-   - Consolidate cost/metrics migrations
-   - Remove fix migrations
-   - Audit schema references
-3. Test thoroughly with `supabase db reset`
-4. Proceed to Phase 2 (Authentication Layer)
-
-### Long-Term
-1. Add migration validation CI/CD checks
-2. Create schema evolution guidelines
-3. Document migration best practices
-4. Consider using migration consolidation for future schemas
+**Priority Order:**
+1. Fix tenant_llm_policies ordering (critical - broken dependency)
+2. Consolidate cost/metrics with metrics schema (high value)
+3. Remove fix migrations (cleanup)
+4. Audit schema references (consistency)
 
 ---
 
-## Conclusion
+**Estimated Time**: 2-3 hours to complete all consolidations and testing
 
-**Option A**: ✅ **COMPLETE** - Critical migration ordering issue resolved
-**Option B**: 📋 **PLANNED** - Full consolidation integrated into Phase 1.5 of multi-tenant implementation
+**Risk**: Low (development only, no production data)
 
-**Current Status**: Database migrations are now in correct dependency order with proper foreign key enforcement. Full consolidation of cost/metrics schema and cleanup of fix migrations will happen in Phase 1.5, after the core multi-tenant foundation is established in Phase 1.
-
-**Risk Level**: 🟢 **LOW** - Critical data integrity issue fixed, remaining work is optimization
-
-**Ready to Proceed**: ✅ **YES** - Can now safely proceed with Phase 1 of multi-tenant implementation
-
----
-
-**Document Version**: 1.0
-**Last Updated**: 2026-01-06
-**Status**: Option A Complete ✅ | Option B Planned for Phase 1.5 📋
+**Benefit**: Much cleaner migration structure for future development
