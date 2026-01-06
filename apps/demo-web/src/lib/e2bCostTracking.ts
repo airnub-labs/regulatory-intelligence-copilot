@@ -20,6 +20,7 @@ import {
   type NotificationService,
   initNotificationServiceFromEnv,
   createCostAlert,
+  type E2BPricing,
 } from '@reg-copilot/reg-intel-observability';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -105,7 +106,7 @@ export const initializeE2BCostTracking = (): void => {
     const redisBackend = resolveRedisBackend('cache');
     const redisClient = createKeyValueClient(redisBackend);
 
-    let cache: TransparentCache<any> | undefined;
+    let cache: TransparentCache<E2BPricing> | undefined;
 
     if (redisClient && redisBackend) {
       // Redis is available - pass client directly to TransparentCache

@@ -21,7 +21,6 @@ import {
   describeRedisBackendSelection,
   resolveRedisBackend,
   createTransparentCache,
-  type RedisKeyValueClient,
   type CacheBackend,
   type TransparentCache as BaseTransparentCache,
 } from '@reg-copilot/reg-intel-cache';

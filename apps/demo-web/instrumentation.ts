@@ -74,10 +74,11 @@ export async function register() {
       // Create Supabase client for snapshot storage
       const supabase = createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
+        db: { schema: 'copilot_internal' },
       });
 
       // Create snapshot storage provider
-      const snapshotStorage = new SupabaseSnapshotStorage(supabase);
+      const snapshotStorage = new SupabaseSnapshotStorage(supabase as any);
 
       // Initialize compaction system
       await initializeCompactionSystem({
