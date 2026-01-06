@@ -27,9 +27,10 @@ CREATE TABLE copilot_internal.workspace_invitations (
 
 -- Partial unique index: one pending invitation per tenant+email
 -- (PostgreSQL doesn't support WHERE clauses in table-level UNIQUE constraints)
+-- Note: Can't use NOW() in index predicate (not IMMUTABLE), expiration is handled at query time
 CREATE UNIQUE INDEX unique_pending_invitation
   ON copilot_internal.workspace_invitations(tenant_id, email)
-  WHERE accepted_at IS NULL AND expires_at > NOW();
+  WHERE accepted_at IS NULL;
 
 CREATE INDEX idx_workspace_invitations_token ON copilot_internal.workspace_invitations(token)
   WHERE accepted_at IS NULL;
