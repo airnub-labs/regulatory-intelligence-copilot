@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Settings,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -48,6 +49,12 @@ const navItems: NavItem[] = [
     href: "/analytics/compaction",
     icon: <Layers className="h-5 w-5" />,
     description: "Compaction analytics",
+  },
+  {
+    label: "Team",
+    href: "/settings/team",
+    icon: <Settings className="h-5 w-5" />,
+    description: "Team settings",
   },
 ]
 

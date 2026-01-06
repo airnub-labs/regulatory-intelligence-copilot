@@ -40,10 +40,10 @@ CREATE TABLE IF NOT EXISTS copilot_internal.execution_contexts (
 
     -- Metadata and diagnostics
     error_message text,
-    resource_usage jsonb,
+    resource_usage jsonb
 
-    -- Constraint: one execution context per path
-    UNIQUE(tenant_id, conversation_id, path_id)
+    -- NOTE: UNIQUE constraint removed - using partial unique index instead
+    -- See idx_execution_contexts_unique_active_path below
 );
 
 -- =============================================================================
@@ -70,6 +70,16 @@ CREATE INDEX IF NOT EXISTS idx_execution_contexts_sandbox
 -- Index for conversation lookups (for bulk operations)
 CREATE INDEX IF NOT EXISTS idx_execution_contexts_conversation
     ON copilot_internal.execution_contexts(conversation_id);
+
+-- Partial unique index: Ensures only one active execution context per path
+-- Allows multiple terminated contexts for the same path (for historical tracking)
+-- This replaces the table-level UNIQUE constraint that was too restrictive
+CREATE UNIQUE INDEX IF NOT EXISTS idx_execution_contexts_unique_active_path
+    ON copilot_internal.execution_contexts(tenant_id, conversation_id, path_id)
+    WHERE terminated_at IS NULL;
+
+COMMENT ON INDEX copilot_internal.idx_execution_contexts_unique_active_path IS
+    'Ensures only one active execution context per path. Allows multiple terminated contexts for the same path for historical tracking.';
 
 -- =============================================================================
 -- PART 3: Enable Row Level Security (RLS)
@@ -248,7 +258,59 @@ CREATE TRIGGER trg_set_execution_context_expiry
     EXECUTE FUNCTION copilot_internal.set_execution_context_expiry();
 
 -- =============================================================================
--- PART 8: Verification
+-- PART 8: Cleanup Function for Terminated Contexts
+-- =============================================================================
+-- Function to clean up old terminated contexts to prevent unbounded growth
+-- This is especially useful as we now allow multiple terminated contexts per path
+
+CREATE OR REPLACE FUNCTION copilot_internal.cleanup_old_terminated_contexts(
+    p_days_old integer DEFAULT 7,
+    p_limit integer DEFAULT 100
+)
+RETURNS TABLE(
+    deleted_count integer,
+    deleted_ids uuid[]
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    deleted_id_array uuid[];
+    delete_count integer;
+BEGIN
+    -- Delete terminated contexts older than p_days_old days
+    -- Use CTE to select candidates first, then delete via USING
+    WITH to_delete AS (
+        SELECT id
+        FROM copilot_internal.execution_contexts
+        WHERE terminated_at IS NOT NULL
+          AND terminated_at < now() - (p_days_old || ' days')::interval
+        ORDER BY terminated_at ASC
+        LIMIT GREATEST(COALESCE(p_limit, 100), 0)
+    ), deleted AS (
+        DELETE FROM copilot_internal.execution_contexts ec
+        USING to_delete td
+        WHERE ec.id = td.id
+        RETURNING ec.id
+    )
+    SELECT array_agg(id), count(*)::integer
+    INTO deleted_id_array, delete_count
+    FROM deleted;
+
+    -- Handle case where no rows were deleted
+    deleted_id_array := COALESCE(deleted_id_array, ARRAY[]::uuid[]);
+    delete_count := COALESCE(delete_count, 0);
+
+    RETURN QUERY SELECT delete_count, deleted_id_array;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION copilot_internal.cleanup_old_terminated_contexts(integer, integer) TO service_role;
+
+COMMENT ON FUNCTION copilot_internal.cleanup_old_terminated_contexts IS
+    'Cleans up terminated execution contexts older than specified days. Returns count and IDs of deleted records. Recommended to run periodically via cron job.';
+
+-- =============================================================================
+-- PART 9: Verification
 -- =============================================================================
 
 DO $$
