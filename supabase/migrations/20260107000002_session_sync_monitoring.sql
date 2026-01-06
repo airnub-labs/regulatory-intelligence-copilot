@@ -39,7 +39,25 @@ COMMENT ON COLUMN copilot_internal.session_sync_logs.actual_tenant_id IS
   'The currentTenantId from JWT (may be stale)';
 
 -- =====================================================
--- 2. Function: Log Session Mismatch
+-- 2. User Tenant Context Table
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS copilot_internal.user_tenant_contexts (
+  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  current_tenant_id uuid REFERENCES copilot_internal.tenants(id) ON DELETE SET NULL,
+  updated_at timestamptz NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_tenant_contexts_tenant ON copilot_internal.user_tenant_contexts(current_tenant_id);
+
+COMMENT ON TABLE copilot_internal.user_tenant_contexts IS
+  'Tracks the current active tenant for each user. Updated when user switches workspaces. Used to detect session/DB inconsistencies.';
+
+COMMENT ON COLUMN copilot_internal.user_tenant_contexts.current_tenant_id IS
+  'The currently active tenant_id for this user (database source of truth)';
+
+-- =====================================================
+-- 3. Function: Log Session Mismatch
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION public.log_session_mismatch(
@@ -73,7 +91,7 @@ COMMENT ON FUNCTION public.log_session_mismatch IS
   'Logs session/database tenant ID mismatches for monitoring. Called from middleware when detecting inconsistency.';
 
 -- =====================================================
--- 3. Function: Get Current Tenant ID
+-- 4. Function: Get Current Tenant ID
 -- =====================================================
 -- Note: Keeps DEFAULT auth.uid() from original definition in 20260105000003
 -- (PostgreSQL doesn't allow removing defaults with CREATE OR REPLACE)
@@ -103,7 +121,7 @@ COMMENT ON FUNCTION public.get_current_tenant_id IS
   'Returns the current active tenant_id from database for a user. Used to detect session/DB mismatches.';
 
 -- =====================================================
--- 4. Function: Get Session Sync Stats (Monitoring)
+-- 5. Function: Get Session Sync Stats (Monitoring)
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION public.get_session_sync_stats(
@@ -147,7 +165,7 @@ COMMENT ON FUNCTION public.get_session_sync_stats IS
   'Returns session sync mismatch statistics for monitoring dashboard. Shows total mismatches, affected users, and most common paths.';
 
 -- =====================================================
--- 5. Cleanup Function for Old Logs
+-- 6. Cleanup Function for Old Logs
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION copilot_internal.cleanup_old_session_sync_logs()
