@@ -163,14 +163,12 @@ begin
     user_id,
     active_tenant_id,
     preferences,
-    created_at,
     updated_at
   )
   values (
     demo_user_id,
     demo_tenant_id,
     '{}'::jsonb,
-    demo_now,
     demo_now
   )
   on conflict (user_id) do update

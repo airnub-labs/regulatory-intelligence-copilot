@@ -206,8 +206,12 @@ cd supabase
 supabase db reset
 
 # This applies ALL migrations including the new ones:
-# - 20260105000000_multi_tenant_user_model.sql
-# - 20260105000001_backfill_personal_tenants.sql
+# - 20260105000003_multi_tenant_user_model.sql
+# - 20260105000004_backfill_personal_tenants.sql
+#
+# NOTE: The backfill migration (000004) is for production data migration only.
+# In development, there is no existing data to preserve - seed data will be
+# created fresh with proper tenant relationships.
 
 # Verify migrations applied
 psql postgresql://postgres:postgres@localhost:54322/postgres
