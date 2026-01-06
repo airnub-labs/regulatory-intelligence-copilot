@@ -54,7 +54,7 @@ All required files are present and verified:
 
 3. **Authentication**:
    - NextAuth preserved for provider flexibility
-   - JWT includes: user_id + active_tenant_id
+   - JWT includes: user_id + current_tenant_id
    - Provider-agnostic (works with any auth provider)
 
 4. **Security**:
@@ -208,13 +208,13 @@ NextAuth verifies credentials
     ↓
 create_personal_tenant() if new user
     ↓
-get_active_tenant_id() loads preference
+get_current_tenant_id() loads preference
     ↓
-JWT includes: { user_id, active_tenant_id }
+JWT includes: { user_id, current_tenant_id }
     ↓
 API routes call getTenantContext(session)
     ↓
-verify_tenant_access(user_id, active_tenant_id) via RLS
+verify_tenant_access(user_id, current_tenant_id) via RLS
     ↓
 Returns: { tenant_id, role }
     ↓
@@ -225,7 +225,7 @@ Application filters data by verified tenant_id
 
 ```sql
 -- Core functions from migration
-get_active_tenant_id(user_id) → Returns active tenant
+get_current_tenant_id(user_id) → Returns active tenant
 get_user_tenants(user_id) → Returns all memberships
 create_personal_tenant(user_id, email) → Creates & assigns personal workspace
 switch_tenant(tenant_id) → Updates active preference

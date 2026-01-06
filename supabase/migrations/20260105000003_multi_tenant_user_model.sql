@@ -84,12 +84,13 @@ CREATE TABLE IF NOT EXISTS copilot_internal.user_preferences (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
 
     -- Currently selected tenant
-    active_tenant_id UUID REFERENCES copilot_internal.tenants(id) ON DELETE SET NULL,
+    current_tenant_id UUID REFERENCES copilot_internal.tenants(id) ON DELETE SET NULL,
 
     -- UI and other preferences
     preferences JSONB NOT NULL DEFAULT '{}'::jsonb,
 
-    -- Timestamp
+    -- Timestamps
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Constraints
@@ -98,7 +99,7 @@ CREATE TABLE IF NOT EXISTS copilot_internal.user_preferences (
 
 COMMENT ON TABLE copilot_internal.tenants IS 'Workspaces/organizations that users belong to';
 COMMENT ON TABLE copilot_internal.tenant_memberships IS 'Many-to-many relationship between users and tenants';
-COMMENT ON TABLE copilot_internal.user_preferences IS 'User-specific settings including active tenant selection';
+COMMENT ON TABLE copilot_internal.user_preferences IS 'User-specific settings including current tenant selection';
 
 -- ========================================
 -- PART 2: Indexes
@@ -130,9 +131,9 @@ CREATE INDEX IF NOT EXISTS idx_tenant_memberships_status
     ON copilot_internal.tenant_memberships(tenant_id, status);
 
 -- User preferences
-CREATE INDEX IF NOT EXISTS idx_user_preferences_active_tenant
-    ON copilot_internal.user_preferences(active_tenant_id)
-    WHERE active_tenant_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_user_preferences_current_tenant
+    ON copilot_internal.user_preferences(current_tenant_id)
+    WHERE current_tenant_id IS NOT NULL;
 
 -- ========================================
 -- PART 3: Triggers
@@ -296,19 +297,19 @@ CREATE POLICY preferences_own_all
 -- ========================================
 
 -- Get user's currently active tenant ID
-CREATE OR REPLACE FUNCTION public.get_active_tenant_id(p_user_id UUID DEFAULT auth.uid())
+CREATE OR REPLACE FUNCTION public.get_current_tenant_id(p_user_id UUID DEFAULT auth.uid())
 RETURNS UUID
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public, copilot_internal
 AS $$
-    SELECT active_tenant_id
+    SELECT current_tenant_id
     FROM copilot_internal.user_preferences
     WHERE user_id = p_user_id;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_active_tenant_id(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_current_tenant_id(UUID) TO authenticated, service_role;
 
 -- Get all tenants a user belongs to
 CREATE OR REPLACE FUNCTION public.get_user_tenants(p_user_id UUID DEFAULT auth.uid())
@@ -334,7 +335,7 @@ AS $$
         t.type as tenant_type,
         t.plan as tenant_plan,
         tm.role,
-        (t.id = up.active_tenant_id) as is_active,
+        (t.id = up.current_tenant_id) as is_active,
         tm.joined_at
     FROM copilot_internal.tenants t
     JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id
@@ -427,7 +428,7 @@ BEGIN
     -- Set as active tenant
     INSERT INTO copilot_internal.user_preferences (
         user_id,
-        active_tenant_id
+        current_tenant_id
     )
     VALUES (
         p_user_id,
@@ -435,7 +436,7 @@ BEGIN
     )
     ON CONFLICT (user_id)
     DO UPDATE SET
-        active_tenant_id = v_tenant_id,
+        current_tenant_id = v_tenant_id,
         updated_at = NOW();
 
     RETURN v_tenant_id;
@@ -472,7 +473,7 @@ BEGIN
     -- Update active tenant
     INSERT INTO copilot_internal.user_preferences (
         user_id,
-        active_tenant_id,
+        current_tenant_id,
         updated_at
     )
     VALUES (
@@ -482,7 +483,7 @@ BEGIN
     )
     ON CONFLICT (user_id)
     DO UPDATE SET
-        active_tenant_id = p_tenant_id,
+        current_tenant_id = p_tenant_id,
         updated_at = NOW();
 
     RETURN TRUE;
@@ -536,7 +537,7 @@ SELECT
     tm.role,
     tm.status as membership_status,
     tm.joined_at,
-    (t.id = up.active_tenant_id) as is_active,
+    (t.id = up.current_tenant_id) as is_active,
     t.created_at as tenant_created_at
 FROM copilot_internal.tenants t
 JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id

@@ -158,21 +158,23 @@ begin
         status = 'active',
         updated_at = demo_now;
 
-  -- Ensure user preference exists (set demo tenant as active)
+  -- Ensure user preference exists (set demo tenant as current)
   insert into copilot_internal.user_preferences (
     user_id,
-    active_tenant_id,
+    current_tenant_id,
     preferences,
+    created_at,
     updated_at
   )
   values (
     demo_user_id,
     demo_tenant_id,
     '{}'::jsonb,
+    demo_now,
     demo_now
   )
   on conflict (user_id) do update
-    set active_tenant_id = demo_tenant_id,
+    set current_tenant_id = demo_tenant_id,
         updated_at = demo_now;
 
   raise notice 'Demo user tenant setup complete: user=%, tenant=%', demo_user_id, demo_tenant_id;
