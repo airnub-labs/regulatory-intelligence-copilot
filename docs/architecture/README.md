@@ -143,6 +143,32 @@ Related:
 
 ---
 
+## Multi-Tenant Workspaces
+
+- `multi-tenant/README.md`
+  **Comprehensive multi-tenant workspace architecture**. Covers:
+  - Personal Tenant Model (Slack/GitHub/Discord-style multi-tenancy)
+  - Database schema with tenant isolation (RLS policies)
+  - Authentication flows with Mermaid diagrams (signup, login, workspace switching)
+  - Security model (defense-in-depth, verified membership)
+  - API patterns (`getTenantContext()` verification)
+  - UI components (TenantSwitcher, CreateWorkspaceModal)
+  - Testing guide with seed data and end-to-end scenarios
+  - Migration history and implementation phases
+
+Related:
+- `../archive/multi-tenant-implementation/` - Archived implementation phase reports
+- `../archive/multi-tenant-implementation/INDEX.md` - Archive index with documentation mapping
+
+**Key Features**:
+- ✅ Auto-create personal workspaces on user signup
+- ✅ Multi-workspace membership (same user can belong to multiple workspaces)
+- ✅ Workspace switching via UI dropdown
+- ✅ Row-Level Security (RLS) enforces tenant isolation
+- ✅ Security vulnerability fixed (eliminated unsafe tenant ID fallbacks)
+
+---
+
 ## Relationship to other docs
 
 The architecture docs are **top-level narratives**. They describe the big picture; detailed behaviour lives in the specs under `docs/architecture/`.
