@@ -5,30 +5,28 @@ import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-o
 import { conversationStore } from '@/lib/server/conversations';
 import { toClientConversation } from '@/lib/server/conversationPresenter';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 
 export const dynamic = 'force-dynamic';
 
 const logger = createLogger('ConversationsRoute');
 
 export async function GET(request: NextRequest) {
-  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
-  const user = session?.user;
-  const userId = user?.id;
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const url = new URL(request.url);
-  const statusParam = url.searchParams.get('status');
-  const status = statusParam === 'archived' || statusParam === 'all' ? (statusParam as 'archived' | 'all') : 'active';
-  const limitParam = url.searchParams.get('limit');
-  // SEC.3: Add pagination bounds validation (min: 1, max: 100) to prevent resource exhaustion
-  const limit = Math.min(
-    Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam || '50', 10)),
-    100
-  );
-  const cursor = url.searchParams.get('cursor') || null;
+  try {
+    // Get and verify tenant context
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+    const url = new URL(request.url);
+    const statusParam = url.searchParams.get('status');
+    const status = statusParam === 'archived' || statusParam === 'all' ? (statusParam as 'archived' | 'all') : 'active';
+    const limitParam = url.searchParams.get('limit');
+    // SEC.3: Add pagination bounds validation (min: 1, max: 100) to prevent resource exhaustion
+    const limit = Math.min(
+      Math.max(1, isNaN(parseInt(limitParam || '50', 10)) ? 50 : parseInt(limitParam || '50', 10)),
+      100
+    );
+    const cursor = url.searchParams.get('cursor') || null;
   return requestContext.run(
     { tenantId, userId },
     () =>
@@ -66,5 +64,13 @@ export async function GET(request: NextRequest) {
           });
         },
       ),
-  );
+    );
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to fetch conversations';
+    logger.error({ error }, 'Failed to fetch conversations');
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: error instanceof Error && error.message.includes('Unauthorized') ? 401 : 500 }
+    );
+  }
 }

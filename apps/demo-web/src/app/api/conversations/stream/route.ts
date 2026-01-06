@@ -8,6 +8,7 @@ import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-o
 import { getServerSession } from 'next-auth/next'
 
 import { authOptions } from '@/lib/auth/options'
+import { getTenantContext } from '@/lib/auth/tenantContext'
 import { conversationListEventHub, conversationStore } from '@/lib/server/conversations'
 import { toClientConversation } from '@/lib/server/conversationPresenter'
 
@@ -22,19 +23,15 @@ function sseChunk(event: ConversationListEventType, data: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null
-  const userId = session?.user?.id
+  try {
+    const session = await getServerSession(authOptions)
+    const { userId, tenantId, role } = await getTenantContext(session)
 
-  if (!userId) {
-    return new Response('Unauthorized', { status: 401 })
-  }
+    const url = new URL(request.url)
+    const statusParam = url.searchParams.get('status')
+    const status = statusParam === 'archived' || statusParam === 'all' ? (statusParam as 'archived' | 'all') : 'active'
 
-  const url = new URL(request.url)
-  const statusParam = url.searchParams.get('status')
-  const status = statusParam === 'archived' || statusParam === 'all' ? (statusParam as 'archived' | 'all') : 'active'
-  const tenantId = session.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default'
-
-  return requestContext.run({ tenantId, userId }, () =>
+    return requestContext.run({ tenantId, userId }, () =>
     withSpan(
       'api.conversations.stream',
       { 'app.route': '/api/conversations/stream', 'app.tenant.id': tenantId, 'app.user.id': userId },
@@ -90,5 +87,12 @@ export async function GET(request: NextRequest) {
         })
       }
     )
-  )
+    )
+  } catch (error) {
+    logger.error({ error }, 'Error in GET conversations stream')
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return new Response('Unauthorized', { status: 401 })
+    }
+    return new Response('Internal server error', { status: 500 })
+  }
 }

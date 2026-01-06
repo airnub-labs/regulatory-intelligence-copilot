@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 import { conversationStore, conversationEventHub } from '@/lib/server/conversations';
 import { createClient } from '@supabase/supabase-js';
 
@@ -31,19 +32,12 @@ export async function GET(
   context: { params: Promise<{ id: string; messageId: string }> }
 ) {
   const { id: conversationId, messageId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -109,7 +103,17 @@ export async function GET(
           }
         },
       ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId, messageId }, 'Error in GET message');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -121,19 +125,12 @@ export async function PATCH(
   context: { params: Promise<{ id: string; messageId: string }> }
 ) {
   const { id: conversationId, messageId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -251,7 +248,17 @@ export async function PATCH(
           }
         },
       ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId, messageId }, 'Error in PATCH message');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -263,19 +270,12 @@ export async function DELETE(
   context: { params: Promise<{ id: string; messageId: string }> }
 ) {
   const { id: conversationId, messageId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -330,5 +330,15 @@ export async function DELETE(
           }
         },
       ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId, messageId }, 'Error in DELETE message');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }

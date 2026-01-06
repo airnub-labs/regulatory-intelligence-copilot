@@ -4,6 +4,7 @@ import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
 
 export const dynamic = 'force-dynamic';
@@ -19,19 +20,12 @@ export async function GET(
   context: { params: Promise<{ id: string; pathId: string }> }
 ) {
   const { id: conversationId, pathId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -69,7 +63,17 @@ export async function GET(
           });
         },
       ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId, pathId }, 'Error in GET path');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -81,19 +85,12 @@ export async function PATCH(
   context: { params: Promise<{ id: string; pathId: string }> }
 ) {
   const { id: conversationId, pathId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -145,7 +142,17 @@ export async function PATCH(
           }
         },
       ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId, pathId }, 'Error in PATCH path');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }
 
 /**
@@ -157,19 +164,12 @@ export async function DELETE(
   context: { params: Promise<{ id: string; pathId: string }> }
 ) {
   const { id: conversationId, pathId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -209,5 +209,15 @@ export async function DELETE(
           }
         },
       ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId, pathId }, 'Error in DELETE path');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }

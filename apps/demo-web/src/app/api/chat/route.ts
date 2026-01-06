@@ -12,6 +12,7 @@ import { context, propagation, trace } from '@opentelemetry/api';
 import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 import {
   conversationContextStore,
   conversationEventHub,
@@ -44,15 +45,13 @@ const headerSetter = {
 };
 
 export async function POST(request: Request) {
-  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
-  if (!session?.user?.id) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+  try {
+    // Get and verify tenant context
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const headers = new Headers(request.headers);
-  headers.set('x-user-id', session.user.id);
-
-  const tenantId = session.user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+    const headers = new Headers(request.headers);
+    headers.set('x-user-id', userId);
 
   // PRE-REQUEST QUOTA CHECK (Phase 3)
   // Check LLM quota BEFORE processing chat request
@@ -102,26 +101,26 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch (error) {
-    logger.error({ error, tenantId, userId: session.user.id }, 'Failed to parse request body');
-    const message = error instanceof Error ? error.message : 'Invalid request body';
-    return new Response(message, { status: 400 });
-  }
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (error) {
+      logger.error({ error, tenantId, userId }, 'Failed to parse request body');
+      const message = error instanceof Error ? error.message : 'Invalid request body';
+      return new Response(message, { status: 400 });
+    }
 
-  const normalizedBody = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
-  const conversationId = typeof normalizedBody.conversationId === 'string' ? normalizedBody.conversationId : undefined;
+    const normalizedBody = (typeof body === 'object' && body !== null ? body : {}) as Record<string, unknown>;
+    const conversationId = typeof normalizedBody.conversationId === 'string' ? normalizedBody.conversationId : undefined;
 
-  const spanAttributes = {
-    'app.tenant.id': tenantId,
-    'app.user.id': session.user.id,
-    ...(conversationId ? { 'app.conversation.id': conversationId } : {}),
-  };
+    const spanAttributes = {
+      'app.tenant.id': tenantId,
+      'app.user.id': userId,
+      ...(conversationId ? { 'app.conversation.id': conversationId } : {}),
+    };
 
-  return requestContext.run(
-    { tenantId, conversationId, userId: session.user.id },
+    return requestContext.run(
+      { tenantId, conversationId, userId },
     () =>
       withSpan('api.chat', spanAttributes, () => {
         const activeSpan = trace.getActiveSpan();
@@ -152,5 +151,13 @@ export async function POST(request: Request) {
           }),
         );
       }),
-  );
+    );
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Chat request failed';
+    logger.error({ error }, 'Chat request failed');
+    return new Response(
+      errorMessage,
+      { status: error instanceof Error && error.message.includes('Unauthorized') ? 401 : 500 }
+    );
+  }
 }

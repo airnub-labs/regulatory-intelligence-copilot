@@ -2,6 +2,7 @@ import { createLogger, requestContext } from '@reg-copilot/reg-intel-observabili
 import { getRateLimiter } from '@/lib/rateLimiter';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 
 const logger = createLogger('ClientTelemetryRoute');
 const rateLimiter = getRateLimiter();
@@ -212,11 +213,8 @@ const processEvent = (event: ClientTelemetryEvent): void => {
 export async function POST(request: Request) {
   try {
     // CRITICAL: Add authentication check - telemetry endpoint should be protected
-    const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
-
-    if (!session?.user?.id) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId } = await getTenantContext(session);
 
     // Check rate limit using distributed rate limiter (Redis/Upstash)
     // ✅ No null check - rateLimiter ALWAYS exists (transparent failover)
