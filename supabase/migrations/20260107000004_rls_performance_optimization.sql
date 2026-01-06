@@ -256,12 +256,12 @@ SELECT
     t.id as tenant_id,
     COUNT(DISTINCT tm.user_id) as user_count,
     COUNT(tm.id) as membership_count,
-    ROUND(AVG(
-        SELECT execution_time_ms
+    (
+        SELECT ROUND(AVG(execution_time_ms), 2)
         FROM copilot_internal.slow_query_log sql
         WHERE sql.tenant_id = t.id
           AND sql.created_at >= NOW() - INTERVAL '24 hours'
-    ), 2) as avg_query_time_24h_ms
+    ) as avg_query_time_24h_ms
 FROM copilot_internal.tenants t
 LEFT JOIN copilot_internal.tenant_memberships tm ON tm.tenant_id = t.id AND tm.status = 'active'
 WHERE t.deleted_at IS NULL
