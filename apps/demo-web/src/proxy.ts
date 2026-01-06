@@ -1,13 +1,21 @@
 /**
- * Next.js Proxy for session validation
+ * Next.js Proxy for session validation and consistency monitoring
  *
- * SECURITY: This proxy runs on every request to validate user sessions.
- * It ensures that deleted or banned users cannot access protected routes.
+ * SECURITY: This proxy runs on every request to:
+ * 1. Validate user sessions
+ * 2. Ensure deleted or banned users cannot access protected routes
+ * 3. Monitor session/DB consistency for workspace switching
+ *
+ * Auto-healing:
+ * - Logs mismatch to database for monitoring
+ * - Sets header to trigger client-side session refresh
  */
 
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient'
+import { cookies } from 'next/headers'
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = [
@@ -92,6 +100,49 @@ export async function proxy(request: NextRequest) {
     response.cookies.delete('__Secure-next-auth.csrf-token')
 
     return response
+  }
+
+  // Check for session/DB tenant consistency (MEDIUM-1: Session/DB Consistency)
+  if (token.currentTenantId) {
+    try {
+      const userId = token.sub as string
+      const jwtTenantId = token.currentTenantId as string
+
+      // Check database for current tenant using unrestricted client
+      const supabase = createUnrestrictedServiceClient(cookies(), {
+        operation: 'session-consistency-check',
+      })
+
+      const { data: dbTenantId, error } = await supabase
+        .rpc('get_current_tenant_id', { p_user_id: userId })
+        .single()
+
+      // Detect mismatch
+      if (!error && dbTenantId && dbTenantId !== jwtTenantId) {
+        console.warn('Session/DB tenant mismatch detected', {
+          userId,
+          jwtTenantId,
+          dbTenantId,
+          path: pathname,
+        })
+
+        // Log to database for monitoring
+        await supabase.rpc('log_session_mismatch', {
+          p_user_id: userId,
+          p_expected_tenant_id: dbTenantId,
+          p_actual_tenant_id: jwtTenantId,
+          p_request_path: pathname,
+        })
+
+        // Set header to trigger auto-heal on client
+        const response = NextResponse.next()
+        response.headers.set('X-Session-Refresh-Required', 'true')
+        return response
+      }
+    } catch (error) {
+      console.error('Session consistency check error:', error)
+      // Don't block the request on consistency check errors
+    }
   }
 
   // Session is valid, allow the request
