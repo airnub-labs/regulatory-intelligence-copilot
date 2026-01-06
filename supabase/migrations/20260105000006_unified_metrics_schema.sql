@@ -27,14 +27,13 @@ SELECT
     tenant_id,
     user_id,
     conversation_id,
-    message_id,
+    NULL::uuid AS path_id,
     model,
     provider,
     input_tokens,
     output_tokens,
-    cost_usd,
-    created_at,
-    metadata
+    total_cost_usd AS cost_usd,
+    created_at
 FROM copilot_internal.llm_cost_records
 UNION ALL
 SELECT
@@ -42,14 +41,13 @@ SELECT
     tenant_id,
     user_id,
     conversation_id,
-    message_id,
-    sandbox_template AS model,
+    path_id,
+    tier AS model,
     'e2b' AS provider,
     0 AS input_tokens,
     0 AS output_tokens,
-    cost_usd,
-    created_at,
-    metadata
+    total_cost_usd AS cost_usd,
+    created_at
 FROM copilot_internal.e2b_cost_records;
 
 COMMENT ON VIEW metrics.all_costs IS 'Unified view of all costs (LLM + E2B) for analytics and reporting';
@@ -109,22 +107,30 @@ COMMENT ON VIEW metrics.cost_by_conversation IS 'Cost summaries grouped by conve
 -- Provides quota usage with status indicators
 CREATE OR REPLACE VIEW metrics.quota_status AS
 SELECT
-    q.tenant_id,
-    q.user_id,
-    q.quota_type,
-    q.limit_value,
-    q.current_usage,
     CASE
-        WHEN q.limit_value > 0
-        THEN (q.current_usage::float / q.limit_value * 100)::numeric(5,2)
+        WHEN q.scope = 'tenant' THEN q.scope_id
+        ELSE NULL
+    END AS tenant_id,
+    CASE
+        WHEN q.scope = 'user' THEN q.scope_id
+        ELSE NULL
+    END AS user_id,
+    q.scope,
+    q.resource_type,
+    q.period AS quota_period,
+    q.limit_usd AS limit_value,
+    q.current_spend_usd AS current_usage,
+    CASE
+        WHEN q.limit_usd > 0
+        THEN (q.current_spend_usd::float / q.limit_usd * 100)::numeric(5,2)
         ELSE 0
     END AS usage_percent,
     CASE
-        WHEN q.limit_value > 0 AND q.current_usage >= q.limit_value
+        WHEN q.limit_usd > 0 AND q.current_spend_usd >= q.limit_usd
         THEN 'exceeded'
-        WHEN q.limit_value > 0 AND (q.current_usage::float / q.limit_value) > 0.9
+        WHEN q.limit_usd > 0 AND (q.current_spend_usd::float / q.limit_usd) > 0.9
         THEN 'warning'
-        WHEN q.limit_value > 0 AND (q.current_usage::float / q.limit_value) > 0.75
+        WHEN q.limit_usd > 0 AND (q.current_spend_usd::float / q.limit_usd) > 0.75
         THEN 'caution'
         ELSE 'ok'
     END AS status,
@@ -155,8 +161,8 @@ SELECT
     COUNT(*) AS request_count,
     SUM(input_tokens) AS total_input_tokens,
     SUM(output_tokens) AS total_output_tokens,
-    SUM(cost_usd) AS total_cost_usd,
-    AVG(cost_usd) AS avg_cost_per_request,
+    SUM(total_cost_usd) AS total_cost_usd,
+    AVG(total_cost_usd) AS avg_cost_per_request,
     MIN(created_at) AS first_used_at,
     MAX(created_at) AS last_used_at
 FROM copilot_internal.llm_cost_records
@@ -171,7 +177,7 @@ SELECT
     DATE(created_at) AS date,
     model,
     provider,
-    SUM(cost_usd) AS total_cost_usd,
+    SUM(total_cost_usd) AS total_cost_usd,
     SUM(input_tokens) AS total_input_tokens,
     SUM(output_tokens) AS total_output_tokens,
     COUNT(*) AS request_count
@@ -190,18 +196,18 @@ SELECT * FROM copilot_internal.e2b_cost_records;
 
 COMMENT ON VIEW metrics.e2b_costs IS 'Direct read-only access to E2B sandbox cost records';
 
--- E2B usage aggregated by sandbox template
+-- E2B usage aggregated by sandbox tier
 CREATE OR REPLACE VIEW metrics.e2b_sandbox_usage AS
 SELECT
     tenant_id,
-    sandbox_template,
+    tier AS sandbox_tier,
     COUNT(*) AS execution_count,
-    SUM(cost_usd) AS total_cost_usd,
-    AVG(cost_usd) AS avg_cost_per_execution,
+    SUM(total_cost_usd) AS total_cost_usd,
+    AVG(total_cost_usd) AS avg_cost_per_execution,
     MIN(created_at) AS first_used_at,
     MAX(created_at) AS last_used_at
 FROM copilot_internal.e2b_cost_records
-GROUP BY tenant_id, sandbox_template;
+GROUP BY tenant_id, tier;
 
 COMMENT ON VIEW metrics.e2b_sandbox_usage IS 'E2B sandbox usage statistics aggregated by tenant and template';
 
@@ -210,22 +216,52 @@ CREATE OR REPLACE VIEW metrics.e2b_costs_daily AS
 SELECT
     tenant_id,
     DATE(created_at) AS date,
-    sandbox_template,
-    SUM(cost_usd) AS total_cost_usd,
+    tier AS sandbox_tier,
+    SUM(total_cost_usd) AS total_cost_usd,
     COUNT(*) AS execution_count
 FROM copilot_internal.e2b_cost_records
-GROUP BY tenant_id, DATE(created_at), sandbox_template;
+GROUP BY tenant_id, DATE(created_at), tier;
 
 COMMENT ON VIEW metrics.e2b_costs_daily IS 'Daily E2B cost trends for time-series analysis';
 
 -- ========================================
 -- Cost Estimates View
 -- ========================================
--- Read-only access to estimated costs
+-- Read-only access to estimated costs (combines LLM and E2B estimates)
 CREATE OR REPLACE VIEW metrics.cost_estimates AS
-SELECT * FROM copilot_internal.cost_estimates;
+SELECT
+    'llm' AS estimate_type,
+    provider,
+    model,
+    operation_type,
+    NULL::integer AS expected_duration_seconds,
+    estimated_cost_usd,
+    confidence_level,
+    description,
+    assumptions,
+    effective_date,
+    expires_at,
+    created_at,
+    updated_at
+FROM copilot_internal.llm_cost_estimates
+UNION ALL
+SELECT
+    'e2b' AS estimate_type,
+    'e2b' AS provider,
+    tier AS model,
+    operation_type,
+    expected_duration_seconds,
+    estimated_cost_usd,
+    confidence_level,
+    description,
+    assumptions,
+    effective_date,
+    expires_at,
+    created_at,
+    updated_at
+FROM copilot_internal.e2b_cost_estimates;
 
-COMMENT ON VIEW metrics.cost_estimates IS 'Estimated costs for operations before execution';
+COMMENT ON VIEW metrics.cost_estimates IS 'Estimated costs for operations before execution (combines LLM and E2B)';
 
 -- ========================================
 -- Combined Analytics Views
@@ -303,8 +339,10 @@ CREATE INDEX IF NOT EXISTS idx_e2b_cost_records_conversation
     WHERE conversation_id IS NOT NULL;
 
 -- Cost quotas indexes
-CREATE INDEX IF NOT EXISTS idx_cost_quotas_tenant_user
-    ON copilot_internal.cost_quotas(tenant_id, user_id);
+-- Note: cost_quotas uses scope/scope_id pattern, not tenant_id/user_id
+CREATE INDEX IF NOT EXISTS idx_cost_quotas_scope_resource
+    ON copilot_internal.cost_quotas(scope, scope_id, resource_type)
+    WHERE scope_id IS NOT NULL;
 
 -- ========================================
 -- Migration Complete

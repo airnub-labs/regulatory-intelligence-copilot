@@ -3,6 +3,7 @@ import pluginReactHooks from "eslint-plugin-react-hooks";
 import pluginNext from "@next/eslint-plugin-next";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
+import tenantSecurityPlugin from "./eslint-plugin-tenant-security.mjs";
 
 const eslintConfig = [
   {
@@ -20,6 +21,7 @@ const eslintConfig = [
       "react-hooks": pluginReactHooks,
       "@next/next": pluginNext,
       "@typescript-eslint": tsPlugin,
+      "tenant-security": tenantSecurityPlugin,
     },
     languageOptions: {
       parser: tsParser,
@@ -39,6 +41,7 @@ const eslintConfig = [
       "prefer-const": "error",
       "react/react-in-jsx-scope": "off",
       "react/prop-types": "off",
+      "tenant-security/no-unsafe-service-role": "error",
     },
     settings: {
       react: {

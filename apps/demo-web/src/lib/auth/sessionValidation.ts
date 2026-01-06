@@ -24,6 +24,7 @@ import { cookies } from 'next/headers'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { getValidationCache } from './distributedValidationCache'
 import { authMetrics } from './authMetrics'
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient'
 
 const logger = createLogger('SessionValidation')
 
@@ -102,11 +103,8 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       },
     })
 
-    // Use Supabase Admin API to check if user exists
-    // Note: We use the service role key for this check to bypass RLS
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-    if (!serviceRoleKey) {
+    // Check if service role key is configured
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       // Fallback: Try to get user from auth.users table via RPC or direct query
       // This requires a database function or RLS policy that allows checking user existence
       logger.warn('Service role key not configured - using limited validation')
@@ -146,19 +144,14 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       }
     }
 
-    // Use service role client for admin operations
-    const adminSupabase = createServerClient(supabaseUrl, serviceRoleKey, {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        },
-      },
-    })
+    // SECURITY: Use unrestricted service client for auth admin operations
+    // This is a valid use case - checking auth.users table and calling RPC functions
+    // that don't have tenant_id (auth operations are cross-tenant by nature)
+    const adminSupabase = createUnrestrictedServiceClient(
+      'Session validation - checking auth.users and tenant RPC',
+      userId,
+      cookieStore
+    )
 
     // Check if user exists in auth.users
     const { data, error } = await adminSupabase.auth.admin.getUserById(userId)
@@ -218,6 +211,67 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     const { data: currentTenantId } = await adminSupabase
       .rpc('get_current_tenant_id', { p_user_id: userId })
       .single()
+
+    // MEDIUM-2: Verify user still has access to current tenant
+    // If removed from active workspace, auto-switch to another workspace
+    if (currentTenantId) {
+      const { data: access } = await adminSupabase
+        .rpc('verify_tenant_access', {
+          p_user_id: userId,
+          p_tenant_id: currentTenantId,
+        })
+        .single()
+
+      // If no longer has access, switch to another workspace
+      if (!access || !access.has_access) {
+        logger.warn(
+          { userId, tenantId: currentTenantId },
+          'User lost access to active tenant, auto-switching...'
+        )
+
+        // Get other workspaces
+        const { data: tenants } = await adminSupabase
+          .rpc('get_user_tenants')
+
+        if (tenants && tenants.length > 0) {
+          // Switch to first available workspace (prefer personal)
+          const personalWorkspace = tenants.find((t) => t.tenant_type === 'personal')
+          const targetWorkspace = personalWorkspace || tenants[0]
+          const newTenantId = targetWorkspace.tenant_id
+
+          logger.info(
+            { userId, oldTenantId: currentTenantId, newTenantId },
+            'Auto-switching to available workspace'
+          )
+
+          await adminSupabase.rpc('switch_tenant', {
+            p_tenant_id: newTenantId,
+          })
+
+          // Update cache with new tenant
+          await validationCache.set(userId, true, newTenantId)
+          authMetrics.recordCacheMiss(userId, validationDuration, true)
+
+          return {
+            isValid: true,
+            user: {
+              id: data.user.id,
+              email: data.user.email,
+              currentTenantId: newTenantId,
+            },
+          }
+        } else {
+          // No workspaces left - invalidate session
+          logger.warn({ userId }, 'User has no accessible workspaces remaining')
+          await validationCache.set(userId, false)
+          authMetrics.recordCacheMiss(userId, validationDuration, false)
+          return {
+            isValid: false,
+            error: 'No accessible workspaces',
+          }
+        }
+      }
+    }
 
     await validationCache.set(userId, true, currentTenantId)
     authMetrics.recordCacheMiss(userId, validationDuration, true)

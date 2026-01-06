@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { authOptions } from '@/lib/auth/options'
 import { getTenantContext } from '@/lib/auth/tenantContext'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient'
 
 const logger = createLogger('WorkspacesAPI')
 
@@ -30,20 +30,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-
     const cookieStore = await cookies()
-    const supabase = createServerClient(supabaseUrl, supabaseServiceKey, {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookies) {
-          cookies.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        },
-      },
-    })
+
+    // SECURITY: Creating NEW tenant requires unrestricted access (no tenant_id exists yet)
+    // This is a valid use case for unrestricted service client
+    const supabase = createUnrestrictedServiceClient(
+      'Creating new tenant - no tenant_id exists yet',
+      userId,
+      cookieStore
+    )
 
     // Create tenant
     const { data: tenant, error: tenantError } = await supabase

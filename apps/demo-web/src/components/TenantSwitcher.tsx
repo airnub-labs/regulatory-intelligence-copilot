@@ -49,28 +49,73 @@ export function TenantSwitcher({ onCreateWorkspace, className }: TenantSwitcherP
     }
   }
 
+  async function switchTenantWithRetry(
+    tenantId: string,
+    maxRetries: number = 3
+  ): Promise<{ success: boolean; error?: string }> {
+    const supabase = createClient()
+
+    // Step 1: Update database (this is source of truth)
+    const { data: switchResult, error: switchError } = await supabase
+      .rpc('switch_tenant', { p_tenant_id: tenantId })
+      .single()
+
+    if (switchError || !switchResult) {
+      return {
+        success: false,
+        error: 'Failed to switch workspace in database',
+      }
+    }
+
+    // Step 2: Update session with retry logic
+    let lastError: Error | null = null
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await update()
+
+        // Session updated successfully
+        return { success: true }
+
+      } catch (error) {
+        lastError = error as Error
+        console.error(`Session update attempt ${attempt}/${maxRetries} failed:`, error)
+
+        // Exponential backoff
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+        }
+      }
+    }
+
+    // All retries failed - force page reload to re-sync
+    console.error('Session update failed after retries, forcing page reload')
+    window.location.reload()
+
+    return {
+      success: false,
+      error: `Session update failed: ${lastError?.message}`,
+    }
+  }
+
   async function switchTenant(tenantId: string) {
     if (switching) return
 
     setSwitching(true)
     try {
-      const supabase = createClient()
+      const result = await switchTenantWithRetry(tenantId, 3)
 
-      // Update active tenant
-      const { error } = await supabase.rpc('switch_tenant', {
-        p_tenant_id: tenantId
-      })
+      if (!result.success) {
+        console.error('Failed to switch workspace:', result.error)
+        // Page will reload automatically in switchTenantWithRetry
+        return
+      }
 
-      if (error) throw error
-
-      // Refresh NextAuth session (updates JWT)
-      await update()
-
-      // Reload page to refresh all data
+      // Success - reload page to fetch new tenant's data
       window.location.reload()
 
     } catch (error) {
-      console.error('Failed to switch tenant:', error)
+      console.error('Unexpected error while switching workspace:', error)
       setSwitching(false)
     }
   }
