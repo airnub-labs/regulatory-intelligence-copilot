@@ -7,7 +7,7 @@ import {
   scrollToMessage,
   type NavigateOptions,
 } from '@reg-copilot/reg-intel-ui';
-import { recordBreadcrumbNavigate, recordPathSwitch } from '@reg-copilot/reg-intel-observability';
+import { recordBreadcrumbNavigate, recordPathSwitch } from '@reg-copilot/reg-intel-observability/browser';
 
 interface PathBreadcrumbNavProps {
   /** Called when user navigates to a different path */

@@ -11,6 +11,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browserMetrics.js",
+      "types": "./dist/browserMetrics.d.ts"
     }
   },
   "scripts": {

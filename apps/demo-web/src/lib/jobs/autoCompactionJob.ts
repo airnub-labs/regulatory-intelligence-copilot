@@ -88,11 +88,7 @@ export interface CompactionJobResult {
  * @param config - Job configuration
  * @returns Job execution results
  */
-type CompactionConversationStore = Pick<ConversationStore, 'getMessages'> & {
-  getConversationsNeedingCompaction?: (
-    limit: number
-  ) => Promise<Array<{ id: string; tenantId: string; activePathId?: string }>>;
-};
+type CompactionConversationStore = Pick<ConversationStore, 'getMessages' | 'getConversationsNeedingCompaction'>;
 
 export async function runAutoCompactionJob(
   conversationStore: CompactionConversationStore,
@@ -143,7 +139,7 @@ export async function runAutoCompactionJob(
     // Query conversations (In production, add filters for active conversations, recent activity, etc.)
     // For now, this is a placeholder - you'd implement actual querying logic
     const conversationsToCheck = conversationStore.getConversationsNeedingCompaction
-      ? await conversationStore.getConversationsNeedingCompaction(batchSize)
+      ? await conversationStore.getConversationsNeedingCompaction({}, batchSize)
       : await getConversationsNeedingCompaction(conversationStore, batchSize);
 
     logger.info(
