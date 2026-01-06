@@ -741,6 +741,106 @@ User query: ${query}
 
 ---
 
+## Future Enhancement: Adaptive Output Token Estimation
+
+> **Status**: 📋 Proposed
+> **Implementation Plan**: [`ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+
+### Current Limitation
+
+The current system uses **tiktoken for input token counting only**. Output tokens cannot be counted before the LLM request completes, so pre-request cost estimates rely on static per-model assumptions.
+
+**Current Flow**:
+```typescript
+// Input tokens: EXACT (via tiktoken)
+const inputTokens = tiktoken.encode(prompt).length;  // ✅ Accurate
+
+// Output tokens: STATIC ESTIMATE (same for all users)
+const estimatedOutputTokens = MODEL_DEFAULTS['claude-3-sonnet'].avgOutput;  // ❌ Not personalized
+```
+
+### Proposed Enhancement
+
+Implement **user-based output token learning** using Exponential Moving Average (EMA):
+
+```
+estimated_output = user_ema_ratio × input_tokens
+
+where:
+  user_ema_ratio = α × (actual_output / actual_input) + (1-α) × previous_ema
+  α = 0.2 (smoothing factor)
+```
+
+### Benefits for LLM Cost Tracking
+
+| Aspect | Current | With Adaptive Estimation |
+|--------|---------|--------------------------|
+| Input token counting | Exact (tiktoken) | Exact (tiktoken) - unchanged |
+| Output token estimation | Static per-model | Learned per-user |
+| Estimation accuracy | ~60% | >85% (target) |
+| Quota precision | Conservative | Personalized |
+| System learning | None | Continuous improvement |
+
+### Integration Points
+
+The adaptive estimator will integrate with existing tiktoken-based token counting:
+
+```typescript
+// Enhanced flow (proposed)
+async function estimateCostBeforeRequest(params: {
+  userId: string;
+  tenantId: string;
+  provider: string;
+  model: string;
+  prompt: string;
+}): Promise<CostEstimate> {
+  // 1. Exact input tokens (existing tiktoken)
+  const inputTokens = await tiktokenCounter.estimateTokens(params.prompt);
+
+  // 2. Adaptive output estimation (NEW)
+  const outputEstimate = await adaptiveEstimator.estimateOutputTokens({
+    userId: params.userId,
+    tenantId: params.tenantId,
+    provider: params.provider,
+    model: params.model,
+    inputTokens: inputTokens.tokens,
+    confidenceLevel: 'conservative',
+  });
+
+  // 3. Calculate cost
+  const pricing = await pricingService.getPricing(params.provider, params.model);
+  return {
+    inputTokens: inputTokens.tokens,
+    estimatedOutputTokens: outputEstimate.estimatedOutputTokens,
+    estimatedCostUsd: calculateCost(inputTokens.tokens, outputEstimate.estimatedOutputTokens, pricing),
+    outputEstimateSource: outputEstimate.ratioSource,  // 'user' | 'tenant' | 'platform' | 'default'
+    confidenceScore: outputEstimate.confidenceScore,
+  };
+}
+```
+
+### Fallback Chain
+
+Ensures estimation always works, even for new users:
+
+```
+User Pattern (5+ samples)     → Most accurate, personalized
+    ↓ not available
+Tenant Pattern (20+ samples)  → Tenant-specific average
+    ↓ not available
+Platform Pattern (100+ samples) → Platform-wide average
+    ↓ not available
+Static Model Defaults         → Current behavior (fallback)
+```
+
+### See Also
+
+- **Full Implementation Plan**: [`ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+- **Main Architecture**: [`COST_TRACKING_ARCHITECTURE.md`](./COST_TRACKING_ARCHITECTURE.md#future-enhancement-adaptive-output-token-estimation)
+- **Current Tiktoken Implementation**: [`packages/reg-intel-core/src/tokens/tiktoken.ts`](../../packages/reg-intel-core/src/tokens/tiktoken.ts)
+
+---
+
 ## Conclusion
 
 This architecture has been **fully implemented** with comprehensive cost tracking across the entire PAAS/SAAS platform.

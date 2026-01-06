@@ -367,12 +367,105 @@ Edit `packages/reg-intel-observability/src/costEstimation/fallbacks.ts`:
 
 Commit and deploy the code change.
 
+## Future Enhancement: Adaptive Output Token Estimation
+
+> **Status**: 📋 Proposed
+> **Full Plan**: [`ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+
+### Current Limitation
+
+The current `CostEstimationService` uses **static per-model estimates** that don't adapt to individual user behavior:
+
+```typescript
+// Current: Same estimate for all users
+const estimate = await service.getLLMCostEstimate({
+  provider: 'anthropic',
+  model: 'claude-3-sonnet-20240229',
+  operationType: 'chat',
+  confidenceLevel: 'conservative',
+});
+// Returns: $0.05 (fixed, regardless of user)
+```
+
+### Proposed Enhancement
+
+Add an `AdaptiveOutputEstimator` that learns from user history:
+
+```typescript
+// Future: Personalized estimate based on user's historical output patterns
+const estimate = await enhancedService.getLLMCostEstimate({
+  userId: 'user-123',
+  tenantId: 'tenant-456',
+  provider: 'anthropic',
+  model: 'claude-3-sonnet-20240229',
+  inputText: prompt,
+  confidenceLevel: 'conservative',
+});
+// Returns: $0.03 (personalized based on user's typical output length)
+```
+
+### How It Works
+
+1. **Input tokens**: Counted exactly using tiktoken (unchanged)
+2. **Output tokens**: Estimated using learned user output/input ratio
+3. **Learning**: After each request, update user's EMA ratio
+4. **Fallback**: User → Tenant → Platform → Static defaults
+
+### New Service Interface
+
+```typescript
+interface EnhancedCostEstimationService extends CostEstimationService {
+  // Enhanced LLM estimate with adaptive output estimation
+  getLLMCostEstimateAdaptive(params: {
+    userId: string;
+    tenantId: string;
+    provider: string;
+    model: string;
+    inputText: string;
+    confidenceLevel?: 'optimistic' | 'typical' | 'conservative';
+  }): Promise<{
+    estimatedCostUsd: number;
+    inputTokens: number;
+    estimatedOutputTokens: number;
+    outputEstimateSource: 'user' | 'tenant' | 'platform' | 'default';
+    confidenceScore: number;
+  }>;
+
+  // Record actual usage for learning
+  recordActualUsage(params: {
+    userId: string;
+    tenantId: string;
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+  }): Promise<void>;
+}
+```
+
+### Migration Path
+
+1. **Phase 1**: New tables for token patterns (non-breaking)
+2. **Phase 2**: Add `AdaptiveOutputEstimator` service (feature-flagged)
+3. **Phase 3**: Integrate with existing `CostEstimationService`
+4. **Phase 4**: Gradual rollout via feature flag percentage
+5. **Phase 5**: Make default once accuracy validated
+
+### Feature Flag
+
+```bash
+# Enable adaptive estimation (default: false initially)
+ADAPTIVE_TOKEN_ESTIMATION_ENABLED=true
+ADAPTIVE_ROLLOUT_PERCENT=10  # Start with 10% of users
+```
+
 ## Related Documents
 
 - **Migration**: `supabase/migrations/20260105000002_cost_estimates.sql`
 - **DevOps Guide**: `docs/devops/COST_ESTIMATION_MANAGEMENT.md`
 - **Architecture**: `docs/architecture/COST_TRACKING_ARCHITECTURE.md`
 - **Implementation Plan** (archived): `docs/archive/cost-estimation/COST_ESTIMATION_SERVICE_PLAN.md`
+- **Adaptive Estimation Plan**: `docs/development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`
 
 ## Success Criteria
 
