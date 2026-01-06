@@ -18,7 +18,9 @@ All Phase 5 tasks from the Implementation Plan have been successfully completed.
 
 ### Task 5.1: Comprehensive Seed Data Script ✅ (2 hours → 1 hour)
 
-**File Created**: `scripts/seed_multi_tenant_demo.sql`
+**Files Created**:
+- `scripts/seed_multi_tenant_demo.sql` (standalone version)
+- `supabase/seed/demo_seed.sql` (integrated version - **RECOMMENDED**)
 
 **Seed Data Overview**:
 - ✅ 3 test users with authentication credentials
@@ -26,8 +28,11 @@ All Phase 5 tasks from the Implementation Plan have been successfully completed.
 - ✅ 7 tenant memberships with various roles
 - ✅ 9 sample conversations distributed across workspaces
 - ✅ User preferences with active tenant settings
-- ✅ Cleanup section for re-running the script
-- ✅ Verification queries at the end
+- ✅ Idempotent (ON CONFLICT clauses for safe re-runs)
+- ✅ Integrated into Supabase seed file for automatic setup
+- ✅ Uses bcryptjs-compatible password hashes for Supabase GoTrue
+
+**Important**: The seed data has been integrated into `supabase/seed/demo_seed.sql` and will be automatically applied when running `supabase db reset`. This ensures anyone forking the repository gets a working multi-tenant setup out of the box.
 
 **Test Users Created**:
 
@@ -203,12 +208,12 @@ psql -h localhost -U postgres -d postgres -f scripts/verify_rls_policies.sql
 
 ---
 
-## 📁 **Files Created**
+## 📁 **Files Created/Modified**
 
 ### Created (3 files)
 
 1. **scripts/seed_multi_tenant_demo.sql** (250 lines)
-   - Comprehensive seed data for testing
+   - Standalone seed data script for testing
    - 3 users, 5 workspaces, 7 memberships, 9 conversations
    - Cleanup and verification queries
 
@@ -226,6 +231,15 @@ psql -h localhost -U postgres -d postgres -f scripts/verify_rls_policies.sql
    - Phase 5 completion report
    - Summary of deliverables
    - Testing instructions
+
+### Modified (1 file)
+
+1. **supabase/seed/demo_seed.sql**
+   - Integrated multi-tenant seed data
+   - Added Alice, Bob, Charlie test accounts
+   - Added 5 workspaces and 9 sample conversations
+   - Now automatically applied with `supabase db reset`
+   - Fork-friendly setup for new contributors
 
 ---
 
@@ -252,8 +266,27 @@ All exit criteria met:
 
 ### Quick Start Testing
 
+**Option 1: Using Supabase CLI (Recommended)**
+
+The multi-tenant seed data is now integrated into `supabase/seed/demo_seed.sql` and will be automatically applied with any database reset:
+
 ```bash
-# 1. Apply seed data
+# Reset database and apply all seed data (demo user + multi-tenant test accounts)
+supabase db reset
+
+# Start dev server
+npm run dev
+
+# Run acceptance tests (manual)
+# Follow PHASE5_ACCEPTANCE_TESTS.md step by step
+```
+
+**Option 2: Manual SQL Execution**
+
+If you prefer to run the scripts manually:
+
+```bash
+# 1. Apply seed data (standalone script)
 psql -h localhost -U postgres -d postgres -f scripts/seed_multi_tenant_demo.sql
 
 # 2. Verify RLS policies
@@ -265,6 +298,8 @@ npm run dev
 # 4. Run acceptance tests (manual)
 # Follow PHASE5_ACCEPTANCE_TESTS.md step by step
 ```
+
+**Note**: The seed data in `supabase/seed/demo_seed.sql` is now the single source of truth and includes both the original demo user and the Phase 5 multi-tenant test accounts. Anyone forking the repository gets a fully working multi-tenant setup out of the box with `supabase db reset`.
 
 ### Expected Results
 
