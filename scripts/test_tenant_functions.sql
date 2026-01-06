@@ -404,14 +404,35 @@ FROM public.verify_tenant_access(
 \echo '========================================='
 \echo ''
 
--- Delete test users (cascades to tenants and memberships)
+-- Delete tenants first (ON DELETE RESTRICT prevents deleting users who own tenants)
+DELETE FROM copilot_internal.tenants
+WHERE owner_id IN (
+    '11111111-1111-1111-1111-111111111111',
+    '33333333-3333-3333-3333-333333333333'
+);
+
+-- Delete user preferences
+DELETE FROM copilot_internal.user_preferences
+WHERE user_id IN (
+    '11111111-1111-1111-1111-111111111111',
+    '33333333-3333-3333-3333-333333333333'
+);
+
+-- Delete memberships (should already be cascaded, but explicit is clearer)
+DELETE FROM copilot_internal.tenant_memberships
+WHERE user_id IN (
+    '11111111-1111-1111-1111-111111111111',
+    '33333333-3333-3333-3333-333333333333'
+);
+
+-- Finally delete test users
 DELETE FROM auth.users
 WHERE id IN (
     '11111111-1111-1111-1111-111111111111',
     '33333333-3333-3333-3333-333333333333'
 );
 
-\echo '  ✓ Test data cleaned up'
+\echo '  ✓ Test data cleaned up successfully'
 \echo ''
 
 -- ========================================
