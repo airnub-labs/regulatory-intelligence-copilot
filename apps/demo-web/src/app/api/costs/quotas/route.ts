@@ -19,7 +19,10 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
 import { getCostTrackingServiceIfInitialized } from '@reg-copilot/reg-intel-observability';
+import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 
 interface SetQuotaRequest {
   scope: 'platform' | 'tenant' | 'user';
@@ -34,6 +37,9 @@ interface SetQuotaRequest {
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
+
     const costService = getCostTrackingServiceIfInitialized();
 
     if (!costService || !costService.hasQuotas()) {
@@ -72,6 +78,9 @@ export async function GET(request: Request): Promise<NextResponse> {
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
+
     const costService = getCostTrackingServiceIfInitialized();
 
     if (!costService || !costService.hasQuotas()) {
@@ -113,6 +122,9 @@ export async function POST(request: Request): Promise<NextResponse> {
  */
 export async function DELETE(request: Request): Promise<NextResponse> {
   try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
+
     const costService = getCostTrackingServiceIfInitialized();
 
     if (!costService || !costService.hasQuotas()) {

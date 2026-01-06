@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
 import { toClientConversation } from '@/lib/server/conversationPresenter';
 
@@ -19,16 +20,12 @@ function sseChunk(event: ConversationEventType, data: unknown) {
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: conversationId } = await context.params;
-  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
-  const userId = session?.user?.id;
 
-  if (!userId) {
-    return new Response('Unauthorized', { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = session.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run({ tenantId, userId, conversationId }, () =>
+    return requestContext.run({ tenantId, userId, conversationId }, () =>
     withSpan(
       'api.conversation.stream',
       {
@@ -100,5 +97,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         });
       },
     ),
-  );
+    );
+  } catch (error) {
+    logger.error({ error, conversationId }, 'Error in GET conversation stream');
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return new Response('Unauthorized', { status: 401 });
+    }
+    return new Response('Internal server error', { status: 500 });
+  }
 }

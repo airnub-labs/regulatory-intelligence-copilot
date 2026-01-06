@@ -5,6 +5,7 @@ import { NextAuthOptions, Session } from 'next-auth'
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { getCachedValidationResult, validateUserExists } from './sessionValidation'
 import { authMetrics } from './authMetrics'
+import type { ExtendedJWT, ExtendedUser, ExtendedSession } from '@/types/auth'
 
 const logger = createLogger('AuthOptions')
 
@@ -19,35 +20,9 @@ const logger = createLogger('AuthOptions')
 // METRICS: Tracks authentication patterns for cost optimization
 const SESSION_VALIDATION_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
-// Define extended types for our auth callbacks
-interface ExtendedJWT {
-  sub?: string
-  email?: string | null
-  name?: string | null
-  tenantId?: string
-  lastValidated?: number // Timestamp of last database validation
-}
-
-interface ExtendedUser {
-  id: string
-  email?: string | null
-  name?: string | null
-  tenantId?: string
-}
-
-interface ExtendedSession {
-  user: {
-    id?: string
-    email?: string | null
-    name?: string | null
-    tenantId?: string
-  }
-  expires: string
-}
-
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-const fallbackTenantId = process.env.SUPABASE_DEMO_TENANT_ID ?? 'default'
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
   logger.warn('Supabase URL or anon key missing. Authentication will not work until configured.')
@@ -86,6 +61,8 @@ export const authOptions: NextAuthOptions = {
             },
           },
         })
+
+        // Authenticate with Supabase
         const { data, error } = await supabase.auth.signInWithPassword({
           email: credentials.email,
           password: credentials.password,
@@ -102,17 +79,72 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        const userId = data.user.id
+
+        // Get or create personal tenant using service role
+        if (!supabaseServiceKey) {
+          logger.error('Service role key not configured - cannot manage tenants')
+          return null
+        }
+
+        const supabaseAdmin = createServerClient(supabaseUrl, supabaseServiceKey, {
+          cookies: {
+            getAll() {
+              return cookieStore.getAll()
+            },
+            setAll(cookies) {
+              cookies.forEach(({ name, value, options }) => {
+                cookieStore.set(name, value, options)
+              })
+            },
+          },
+        })
+
+        let currentTenantId: string | null = null
+
+        // Check if user has active tenant
+        const { data: activeId } = await supabaseAdmin
+          .rpc('get_current_tenant_id', { p_user_id: userId })
+          .single()
+
+        if (activeId) {
+          currentTenantId = activeId
+          logger.debug({ userId, currentTenantId }, 'User has existing active tenant')
+        } else {
+          // New user - create personal tenant
+          logger.info({ userId, email: data.user.email }, 'Creating personal tenant for new user')
+
+          const { data: newTenantId, error: createError } = await supabaseAdmin
+            .rpc('create_personal_tenant', {
+              p_user_id: userId,
+              p_user_email: data.user.email!,
+            })
+
+          if (createError || !newTenantId) {
+            logger.error(
+              { userId, error: createError },
+              'Failed to create personal tenant'
+            )
+            return null
+          }
+
+          currentTenantId = newTenantId
+          logger.info({ userId, currentTenantId }, 'Created personal tenant')
+        }
+
+        if (!currentTenantId) {
+          logger.error({ userId }, 'No active tenant available')
+          return null
+        }
+
         // Record successful login in metrics
-        authMetrics.recordLogin(data.user.id)
+        authMetrics.recordLogin(userId)
 
         return {
-          id: data.user.id,
-          email: data.user.email,
-          name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email,
-          tenantId:
-            (data.user.user_metadata as { tenant_id?: string } | null)?.tenant_id ??
-            data.user.app_metadata?.tenant_id ??
-            fallbackTenantId,
+          id: userId,
+          email: data.user.email!,
+          name: (data.user.user_metadata as { full_name?: string } | null)?.full_name ?? data.user.email!,
+          currentTenantId: currentTenantId,
         }
       },
     }),
@@ -130,7 +162,7 @@ export const authOptions: NextAuthOptions = {
         extendedToken.sub = extendedUser.id
         extendedToken.email = extendedUser.email ?? undefined
         extendedToken.name = extendedUser.name ?? undefined
-        extendedToken.tenantId = extendedUser.tenantId ?? fallbackTenantId
+        extendedToken.currentTenantId = extendedUser.currentTenantId
         extendedToken.lastValidated = Date.now()
         return token
       }
@@ -152,7 +184,7 @@ export const authOptions: NextAuthOptions = {
 
           if (cachedValidation.user) {
             extendedToken.email = cachedValidation.user.email ?? extendedToken.email
-            extendedToken.tenantId = cachedValidation.user.tenantId ?? extendedToken.tenantId
+            extendedToken.currentTenantId = cachedValidation.user.currentTenantId ?? extendedToken.currentTenantId
           }
         }
       }
@@ -174,7 +206,7 @@ export const authOptions: NextAuthOptions = {
           // Update token with fresh data from database
           if (validation.user) {
             extendedToken.email = validation.user.email ?? extendedToken.email
-            extendedToken.tenantId = validation.user.tenantId ?? extendedToken.tenantId
+            extendedToken.currentTenantId = validation.user.currentTenantId ?? extendedToken.currentTenantId
           }
 
           // Update last validated timestamp
@@ -199,9 +231,9 @@ export const authOptions: NextAuthOptions = {
           ...sessionWithUser,
           user: {
             id: '',
-            email: null,
-            name: null,
-            tenantId: '',
+            email: '',
+            name: '',
+            currentTenantId: undefined,
           },
         }
       }
@@ -209,10 +241,10 @@ export const authOptions: NextAuthOptions = {
       if (sessionWithUser.user) {
         sessionWithUser.user.id = typeof extendedToken.sub === 'string' ? extendedToken.sub : ''
         sessionWithUser.user.email =
-          typeof extendedToken.email === 'string' ? extendedToken.email : sessionWithUser.user.email
+          typeof extendedToken.email === 'string' ? extendedToken.email : ''
         sessionWithUser.user.name =
-          typeof extendedToken.name === 'string' ? extendedToken.name : sessionWithUser.user.name
-        sessionWithUser.user.tenantId = extendedToken.tenantId ?? fallbackTenantId
+          typeof extendedToken.name === 'string' ? extendedToken.name : ''
+        sessionWithUser.user.currentTenantId = extendedToken.currentTenantId
       }
       return sessionWithUser
     },

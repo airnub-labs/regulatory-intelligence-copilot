@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 import { conversationStore } from '@/lib/server/conversations';
 import { getSnapshotServiceIfInitialized } from '@reg-copilot/reg-intel-conversations/compaction';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
@@ -38,19 +39,12 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id: conversationId } = await context.params;
-  const session = (await getServerSession(authOptions)) as {
-    user?: { id?: string; tenantId?: string };
-  } | null;
-  const user = session?.user;
-  const userId = user?.id;
 
-  if (!userId || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-
-  return requestContext.run(
+    return requestContext.run(
     { tenantId, userId },
     () =>
       withSpan(
@@ -178,5 +172,13 @@ export async function POST(
           }
         }
       )
-  );
+    );
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Request failed';
+    logger.error({ error }, 'Request failed');
+    return NextResponse.json(
+      { error: errorMessage },
+      { status: error instanceof Error && error.message.includes('Unauthorized') ? 401 : 500 }
+    );
+  }
 }

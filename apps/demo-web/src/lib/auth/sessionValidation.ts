@@ -37,7 +37,7 @@ interface ValidateUserResult {
   user?: {
     id: string
     email?: string | null
-    tenantId?: string
+    currentTenantId?: string
   }
   error?: string
 }
@@ -67,7 +67,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       user: cached.isValid
         ? {
             id: userId,
-            tenantId: cached.tenantId,
+            currentTenantId: cached.tenantId,
           }
         : undefined,
       error: cached.isValid ? undefined : 'User not found (cached)',
@@ -141,7 +141,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
         user: {
           id: data.id,
           email: data.email,
-          tenantId: data.tenant_id,
+          currentTenantId: data.tenant_id,
         },
       }
     }
@@ -213,10 +213,13 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       }
     }
 
-    // User is valid - cache the success and record metrics
+    // User is valid - get current tenant ID from database
     // ✅ No null check - cache.set() is no-op if Redis down
-    const tenantId = (data.user.user_metadata?.tenant_id ?? data.user.app_metadata?.tenant_id) as string | undefined
-    await validationCache.set(userId, true, tenantId)
+    const { data: currentTenantId } = await adminSupabase
+      .rpc('get_current_tenant_id', { p_user_id: userId })
+      .single()
+
+    await validationCache.set(userId, true, currentTenantId)
     authMetrics.recordCacheMiss(userId, validationDuration, true)
 
     return {
@@ -224,7 +227,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       user: {
         id: data.user.id,
         email: data.user.email,
-        tenantId,
+        currentTenantId,
       },
     }
   } catch (error) {
@@ -251,7 +254,7 @@ export async function getCachedValidationResult(userId: string): Promise<Validat
     user: cached.isValid
       ? {
           id: userId,
-          tenantId: cached.tenantId,
+          currentTenantId: cached.tenantId,
         }
       : undefined,
     error: cached.isValid ? undefined : 'User not found (cached)',

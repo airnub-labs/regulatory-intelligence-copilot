@@ -37,10 +37,13 @@
  */
 
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
 import {
   getCostTrackingServiceIfInitialized,
   createAnomalyDetectionService,
 } from '@reg-copilot/reg-intel-observability';
+import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 
 interface AnomalyRequest {
   hoursBack?: number;
@@ -50,6 +53,9 @@ interface AnomalyRequest {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
+
     const costService = getCostTrackingServiceIfInitialized();
 
     if (!costService || !costService.hasStorage()) {

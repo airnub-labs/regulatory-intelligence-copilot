@@ -21,6 +21,7 @@ import { getServerSession } from 'next-auth/next';
 
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
 import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
 
 const logger = createLogger('GraphStreamRoute');
 
@@ -48,44 +49,48 @@ interface ConnectionMessage {
 }
 
 export async function GET(request: Request) {
-  const session = (await getServerSession(authOptions)) as { user?: { id?: string; tenantId?: string } } | null;
-  const tenantId = session?.user?.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
-  const userId = session?.user?.id;
+  try {
+    // Get and verify tenant context
+    const session = await getServerSession(authOptions);
+    const { userId, tenantId, role } = await getTenantContext(session);
 
-  // CRITICAL: Require authenticated user for graph stream access
-  if (!userId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const { searchParams } = new URL(request.url);
+    const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
+    const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
+    const keyword = searchParams.get('keyword') || undefined;
+
+    const filter: ChangeFilter = { jurisdictions, profileType, keyword };
+
+    logger.info({ filter, tenantId, userId }, 'Client connected to graph stream');
+
+    return requestContext.run({ tenantId, userId }, () =>
+      withSpan(
+        'api.graph.stream',
+        {
+          'app.route': '/api/graph/stream',
+          'app.tenant.id': tenantId,
+          'app.user.id': userId,
+        },
+        () => {
+          const upgradeHeader = request.headers.get('upgrade');
+          const supportsWebSocket = typeof (globalThis as CloudflareGlobalThis).WebSocketPair !== 'undefined';
+
+          if (upgradeHeader?.toLowerCase() === 'websocket' && supportsWebSocket) {
+            return handleWebSocket(filter, tenantId, userId);
+          }
+
+          return handleSse(request, filter, tenantId, userId);
+        },
+      ),
+    );
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Graph stream failed';
+    logger.error({ error }, 'Graph stream failed');
+    return Response.json(
+      { error: errorMessage },
+      { status: error instanceof Error && error.message.includes('Unauthorized') ? 401 : 500 }
+    );
   }
-
-  const { searchParams } = new URL(request.url);
-  const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];
-  const profileType: ProfileId = normalizeProfileType(searchParams.get('profileType'));
-  const keyword = searchParams.get('keyword') || undefined;
-
-  const filter: ChangeFilter = { jurisdictions, profileType, keyword };
-
-  logger.info({ filter, tenantId, userId }, 'Client connected to graph stream');
-
-  return requestContext.run({ tenantId, userId }, () =>
-    withSpan(
-      'api.graph.stream',
-      {
-        'app.route': '/api/graph/stream',
-        'app.tenant.id': tenantId,
-        'app.user.id': userId,
-      },
-      () => {
-        const upgradeHeader = request.headers.get('upgrade');
-        const supportsWebSocket = typeof (globalThis as CloudflareGlobalThis).WebSocketPair !== 'undefined';
-
-        if (upgradeHeader?.toLowerCase() === 'websocket' && supportsWebSocket) {
-          return handleWebSocket(filter, tenantId, userId);
-        }
-
-        return handleSse(request, filter, tenantId, userId);
-      },
-    ),
-  );
 }
 
 function handleSse(
