@@ -4,12 +4,21 @@
 **Date**: 2026-01-06
 **Author**: Platform Infrastructure Team
 **Priority**: Medium-High (Cost Accuracy Improvement)
+**Target Accuracy**: 95% (up from ~60% baseline)
 
 ---
 
 ## Executive Summary
 
 This document outlines the implementation plan for **Adaptive Output Token Estimation**, a system that learns from historical user behavior to improve LLM cost estimation accuracy. Instead of using static per-model estimates, this system tracks actual input/output token ratios per user and uses statistical methods to predict expected output tokens for quota enforcement.
+
+### Key Design Principles
+
+1. **Pluggable Architecture**: Support multiple algorithms without refactoring
+2. **Multi-Level Configuration**: Algorithm selection at platform, tenant, and user levels
+3. **JSONB Flexibility**: Use JSONB columns for algorithm-specific data to avoid schema changes
+4. **Open Source Ready**: Clean interfaces for community algorithm contributions
+5. **95% Accuracy Target**: Enhanced features beyond basic EMA
 
 ### Problem Statement
 
@@ -29,9 +38,10 @@ This document outlines the implementation plan for **Adaptive Output Token Estim
 
 Implement an **Adaptive Output Token Estimator** that:
 1. Tracks historical input/output token ratios per user
-2. Uses exponential moving average (EMA) to weight recent behavior
+2. Uses **pluggable algorithms** (EMA, task-classification, ML, etc.)
 3. Falls back through hierarchy: User → Tenant → Platform → Static defaults
 4. Continuously improves accuracy as usage data accumulates
+5. Allows **platform/tenant-level algorithm selection**
 
 ---
 
@@ -39,65 +49,275 @@ Implement an **Adaptive Output Token Estimator** that:
 
 ### How Others Solve This
 
-| Approach | Used By | Pros | Cons |
-|----------|---------|------|------|
-| **Static Multipliers** | Most SaaS | Simple, predictable | Inaccurate, no personalization |
-| **Exponential Moving Average** | AWS Cost Explorer | Adapts quickly, lightweight | Needs warmup period |
-| **Percentile-Based (P75/P90)** | Cloud billing | Conservative, reliable | May over-estimate |
-| **Task-Type Classification** | OpenAI fine-tuning | Accurate per task | Complex to classify |
-| **ML Prediction Models** | Enterprise platforms | Most accurate | High complexity, latency |
-| **Hybrid (EMA + Bounds)** | **Recommended** | Balanced accuracy/simplicity | Moderate complexity |
+| Approach | Used By | Pros | Cons | Accuracy |
+|----------|---------|------|------|----------|
+| **Static Multipliers** | Most SaaS | Simple, predictable | Inaccurate, no personalization | ~60% |
+| **Exponential Moving Average** | AWS Cost Explorer | Adapts quickly, lightweight | Needs warmup period | ~75-80% |
+| **Percentile-Based (P75/P90)** | Cloud billing | Conservative, reliable | May over-estimate | ~70-75% |
+| **Task-Type Classification** | OpenAI fine-tuning | Accurate per task | Complex to classify | ~85-90% |
+| **Context-Aware** | Enterprise | Considers input length | More complex | ~88-92% |
+| **ML Prediction Models** | Enterprise platforms | Most accurate | High complexity, latency | ~90-95% |
+| **Ensemble (Multiple)** | **Recommended** | Best of all approaches | Moderate complexity | ~95% |
 
-### Recommended Approach: Hybrid EMA with Bounds
+### Recommended Approach: Pluggable Ensemble Architecture
+
+Support **multiple algorithms** with platform/tenant-configurable selection:
 
 ```
-estimated_output_tokens = clamp(
-  user_ema_ratio × input_tokens,
-  min_bound,
-  max_bound
-)
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Algorithm Selection Layer                         │
+│                                                                      │
+│  Platform Default: "weighted_ensemble"                               │
+│       ↓ override                                                     │
+│  Tenant Config: "task_aware_ema" (if configured)                    │
+│       ↓ override                                                     │
+│  User Preference: (future - not in v1)                              │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Algorithm Registry                                │
+│                                                                      │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐  │
+│  │ ema_basic   │  │ task_aware  │  │ context_    │  │ weighted_ │  │
+│  │             │  │ _ema        │  │ length_     │  │ ensemble  │  │
+│  │ Simple EMA  │  │ EMA + task  │  │ aware       │  │           │  │
+│  │ α=0.2       │  │ classific.  │  │             │  │ Combines  │  │
+│  │             │  │             │  │ Input len   │  │ multiple  │  │
+│  │ ~75-80%     │  │ ~85-90%     │  │ correlation │  │ ~95%      │  │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-where:
-  user_ema_ratio = α × current_ratio + (1 - α) × previous_ema
-  α = 0.2 (smoothing factor)
-  min_bound = 0.1 × input_tokens  (prevent unrealistically low estimates)
-  max_bound = 5.0 × input_tokens  (prevent runaway estimates)
+---
+
+## Pluggable Algorithm Architecture
+
+### Algorithm Interface
+
+All estimation algorithms implement a common interface:
+
+```typescript
+interface OutputEstimationAlgorithm {
+  /** Unique algorithm identifier */
+  readonly id: string;
+
+  /** Human-readable name */
+  readonly name: string;
+
+  /** Algorithm version for compatibility tracking */
+  readonly version: string;
+
+  /** Expected accuracy range */
+  readonly expectedAccuracy: { min: number; max: number };
+
+  /** Default configuration */
+  readonly defaultConfig: Record<string, unknown>;
+
+  /**
+   * Estimate output tokens for a request
+   */
+  estimate(params: EstimationInput): Promise<EstimationOutput>;
+
+  /**
+   * Update learned patterns after a completed request
+   */
+  learn(params: LearningInput): Promise<void>;
+
+  /**
+   * Validate algorithm-specific configuration
+   */
+  validateConfig(config: Record<string, unknown>): ValidationResult;
+
+  /**
+   * Extract statistics from JSONB for this algorithm
+   */
+  extractStats(stats: Record<string, unknown>): AlgorithmStats;
+}
+```
+
+### Built-in Algorithms
+
+#### 1. `ema_basic` - Simple Exponential Moving Average
+
+```typescript
+{
+  id: 'ema_basic',
+  name: 'Basic EMA',
+  version: '1.0.0',
+  expectedAccuracy: { min: 0.75, max: 0.80 },
+  defaultConfig: {
+    smoothingFactor: 0.2,
+    minRatioBound: 0.1,
+    maxRatioBound: 5.0,
+    minSamples: 5,
+  }
+}
+```
+
+#### 2. `task_aware_ema` - Task-Type Aware EMA (85-90% accuracy)
+
+Classifies requests by task type and maintains separate EMA per task:
+
+```typescript
+{
+  id: 'task_aware_ema',
+  name: 'Task-Aware EMA',
+  version: '1.0.0',
+  expectedAccuracy: { min: 0.85, max: 0.90 },
+  defaultConfig: {
+    smoothingFactor: 0.2,
+    taskTypes: ['summarization', 'generation', 'qa', 'analysis', 'coding', 'other'],
+    classificationMethod: 'prompt_heuristics', // or 'ml_classifier'
+    perTaskMinSamples: 3,
+  }
+}
+```
+
+**Task Classification Heuristics**:
+- `summarization`: Prompt contains "summarize", "tldr", "brief", output typically < input
+- `generation`: Prompt contains "write", "create", "generate", output typically > input
+- `qa`: Prompt is a question, output typically 0.3-0.8× input
+- `analysis`: Prompt contains "analyze", "explain", output typically 1.0-2.0× input
+- `coding`: Prompt contains code blocks or "function", "class", output varies widely
+
+#### 3. `context_length_aware` - Input Length Correlation (88-92% accuracy)
+
+Uses correlation between input length and output length:
+
+```typescript
+{
+  id: 'context_length_aware',
+  name: 'Context-Length Aware',
+  version: '1.0.0',
+  expectedAccuracy: { min: 0.88, max: 0.92 },
+  defaultConfig: {
+    lengthBuckets: [100, 500, 1000, 2000, 4000, 8000, 16000],
+    perBucketEMA: true,
+    regressionFallback: true,
+  }
+}
+```
+
+**Insight**: Short prompts (< 500 tokens) often get longer responses; long prompts (> 4000) often get shorter responses.
+
+#### 4. `weighted_ensemble` - Combined Algorithms (95% accuracy target)
+
+Combines multiple algorithms with learned weights:
+
+```typescript
+{
+  id: 'weighted_ensemble',
+  name: 'Weighted Ensemble',
+  version: '1.0.0',
+  expectedAccuracy: { min: 0.93, max: 0.97 },
+  defaultConfig: {
+    algorithms: ['ema_basic', 'task_aware_ema', 'context_length_aware'],
+    initialWeights: { ema_basic: 0.2, task_aware_ema: 0.4, context_length_aware: 0.4 },
+    adaptiveWeights: true,  // Learn weights from accuracy
+    recencyBoost: true,     // Weight recent samples higher
+    outlierExclusion: true, // Exclude statistical outliers
+  }
+}
+```
+
+### Algorithm Registry
+
+```typescript
+// packages/reg-intel-core/src/costEstimation/adaptiveEstimator/AlgorithmRegistry.ts
+
+class AlgorithmRegistry {
+  private algorithms = new Map<string, OutputEstimationAlgorithm>();
+
+  /** Register a new algorithm */
+  register(algorithm: OutputEstimationAlgorithm): void {
+    this.algorithms.set(algorithm.id, algorithm);
+  }
+
+  /** Get algorithm by ID */
+  get(id: string): OutputEstimationAlgorithm | undefined {
+    return this.algorithms.get(id);
+  }
+
+  /** List all registered algorithms */
+  list(): AlgorithmInfo[] {
+    return Array.from(this.algorithms.values()).map(a => ({
+      id: a.id,
+      name: a.name,
+      version: a.version,
+      expectedAccuracy: a.expectedAccuracy,
+    }));
+  }
+
+  /** Get algorithm for scope (with fallback chain) */
+  async getForScope(params: {
+    userId?: string;
+    tenantId?: string;
+    configStore: AlgorithmConfigStore;
+  }): Promise<OutputEstimationAlgorithm> {
+    // 1. Check user config (future)
+    // 2. Check tenant config
+    const tenantConfig = await params.configStore.getTenantConfig(params.tenantId);
+    if (tenantConfig?.algorithmId) {
+      const algo = this.get(tenantConfig.algorithmId);
+      if (algo) return algo;
+    }
+
+    // 3. Check platform config
+    const platformConfig = await params.configStore.getPlatformConfig();
+    const algo = this.get(platformConfig.algorithmId);
+    if (algo) return algo;
+
+    // 4. Default to ema_basic
+    return this.get('ema_basic')!;
+  }
+}
+
+// Global registry with built-in algorithms
+export const algorithmRegistry = new AlgorithmRegistry();
+algorithmRegistry.register(new EMABasicAlgorithm());
+algorithmRegistry.register(new TaskAwareEMAAlgorithm());
+algorithmRegistry.register(new ContextLengthAwareAlgorithm());
+algorithmRegistry.register(new WeightedEnsembleAlgorithm());
 ```
 
 ---
 
 ## Technical Architecture
 
-### System Design
+### System Design (Enhanced with Pluggable Algorithms)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    Adaptive Output Token Estimation                      │
+│                    (Pluggable Algorithm Architecture)                    │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
         ┌───────────────────────────┼───────────────────────────┐
         │                           │                           │
         ▼                           ▼                           ▼
 ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────────┐
-│ Token Pattern     │   │ Adaptive Estimator│   │ Learning Pipeline     │
-│ Storage           │   │ Service           │   │ (Post-Request)        │
+│ Algorithm         │   │ Algorithm         │   │ Token Pattern         │
+│ Registry          │   │ Config Store      │   │ Storage (JSONB)       │
 │                   │   │                   │   │                       │
-│ • User patterns   │   │ • EMA calculation │   │ • Record actual ratio │
-│ • Tenant patterns │   │ • Fallback chain  │   │ • Update EMA          │
-│ • Platform stats  │   │ • Bounds checking │   │ • Prune stale data    │
+│ • ema_basic       │   │ • Platform config │   │ • User patterns       │
+│ • task_aware_ema  │   │ • Tenant configs  │   │ • Tenant aggregates   │
+│ • context_aware   │   │ • Algorithm params│   │ • Platform aggregates │
+│ • weighted_ensem. │   │                   │   │ • Algorithm-specific  │
+│ • (custom...)     │   │                   │   │   stats in JSONB      │
 └───────────────────┘   └───────────────────┘   └───────────────────────┘
         │                           │                           │
         └───────────────────────────┼───────────────────────────┘
                                     │
                                     ▼
                     ┌───────────────────────────────┐
-                    │ Cost Estimation Service       │
-                    │ (Enhanced with Adaptive)      │
+                    │ Adaptive Estimator Service    │
                     │                               │
-                    │ 1. Get input token count      │
-                    │ 2. Estimate output tokens     │
-                    │ 3. Calculate estimated cost   │
-                    │ 4. Perform quota check        │
+                    │ 1. Resolve algorithm for scope│
+                    │ 2. Get input token count      │
+                    │ 3. Call algorithm.estimate()  │
+                    │ 4. Calculate estimated cost   │
+                    │ 5. After request: learn()     │
                     └───────────────────────────────┘
 ```
 
@@ -181,36 +401,164 @@ LLM Response (with actual output tokens)
 
 ## Database Schema
 
+### Design Philosophy: JSONB for Algorithm Flexibility
+
+To support pluggable algorithms without schema changes, we use **JSONB columns** for algorithm-specific data:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                     JSONB Column Strategy                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  FIXED COLUMNS (identity, common metrics):                                 │
+│  • user_id, tenant_id, provider, model (identity)                          │
+│  • sample_count, total_input_tokens, total_output_tokens (universal)       │
+│  • created_at, last_updated_at (timestamps)                                │
+│                                                                            │
+│  JSONB COLUMNS (algorithm-specific, extensible):                           │
+│  • algorithm_stats: { ema_ratio, task_ratios, bucket_stats, ... }         │
+│  • algorithm_config: { smoothingFactor, weights, ... }                     │
+│  • accuracy_metrics: { predictions, actuals, error_rates, ... }           │
+│                                                                            │
+│  BENEFITS:                                                                 │
+│  ✅ No schema migration when adding new algorithms                         │
+│  ✅ Each algorithm stores its own structure                                │
+│  ✅ Easy to add/remove algorithm-specific fields                           │
+│  ✅ PostgreSQL JSONB is indexed and queryable                              │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
 ### New Tables
 
 ```sql
 -- ============================================================================
--- USER TOKEN PATTERNS
--- Stores learned input/output ratios per user, per model
+-- ALGORITHM CONFIGURATION
+-- Platform and tenant-level algorithm selection and configuration
+-- ============================================================================
+CREATE TABLE copilot_internal.estimation_algorithm_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Scope (platform has NULL scope_id)
+  scope TEXT NOT NULL,                       -- 'platform', 'tenant'
+  scope_id UUID,                             -- NULL for platform, tenant_id for tenant
+
+  -- Algorithm Selection
+  algorithm_id TEXT NOT NULL,                -- 'ema_basic', 'task_aware_ema', 'weighted_ensemble'
+  algorithm_version TEXT NOT NULL,           -- '1.0.0'
+
+  -- Algorithm-Specific Configuration (JSONB for flexibility)
+  config JSONB NOT NULL DEFAULT '{}',
+  /*
+    Examples:
+    ema_basic: { "smoothingFactor": 0.2, "minRatioBound": 0.1, "maxRatioBound": 5.0 }
+    task_aware_ema: { "smoothingFactor": 0.2, "taskTypes": ["summarization", "qa", "generation"] }
+    weighted_ensemble: { "algorithms": ["ema_basic", "task_aware_ema"], "weights": { "ema_basic": 0.3, "task_aware_ema": 0.7 } }
+  */
+
+  -- Metadata
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by TEXT,                           -- For audit trail
+
+  -- Constraints
+  UNIQUE(scope, scope_id)
+);
+
+-- Default platform configuration
+INSERT INTO copilot_internal.estimation_algorithm_config (scope, scope_id, algorithm_id, algorithm_version, config)
+VALUES ('platform', NULL, 'weighted_ensemble', '1.0.0', '{
+  "algorithms": ["ema_basic", "task_aware_ema", "context_length_aware"],
+  "initialWeights": { "ema_basic": 0.2, "task_aware_ema": 0.4, "context_length_aware": 0.4 },
+  "adaptiveWeights": true,
+  "outlierExclusion": true
+}'::jsonb);
+
+CREATE INDEX idx_algorithm_config_scope
+  ON copilot_internal.estimation_algorithm_config(scope, scope_id);
+
+-- ============================================================================
+-- USER TOKEN PATTERNS (JSONB-based)
+-- Stores learned patterns per user, per model with algorithm-specific stats
 -- ============================================================================
 CREATE TABLE copilot_internal.user_token_patterns (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-  -- Identity
+  -- Identity (fixed columns for fast lookups)
   user_id UUID NOT NULL,
   tenant_id UUID NOT NULL,
   provider TEXT NOT NULL,                    -- 'anthropic', 'openai', etc.
   model TEXT NOT NULL,                       -- 'claude-3-sonnet-20240229'
 
-  -- Learned Statistics
-  ema_output_ratio NUMERIC(8, 4) NOT NULL,   -- EMA of (output/input) ratio
-  sample_count INTEGER NOT NULL DEFAULT 0,   -- Number of samples used
-  total_input_tokens BIGINT DEFAULT 0,       -- Total input tokens processed
-  total_output_tokens BIGINT DEFAULT 0,      -- Total output tokens generated
+  -- Universal Statistics (common across all algorithms)
+  sample_count INTEGER NOT NULL DEFAULT 0,
+  total_input_tokens BIGINT DEFAULT 0,
+  total_output_tokens BIGINT DEFAULT 0,
 
-  -- Distribution Stats (for percentile-based estimation)
-  min_ratio NUMERIC(8, 4),                   -- Minimum observed ratio
-  max_ratio NUMERIC(8, 4),                   -- Maximum observed ratio
-  p50_ratio NUMERIC(8, 4),                   -- Median ratio (updated periodically)
-  p90_ratio NUMERIC(8, 4),                   -- 90th percentile ratio
+  -- Algorithm-Specific Statistics (JSONB for flexibility)
+  algorithm_stats JSONB NOT NULL DEFAULT '{}',
+  /*
+    Structure varies by algorithm. Examples:
 
-  -- Configuration
-  smoothing_factor NUMERIC(4, 3) DEFAULT 0.2, -- α in EMA formula
+    For ema_basic:
+    {
+      "ema_ratio": 0.85,
+      "min_ratio": 0.3,
+      "max_ratio": 2.1,
+      "p50_ratio": 0.8,
+      "p90_ratio": 1.4
+    }
+
+    For task_aware_ema:
+    {
+      "task_ratios": {
+        "summarization": { "ema": 0.4, "count": 15 },
+        "qa": { "ema": 0.6, "count": 42 },
+        "generation": { "ema": 1.8, "count": 23 },
+        "coding": { "ema": 1.2, "count": 8 }
+      },
+      "default_ema": 0.85
+    }
+
+    For context_length_aware:
+    {
+      "bucket_stats": {
+        "0-500": { "ema": 1.2, "count": 30 },
+        "500-1000": { "ema": 0.9, "count": 25 },
+        "1000-2000": { "ema": 0.7, "count": 18 },
+        "2000+": { "ema": 0.5, "count": 12 }
+      },
+      "regression_coefficients": { "slope": -0.0001, "intercept": 1.5 }
+    }
+
+    For weighted_ensemble:
+    {
+      "algorithm_predictions": {
+        "ema_basic": { "last_prediction": 450, "recent_accuracy": 0.78 },
+        "task_aware_ema": { "last_prediction": 420, "recent_accuracy": 0.88 },
+        "context_length_aware": { "last_prediction": 435, "recent_accuracy": 0.85 }
+      },
+      "learned_weights": { "ema_basic": 0.15, "task_aware_ema": 0.45, "context_length_aware": 0.40 }
+    }
+  */
+
+  -- Accuracy Tracking (for weight learning and monitoring)
+  accuracy_metrics JSONB NOT NULL DEFAULT '{}',
+  /*
+    {
+      "recent_predictions": [
+        { "predicted": 450, "actual": 420, "timestamp": "2026-01-06T10:00:00Z" },
+        { "predicted": 380, "actual": 395, "timestamp": "2026-01-06T10:05:00Z" }
+      ],
+      "rolling_accuracy": 0.87,
+      "total_predictions": 156,
+      "within_10_percent": 142,
+      "within_20_percent": 153
+    }
+  */
+
+  -- Timestamps
   last_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -225,9 +573,12 @@ CREATE INDEX idx_user_token_patterns_tenant
   ON copilot_internal.user_token_patterns(tenant_id, provider, model);
 CREATE INDEX idx_user_token_patterns_updated
   ON copilot_internal.user_token_patterns(last_updated_at);
+-- GIN index for JSONB queries (e.g., finding users with specific task types)
+CREATE INDEX idx_user_token_patterns_stats_gin
+  ON copilot_internal.user_token_patterns USING GIN (algorithm_stats);
 
 -- ============================================================================
--- TENANT TOKEN PATTERNS
+-- TENANT TOKEN PATTERNS (JSONB-based)
 -- Aggregated patterns at tenant level (for user fallback)
 -- ============================================================================
 CREATE TABLE copilot_internal.tenant_token_patterns (
@@ -238,20 +589,23 @@ CREATE TABLE copilot_internal.tenant_token_patterns (
   provider TEXT NOT NULL,
   model TEXT NOT NULL,
 
-  -- Aggregated Statistics
-  ema_output_ratio NUMERIC(8, 4) NOT NULL,
-  active_user_count INTEGER DEFAULT 0,       -- Users contributing to aggregate
+  -- Universal Statistics
+  active_user_count INTEGER DEFAULT 0,
   sample_count INTEGER DEFAULT 0,
   total_input_tokens BIGINT DEFAULT 0,
   total_output_tokens BIGINT DEFAULT 0,
 
-  -- Distribution
-  min_ratio NUMERIC(8, 4),
-  max_ratio NUMERIC(8, 4),
-  p50_ratio NUMERIC(8, 4),
-  p90_ratio NUMERIC(8, 4),
+  -- Algorithm-Specific Statistics (JSONB)
+  algorithm_stats JSONB NOT NULL DEFAULT '{}',
+  /*
+    Aggregated from user patterns. Structure matches user_token_patterns
+    but with aggregated values (averages, percentiles across users).
+  */
 
-  -- Metadata
+  -- Accuracy Metrics (aggregated)
+  accuracy_metrics JSONB NOT NULL DEFAULT '{}',
+
+  -- Timestamps
   last_aggregated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -260,9 +614,11 @@ CREATE TABLE copilot_internal.tenant_token_patterns (
 
 CREATE INDEX idx_tenant_token_patterns_lookup
   ON copilot_internal.tenant_token_patterns(tenant_id, provider, model);
+CREATE INDEX idx_tenant_token_patterns_stats_gin
+  ON copilot_internal.tenant_token_patterns USING GIN (algorithm_stats);
 
 -- ============================================================================
--- PLATFORM TOKEN PATTERNS
+-- PLATFORM TOKEN PATTERNS (JSONB-based)
 -- Platform-wide aggregates (for tenant fallback)
 -- ============================================================================
 CREATE TABLE copilot_internal.platform_token_patterns (
@@ -272,21 +628,20 @@ CREATE TABLE copilot_internal.platform_token_patterns (
   provider TEXT NOT NULL,
   model TEXT NOT NULL,
 
-  -- Aggregated Statistics
-  ema_output_ratio NUMERIC(8, 4) NOT NULL,
+  -- Universal Statistics
   active_tenant_count INTEGER DEFAULT 0,
   active_user_count INTEGER DEFAULT 0,
   sample_count INTEGER DEFAULT 0,
   total_input_tokens BIGINT DEFAULT 0,
   total_output_tokens BIGINT DEFAULT 0,
 
-  -- Distribution
-  min_ratio NUMERIC(8, 4),
-  max_ratio NUMERIC(8, 4),
-  p50_ratio NUMERIC(8, 4),
-  p90_ratio NUMERIC(8, 4),
+  -- Algorithm-Specific Statistics (JSONB)
+  algorithm_stats JSONB NOT NULL DEFAULT '{}',
 
-  -- Metadata
+  -- Accuracy Metrics (platform-wide)
+  accuracy_metrics JSONB NOT NULL DEFAULT '{}',
+
+  -- Timestamps
   last_aggregated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -297,8 +652,8 @@ CREATE INDEX idx_platform_token_patterns_lookup
   ON copilot_internal.platform_token_patterns(provider, model);
 
 -- ============================================================================
--- TOKEN PATTERN HISTORY
--- Historical snapshots for trend analysis and debugging
+-- TOKEN PATTERN HISTORY (JSONB-based)
+-- Historical snapshots for trend analysis, debugging, and algorithm comparison
 -- ============================================================================
 CREATE TABLE copilot_internal.token_pattern_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -309,9 +664,16 @@ CREATE TABLE copilot_internal.token_pattern_history (
   provider TEXT NOT NULL,
   model TEXT NOT NULL,
 
-  -- Snapshot
-  ema_output_ratio NUMERIC(8, 4) NOT NULL,
-  sample_count INTEGER NOT NULL,
+  -- Snapshot (JSONB for full state capture)
+  snapshot JSONB NOT NULL,
+  /*
+    {
+      "algorithm_id": "weighted_ensemble",
+      "sample_count": 156,
+      "algorithm_stats": { ... },
+      "accuracy_metrics": { "rolling_accuracy": 0.87 }
+    }
+  */
 
   -- Timestamp
   snapshot_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -322,6 +684,99 @@ CREATE TABLE copilot_internal.token_pattern_history (
 
 CREATE INDEX idx_token_pattern_history_lookup
   ON copilot_internal.token_pattern_history(scope, scope_id, provider, model, snapshot_at DESC);
+CREATE INDEX idx_token_pattern_history_snapshot_gin
+  ON copilot_internal.token_pattern_history USING GIN (snapshot);
+
+-- ============================================================================
+-- ALGORITHM PERFORMANCE TRACKING
+-- Track algorithm accuracy for A/B testing and weight optimization
+-- ============================================================================
+CREATE TABLE copilot_internal.algorithm_performance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Identity
+  algorithm_id TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+
+  -- Time bucket (hourly aggregation)
+  bucket_start TIMESTAMPTZ NOT NULL,
+  bucket_end TIMESTAMPTZ NOT NULL,
+
+  -- Performance Metrics
+  metrics JSONB NOT NULL,
+  /*
+    {
+      "total_predictions": 1250,
+      "within_10_percent": 1087,
+      "within_20_percent": 1200,
+      "mean_absolute_error": 45.2,
+      "mean_percentage_error": 0.12,
+      "accuracy_score": 0.87,
+      "sample_breakdown": {
+        "by_task_type": { "qa": 0.92, "generation": 0.78 },
+        "by_input_length": { "short": 0.85, "long": 0.89 }
+      }
+    }
+  */
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  UNIQUE(algorithm_id, provider, model, bucket_start)
+);
+
+CREATE INDEX idx_algorithm_performance_lookup
+  ON copilot_internal.algorithm_performance(algorithm_id, provider, model, bucket_start DESC);
+```
+
+### JSONB Helper Functions
+
+```sql
+-- ============================================================================
+-- GET EMA RATIO FROM JSONB
+-- Extracts EMA ratio from algorithm_stats, handling different algorithm formats
+-- ============================================================================
+CREATE OR REPLACE FUNCTION copilot_internal.get_ema_ratio(
+  p_algorithm_stats JSONB
+) RETURNS NUMERIC AS $$
+BEGIN
+  -- Try direct ema_ratio (ema_basic)
+  IF p_algorithm_stats ? 'ema_ratio' THEN
+    RETURN (p_algorithm_stats->>'ema_ratio')::NUMERIC;
+  END IF;
+
+  -- Try default_ema (task_aware_ema)
+  IF p_algorithm_stats ? 'default_ema' THEN
+    RETURN (p_algorithm_stats->>'default_ema')::NUMERIC;
+  END IF;
+
+  -- Try bucket average (context_length_aware)
+  IF p_algorithm_stats ? 'bucket_stats' THEN
+    RETURN (
+      SELECT AVG((value->>'ema')::NUMERIC)
+      FROM jsonb_each(p_algorithm_stats->'bucket_stats') AS x(key, value)
+      WHERE value ? 'ema'
+    );
+  END IF;
+
+  -- Default
+  RETURN 0.8;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- ============================================================================
+-- MERGE ALGORITHM STATS
+-- Merges new algorithm-specific data into existing JSONB
+-- ============================================================================
+CREATE OR REPLACE FUNCTION copilot_internal.merge_algorithm_stats(
+  p_existing JSONB,
+  p_new JSONB
+) RETURNS JSONB AS $$
+BEGIN
+  -- Deep merge: new values override existing at each key
+  RETURN p_existing || p_new;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
 ```
 
 ### Helper Functions
@@ -965,16 +1420,226 @@ export class EnhancedCostEstimationService {
 
 ---
 
+## Achieving 95% Accuracy: Enhancement Strategies
+
+To reach the **95% accuracy target** (up from ~60% baseline), we employ multiple complementary strategies:
+
+### Accuracy Improvement Breakdown
+
+| Strategy | Contribution | Cumulative |
+|----------|-------------|------------|
+| Basic EMA (baseline) | +15-20% | 75-80% |
+| Task-type classification | +7-10% | 85-88% |
+| Input length correlation | +3-5% | 88-92% |
+| Ensemble + weight learning | +3-5% | 91-95% |
+| Outlier exclusion | +1-2% | 93-97% |
+
+### Strategy 1: Task-Type Classification (+7-10%)
+
+Different tasks have predictable output patterns:
+
+```typescript
+const TASK_OUTPUT_CHARACTERISTICS = {
+  summarization: {
+    typicalRatio: 0.3,      // Output ~30% of input
+    variance: 'low',         // Very predictable
+    detection: ['summarize', 'tldr', 'brief', 'key points'],
+  },
+  qa: {
+    typicalRatio: 0.5,      // Output ~50% of input
+    variance: 'medium',
+    detection: ['?', 'what', 'how', 'why', 'explain'],
+  },
+  generation: {
+    typicalRatio: 2.0,      // Output ~200% of input
+    variance: 'high',        // Less predictable
+    detection: ['write', 'create', 'generate', 'compose'],
+  },
+  analysis: {
+    typicalRatio: 1.5,
+    variance: 'medium',
+    detection: ['analyze', 'compare', 'evaluate', 'assess'],
+  },
+  coding: {
+    typicalRatio: 1.2,
+    variance: 'high',
+    detection: ['function', 'class', 'code', '```'],
+  },
+  translation: {
+    typicalRatio: 1.0,      // ~1:1 ratio
+    variance: 'low',
+    detection: ['translate', 'convert to', 'in spanish'],
+  },
+};
+```
+
+### Strategy 2: Input Length Correlation (+3-5%)
+
+Empirical observation: output/input ratio correlates with input length:
+
+```typescript
+const LENGTH_CORRELATION = {
+  // Short prompts often get longer responses (ratio > 1)
+  '0-100': { avgRatio: 2.5, confidence: 0.7 },
+  '100-500': { avgRatio: 1.5, confidence: 0.8 },
+  '500-1000': { avgRatio: 1.0, confidence: 0.85 },
+  '1000-2000': { avgRatio: 0.8, confidence: 0.85 },
+  '2000-4000': { avgRatio: 0.6, confidence: 0.8 },
+  // Long prompts get shorter responses (ratio < 1)
+  '4000+': { avgRatio: 0.4, confidence: 0.75 },
+};
+
+// Linear regression can model this more precisely
+// output_ratio = intercept - (slope × input_tokens)
+```
+
+### Strategy 3: Weighted Ensemble with Adaptive Weights (+3-5%)
+
+Combine multiple algorithms and **learn which works best** for each user:
+
+```typescript
+interface EnsembleConfig {
+  algorithms: string[];
+  initialWeights: Record<string, number>;
+  adaptiveWeights: boolean;
+  weightLearningRate: number;  // How fast weights adapt
+}
+
+// After each prediction, update weights based on accuracy
+function updateEnsembleWeights(
+  predictions: Record<string, number>,
+  actual: number,
+  currentWeights: Record<string, number>,
+  learningRate: number = 0.1
+): Record<string, number> {
+  const errors: Record<string, number> = {};
+  let totalInverseError = 0;
+
+  // Calculate error for each algorithm
+  for (const [algo, predicted] of Object.entries(predictions)) {
+    const error = Math.abs(predicted - actual) / actual;
+    errors[algo] = error;
+    totalInverseError += 1 / (error + 0.01); // Avoid division by zero
+  }
+
+  // Update weights: better accuracy = higher weight
+  const newWeights: Record<string, number> = {};
+  for (const algo of Object.keys(predictions)) {
+    const accuracyWeight = (1 / (errors[algo] + 0.01)) / totalInverseError;
+    newWeights[algo] =
+      currentWeights[algo] * (1 - learningRate) +
+      accuracyWeight * learningRate;
+  }
+
+  return normalizeWeights(newWeights);
+}
+```
+
+### Strategy 4: Outlier Exclusion (+1-2%)
+
+Exclude statistical outliers from EMA updates to prevent single anomalous requests from skewing estimates:
+
+```typescript
+function shouldExcludeAsOutlier(
+  currentRatio: number,
+  historicalStats: { mean: number; stdDev: number },
+  threshold: number = 2.5  // Z-score threshold
+): boolean {
+  const zScore = Math.abs(currentRatio - historicalStats.mean) / historicalStats.stdDev;
+  return zScore > threshold;
+}
+
+// In learning pipeline:
+if (!shouldExcludeAsOutlier(actualRatio, userStats)) {
+  updateEMA(actualRatio);
+} else {
+  // Log but don't update
+  logger.info('Excluded outlier ratio', { actualRatio, userStats });
+}
+```
+
+### Strategy 5: Recency Weighting
+
+Recent behavior is more predictive than old behavior:
+
+```typescript
+// Time-decayed EMA: recent samples weighted more heavily
+function calculateRecencyWeightedEMA(
+  samples: Array<{ ratio: number; timestamp: Date }>,
+  decayHalfLifeHours: number = 168  // 1 week half-life
+): number {
+  const now = Date.now();
+  let weightedSum = 0;
+  let weightSum = 0;
+
+  for (const sample of samples) {
+    const ageHours = (now - sample.timestamp.getTime()) / (1000 * 60 * 60);
+    const weight = Math.pow(0.5, ageHours / decayHalfLifeHours);
+    weightedSum += sample.ratio * weight;
+    weightSum += weight;
+  }
+
+  return weightedSum / weightSum;
+}
+```
+
+### Strategy 6: Model-Specific Adjustments
+
+Different LLMs have different output characteristics:
+
+```typescript
+const MODEL_CHARACTERISTICS = {
+  'claude-3-opus': { verbosityFactor: 1.2 },     // More verbose
+  'claude-3-sonnet': { verbosityFactor: 1.0 },   // Baseline
+  'claude-3-haiku': { verbosityFactor: 0.8 },    // More concise
+  'gpt-4-turbo': { verbosityFactor: 1.1 },
+  'gpt-3.5-turbo': { verbosityFactor: 0.9 },
+};
+
+// Apply model adjustment to base estimate
+estimatedOutput *= MODEL_CHARACTERISTICS[model]?.verbosityFactor ?? 1.0;
+```
+
+### Accuracy Monitoring Dashboard
+
+Track accuracy in real-time to validate improvements:
+
+```sql
+-- Hourly accuracy report by algorithm
+SELECT
+  DATE_TRUNC('hour', recorded_at) as hour,
+  algorithm_id,
+  COUNT(*) as predictions,
+  AVG(CASE
+    WHEN ABS(estimated_output - actual_output) / actual_output < 0.10
+    THEN 1 ELSE 0
+  END) as within_10_percent,
+  AVG(CASE
+    WHEN ABS(estimated_output - actual_output) / actual_output < 0.20
+    THEN 1 ELSE 0
+  END) as within_20_percent,
+  AVG(ABS(estimated_output - actual_output)::NUMERIC / actual_output) as mean_error
+FROM copilot_internal.llm_cost_records
+WHERE estimated_output IS NOT NULL
+  AND recorded_at > NOW() - INTERVAL '24 hours'
+GROUP BY hour, algorithm_id
+ORDER BY hour DESC, algorithm_id;
+```
+
+---
+
 ## Implementation Phases
 
-### Phase 1: Database Foundation (1-2 days)
+### Phase 1: Database Foundation (2-3 days)
 
 **Tasks**:
-1. Create migration for new tables
-2. Implement SQL helper functions
-3. Add database indexes
-4. Create aggregation functions
-5. Write migration tests
+1. Create migration for JSONB-based tables
+2. Create `estimation_algorithm_config` table with platform default
+3. Create `user_token_patterns`, `tenant_token_patterns`, `platform_token_patterns` tables
+4. Create `algorithm_performance` tracking table
+5. Implement JSONB helper functions
+6. Add GIN indexes for JSONB queries
+7. Write migration tests
 
 **Files**:
 - `supabase/migrations/20260106000001_adaptive_token_patterns.sql`
@@ -985,31 +1650,71 @@ npm run db:migrate
 npm run db:test:adaptive-patterns
 ```
 
-### Phase 2: Core Service Implementation (2-3 days)
+### Phase 2: Algorithm Framework (2-3 days)
 
 **Tasks**:
-1. Implement `TokenPatternStore` (database layer)
-2. Implement `AdaptiveOutputEstimator` (core logic)
-3. Implement `EMACalculator` (utilities)
-4. Add unit tests
-5. Add integration tests
+1. Define `OutputEstimationAlgorithm` interface
+2. Implement `AlgorithmRegistry` for algorithm management
+3. Implement `AlgorithmConfigStore` for scope-based config lookup
+4. Implement `ema_basic` algorithm
+5. Add unit tests for framework
+6. Add integration tests
 
 **Files**:
-- `packages/reg-intel-core/src/costEstimation/adaptiveEstimator/*.ts`
+```
+packages/reg-intel-core/src/costEstimation/adaptiveEstimator/
+├── types.ts                    # Interfaces and types
+├── AlgorithmRegistry.ts        # Algorithm registration
+├── AlgorithmConfigStore.ts     # Config lookup with fallback
+├── algorithms/
+│   ├── BaseAlgorithm.ts        # Base class with common logic
+│   ├── EMABasicAlgorithm.ts    # Simple EMA implementation
+│   └── index.ts
+└── index.ts
+```
 
 **Verification**:
 ```bash
-npm run test:adaptive-estimator
+npm run test:algorithm-framework
 ```
 
-### Phase 3: Integration (1-2 days)
+### Phase 3: Advanced Algorithms (3-4 days)
 
 **Tasks**:
-1. Integrate with `CostEstimationService`
-2. Update `getLLMCostEstimate()` to use adaptive estimation
-3. Add `recordActualUsage()` call after LLM requests
-4. Update Chat API route
-5. Add feature flag for gradual rollout
+1. Implement `task_aware_ema` algorithm with task classification
+2. Implement `context_length_aware` algorithm with bucket stats
+3. Implement `weighted_ensemble` algorithm with adaptive weights
+4. Add task classifier (heuristic-based initially)
+5. Add accuracy tracking
+6. Add unit tests for each algorithm
+
+**Files**:
+```
+packages/reg-intel-core/src/costEstimation/adaptiveEstimator/algorithms/
+├── TaskAwareEMAAlgorithm.ts
+├── ContextLengthAwareAlgorithm.ts
+├── WeightedEnsembleAlgorithm.ts
+└── utils/
+    ├── TaskClassifier.ts
+    ├── AccuracyTracker.ts
+    └── OutlierDetector.ts
+```
+
+**Verification**:
+```bash
+npm run test:advanced-algorithms
+```
+
+### Phase 4: Core Service & Integration (2-3 days)
+
+**Tasks**:
+1. Implement `AdaptiveOutputEstimator` main service
+2. Implement `TokenPatternStore` (JSONB-aware database layer)
+3. Integrate with existing `CostEstimationService`
+4. Update `getLLMCostEstimate()` to use adaptive estimation
+5. Add `recordActualUsage()` call after LLM requests
+6. Update Chat API route
+7. Add feature flag for gradual rollout
 
 **Files**:
 - `packages/reg-intel-core/src/costEstimation/service.ts`
@@ -1021,13 +1726,14 @@ npm run test:adaptive-estimator
 npm run test:integration:cost-estimation
 ```
 
-### Phase 4: Aggregation Jobs (1 day)
+### Phase 5: Aggregation Jobs (1-2 days)
 
 **Tasks**:
 1. Implement `PatternAggregator` service
 2. Create scheduled job for tenant aggregation
 3. Create scheduled job for platform aggregation
-4. Add monitoring/alerting
+4. Add algorithm performance aggregation
+5. Add monitoring/alerting
 
 **Files**:
 - `packages/reg-intel-core/src/costEstimation/adaptiveEstimator/PatternAggregator.ts`
@@ -1040,20 +1746,39 @@ npm run test:integration:cost-estimation
 
 # Aggregate platform patterns every 6 hours
 0 */6 * * * npm run patterns:aggregate:platform
+
+# Aggregate algorithm performance hourly
+0 * * * * npm run patterns:aggregate:performance
 ```
 
-### Phase 5: Observability & Documentation (1 day)
+### Phase 6: Observability & Documentation (1-2 days)
 
 **Tasks**:
 1. Add OpenTelemetry metrics for estimation accuracy
-2. Create Grafana dashboard for token patterns
-3. Update all documentation
-4. Create runbook for operations
+2. Create Grafana dashboard for token patterns and algorithm comparison
+3. Add A/B testing support for algorithm comparison
+4. Update all documentation
+5. Create runbook for operations
 
 **Metrics**:
 - `llm_estimation_accuracy_ratio` - Histogram of (estimated/actual)
 - `token_pattern_cache_hit_rate` - Cache effectiveness
 - `token_pattern_source_distribution` - user/tenant/platform/default usage
+- `algorithm_accuracy_by_type` - Compare algorithm performance
+- `ensemble_weight_distribution` - Track learned weights
+
+### Implementation Timeline Summary
+
+| Phase | Duration | Cumulative |
+|-------|----------|------------|
+| 1. Database Foundation | 2-3 days | 2-3 days |
+| 2. Algorithm Framework | 2-3 days | 4-6 days |
+| 3. Advanced Algorithms | 3-4 days | 7-10 days |
+| 4. Core Service & Integration | 2-3 days | 9-13 days |
+| 5. Aggregation Jobs | 1-2 days | 10-15 days |
+| 6. Observability & Documentation | 1-2 days | 11-17 days |
+
+**Total Estimate**: 11-17 days (depending on testing depth)
 
 ---
 
@@ -1064,6 +1789,9 @@ npm run test:integration:cost-estimation
 ```bash
 # Feature flag
 ADAPTIVE_TOKEN_ESTIMATION_ENABLED=true
+
+# Algorithm selection (platform default)
+ADAPTIVE_DEFAULT_ALGORITHM=weighted_ensemble  # ema_basic, task_aware_ema, context_length_aware, weighted_ensemble
 
 # EMA Configuration
 ADAPTIVE_EMA_SMOOTHING_FACTOR=0.2        # How quickly to adapt (0.1-0.5)
@@ -1076,8 +1804,16 @@ ADAPTIVE_MIN_USER_SAMPLES=5              # Samples needed for user-level
 ADAPTIVE_MIN_TENANT_SAMPLES=20           # Samples needed for tenant-level
 ADAPTIVE_MIN_PLATFORM_SAMPLES=100        # Samples needed for platform-level
 
+# Ensemble configuration
+ADAPTIVE_ENSEMBLE_WEIGHT_LEARNING_RATE=0.1   # How fast ensemble weights adapt
+ADAPTIVE_OUTLIER_ZSCORE_THRESHOLD=2.5        # Z-score threshold for outlier exclusion
+
 # Cache configuration
 ADAPTIVE_CACHE_TTL_SECONDS=300           # How long to cache patterns
+ADAPTIVE_ALGORITHM_CONFIG_CACHE_TTL=3600 # Algorithm config cache (1 hour)
+
+# Rollout
+ADAPTIVE_ROLLOUT_PERCENT=100             # Percentage of tenants to enable
 ```
 
 ### Feature Flag Rollout
