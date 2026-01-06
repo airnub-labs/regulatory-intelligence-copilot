@@ -2214,6 +2214,140 @@ jobs:
 
 ---
 
+## Future Enhancement: Adaptive Output Token Estimation
+
+> **Status**: 📋 Proposed (See Implementation Plan)
+> **Document**: [`docs/development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+
+### Problem Statement
+
+The current cost estimation system uses **static per-model estimates** for pre-request quota checks:
+
+```typescript
+// Current approach - same estimate for ALL users
+const estimatedCost = getLLMCostEstimateFallback(
+  'anthropic',
+  'claude-3-sonnet-20240229',
+  'chat',
+  'conservative'  // Returns fixed $0.05
+);
+```
+
+**Issues**:
+1. No personalization - power users and casual users treated identically
+2. No learning - system doesn't improve over time with actual usage data
+3. Output tokens unknown - tiktoken can only count input tokens exactly
+4. Conservative estimates may block legitimate requests or over-reserve quota
+
+### Proposed Solution: User-Based Learning
+
+Implement an **Adaptive Output Token Estimator** that learns from historical user behavior:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                 Adaptive Output Token Estimation                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+PRE-REQUEST (Quota Check):
+1. Count input tokens (exact via tiktoken)
+2. Lookup user's historical output/input ratio
+3. Estimate: output_tokens = ratio × input_tokens
+4. Calculate cost estimate for quota check
+
+POST-REQUEST (Learning):
+1. Record actual input/output tokens from API response
+2. Update user's EMA ratio: new_ema = α × actual + (1-α) × old_ema
+3. Aggregate to tenant/platform levels periodically
+```
+
+### Key Features
+
+**Fallback Hierarchy**:
+```
+User Pattern (5+ samples)
+    ↓ fallback
+Tenant Pattern (20+ samples)
+    ↓ fallback
+Platform Pattern (100+ samples)
+    ↓ fallback
+Static Model Defaults
+```
+
+**Exponential Moving Average (EMA)**:
+- Smoothing factor α = 0.2 (configurable)
+- Weights recent behavior more heavily
+- Adapts within ~10 requests to new patterns
+- Resistant to single outliers
+
+**Confidence Levels**:
+| Level | Ratio Used | Use Case |
+|-------|------------|----------|
+| Conservative | P90 or EMA × 1.3 | Quota enforcement (prevent overruns) |
+| Typical | EMA | Reporting, forecasting |
+| Optimistic | P50 or EMA × 0.7 | User-facing cost previews |
+
+### Database Schema (New Tables)
+
+```sql
+-- User-level learned patterns
+CREATE TABLE copilot_internal.user_token_patterns (
+  user_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  ema_output_ratio NUMERIC(8, 4) NOT NULL,
+  sample_count INTEGER DEFAULT 0,
+  p50_ratio NUMERIC(8, 4),
+  p90_ratio NUMERIC(8, 4),
+  last_updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, provider, model)
+);
+
+-- Tenant-level aggregates (user fallback)
+CREATE TABLE copilot_internal.tenant_token_patterns (...);
+
+-- Platform-level aggregates (tenant fallback)
+CREATE TABLE copilot_internal.platform_token_patterns (...);
+```
+
+### Expected Benefits
+
+| Metric | Current | Target | Improvement |
+|--------|---------|--------|-------------|
+| Estimation accuracy | ~60% | >85% | +25% |
+| Quota false positives | Unknown | <5% | Fewer blocked requests |
+| User personalization | None | Per-user | Tailored quotas |
+| System learning | None | Continuous | Improves over time |
+
+### Implementation Timeline
+
+| Phase | Description | Duration |
+|-------|-------------|----------|
+| 1 | Database schema & migrations | 1-2 days |
+| 2 | Core service implementation | 2-3 days |
+| 3 | Integration with CostEstimationService | 1-2 days |
+| 4 | Aggregation jobs (tenant/platform) | 1 day |
+| 5 | Observability & documentation | 1 day |
+
+**Total**: ~7-9 days
+
+### Feature Flag Rollout
+
+```bash
+# Environment configuration
+ADAPTIVE_TOKEN_ESTIMATION_ENABLED=true
+ADAPTIVE_EMA_SMOOTHING_FACTOR=0.2
+ADAPTIVE_ROLLOUT_PERCENT=10  # Gradual rollout
+```
+
+### Related Documentation
+
+- **Full Implementation Plan**: [`ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+- **Current Token Counting**: [`packages/reg-intel-core/src/tokens/tiktoken.ts`](../../packages/reg-intel-core/src/tokens/tiktoken.ts)
+- **Current Cost Estimation**: [`COST_ESTIMATION_SERVICE_IMPLEMENTATION.md`](../implementation/COST_ESTIMATION_SERVICE_IMPLEMENTATION.md)
+
+---
+
 ## API Reference
 
 ### Cost Tracking Service

@@ -573,12 +573,193 @@ WHERE provider = 'anthropic' AND model = 'claude-3-opus-20240229';
 2. Build and deploy
 3. Takes effect on next deployment
 
+## Future: Adaptive Token Pattern Management
+
+> **Status**: 📋 Proposed Enhancement
+> **Implementation Plan**: [`ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`](../development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md)
+
+### Overview
+
+A future enhancement will add **Adaptive Output Token Estimation** that learns from user behavior. This section describes the upcoming management tasks for DevOps teams.
+
+### New Database Tables
+
+When implemented, three new tables will require management:
+
+```sql
+-- User-level learned patterns
+copilot_internal.user_token_patterns
+  ├── user_id, tenant_id, provider, model
+  ├── ema_output_ratio (learned output/input ratio)
+  ├── sample_count (number of requests)
+  ├── p50_ratio, p90_ratio (percentiles)
+  └── last_updated_at
+
+-- Tenant-level aggregates
+copilot_internal.tenant_token_patterns
+  ├── tenant_id, provider, model
+  ├── ema_output_ratio (aggregated from users)
+  ├── active_user_count, sample_count
+  └── last_aggregated_at
+
+-- Platform-level aggregates
+copilot_internal.platform_token_patterns
+  ├── provider, model
+  ├── ema_output_ratio (aggregated from tenants)
+  ├── active_tenant_count, active_user_count
+  └── last_aggregated_at
+```
+
+### Common Operations (Future)
+
+#### View User's Token Pattern
+
+```sql
+SELECT
+  user_id,
+  provider,
+  model,
+  ema_output_ratio,
+  sample_count,
+  p50_ratio,
+  p90_ratio,
+  last_updated_at
+FROM copilot_internal.user_token_patterns
+WHERE user_id = '<USER_ID>'
+ORDER BY model;
+```
+
+#### Reset User's Pattern (Support Request)
+
+```sql
+-- Delete user's learned pattern (will restart learning)
+DELETE FROM copilot_internal.user_token_patterns
+WHERE user_id = '<USER_ID>';
+
+-- User will fall back to tenant → platform → static estimates
+```
+
+#### Compare Estimation Accuracy
+
+```sql
+-- Compare pre-request estimates vs actual costs
+SELECT
+  model,
+  AVG(estimated_output_tokens::numeric / output_tokens) as accuracy_ratio,
+  COUNT(*) as sample_count
+FROM copilot_internal.llm_cost_records
+WHERE estimated_output_tokens IS NOT NULL
+  AND output_tokens > 0
+  AND recorded_at > NOW() - INTERVAL '7 days'
+GROUP BY model
+ORDER BY accuracy_ratio DESC;
+```
+
+### New Scheduled Jobs
+
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| `aggregate_tenant_patterns` | Hourly | Aggregate user patterns to tenant level |
+| `aggregate_platform_patterns` | Every 6 hours | Aggregate tenant patterns to platform level |
+| `prune_stale_patterns` | Daily | Remove patterns not updated in 90 days |
+
+### New Environment Variables
+
+```bash
+# Feature flag
+ADAPTIVE_TOKEN_ESTIMATION_ENABLED=true
+
+# EMA configuration
+ADAPTIVE_EMA_SMOOTHING_FACTOR=0.2  # How quickly to adapt (0.1-0.5)
+ADAPTIVE_MIN_RATIO_BOUND=0.1       # Minimum output/input ratio
+ADAPTIVE_MAX_RATIO_BOUND=5.0       # Maximum output/input ratio
+
+# Sample thresholds
+ADAPTIVE_MIN_USER_SAMPLES=5        # Samples needed for user patterns
+ADAPTIVE_MIN_TENANT_SAMPLES=20     # Samples needed for tenant patterns
+ADAPTIVE_MIN_PLATFORM_SAMPLES=100  # Samples needed for platform patterns
+
+# Cache
+ADAPTIVE_CACHE_TTL_SECONDS=300     # Pattern cache TTL (5 minutes)
+
+# Rollout
+ADAPTIVE_ROLLOUT_PERCENT=100       # Percentage of users to enable
+```
+
+### Monitoring (Future)
+
+**New Metrics to Watch**:
+
+```bash
+# Estimation accuracy (target: >85%)
+llm_estimation_accuracy_ratio
+
+# Pattern source distribution (track learning coverage)
+token_pattern_source{source="user|tenant|platform|default"}
+
+# Cache effectiveness
+adaptive_pattern_cache_hit_rate
+```
+
+**Log Patterns to Monitor**:
+
+```bash
+# Pattern learning
+grep "Token pattern updated for user" logs/app.log
+
+# Fallback usage (indicates new users)
+grep "Using tenant pattern for user" logs/app.log
+grep "Using platform pattern for tenant" logs/app.log
+grep "Using default pattern" logs/app.log
+
+# Aggregation job
+grep "Tenant pattern aggregation" logs/app.log
+grep "Platform pattern aggregation" logs/app.log
+```
+
+### Troubleshooting (Future)
+
+#### Issue: User Getting Inaccurate Estimates
+
+**Diagnosis**:
+```sql
+SELECT
+  ema_output_ratio,
+  sample_count,
+  last_updated_at
+FROM copilot_internal.user_token_patterns
+WHERE user_id = '<USER_ID>'
+  AND model = '<MODEL>';
+```
+
+**Solution**:
+- If sample_count < 5: User is still learning, using fallback
+- If ema_output_ratio is extreme: Reset user pattern
+- If last_updated_at is old: User hasn't used service recently
+
+#### Issue: Aggregation Jobs Failing
+
+**Diagnosis**:
+```bash
+# Check job logs
+grep "aggregate_tenant_patterns" logs/cron.log
+grep "aggregate_platform_patterns" logs/cron.log
+```
+
+**Solution**:
+```sql
+-- Manual aggregation
+SELECT copilot_internal.aggregate_tenant_token_patterns();
+SELECT copilot_internal.aggregate_platform_token_patterns();
+```
+
 ## Related Documentation
 
 - **Implementation**: `docs/implementation/COST_ESTIMATION_SERVICE_IMPLEMENTATION.md`
 - **Architecture**: `docs/architecture/COST_TRACKING_ARCHITECTURE.md`
 - **Migration**: `supabase/migrations/20260105000002_cost_estimates.sql`
 - **Actual Cost Tracking**: `docs/devops/COST_TRACKING_MANAGEMENT.md`
+- **Adaptive Estimation Plan**: `docs/development/implementation-plans/ADAPTIVE_OUTPUT_TOKEN_ESTIMATION_PLAN.md`
 
 ## Support Contacts
 
