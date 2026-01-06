@@ -92,8 +92,9 @@ If you’re new to the repo, start here:
 - 🧭 **Docs index**  
   - `docs/README.md` – top‑level map of concept, architecture, safety, engines, and governance docs.
 
-- 🏛 **Architecture**  
+- 🏛 **Architecture**
   - `docs/architecture/README.md` – high‑level architecture overview for v0.6, with links to `architecture_v_0_6.md`, diagrams, graph schema, change detection, engines, and integration guides.
+  - `docs/architecture/multi-tenant/README.md` – comprehensive multi-tenant workspace architecture with flow diagrams, database schema, authentication flows, and security model.
 
 - 🗺 **Roadmap & decisions**  
   - `docs/governance/roadmap/roadmap_v_0_6.md` – phased implementation plan and future use cases (scenario engine, eligibility explorers, advisory workflows).  
