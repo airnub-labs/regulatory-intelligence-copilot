@@ -1,8 +1,18 @@
 # Package Extraction Analysis & Recommendations
 
+> **Last Updated:** 2026-01-06 (Post multi-tenant & cost estimation PRs)
+
 ## Executive Summary
 
 After a comprehensive analysis of all 9 packages in the `regulatory-intelligence-copilot` monorepo, I recommend extracting **2-3 packages** in phases, with one package requiring a **strategic split** before extraction.
+
+**Recent Changes (merged from main):**
+- Added `costEstimation/` module to observability (5 new files)
+- Expanded E2B cost tracking with global service pattern
+- Enhanced cache interfaces with industry-standard documentation
+- Multi-tenant architecture additions (increases domain complexity)
+
+These changes **strengthen the case for extraction** - the observability package now has even more domain-specific code that needs splitting from the generic OTEL utilities.
 
 ### Top Recommendations
 
@@ -50,12 +60,18 @@ APPLICATION LAYER ────────────────────�
 
 **Current State:**
 - Zero internal dependencies (foundational)
-- 40 source files mixing generic and domain-specific code
+- **49 source files** mixing generic and domain-specific code (grew from 40 after recent PRs)
 - External deps: OpenTelemetry suite, Pino, Supabase
 
-**Problem:** Contains two distinct concerns:
-1. **Generic Observability** - OpenTelemetry setup, logging, tracing, trace propagation
-2. **Domain-Specific** - Cost tracking, E2B metrics, business metrics, compaction storage
+**Problem:** Contains two distinct concerns that have grown further apart:
+1. **Generic Observability** (~8 files) - OpenTelemetry setup, logging, tracing, trace propagation
+2. **Domain-Specific** (~41 files) - Cost tracking, E2B metrics, business metrics, compaction storage, **cost estimation**
+
+**Recent Additions (strengthening split case):**
+- `costEstimation/` module (5 files) - Pre-operation quota checks with LLM/E2B operation types
+- E2B global service pattern (`initE2BCostTracking`, `getE2BPricingService`, etc.)
+- Enhanced business metrics for E2B operations
+- Quota chaos and performance tests
 
 **Recommendation: SPLIT INTO TWO PACKAGES**
 
@@ -68,7 +84,9 @@ BEFORE:
 │  ├── tracePropagation.ts        (generic)   │
 │  ├── diagnostics.ts             (generic)   │
 │  ├── costTracking/              (domain)    │
+│  ├── costEstimation/            (domain) ★NEW
 │  ├── e2b/                       (domain)    │
+│  ├── pricing/                   (domain)    │
 │  ├── businessMetrics.ts         (domain)    │
 │  └── compactionMetrics.ts       (domain)    │
 └─────────────────────────────────────────────┘
@@ -77,10 +95,12 @@ AFTER:
 ┌─────────────────────────────────────┐      ┌─────────────────────────────────┐
 │  @aspect/otel-utils (NEW - OSS)     │      │  @reg-copilot/observability     │
 │  ├── logger.ts                      │◄─────│  ├── costTracking/              │
-│  ├── tracing.ts                     │      │  ├── e2b/                       │
-│  ├── tracePropagation.ts            │      │  ├── businessMetrics.ts         │
-│  ├── diagnostics.ts                 │      │  └── compactionMetrics.ts       │
-│  └── requestContext.ts              │      │  (imports from @aspect/otel-utils)
+│  ├── tracing.ts                     │      │  ├── costEstimation/            │
+│  ├── tracePropagation.ts            │      │  ├── e2b/                       │
+│  ├── diagnostics.ts                 │      │  ├── pricing/                   │
+│  └── requestContext.ts              │      │  ├── businessMetrics.ts         │
+│                                     │      │  └── compactionMetrics.ts       │
+│  (~8 files, pure OTEL)              │      │  (~41 files, domain-specific)   │
 └─────────────────────────────────────┘      └─────────────────────────────────┘
         ▲                                            │
         │ Used by ANY project                        │ Stays in monorepo
@@ -119,6 +139,12 @@ AFTER:
 - `PassThroughRedis` - No-op Redis client for testing/degradation
 - `backendResolver` - Multi-backend Redis resolution
 
+**Recent Improvements (extraction-ready):**
+- Interface documentation now explicitly notes compatibility with industry standards:
+  > "Signature matches standard cache libraries (cache-manager, node-cache, keyv)"
+- `CacheBackend` interface is documented as compatible with `RedisKeyValueClient`
+- Optional `ttlSeconds` parameter on `set()` method
+
 **Code Quality Check:**
 ```typescript
 // From transparentCache.ts - This is COMPLETELY generic
@@ -127,6 +153,18 @@ export interface TransparentCache<T> {
   set(key: string, value: T, ttlSeconds?: number): Promise<void>;
   del(key: string): Promise<void>;
   getBackendType(): 'redis' | 'upstash' | 'passthrough';
+}
+
+// From types.ts - Explicitly industry-standard
+/**
+ * Industry-standard key-value cache interface
+ * Signature matches standard cache libraries (cache-manager, node-cache, keyv)
+ */
+export interface RedisKeyValueClient {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, ttlSeconds?: number): Promise<void>;
+  del(key: string): Promise<void>;
+  ping?(): Promise<string>;
 }
 ```
 
