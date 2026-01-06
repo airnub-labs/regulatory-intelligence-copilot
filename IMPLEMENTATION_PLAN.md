@@ -455,6 +455,421 @@ psql postgresql://postgres:postgres@localhost:54322/postgres < test_rls.sql
 
 ---
 
+## Phase 1.5: Migration Consolidation (Day 5-6)
+
+### Objective
+Consolidate scattered cost/metrics schema, remove unnecessary fix migrations, and standardize schema usage (Option B from Migration Consolidation Analysis).
+
+### Background
+This phase implements the full consolidation plan identified in the migration analysis:
+- 5 cost/metrics files scattered → 1 unified schema with analytics views
+- 2 fix migrations → removed and incorporated
+- Schema inconsistencies → standardized
+- See `MIGRATION_CONSOLIDATION_ANALYSIS.md` for full details
+
+### Tasks
+
+#### Task 1.5.1: Create Metrics Schema (1-1.5 hours)
+
+Create a new migration for the unified metrics/analytics schema:
+
+```bash
+# Create new migration file
+touch supabase/migrations/20260105000004_unified_metrics_schema.sql
+```
+
+**Migration Content**:
+
+```sql
+-- ========================================
+-- Unified Metrics Schema for Analytics
+-- ========================================
+-- Provides read-only views for BI tools and analytics
+-- Consolidates cost tracking across all sources
+
+-- Create metrics schema
+CREATE SCHEMA IF NOT EXISTS metrics;
+
+COMMENT ON SCHEMA metrics IS 'Read-only analytical views for BI tools and dashboards';
+
+-- ========================================
+-- Unified Cost View
+-- ========================================
+CREATE OR REPLACE VIEW metrics.all_costs AS
+SELECT
+    'llm' AS cost_type,
+    tenant_id,
+    user_id,
+    conversation_id,
+    message_id,
+    model,
+    provider,
+    input_tokens,
+    output_tokens,
+    cost_usd,
+    created_at,
+    metadata
+FROM copilot_internal.llm_cost_records
+UNION ALL
+SELECT
+    'e2b' AS cost_type,
+    tenant_id,
+    user_id,
+    conversation_id,
+    message_id,
+    sandbox_template AS model,
+    'e2b' AS provider,
+    0 AS input_tokens,
+    0 AS output_tokens,
+    cost_usd,
+    created_at,
+    metadata
+FROM copilot_internal.e2b_cost_records;
+
+COMMENT ON VIEW metrics.all_costs IS 'Unified view of all costs (LLM + E2B) for analytics';
+
+-- ========================================
+-- Cost Summary Views
+-- ========================================
+CREATE OR REPLACE VIEW metrics.cost_by_tenant AS
+SELECT
+    tenant_id,
+    cost_type,
+    SUM(cost_usd) AS total_cost_usd,
+    COUNT(*) AS record_count,
+    MIN(created_at) AS first_cost_at,
+    MAX(created_at) AS last_cost_at
+FROM metrics.all_costs
+GROUP BY tenant_id, cost_type;
+
+COMMENT ON VIEW metrics.cost_by_tenant IS 'Cost summaries grouped by tenant and type';
+
+CREATE OR REPLACE VIEW metrics.cost_by_user AS
+SELECT
+    tenant_id,
+    user_id,
+    cost_type,
+    SUM(cost_usd) AS total_cost_usd,
+    COUNT(*) AS record_count,
+    MIN(created_at) AS first_cost_at,
+    MAX(created_at) AS last_cost_at
+FROM metrics.all_costs
+GROUP BY tenant_id, user_id, cost_type;
+
+COMMENT ON VIEW metrics.cost_by_user IS 'Cost summaries grouped by user and type';
+
+-- ========================================
+-- Quota Status View
+-- ========================================
+CREATE OR REPLACE VIEW metrics.quota_status AS
+SELECT
+    q.tenant_id,
+    q.user_id,
+    q.quota_type,
+    q.limit_value,
+    q.current_usage,
+    CASE
+        WHEN q.limit_value > 0
+        THEN (q.current_usage::float / q.limit_value * 100)::numeric(5,2)
+        ELSE 0
+    END AS usage_percent,
+    CASE
+        WHEN q.limit_value > 0 AND q.current_usage >= q.limit_value
+        THEN 'exceeded'
+        WHEN q.limit_value > 0 AND (q.current_usage::float / q.limit_value) > 0.9
+        THEN 'warning'
+        WHEN q.limit_value > 0 AND (q.current_usage::float / q.limit_value) > 0.75
+        THEN 'caution'
+        ELSE 'ok'
+    END AS status,
+    q.created_at,
+    q.updated_at
+FROM copilot_internal.cost_quotas q;
+
+COMMENT ON VIEW metrics.quota_status IS 'Quota usage with status indicators (ok/caution/warning/exceeded)';
+
+-- ========================================
+-- LLM Specific Views
+-- ========================================
+CREATE OR REPLACE VIEW metrics.llm_costs AS
+SELECT * FROM copilot_internal.llm_cost_records;
+
+COMMENT ON VIEW metrics.llm_costs IS 'Direct read-only access to LLM cost records';
+
+CREATE OR REPLACE VIEW metrics.llm_model_usage AS
+SELECT
+    tenant_id,
+    model,
+    provider,
+    COUNT(*) AS request_count,
+    SUM(input_tokens) AS total_input_tokens,
+    SUM(output_tokens) AS total_output_tokens,
+    SUM(cost_usd) AS total_cost_usd,
+    AVG(cost_usd) AS avg_cost_per_request,
+    MIN(created_at) AS first_used_at,
+    MAX(created_at) AS last_used_at
+FROM copilot_internal.llm_cost_records
+GROUP BY tenant_id, model, provider;
+
+COMMENT ON VIEW metrics.llm_model_usage IS 'LLM model usage statistics by tenant';
+
+-- ========================================
+-- E2B Specific Views
+-- ========================================
+CREATE OR REPLACE VIEW metrics.e2b_costs AS
+SELECT * FROM copilot_internal.e2b_cost_records;
+
+COMMENT ON VIEW metrics.e2b_costs IS 'Direct read-only access to E2B cost records';
+
+CREATE OR REPLACE VIEW metrics.e2b_sandbox_usage AS
+SELECT
+    tenant_id,
+    sandbox_template,
+    COUNT(*) AS execution_count,
+    SUM(cost_usd) AS total_cost_usd,
+    AVG(cost_usd) AS avg_cost_per_execution,
+    MIN(created_at) AS first_used_at,
+    MAX(created_at) AS last_used_at
+FROM copilot_internal.e2b_cost_records
+GROUP BY tenant_id, sandbox_template;
+
+COMMENT ON VIEW metrics.e2b_sandbox_usage IS 'E2B sandbox usage statistics by tenant';
+
+-- ========================================
+-- Cost Estimates View
+-- ========================================
+CREATE OR REPLACE VIEW metrics.cost_estimates AS
+SELECT * FROM copilot_internal.cost_estimates;
+
+COMMENT ON VIEW metrics.cost_estimates IS 'Estimated costs for operations';
+
+-- ========================================
+-- Permissions
+-- ========================================
+-- Grant read-only access to authenticated users
+GRANT USAGE ON SCHEMA metrics TO authenticated;
+GRANT SELECT ON ALL TABLES IN SCHEMA metrics TO authenticated;
+
+-- Ensure future views also get SELECT permission
+ALTER DEFAULT PRIVILEGES IN SCHEMA metrics
+    GRANT SELECT ON TABLES TO authenticated;
+
+-- Service role has full access
+GRANT ALL ON SCHEMA metrics TO service_role;
+```
+
+**Deliverable**: ✅ Unified metrics schema created with analytics views
+
+#### Task 1.5.2: Remove Fix Migrations (30 min)
+
+Since we have no production data, we can safely remove fix migrations and incorporate fixes into original migrations.
+
+**Step 1: Backup fix migration content**
+```bash
+# Save the fixes for reference
+cp supabase/migrations/20260104000000_fix_execution_context_unique_constraint.sql \
+   /tmp/fix_execution_context_backup.sql
+
+cp supabase/migrations/20250314000000_conversation_contexts_rls_fix.sql \
+   /tmp/conversation_contexts_rls_fix_backup.sql
+```
+
+**Step 2: Incorporate fixes into original migrations**
+
+Update `20251210000000_execution_contexts.sql`:
+
+```sql
+-- Find the UNIQUE constraint and update it
+-- OLD (wrong):
+-- UNIQUE(conversation_id, sandbox_id)
+
+-- NEW (correct - prevents duplicates):
+UNIQUE(conversation_id, message_id, sandbox_id)
+```
+
+Update the conversation contexts migration (whichever one needs the RLS fix):
+```bash
+# Review the fix and incorporate into original migration
+cat /tmp/conversation_contexts_rls_fix_backup.sql
+# Apply the changes to the original migration
+```
+
+**Step 3: Remove fix migrations**
+```bash
+rm supabase/migrations/20260104000000_fix_execution_context_unique_constraint.sql
+rm supabase/migrations/20250314000000_conversation_contexts_rls_fix.sql
+```
+
+**Step 4: Test with clean migration**
+```bash
+supabase db reset
+# Should work perfectly without errors
+```
+
+**Deliverable**: ✅ Fix migrations removed, fixes incorporated, clean migration history
+
+#### Task 1.5.3: Audit and Fix Schema References (30 min)
+
+**Step 1: Search for incorrect schema references**
+```bash
+# Find all public.tenant references
+grep -r "public\.tenant" supabase/migrations/
+
+# Should return zero results (all should be copilot_internal.tenant*)
+```
+
+**Step 2: Fix any incorrect references**
+```bash
+# If any are found, update them:
+# public.tenants → copilot_internal.tenants
+# public.tenant_memberships → copilot_internal.tenant_memberships
+```
+
+**Step 3: Verify schema organization**
+```bash
+# After migrations, verify schema structure
+psql -c "
+SELECT
+  schemaname,
+  tablename,
+  'table' AS object_type
+FROM pg_tables
+WHERE schemaname IN ('copilot_internal', 'metrics', 'public')
+UNION ALL
+SELECT
+  n.nspname AS schemaname,
+  p.proname AS tablename,
+  'function' AS object_type
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname IN ('copilot_internal', 'metrics', 'public')
+ORDER BY schemaname, object_type, tablename;
+"
+```
+
+**Expected Structure**:
+```
+copilot_internal | tables:
+  - tenants
+  - tenant_memberships
+  - user_preferences
+  - conversations
+  - llm_cost_records
+  - e2b_cost_records
+  - cost_quotas
+  - (etc.)
+
+metrics | views:
+  - all_costs
+  - cost_by_tenant
+  - cost_by_user
+  - quota_status
+  - llm_costs
+  - e2b_costs
+  - (etc.)
+
+public | functions:
+  - get_active_tenant_id
+  - get_user_tenants
+  - create_personal_tenant
+  - switch_tenant
+  - verify_tenant_access
+  - (etc.)
+```
+
+**Deliverable**: ✅ Schema references consistent, organization validated
+
+#### Task 1.5.4: Create Migration Validation Script (30 min)
+
+Create a script to validate migration consistency:
+
+```typescript
+// scripts/validate-migrations.ts
+
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+async function validateMigrations() {
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  console.log('🔍 Validating migration consistency...\n');
+
+  // Check 1: Verify tenant tables exist
+  console.log('✅ Check 1: Tenant tables');
+  const { data: tenantTables } = await supabase.rpc('validate_tenant_tables');
+  // ... validation logic
+
+  // Check 2: Verify foreign key constraints
+  console.log('✅ Check 2: Foreign key constraints');
+  const { data: fkConstraints } = await supabase.rpc('validate_foreign_keys');
+  // ... validation logic
+
+  // Check 3: Verify RLS policies
+  console.log('✅ Check 3: RLS policies');
+  const { data: rlsPolicies } = await supabase.rpc('validate_rls_policies');
+  // ... validation logic
+
+  // Check 4: Verify metrics schema
+  console.log('✅ Check 4: Metrics schema');
+  const { data: metricsViews } = await supabase.rpc('validate_metrics_schema');
+  // ... validation logic
+
+  console.log('\n🎉 All validation checks passed!');
+}
+
+validateMigrations().catch(console.error);
+```
+
+**Deliverable**: ✅ Migration validation script created
+
+#### Task 1.5.5: Test Full Migration Stack (30 min)
+
+```bash
+# Full reset and test
+supabase db reset
+
+# Verify all migrations applied
+psql -c "\dt copilot_internal.*" | wc -l
+# Should show correct number of tables
+
+# Verify metrics schema
+psql -c "\dv metrics.*" | wc -l
+# Should show all views
+
+# Test metrics views work
+psql -c "SELECT * FROM metrics.all_costs LIMIT 1;"
+psql -c "SELECT * FROM metrics.quota_status LIMIT 1;"
+
+# Verify no fix migrations exist
+ls supabase/migrations/ | grep -i fix
+# Should return nothing
+```
+
+**Deliverable**: ✅ Full migration stack tested and working
+
+### Phase 1.5 Exit Criteria
+
+- ✅ Metrics schema created with unified views
+- ✅ Fix migrations removed and incorporated
+- ✅ Schema references consistent (copilot_internal.*)
+- ✅ Migration validation script created
+- ✅ Full migration stack tested
+- ✅ Analytics-ready (read-only metrics views)
+- ✅ No migration errors
+
+**Estimated Time**: 2-3 hours
+
+**Benefits Achieved**:
+- Unified cost/metrics analytics (5 files → 1 schema)
+- Cleaner migration history (2 fewer fix migrations)
+- Consistent schema usage
+- BI-tool ready (read-only metrics access)
+- Easier to maintain and understand
+
+---
+
 ## Phase 2: Authentication Layer (Day 6-8)
 
 ### Objective
