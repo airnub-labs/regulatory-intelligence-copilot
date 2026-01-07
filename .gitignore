@@ -18,6 +18,8 @@ next-env.d.ts
 .idea/
 *.swp
 *.swo
+*.code-workspace
+.claude/
 
 # OS
 .DS_Store
