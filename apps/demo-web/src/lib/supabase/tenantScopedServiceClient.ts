@@ -114,7 +114,7 @@ export function createTenantScopedServiceClient(
 
               if (typeof original === 'function') {
                 return function(...args: any[]) {
-                  const result = original.apply(qbTarget, args);
+                  const result = (original as any).apply(qbTarget, args);
 
                   // Auto-inject tenant_id filter for SELECT/UPDATE/DELETE
                   if (['select', 'update', 'delete'].includes(qbProp as string)) {
@@ -221,7 +221,7 @@ export function createUnrestrictedServiceClient(
         });
       },
     },
-  });
+  }) as unknown as SupabaseClient;
 }
 
 /**

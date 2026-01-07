@@ -76,15 +76,15 @@ export async function DELETE(
       );
     }
 
-    if (!data.success) {
+    if (!(data as any).success) {
       logger.warn({
         userId,
         workspaceId,
-        error: data.error,
+        error: (data as any).error,
       }, 'Workspace deletion validation failed');
 
       return NextResponse.json(
-        { error: data.error, details: data },
+        { error: (data as any).error, details: data },
         { status: 400 }
       );
     }
@@ -92,8 +92,8 @@ export async function DELETE(
     logger.info({
       userId,
       workspaceId,
-      workspaceName: data.workspace_name,
-      membersAffected: data.members_affected,
+      workspaceName: (data as any).workspace_name,
+      membersAffected: (data as any).members_affected,
     }, 'Workspace deleted successfully');
 
     // If user deleted their active workspace, switch to another
@@ -132,7 +132,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      ...data,
+      ...(data as any),
     });
 
   } catch (error) {
@@ -221,15 +221,15 @@ export async function PATCH(
       );
     }
 
-    if (!data.success) {
+    if (!(data as any).success) {
       logger.warn({
         userId,
         workspaceId,
-        error: data.error,
+        error: (data as any).error,
       }, 'Workspace restoration validation failed');
 
       return NextResponse.json(
-        { error: data.error, details: data },
+        { error: (data as any).error, details: data },
         { status: 400 }
       );
     }
@@ -237,13 +237,13 @@ export async function PATCH(
     logger.info({
       userId,
       workspaceId,
-      workspaceName: data.workspace_name,
-      membersRestored: data.members_restored,
+      workspaceName: (data as any).workspace_name,
+      membersRestored: (data as any).members_restored,
     }, 'Workspace restored successfully');
 
     return NextResponse.json({
       success: true,
-      ...data,
+      ...(data as any),
     });
 
   } catch (error) {

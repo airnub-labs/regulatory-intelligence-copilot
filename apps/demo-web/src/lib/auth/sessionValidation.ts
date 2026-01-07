@@ -223,7 +223,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
         .single()
 
       // If no longer has access, switch to another workspace
-      if (!access || !access.has_access) {
+      if (!access || !(access as any).has_access) {
         logger.warn(
           { userId, tenantId: currentTenantId },
           'User lost access to active tenant, auto-switching...'
@@ -273,7 +273,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       }
     }
 
-    await validationCache.set(userId, true, currentTenantId)
+    await validationCache.set(userId, true, currentTenantId as string | undefined)
     authMetrics.recordCacheMiss(userId, validationDuration, true)
 
     return {
@@ -281,7 +281,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       user: {
         id: data.user.id,
         email: data.user.email,
-        currentTenantId,
+        currentTenantId: currentTenantId as string | undefined,
       },
     }
   } catch (error) {

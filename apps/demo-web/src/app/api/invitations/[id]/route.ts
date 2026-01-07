@@ -70,15 +70,15 @@ export async function DELETE(
       );
     }
 
-    if (!data.success) {
+    if (!(data as any).success) {
       logger.warn({
         userId,
         invitationId,
-        error: data.error,
+        error: (data as any).error,
       }, 'Invitation cancellation validation failed');
 
       return NextResponse.json(
-        { error: data.error },
+        { error: (data as any).error },
         { status: 400 }
       );
     }
@@ -90,7 +90,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      cancelledAt: data.cancelled_at,
+      cancelledAt: (data as any).cancelled_at,
     });
 
   } catch (error) {

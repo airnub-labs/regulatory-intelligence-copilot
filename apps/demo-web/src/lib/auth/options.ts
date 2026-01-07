@@ -101,7 +101,7 @@ export const authOptions: NextAuthOptions = {
           .single()
 
         if (activeId) {
-          currentTenantId = activeId
+          currentTenantId = activeId as string
           logger.debug({ userId, currentTenantId }, 'User has existing active tenant')
         } else {
           // New user - create personal tenant

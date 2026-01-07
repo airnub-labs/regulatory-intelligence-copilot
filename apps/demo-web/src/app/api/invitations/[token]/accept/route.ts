@@ -70,32 +70,32 @@ export async function POST(
       );
     }
 
-    if (!data.success) {
+    if (!(data as any).success) {
       logger.warn({
         userId,
         token,
-        error: data.error,
+        error: (data as any).error,
       }, 'Invitation acceptance validation failed');
 
       return NextResponse.json(
-        { error: data.error },
+        { error: (data as any).error },
         { status: 400 }
       );
     }
 
     logger.info({
       userId,
-      tenantId: data.tenant_id,
-      role: data.role,
-      alreadyMember: data.already_member,
+      tenantId: (data as any).tenant_id,
+      role: (data as any).role,
+      alreadyMember: (data as any).already_member,
     }, 'Workspace invitation accepted successfully');
 
     // Return success with workspace details
     return NextResponse.json({
       success: true,
-      workspaceId: data.tenant_id,
-      role: data.role,
-      alreadyMember: data.already_member || false,
+      workspaceId: (data as any).tenant_id,
+      role: (data as any).role,
+      alreadyMember: (data as any).already_member || false,
     });
 
   } catch (error) {

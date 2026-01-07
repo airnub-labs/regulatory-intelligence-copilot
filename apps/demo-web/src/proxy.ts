@@ -109,9 +109,11 @@ export async function proxy(request: NextRequest) {
       const jwtTenantId = token.currentTenantId as string
 
       // Check database for current tenant using unrestricted client
-      const supabase = createUnrestrictedServiceClient(cookies(), {
-        operation: 'session-consistency-check',
-      })
+      const supabase = createUnrestrictedServiceClient(
+        'session-consistency-check',
+        userId,
+        cookies()
+      )
 
       const { data: dbTenantId, error } = await supabase
         .rpc('get_current_tenant_id', { p_user_id: userId })
