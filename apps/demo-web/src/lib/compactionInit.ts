@@ -7,12 +7,14 @@
 
 import {
   initSnapshotService,
+  getSnapshotServiceIfInitialized,
   type SnapshotStorageProvider,
 } from '@reg-copilot/reg-intel-conversations/compaction';
 import {
   createLogger,
   initCompactionMetrics,
   initCostTracking,
+  getCostTrackingServiceIfInitialized,
   type CostStorageProvider,
   type QuotaProvider,
 } from '@reg-copilot/reg-intel-observability';
@@ -101,9 +103,6 @@ export function getCompactionSystemStatus(): {
   costTracking: boolean;
 } {
   try {
-    const { getSnapshotServiceIfInitialized } = require('@reg-copilot/reg-intel-conversations/compaction');
-    const { getCostTrackingServiceIfInitialized } = require('@reg-copilot/reg-intel-observability');
-
     return {
       snapshotService: getSnapshotServiceIfInitialized() !== null,
       compactionMetrics: true, // Metrics are always available after init
