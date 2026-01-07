@@ -94,36 +94,20 @@ export async function initializeCompactionSystem(options: {
 
 /**
  * Get compaction system status
- *
- * Note: This function returns a default status during build time to avoid
- * module resolution issues with Turbopack. At runtime, it will properly
- * check the initialization status.
  */
 export function getCompactionSystemStatus(): {
   snapshotService: boolean;
   compactionMetrics: boolean;
   costTracking: boolean;
 } {
-  // During build/SSR, return default status to avoid module resolution issues
-  if (typeof window === 'undefined' && process.env.NEXT_PHASE === 'phase-production-build') {
-    return {
-      snapshotService: false,
-      compactionMetrics: false,
-      costTracking: false,
-    };
-  }
-
   try {
-    // Use dynamic require to avoid build-time resolution issues
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const conversations = require('@reg-copilot/reg-intel-conversations/compaction');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const observability = require('@reg-copilot/reg-intel-observability');
+    const { getSnapshotServiceIfInitialized } = require('@reg-copilot/reg-intel-conversations/compaction');
+    const { getCostTrackingServiceIfInitialized } = require('@reg-copilot/reg-intel-observability');
 
     return {
-      snapshotService: conversations.getSnapshotServiceIfInitialized?.() !== null,
+      snapshotService: getSnapshotServiceIfInitialized() !== null,
       compactionMetrics: true, // Metrics are always available after init
-      costTracking: observability.getCostTrackingServiceIfInitialized?.() !== null,
+      costTracking: getCostTrackingServiceIfInitialized() !== null,
     };
   } catch {
     return {
