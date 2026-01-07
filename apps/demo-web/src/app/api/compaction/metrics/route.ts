@@ -5,17 +5,19 @@
  *
  * Query params:
  * - timeRange: '24h' | '7d' | '30d' | 'all' (default: '7d')
- * - tenantId: optional tenant filter
  *
- * Returns aggregated compaction metrics, strategy breakdown, and recent operations.
+ * Returns aggregated compaction metrics, strategy breakdown, and recent operations
+ * for the authenticated user's current tenant.
+ *
+ * SECURITY: Tenant-scoped - users only see metrics for their own tenant.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-// eslint-disable-next-line tenant-security/no-unsafe-service-role -- Admin metrics endpoint, queries across all tenants
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth/options';
+import { getTenantContext } from '@/lib/auth/tenantContext';
+import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
+import { cookies } from 'next/headers';
 
 interface CompactionMetricsResponse {
   totalOperations: number;
@@ -60,48 +62,61 @@ function getTimeRangeStart(range: string): Date | null {
 }
 
 export async function GET(request: NextRequest) {
-  // Check for Supabase credentials
-  if (!supabaseUrl || !supabaseKey) {
-    // Return example data if Supabase not configured
-    return NextResponse.json(getExampleData());
-  }
-
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // SECURITY: Require authentication
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // SECURITY: Get user's tenant context
+    const { userId, tenantId } = await getTenantContext(session);
+    if (!tenantId) {
+      return NextResponse.json({ error: 'No active tenant' }, { status: 400 });
+    }
+
+    // Use unrestricted client - already validated user has access to their tenant above
+    const cookieStore = await cookies();
+    const supabase = createUnrestrictedServiceClient(cookieStore, {
+      operation: 'fetch-compaction-metrics',
+      userId,
+    });
 
     const { searchParams } = new URL(request.url);
     const timeRange = searchParams.get('timeRange') || '7d';
-    const tenantId = searchParams.get('tenantId') || null;
 
     const startTime = getTimeRangeStart(timeRange);
     const endTime = new Date();
 
-    // Fetch aggregated metrics using the database function
+    // Fetch aggregated metrics for THIS tenant only
     const { data: metricsData, error: metricsError } = await supabase.rpc(
       'get_compaction_metrics',
       {
         p_start_time: startTime?.toISOString() || null,
         p_end_time: endTime.toISOString(),
-        p_tenant_id: tenantId,
+        p_tenant_id: tenantId, // Always scope to user's tenant
       }
     );
 
     if (metricsError) {
       console.error('Error fetching compaction metrics:', metricsError);
-      // Fall back to example data if table doesn't exist yet
+      // Fall back to empty data if function doesn't exist yet
       if (metricsError.code === '42883' || metricsError.message.includes('does not exist')) {
         return NextResponse.json(getExampleData());
       }
-      throw metricsError;
+      return NextResponse.json(
+        { error: 'Failed to fetch metrics', details: metricsError.message },
+        { status: 500 }
+      );
     }
 
-    // Fetch strategy breakdown
+    // Fetch strategy breakdown for THIS tenant only
     const { data: strategyData, error: strategyError } = await supabase.rpc(
       'get_compaction_strategy_breakdown',
       {
         p_start_time: startTime?.toISOString() || null,
         p_end_time: endTime.toISOString(),
-        p_tenant_id: tenantId,
+        p_tenant_id: tenantId, // Always scope to user's tenant
       }
     );
 
@@ -109,12 +124,12 @@ export async function GET(request: NextRequest) {
       console.error('Error fetching strategy breakdown:', strategyError);
     }
 
-    // Fetch recent operations
+    // Fetch recent operations for THIS tenant only
     const { data: recentData, error: recentError } = await supabase.rpc(
       'get_recent_compaction_operations',
       {
         p_limit: 10,
-        p_tenant_id: tenantId,
+        p_tenant_id: tenantId, // Always scope to user's tenant
       }
     );
 
@@ -157,9 +172,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response);
   } catch (error) {
     console.error('Compaction metrics error:', error);
-
-    // Return example data on error (graceful degradation)
-    return NextResponse.json(getExampleData());
+    return NextResponse.json(
+      { error: 'Internal server error', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
 }
 
