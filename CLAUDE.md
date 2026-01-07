@@ -262,7 +262,7 @@ Uses batching queue (20 events or 2 seconds):
 ## Docker Services
 
 ```bash
-# Required
+# Required - Start Memgraph (graph database)
 docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
 
 # Optional (observability)
@@ -272,6 +272,27 @@ docker compose -f docker/docker-compose.yml up -d otel-collector jaeger promethe
 - Memgraph Lab UI: `http://localhost:7444`
 - Jaeger traces: `http://localhost:16686`
 - Grafana dashboards: `http://localhost:3200`
+
+---
+
+## Local Supabase CLI
+
+Supabase CLI is used for local development. Key commands:
+
+```bash
+supabase status      # Check if Supabase is running and get connection details
+supabase start       # Start local Supabase (first run takes 5-10 minutes)
+supabase stop        # Stop Supabase
+supabase db reset    # Reset DB, run all migrations, and seed data
+```
+
+After `supabase start`, access:
+
+- Supabase Studio: `http://localhost:54323`
+- API URL: `http://localhost:54321`
+- Database: `postgresql://postgres:postgres@localhost:54322/postgres`
+
+For detailed setup including demo user configuration, see [docs/development/local/LOCAL_DEVELOPMENT.md](docs/development/local/LOCAL_DEVELOPMENT.md).
 
 ---
 
