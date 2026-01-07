@@ -211,7 +211,7 @@ export function createGraphClient(): GraphClient {
         MATCH (n)-[:IN_JURISDICTION]->(j)
         WHERE (n:Benefit OR n:Relief OR n:Section)
         ${keywordFilter}
-        MATCH (n)-[:APPLIES_TO]->(p)
+        MATCH (n)-[:APPLIES_TO_PROFILE]->(p)
         OPTIONAL MATCH (n)-[r:CITES|REQUIRES|LIMITED_BY|EXCLUDES|MUTUALLY_EXCLUSIVE_WITH|LOOKBACK_WINDOW|LOCKS_IN_FOR_PERIOD]->(m)
         WITH n,
              CASE WHEN r IS NOT NULL AND m IS NOT NULL

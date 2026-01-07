@@ -227,6 +227,34 @@ async function seedGraph(logger: Logger) {
 
     log('   ✅ Created: PRSI lookback, R&D period');
 
+    // Create ProfileTags
+    log('👤 Creating profile tags...');
+    await writeService.upsertProfileTag({
+      id: 'PROFILE_SINGLE_DIRECTOR_IE',
+      label: 'Single Director (Ireland)',
+      category: 'EMPLOYMENT_STATUS',
+      description: 'Single director of an Irish limited company, typically paying Class S PRSI',
+      jurisdictionId: 'IE',
+    });
+
+    await writeService.upsertProfileTag({
+      id: 'PROFILE_SELF_EMPLOYED_IE',
+      label: 'Self-Employed (Ireland)',
+      category: 'EMPLOYMENT_STATUS',
+      description: 'Self-employed individual in Ireland paying Class S PRSI',
+      jurisdictionId: 'IE',
+    });
+
+    await writeService.upsertProfileTag({
+      id: 'PROFILE_PAYE_EMPLOYEE_IE',
+      label: 'PAYE Employee (Ireland)',
+      category: 'EMPLOYMENT_STATUS',
+      description: 'PAYE employee in Ireland paying Class A PRSI',
+      jurisdictionId: 'IE',
+    });
+
+    log('   ✅ Created: Single Director, Self-Employed, PAYE Employee profiles');
+
     // Create relationships
     log('🔗 Creating relationships...');
 
@@ -273,6 +301,83 @@ async function seedGraph(logger: Logger) {
       relType: 'EFFECTIVE_WINDOW',
     });
 
+    // Link benefits to profile tags (who can claim them)
+    // Jobseeker's Benefit (Self-Employed) applies to self-employed and single directors
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_JOBSEEKERS_SE',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_SINGLE_DIRECTOR_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_JOBSEEKERS_SE',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_SELF_EMPLOYED_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    // Illness Benefit applies to all profiles
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_ILLNESS',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_SINGLE_DIRECTOR_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_ILLNESS',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_SELF_EMPLOYED_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_ILLNESS',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_PAYE_EMPLOYEE_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    // State Pension applies to all profiles
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_STATE_PENSION_CONTRIBUTORY',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_SINGLE_DIRECTOR_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_STATE_PENSION_CONTRIBUTORY',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_SELF_EMPLOYED_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    await writeService.createRelationship({
+      fromId: 'IE_BENEFIT_STATE_PENSION_CONTRIBUTORY',
+      fromLabel: 'Benefit',
+      toId: 'PROFILE_PAYE_EMPLOYEE_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
+    // R&D Tax Credit applies to single directors (companies)
+    await writeService.createRelationship({
+      fromId: 'IE_RELIEF_RND_CREDIT',
+      fromLabel: 'Relief',
+      toId: 'PROFILE_SINGLE_DIRECTOR_IE',
+      toLabel: 'ProfileTag',
+      relType: 'APPLIES_TO_PROFILE',
+    });
+
     log('   ✅ Created relationships');
 
     log('\n✅ Graph seeding completed successfully!');
@@ -283,7 +388,8 @@ async function seedGraph(logger: Logger) {
     log('   - Benefits: 3');
     log('   - Reliefs: 1');
     log('   - Timeline constraints: 2');
-    log('   - Relationships: ~5');
+    log('   - ProfileTags: 3 (Single Director, Self-Employed, PAYE Employee)');
+    log('   - Relationships: ~18');
     log('\n✨ All writes enforced via Graph Ingress Guard ✨');
   } catch (error) {
     logError('❌ Error seeding graph:', error);

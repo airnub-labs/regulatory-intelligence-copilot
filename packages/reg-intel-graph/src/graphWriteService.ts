@@ -155,6 +155,17 @@ export interface UpsertRegimeDto {
 }
 
 /**
+ * DTO for upserting a profile tag
+ */
+export interface UpsertProfileTagDto {
+  id: string;
+  label: string;
+  category?: string;
+  description?: string;
+  jurisdictionId: string;
+}
+
+/**
  * DTO for creating a relationship
  */
 export interface CreateRelationshipDto {
@@ -672,6 +683,37 @@ export class GraphWriteService {
       source: this.defaultSource,
     };
     await this.executeWrite(ctx);
+  }
+
+  /**
+   * Upsert a profile tag
+   */
+  async upsertProfileTag(dto: UpsertProfileTagDto): Promise<void> {
+    const { jurisdictionId, ...nodeProps } = dto;
+
+    const nodeCtx: GraphWriteContext = {
+      operation: 'merge',
+      nodeLabel: 'ProfileTag',
+      properties: nodeProps,
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+    };
+    await this.executeWrite(nodeCtx);
+
+    const relCtx: GraphWriteContext = {
+      operation: 'merge',
+      relType: 'IN_JURISDICTION',
+      properties: {},
+      tenantId: this.tenantId,
+      source: this.defaultSource,
+      metadata: {
+        fromLabel: 'ProfileTag',
+        fromId: dto.id,
+        toLabel: 'Jurisdiction',
+        toId: jurisdictionId,
+      },
+    };
+    await this.executeWrite(relCtx);
   }
 
   /**

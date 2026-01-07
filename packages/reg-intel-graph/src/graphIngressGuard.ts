@@ -337,7 +337,7 @@ export const propertyWhitelistAspect: GraphIngressAspect = async (ctx, next) => 
       'jurisdictionCode',
       'description',
     ],
-    ProfileTag: ['id', 'label', 'description'],
+    ProfileTag: ['id', 'label', 'category', 'description'],
     Community: ['id', 'label', 'size', 'representative_nodes'],
     EURegulation: ['id', 'name', 'number', 'effective_from', 'effective_to', 'description'],
     EUDirective: ['id', 'name', 'number', 'effective_from', 'effective_to', 'description'],
