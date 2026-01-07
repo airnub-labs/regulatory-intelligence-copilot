@@ -26,7 +26,7 @@ function sseChunk(event: ConversationListEventType, data: unknown) {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions) as ExtendedSession | null
-    const { userId, tenantId, role } = await getTenantContext(session)
+    const { userId, tenantId } = await getTenantContext(session)
 
     const url = new URL(request.url)
     const statusParam = url.searchParams.get('status')

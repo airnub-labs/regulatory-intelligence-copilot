@@ -25,7 +25,7 @@ interface Tenant {
 
 export default function TeamSettingsPage() {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const [members, setMembers] = useState<TeamMember[]>([])
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,7 +65,7 @@ export default function TeamSettingsPage() {
         if (error) throw error
 
         // Transform data
-        const formattedMembers: TeamMember[] = (membersData || []).map((m: any) => ({
+        const formattedMembers: TeamMember[] = (membersData || []).map((m: { user_id: string; user?: { email?: string }; role: string; joined_at: string; status: string }) => ({
           user_id: m.user_id,
           email: m.user?.email || 'Unknown',
           role: m.role,

@@ -15,7 +15,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-import { createClient } from '@supabase/supabase-js'
+import { createMiddlewareServiceClient } from '@/lib/supabase/middlewareServiceClient'
 
 // Routes that don't require authentication
 const PUBLIC_ROUTES = [
@@ -126,7 +126,7 @@ export async function proxy(request: NextRequest) {
       const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
       if (supabaseUrl && supabaseServiceKey) {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        const supabase = createMiddlewareServiceClient('session-consistency-check')
 
         const { data: dbTenantId, error } = await supabase
           .rpc('get_current_tenant_id', { p_user_id: userId })
