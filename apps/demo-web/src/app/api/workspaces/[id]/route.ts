@@ -8,6 +8,14 @@ import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServ
 
 const logger = createLogger('WorkspaceDeletionAPI');
 
+interface WorkspaceOperationResult {
+  success: boolean;
+  error?: string;
+  workspace_name?: string;
+  members_affected?: number;
+  members_restored?: number;
+}
+
 /**
  * DELETE /api/workspaces/[id]
  *
@@ -21,9 +29,10 @@ const logger = createLogger('WorkspaceDeletionAPI');
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: workspaceId } = await context.params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -34,7 +43,6 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    const workspaceId = params.id;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -59,7 +67,7 @@ export async function DELETE(
         p_tenant_id: workspaceId,
         p_user_id: userId,
       })
-      .single();
+      .single<WorkspaceOperationResult>();
 
     if (error) {
       logger.error({
@@ -128,14 +136,11 @@ export async function DELETE(
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      ...data,
-    });
+    return NextResponse.json(data);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Workspace deletion failed';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error during workspace deletion');
+    logger.error({ error }, 'Unexpected error during workspace deletion');
 
     return NextResponse.json(
       { error: errorMessage },
@@ -156,9 +161,10 @@ export async function DELETE(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: workspaceId } = await context.params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -169,7 +175,6 @@ export async function PATCH(
     }
 
     const userId = session.user.id;
-    const workspaceId = params.id;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -203,7 +208,7 @@ export async function PATCH(
         p_tenant_id: workspaceId,
         p_user_id: userId,
       })
-      .single();
+      .single<WorkspaceOperationResult>();
 
     if (error) {
       logger.error({
@@ -238,14 +243,11 @@ export async function PATCH(
       membersRestored: data.members_restored,
     }, 'Workspace restored successfully');
 
-    return NextResponse.json({
-      success: true,
-      ...data,
-    });
+    return NextResponse.json(data);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Workspace restoration failed';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error during workspace restoration');
+    logger.error({ error }, 'Unexpected error during workspace restoration');
 
     return NextResponse.json(
       { error: errorMessage },
@@ -261,9 +263,10 @@ export async function PATCH(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: workspaceId } = await context.params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -274,7 +277,6 @@ export async function GET(
     }
 
     const userId = session.user.id;
-    const workspaceId = params.id;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -355,7 +357,7 @@ export async function GET(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to get workspace details';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error getting workspace details');
+    logger.error({ error }, 'Unexpected error getting workspace details');
 
     return NextResponse.json(
       { error: errorMessage },

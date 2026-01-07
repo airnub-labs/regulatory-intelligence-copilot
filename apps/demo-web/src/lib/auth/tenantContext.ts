@@ -4,7 +4,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
-import type { ExtendedSession } from '@/types/auth';
+import type { Session } from 'next-auth';
 
 const logger = createLogger('TenantContext');
 
@@ -12,6 +12,11 @@ export interface TenantContext {
   userId: string;
   tenantId: string;
   role: 'owner' | 'admin' | 'member' | 'viewer';
+}
+
+interface TenantAccessResult {
+  has_access: boolean;
+  role: TenantContext['role'];
 }
 
 /**
@@ -31,7 +36,7 @@ export interface TenantContext {
  * @throws {Error} If user is not authenticated or not a member of active tenant
  */
 export async function getTenantContext(
-  session: ExtendedSession | null
+  session: Session | null
 ): Promise<TenantContext> {
   const userId = session?.user?.id;
   const currentTenantId = session?.user?.currentTenantId;
@@ -76,7 +81,7 @@ export async function getTenantContext(
       p_user_id: userId,
       p_tenant_id: currentTenantId,
     })
-    .single();
+    .single<TenantAccessResult>();
 
   if (error || !access?.has_access) {
     logger.error(

@@ -7,6 +7,12 @@ import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServ
 
 const logger = createLogger('CancelInvitationAPI');
 
+interface CancelInvitationResult {
+  success: boolean;
+  error?: string;
+  cancelled_at?: string;
+}
+
 /**
  * DELETE /api/invitations/[id]
  *
@@ -15,9 +21,10 @@ const logger = createLogger('CancelInvitationAPI');
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await context.params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -28,7 +35,7 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    const invitationId = params.id;
+    const invitationId = id;
 
     if (!invitationId) {
       return NextResponse.json(
@@ -53,7 +60,7 @@ export async function DELETE(
         p_invitation_id: invitationId,
         p_user_id: userId,
       })
-      .single();
+      .single<CancelInvitationResult>();
 
     if (error) {
       logger.error({
@@ -93,7 +100,7 @@ export async function DELETE(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to cancel invitation';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error cancelling invitation');
+    logger.error({ error }, 'Unexpected error cancelling invitation');
 
     return NextResponse.json(
       { error: errorMessage },

@@ -85,7 +85,7 @@ export async function POST(request: Request) {
   if (!quotaCheck.allowed) {
     logger.warn({
       tenantId,
-      userId: session.user.id,
+      userId,
       reason: quotaCheck.reason,
     }, 'Chat request denied due to LLM quota exceeded');
 
