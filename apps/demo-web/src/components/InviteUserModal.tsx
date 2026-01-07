@@ -98,7 +98,7 @@ export function InviteUserModal({ isOpen, onClose, workspaceName }: InviteUserMo
         {!inviteUrl ? (
           <>
             <p className="mb-4 text-sm text-muted-foreground">
-              Invite a team member to {workspaceName || 'this workspace'}. They'll receive an invitation link to join.
+              Invite a team member to {workspaceName || 'this workspace'}. They&apos;ll receive an invitation link to join.
             </p>
 
             <div className="space-y-4">

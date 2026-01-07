@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next'
 import { cookies } from 'next/headers'
 import { authOptions } from '@/lib/auth/options'
 import { getTenantContext } from '@/lib/auth/tenantContext'
+import type { ExtendedSession } from '@/types/auth';
 import { createLogger } from '@reg-copilot/reg-intel-observability'
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient'
 
@@ -10,7 +11,7 @@ const logger = createLogger('WorkspacesAPI')
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await getServerSession(authOptions) as ExtendedSession | null
     const { userId } = await getTenantContext(session)
 
     const body = await request.json()

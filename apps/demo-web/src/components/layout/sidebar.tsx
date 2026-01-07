@@ -122,9 +122,8 @@ export function Sidebar() {
       )}
 
       {/* Sidebar */}
-      <aside
+      <nav
         id="sidebar-nav"
-        role="navigation"
         aria-label="Main navigation"
         onKeyDown={handleKeyDown}
         className={cn(
@@ -177,7 +176,7 @@ export function Sidebar() {
                       isCollapsed && "justify-center px-2"
                     )}
                   >
-                    <span className="flex-shrink-0" aria-hidden="true">
+                    <span className="shrink-0" aria-hidden="true">
                       {item.icon}
                     </span>
                     {!isCollapsed && (
@@ -206,7 +205,7 @@ export function Sidebar() {
             )}
           </div>
         </div>
-      </aside>
+      </nav>
     </>
   )
 }

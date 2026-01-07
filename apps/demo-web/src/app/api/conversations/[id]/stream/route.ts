@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth/next';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationEventHub, conversationStore } from '@/lib/server/conversations';
 import { toClientConversation } from '@/lib/server/conversationPresenter';
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const { id: conversationId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run({ tenantId, userId, conversationId }, () =>

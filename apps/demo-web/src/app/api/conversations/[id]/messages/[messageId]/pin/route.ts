@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationPathStore, conversationStore, conversationEventHub } from '@/lib/server/conversations';
 
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ export async function POST(
   const { id: conversationId, messageId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -104,7 +105,7 @@ export async function DELETE(
   const { id: conversationId, messageId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(

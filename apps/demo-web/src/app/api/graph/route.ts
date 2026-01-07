@@ -23,6 +23,7 @@ import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 const logger = createLogger('GraphApiRoute');
 
 const MAX_INITIAL_NODES = 250;
@@ -84,7 +85,7 @@ function boundGraphContext(graphContext: GraphContext) {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId } = await getTenantContext(session);
 
     return requestContext.run({ tenantId, userId }, () =>

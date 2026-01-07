@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 
@@ -28,8 +29,9 @@ interface InvitationResult {
  * Request body: { email: string, role: 'admin' | 'member' | 'viewer' }
  */
 export async function POST(request: NextRequest) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -91,16 +93,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!data.success) {
+    if (!(data as any).success) {
       logger.warn({
         userId,
         tenantId,
         email,
-        error: data.error,
+        error: (data as any).error,
       }, 'Invitation creation validation failed');
 
       return NextResponse.json(
-        { error: data.error },
+        { error: (data as any).error },
         { status: 400 }
       );
     }
@@ -108,22 +110,22 @@ export async function POST(request: NextRequest) {
     logger.info({
       userId,
       tenantId,
-      invitationId: data.invitation_id,
-      email: data.email,
-      role: data.role,
-      workspaceName: data.workspace_name,
+      invitationId: (data as any).invitation_id,
+      email: (data as any).email,
+      role: (data as any).role,
+      workspaceName: (data as any).workspace_name,
     }, 'Workspace invitation created successfully');
 
     // Return invitation details (including URL for sharing)
     return NextResponse.json({
       success: true,
       invitation: {
-        id: data.invitation_id,
-        email: data.email,
-        role: data.role,
-        workspaceName: data.workspace_name,
-        inviteUrl: data.invite_url,
-        expiresAt: data.expires_at,
+        id: (data as any).invitation_id,
+        email: (data as any).email,
+        role: (data as any).role,
+        workspaceName: (data as any).workspace_name,
+        inviteUrl: (data as any).invite_url,
+        expiresAt: (data as any).expires_at,
       },
     });
 
@@ -145,8 +147,9 @@ export async function POST(request: NextRequest) {
  * Uses Supabase's get_my_pending_invitations RPC function.
  */
 export async function GET(request: NextRequest) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(

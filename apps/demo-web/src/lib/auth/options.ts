@@ -23,6 +23,7 @@ const SESSION_VALIDATION_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// eslint-disable-next-line tenant-security/no-unsafe-service-role, @typescript-eslint/no-unused-vars -- Used in session validation, system-level auth
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {

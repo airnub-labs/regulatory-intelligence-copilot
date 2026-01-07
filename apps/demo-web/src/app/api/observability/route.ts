@@ -2,6 +2,7 @@ import { requestContext, withSpan, createLogger } from '@reg-copilot/reg-intel-o
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { authMetrics } from '@/lib/auth/authMetrics';
 import { systemMetrics, businessMetrics } from '@/lib/metrics';
 import type { AggregatedMetrics } from '@/lib/metrics/types';
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     // SEC.1: Add authentication check - observability endpoint should be protected
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId } = await getTenantContext(session);
 
     return requestContext.run(

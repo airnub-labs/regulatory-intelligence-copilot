@@ -6,6 +6,7 @@ import { conversationStore } from '@/lib/server/conversations';
 import { toClientConversation } from '@/lib/server/conversationPresenter';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,7 @@ const logger = createLogger('ConversationsRoute');
 export async function GET(request: NextRequest) {
   try {
     // Get and verify tenant context
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     const url = new URL(request.url);

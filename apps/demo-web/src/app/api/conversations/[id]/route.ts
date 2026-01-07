@@ -5,6 +5,7 @@ import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-o
 
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import {
   conversationContextStore,
   conversationStore,
@@ -20,7 +21,7 @@ const logger = createLogger('ConversationDetailRoute');
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: conversationId } = await context.params;
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId } = await getTenantContext(session);
 
     return requestContext.run(
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id: conversationId } = await context.params;
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId } = await getTenantContext(session);
 
     const body = await request.json().catch(() => null);

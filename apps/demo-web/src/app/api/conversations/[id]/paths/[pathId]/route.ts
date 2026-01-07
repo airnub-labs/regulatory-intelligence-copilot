@@ -5,6 +5,7 @@ import { toClientPath } from '@reg-copilot/reg-intel-conversations';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,7 @@ export async function GET(
   const { id: conversationId, pathId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -87,7 +88,7 @@ export async function PATCH(
   const { id: conversationId, pathId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -166,7 +167,7 @@ export async function DELETE(
   const { id: conversationId, pathId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(

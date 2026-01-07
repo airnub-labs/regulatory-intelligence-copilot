@@ -62,6 +62,7 @@ export async function register() {
   console.log('[Instrumentation] Initializing compaction system...');
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    // eslint-disable-next-line tenant-security/no-unsafe-service-role -- System initialization at startup, no user/tenant context
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
@@ -72,12 +73,14 @@ export async function register() {
       const { initializeCompactionSystem } = await import('./src/lib/compactionInit');
 
       // Create Supabase client for snapshot storage
+      // eslint-disable-next-line tenant-security/no-unsafe-service-role -- System initialization at startup, no user/tenant context
       const supabase = createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         db: { schema: 'copilot_internal' },
       });
 
       // Create snapshot storage provider
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase client type compatibility
       const snapshotStorage = new SupabaseSnapshotStorage(supabase as any);
 
       // Initialize compaction system

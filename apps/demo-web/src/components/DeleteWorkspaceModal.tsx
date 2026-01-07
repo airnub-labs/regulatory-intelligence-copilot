@@ -113,7 +113,7 @@ export function DeleteWorkspaceModal({
           <div className="flex gap-2">
             <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
             <div className="text-sm">
-              <p className="font-medium text-destructive">This action will delete "{workspaceName}"</p>
+              <p className="font-medium text-destructive">This action will delete &quot;{workspaceName}&quot;</p>
               <ul className="mt-2 space-y-1 text-muted-foreground">
                 <li>• All members will lose access</li>
                 <li>• Data will be retained for 30 days</li>

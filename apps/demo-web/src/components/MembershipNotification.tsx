@@ -64,7 +64,7 @@ export function MembershipNotification() {
       case 'added':
         return (
           <>
-            You've been added to <strong>{event.tenant_name}</strong> as{' '}
+            You&apos;ve been added to <strong>{event.tenant_name}</strong> as{' '}
             <Badge variant="outline" className="ml-1">
               {event.new_role}
             </Badge>
@@ -73,7 +73,7 @@ export function MembershipNotification() {
       case 'removed':
         return (
           <>
-            You've been removed from <strong>{event.tenant_name}</strong>
+            You&apos;ve been removed from <strong>{event.tenant_name}</strong>
           </>
         )
       case 'role_changed':

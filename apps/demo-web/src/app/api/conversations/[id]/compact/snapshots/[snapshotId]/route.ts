@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationStore } from '@/lib/server/conversations';
 import { getSnapshotServiceIfInitialized } from '@reg-copilot/reg-intel-conversations/compaction';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
@@ -29,7 +30,7 @@ export async function GET(
   const { id: conversationId, snapshotId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -141,7 +142,7 @@ export async function DELETE(
   const { id: conversationId, snapshotId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(

@@ -22,6 +22,7 @@ import { getServerSession } from 'next-auth/next';
 import { subscribeToGraphPatches } from '@/lib/graphChangeDetectorInstance';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 
 const logger = createLogger('GraphStreamRoute');
 
@@ -51,7 +52,7 @@ interface ConnectionMessage {
 export async function GET(request: Request) {
   try {
     // Get and verify tenant context
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     const { searchParams } = new URL(request.url);
