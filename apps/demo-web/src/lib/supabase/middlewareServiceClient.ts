@@ -24,8 +24,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { logger } from '@/lib/utils/logger';
-import type { Database } from '@/types/supabase';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('MiddlewareServiceClient');
 
 /**
  * Creates a service role client for middleware validation operations.
@@ -47,7 +48,7 @@ import type { Database } from '@/types/supabase';
  */
 export function createMiddlewareServiceClient(
   operation: string
-): ReturnType<typeof createClient<Database>> {
+): ReturnType<typeof createClient> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -68,7 +69,7 @@ export function createMiddlewareServiceClient(
     `Creating middleware service client for ${operation}`
   );
 
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,

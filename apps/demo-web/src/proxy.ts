@@ -129,7 +129,8 @@ export async function proxy(request: NextRequest) {
         const supabase = createMiddlewareServiceClient('session-consistency-check')
 
         const { data: dbTenantId, error } = await supabase
-          .rpc('get_current_tenant_id', { p_user_id: userId })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .rpc('get_current_tenant_id', { p_user_id: userId } as any)
           .single()
 
         if (!error && dbTenantId && dbTenantId !== jwtTenantId) {
@@ -148,7 +149,8 @@ export async function proxy(request: NextRequest) {
                 p_expected_tenant_id: dbTenantId,
                 p_actual_tenant_id: jwtTenantId,
                 p_request_path: pathname,
-              })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } as any)
             } catch (err) {
               console.error('Failed to log session mismatch:', err)
             }

@@ -64,14 +64,21 @@ export default function TeamSettingsPage() {
 
         if (error) throw error
 
-        // Transform data
-        const formattedMembers: TeamMember[] = (membersData || []).map((m: { user_id: string; user?: { email?: string }; role: string; joined_at: string; status: string }) => ({
-          user_id: m.user_id,
-          email: m.user?.email || 'Unknown',
-          role: m.role,
-          status: m.status,
-          joined_at: m.joined_at,
-        }))
+        // Transform data - Supabase returns nested relations as arrays
+        const formattedMembers: TeamMember[] = (membersData || []).map((m) => {
+          // Handle Supabase's array return type for relations
+          const userRecord = m.user as unknown as { email?: string }[] | { email?: string } | null;
+          const email = Array.isArray(userRecord)
+            ? userRecord[0]?.email
+            : userRecord?.email;
+          return {
+            user_id: m.user_id,
+            email: email || 'Unknown',
+            role: m.role as TeamMember['role'],
+            status: m.status as TeamMember['status'],
+            joined_at: m.joined_at,
+          };
+        })
 
         setMembers(formattedMembers)
       }

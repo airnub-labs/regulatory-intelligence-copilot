@@ -20,7 +20,7 @@ import {
   resolveRedisBackend,
 } from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createInfrastructureServiceClient } from '@/lib/supabase/infrastructureServiceClient';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
@@ -310,12 +310,12 @@ if (preferRedisEventHub && redisEventHubAvailable && eventHubClients) {
   );
 
   conversationEventHub = new SupabaseRealtimeConversationEventHub({
-    client: supabaseRealtimeClient!,
+    client: supabaseRealtimeClient as SupabaseClient,
     prefix: 'copilot:events',
   });
 
   conversationListEventHub = new SupabaseRealtimeConversationListEventHub({
-    client: supabaseRealtimeClient!,
+    client: supabaseRealtimeClient as SupabaseClient,
     prefix: 'copilot:events',
   });
 

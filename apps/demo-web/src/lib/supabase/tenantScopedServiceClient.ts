@@ -125,8 +125,8 @@ export function createTenantScopedServiceClient(
                       operation: qbProp,
                     }, 'Auto-injecting tenant_id filter');
 
-                    // Add tenant_id filter
-                    return result.eq('tenant_id', tenantId);
+                    // Add tenant_id filter - cast to access query builder methods
+                    return (result as { eq: (col: string, val: string) => unknown }).eq('tenant_id', tenantId);
                   }
 
                   // For INSERT/UPSERT, we can't auto-inject - developer must explicitly provide

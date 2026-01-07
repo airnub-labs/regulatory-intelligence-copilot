@@ -17,9 +17,17 @@
  * @see /docs/architecture/multi-tenant/README.md
  */
 
-import { createClient, type SupabaseClientOptions } from '@supabase/supabase-js';
-import { logger } from '@/lib/utils/logger';
-import type { Database } from '@/types/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { createLogger } from '@reg-copilot/reg-intel-observability';
+
+const logger = createLogger('InfrastructureServiceClient');
+
+/** Options for infrastructure service client creation */
+interface InfrastructureServiceClientOptions {
+  db?: { schema?: string };
+  global?: { fetch?: typeof fetch };
+  auth?: { persistSession?: boolean; autoRefreshToken?: boolean };
+}
 
 /**
  * Creates a service role client for infrastructure component initialization.
@@ -43,8 +51,8 @@ import type { Database } from '@/types/supabase';
  */
 export function createInfrastructureServiceClient(
   component: string,
-  options?: SupabaseClientOptions<'public'>
-): ReturnType<typeof createClient<Database>> {
+  options?: InfrastructureServiceClientOptions
+): ReturnType<typeof createClient> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -65,11 +73,18 @@ export function createInfrastructureServiceClient(
     `Initializing infrastructure service client for ${component}`
   );
 
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  // Merge options with defaults - using explicit construction to satisfy TypeScript
+  const clientOptions = {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+      ...options?.auth,
     },
-    ...options,
-  });
+    db: options?.db,
+    global: options?.global,
+  };
+
+  // Use type assertion as Supabase's generics are complex with custom schemas
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return createClient(supabaseUrl, supabaseServiceKey, clientOptions as any);
 }
