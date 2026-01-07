@@ -50,14 +50,11 @@ export async function DELETE(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call deletion RPC
     // This is valid because the RPC function enforces ownership checks internally
     const supabase = createUnrestrictedServiceClient(
       'Workspace deletion - calling RPC with internal validation',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call deletion function
@@ -192,14 +189,11 @@ export async function PATCH(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call restoration RPC
     // This is valid because the RPC function enforces ownership checks internally
     const supabase = createUnrestrictedServiceClient(
       'Workspace restoration - calling RPC with internal validation',
-      userId,
-      cookieStore
+      userId
     );
 
     const { data, error } = await supabase
@@ -284,14 +278,11 @@ export async function GET(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to query workspace
     // We need unrestricted access to see deleted workspaces (for restore UI)
     const supabase = createUnrestrictedServiceClient(
       'Get workspace details including deletion status',
-      userId,
-      cookieStore
+      userId
     );
 
     // Get workspace details

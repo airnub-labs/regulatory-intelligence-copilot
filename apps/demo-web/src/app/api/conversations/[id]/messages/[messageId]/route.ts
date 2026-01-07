@@ -53,11 +53,9 @@ export async function GET(
           }
 
           try {
-            const cookieStore = await cookies();
             const supabase = createUnrestrictedServiceClient(
               'get-message',
-              userId,
-              cookieStore
+              userId
             );
 
             const { data: message, error } = await supabase
@@ -166,11 +164,9 @@ export async function PATCH(
           }
 
           try {
-            const cookieStore = await cookies();
             const supabase = createUnrestrictedServiceClient(
               'update-message-metadata',
-              userId,
-              cookieStore
+              userId
             );
 
             // First verify the message exists and belongs to this conversation

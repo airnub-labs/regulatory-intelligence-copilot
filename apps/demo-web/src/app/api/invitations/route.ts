@@ -59,14 +59,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call invitation RPC
     // The RPC function enforces permission checks internally
     const supabase = createUnrestrictedServiceClient(
       'Creating workspace invitation - RPC handles validation',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call Supabase function
@@ -159,14 +156,12 @@ export async function GET() {
     }
 
     const userId = session.user.id;
-    const cookieStore = await cookies();
 
     // SECURITY: Use unrestricted service client to get pending invitations
     // RPC function filters by user's email automatically
     const supabase = createUnrestrictedServiceClient(
       'Getting pending invitations - RPC filters by user email',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call Supabase function

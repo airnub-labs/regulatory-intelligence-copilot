@@ -44,14 +44,11 @@ export async function DELETE(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call cancel RPC
     // The RPC function enforces owner/admin permission checks
     const supabase = createUnrestrictedServiceClient(
       'Cancelling workspace invitation - RPC validates permissions',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call Supabase function

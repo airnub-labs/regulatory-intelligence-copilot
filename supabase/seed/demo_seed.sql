@@ -16,7 +16,7 @@ declare
 -- .....
 --  password: await hashPassword('password'),
 
-  demo_password_hash text := '$2b$06$kPdMymWM7GkrHql.BwroSu1e8wuh5q.KqLLZjP.FctnqV.tii7dGq';
+  demo_password_hash text := '$2b$10$dFyws4yGmOsWeYY7FxFXeOhat4R6UmwWnGbj8xP//5fMmaGn7Iq6y';
   demo_full_name text := 'Demo User';
   demo_now timestamptz := now();
   seeded_user record;
@@ -413,8 +413,8 @@ declare
   startup_xyz_id uuid := 'bbbbeee0-5555-6666-7777-888888888888';
 
   -- Pre-computed bcrypt hash for 'password123'
-  -- Generated using bcryptjs with saltRounds=6 for consistency with demo user
-  test_password_hash text := '$2b$06$PQS.8RLKqtXK0LZjCZy9muBBvQxGlEI7xVKqL8mGvQR2Z7WCVz7Su';
+  -- Generated using bcryptjs with saltRounds=10 for Supabase Auth compatibility
+  test_password_hash text := '$2b$10$gyqT4IRmcshCFyAVCDDyJeuAjMSsAJL55L2DA1ITTk507sBhT9sh2';
 
   demo_now timestamptz := now();
 begin
@@ -677,6 +677,308 @@ begin
   raise notice '  - 2 team workspaces (Acme Corp, Startup XYZ)';
   raise notice '';
   raise notice 'Sample conversations: 9 total';
+  raise notice '========================================';
+
+end $$;
+
+-- ========================================
+-- Compaction Metrics and Cost Analytics Seed Data
+-- ========================================
+
+do $$
+declare
+  demo_user_id uuid;
+  demo_tenant_id uuid;
+  demo_conv_id uuid;
+  alice_id uuid := 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  bob_id uuid := 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  charlie_id uuid := 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+  alice_personal_id uuid := '11111111-1111-1111-1111-111111111111';
+  bob_personal_id uuid := '22222222-2222-2222-2222-222222222222';
+  acme_corp_id uuid := 'aaaacccc-1111-2222-3333-444444444444';
+  startup_xyz_id uuid := 'bbbbeee0-5555-6666-7777-888888888888';
+  demo_now timestamptz := now();
+  alice_conv_id uuid;
+  bob_conv_id uuid;
+begin
+
+  -- Get demo user and tenant
+  select id into demo_user_id
+  from auth.users
+  where email = 'demo.user@example.com'
+  limit 1;
+
+  select id into demo_tenant_id
+  from copilot_internal.tenants
+  where owner_id = demo_user_id
+  limit 1;
+
+  -- Get a demo conversation
+  select id into demo_conv_id
+  from copilot_internal.conversations
+  where tenant_id = demo_tenant_id
+  limit 1;
+
+  -- Get Alice and Bob conversations
+  select id into alice_conv_id
+  from copilot_internal.conversations
+  where tenant_id = alice_personal_id
+  limit 1;
+
+  select id into bob_conv_id
+  from copilot_internal.conversations
+  where tenant_id = acme_corp_id
+  limit 1;
+
+  ---------------------------------------------------------------------------
+  -- 1. Seed Compaction Operations
+  ---------------------------------------------------------------------------
+
+  -- Add compaction operations for demo conversation
+  if demo_conv_id is not null then
+    insert into copilot_internal.compaction_operations (
+      conversation_id,
+      tenant_id,
+      user_id,
+      strategy,
+      triggered_by,
+      tokens_before,
+      tokens_after,
+      messages_before,
+      messages_after,
+      messages_summarized,
+      duration_ms,
+      used_llm,
+      cost_usd,
+      success,
+      "timestamp",
+      metadata
+    )
+    values
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'semantic', 'manual', 15000, 3600, 50, 12, 38, 2500, true, 0.23, true, demo_now - interval '7 days', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-sonnet-20240229')),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'semantic', 'auto', 19500, 4500, 65, 15, 50, 3200, true, 0.29, true, demo_now - interval '5 days', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-sonnet-20240229')),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'aggressive', 'auto', 24000, 5400, 80, 18, 62, 4100, true, 0.12, true, demo_now - interval '3 days', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-haiku-20240307')),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'semantic', 'manual', 28500, 6000, 95, 20, 75, 4800, true, 0.35, true, demo_now - interval '1 day', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-sonnet-20240229')),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'aggressive', 'auto', 33000, 6600, 110, 22, 88, 5500, true, 0.15, true, demo_now - interval '12 hours', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-haiku-20240307'))
+    on conflict do nothing;
+  end if;
+
+  -- Add compaction operations for Alice's conversations
+  if alice_conv_id is not null then
+    insert into copilot_internal.compaction_operations (
+      conversation_id,
+      tenant_id,
+      user_id,
+      strategy,
+      triggered_by,
+      tokens_before,
+      tokens_after,
+      messages_before,
+      messages_after,
+      messages_summarized,
+      duration_ms,
+      used_llm,
+      cost_usd,
+      success,
+      "timestamp",
+      metadata
+    )
+    values
+      (alice_conv_id, alice_personal_id, alice_id, 'moderate', 'manual', 13500, 3000, 45, 10, 35, 2200, true, 0.18, true, demo_now - interval '4 days', jsonb_build_object('provider', 'openai', 'model', 'gpt-4-turbo')),
+      (alice_conv_id, alice_personal_id, alice_id, 'semantic', 'auto', 18000, 3900, 60, 13, 47, 2900, true, 0.24, true, demo_now - interval '2 days', jsonb_build_object('provider', 'openai', 'model', 'gpt-4-turbo'))
+    on conflict do nothing;
+  end if;
+
+  -- Add compaction operations for Bob's conversations
+  if bob_conv_id is not null then
+    insert into copilot_internal.compaction_operations (
+      conversation_id,
+      tenant_id,
+      user_id,
+      strategy,
+      triggered_by,
+      tokens_before,
+      tokens_after,
+      messages_before,
+      messages_after,
+      messages_summarized,
+      duration_ms,
+      used_llm,
+      cost_usd,
+      success,
+      "timestamp",
+      metadata
+    )
+    values
+      (bob_conv_id, acme_corp_id, bob_id, 'minimal', 'manual', 16500, 4200, 55, 14, 41, 2800, true, 0.09, true, demo_now - interval '6 days', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-haiku-20240307')),
+      (bob_conv_id, acme_corp_id, bob_id, 'moderate', 'auto', 21000, 4800, 70, 16, 54, 3400, true, 0.11, true, demo_now - interval '3 days', jsonb_build_object('provider', 'anthropic', 'model', 'claude-3-haiku-20240307'))
+    on conflict do nothing;
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 2. Seed LLM Cost Records
+  ---------------------------------------------------------------------------
+
+  -- Add LLM cost records for demo conversations
+  if demo_conv_id is not null then
+    insert into copilot_internal.llm_cost_records (
+      conversation_id,
+      tenant_id,
+      user_id,
+      provider,
+      model,
+      input_tokens,
+      output_tokens,
+      total_tokens,
+      input_cost_usd,
+      output_cost_usd,
+      total_cost_usd,
+      task,
+      "timestamp"
+    )
+    values
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-sonnet-20240229', 1200, 450, 1650, 0.018, 0.010, 0.028, 'chat', demo_now - interval '8 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-sonnet-20240229', 2500, 800, 3300, 0.038, 0.017, 0.055, 'chat', demo_now - interval '7 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-haiku-20240307', 3200, 1100, 4300, 0.012, 0.013, 0.025, 'chat', demo_now - interval '6 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-sonnet-20240229', 1800, 600, 2400, 0.027, 0.015, 0.042, 'chat', demo_now - interval '5 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-haiku-20240307', 2800, 950, 3750, 0.010, 0.012, 0.022, 'chat', demo_now - interval '4 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-sonnet-20240229', 2200, 750, 2950, 0.033, 0.018, 0.051, 'chat', demo_now - interval '3 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-haiku-20240307', 3500, 1200, 4700, 0.013, 0.015, 0.028, 'chat', demo_now - interval '2 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-sonnet-20240229', 1900, 650, 2550, 0.029, 0.015, 0.044, 'chat', demo_now - interval '1 day'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'anthropic', 'claude-3-haiku-20240307', 4200, 1400, 5600, 0.015, 0.018, 0.033, 'chat', demo_now - interval '12 hours')
+    on conflict do nothing;
+  end if;
+
+  -- Add LLM cost records for Alice
+  if alice_conv_id is not null then
+    insert into copilot_internal.llm_cost_records (
+      conversation_id,
+      tenant_id,
+      user_id,
+      provider,
+      model,
+      input_tokens,
+      output_tokens,
+      total_tokens,
+      input_cost_usd,
+      output_cost_usd,
+      total_cost_usd,
+      task,
+      "timestamp"
+    )
+    values
+      (alice_conv_id, alice_personal_id, alice_id, 'openai', 'gpt-4-turbo', 1500, 500, 2000, 0.023, 0.012, 0.035, 'chat', demo_now - interval '5 days'),
+      (alice_conv_id, alice_personal_id, alice_id, 'openai', 'gpt-4-turbo', 2100, 700, 2800, 0.032, 0.017, 0.049, 'chat', demo_now - interval '4 days'),
+      (alice_conv_id, alice_personal_id, alice_id, 'openai', 'gpt-3.5-turbo', 3200, 1100, 4300, 0.005, 0.007, 0.012, 'chat', demo_now - interval '3 days'),
+      (alice_conv_id, alice_personal_id, alice_id, 'openai', 'gpt-4-turbo', 1800, 600, 2400, 0.027, 0.015, 0.042, 'chat', demo_now - interval '2 days')
+    on conflict do nothing;
+  end if;
+
+  -- Add LLM cost records for Bob
+  if bob_conv_id is not null then
+    insert into copilot_internal.llm_cost_records (
+      conversation_id,
+      tenant_id,
+      user_id,
+      provider,
+      model,
+      input_tokens,
+      output_tokens,
+      total_tokens,
+      input_cost_usd,
+      output_cost_usd,
+      total_cost_usd,
+      task,
+      "timestamp"
+    )
+    values
+      (bob_conv_id, acme_corp_id, bob_id, 'anthropic', 'claude-3-haiku-20240307', 2800, 950, 3750, 0.010, 0.012, 0.022, 'chat', demo_now - interval '6 days'),
+      (bob_conv_id, acme_corp_id, bob_id, 'anthropic', 'claude-3-haiku-20240307', 3100, 1050, 4150, 0.011, 0.013, 0.024, 'chat', demo_now - interval '4 days'),
+      (bob_conv_id, acme_corp_id, bob_id, 'anthropic', 'claude-3-haiku-20240307', 2500, 850, 3350, 0.009, 0.010, 0.019, 'chat', demo_now - interval '2 days')
+    on conflict do nothing;
+  end if;
+
+  ---------------------------------------------------------------------------
+  -- 3. Seed E2B Cost Records
+  ---------------------------------------------------------------------------
+
+  -- Add E2B cost records for demo conversations
+  if demo_conv_id is not null then
+    insert into copilot_internal.e2b_cost_records (
+      conversation_id,
+      tenant_id,
+      user_id,
+      sandbox_id,
+      execution_time_seconds,
+      execution_cost_usd,
+      resource_cost_usd,
+      total_cost_usd,
+      tier,
+      "timestamp"
+    )
+    values
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 180, 0.015, 0.003, 0.018, 'basic', demo_now - interval '7 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 300, 0.025, 0.005, 0.030, 'standard', demo_now - interval '6 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 420, 0.035, 0.007, 0.042, 'standard', demo_now - interval '5 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 600, 0.050, 0.010, 0.060, 'standard', demo_now - interval '4 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 240, 0.020, 0.004, 0.024, 'basic', demo_now - interval '3 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 360, 0.030, 0.006, 0.036, 'standard', demo_now - interval '2 days'),
+      (demo_conv_id, demo_tenant_id, demo_user_id, 'sbx_' || gen_random_uuid()::text, 480, 0.040, 0.008, 0.048, 'standard', demo_now - interval '1 day')
+    on conflict do nothing;
+  end if;
+
+  -- Add E2B cost records for Alice
+  if alice_conv_id is not null then
+    insert into copilot_internal.e2b_cost_records (
+      conversation_id,
+      tenant_id,
+      user_id,
+      sandbox_id,
+      execution_time_seconds,
+      execution_cost_usd,
+      resource_cost_usd,
+      total_cost_usd,
+      tier,
+      "timestamp"
+    )
+    values
+      (alice_conv_id, alice_personal_id, alice_id, 'sbx_' || gen_random_uuid()::text, 300, 0.025, 0.005, 0.030, 'standard', demo_now - interval '5 days'),
+      (alice_conv_id, alice_personal_id, alice_id, 'sbx_' || gen_random_uuid()::text, 420, 0.035, 0.007, 0.042, 'standard', demo_now - interval '3 days'),
+      (alice_conv_id, alice_personal_id, alice_id, 'sbx_' || gen_random_uuid()::text, 180, 0.015, 0.003, 0.018, 'basic', demo_now - interval '1 day')
+    on conflict do nothing;
+  end if;
+
+  -- Add E2B cost records for Bob
+  if bob_conv_id is not null then
+    insert into copilot_internal.e2b_cost_records (
+      conversation_id,
+      tenant_id,
+      user_id,
+      sandbox_id,
+      execution_time_seconds,
+      execution_cost_usd,
+      resource_cost_usd,
+      total_cost_usd,
+      tier,
+      "timestamp"
+    )
+    values
+      (bob_conv_id, acme_corp_id, bob_id, 'sbx_' || gen_random_uuid()::text, 360, 0.030, 0.006, 0.036, 'standard', demo_now - interval '4 days'),
+      (bob_conv_id, acme_corp_id, bob_id, 'sbx_' || gen_random_uuid()::text, 240, 0.020, 0.004, 0.024, 'basic', demo_now - interval '2 days')
+    on conflict do nothing;
+  end if;
+
+  raise notice '========================================';
+  raise notice 'Compaction & Cost Analytics Seed Data Complete!';
+  raise notice '========================================';
+  raise notice '';
+  raise notice 'Created:';
+  raise notice '  - Compaction operations: ~9 records';
+  raise notice '  - LLM cost records: ~16 records';
+  raise notice '  - E2B cost records: ~12 records';
+  raise notice '';
+  raise notice 'Sample data spans 8 days across multiple';
+  raise notice 'tenants and users for realistic testing.';
   raise notice '========================================';
 
 end $$;

@@ -110,11 +110,9 @@ export async function GET(
 
             // Fetch compaction history from Supabase using unrestricted service client
             // (already validated user has access to this conversation above)
-            const cookieStore = await cookies();
             const supabase = createUnrestrictedServiceClient(
               'fetch-compaction-history',
-              userId,
-              cookieStore
+              userId
             );
 
             // Query compaction_operations table for this conversation

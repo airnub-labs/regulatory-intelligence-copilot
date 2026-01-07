@@ -31,14 +31,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const cookieStore = await cookies()
-
     // SECURITY: Creating NEW tenant requires unrestricted access (no tenant_id exists yet)
     // This is a valid use case for unrestricted service client
     const supabase = createUnrestrictedServiceClient(
       'Creating new tenant - no tenant_id exists yet',
-      userId,
-      cookieStore
+      userId
     )
 
     // Create tenant

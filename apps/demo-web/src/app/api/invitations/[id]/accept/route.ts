@@ -45,14 +45,11 @@ export async function POST(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call accept RPC
     // The RPC function validates email match and creates membership
     const supabase = createUnrestrictedServiceClient(
       'Accepting workspace invitation - RPC validates email match',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call Supabase function
