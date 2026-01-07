@@ -7,6 +7,14 @@ import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServ
 
 const logger = createLogger('AcceptInvitationAPI');
 
+interface AcceptInvitationResult {
+  success: boolean;
+  error?: string;
+  tenant_id?: string;
+  role?: string;
+  already_member?: boolean;
+}
+
 /**
  * POST /api/invitations/[token]/accept
  *
@@ -15,9 +23,10 @@ const logger = createLogger('AcceptInvitationAPI');
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  context: { params: Promise<{ token: string }> }
 ) {
   try {
+    const { token } = await context.params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -28,7 +37,6 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    const token = params.token;
 
     if (!token) {
       return NextResponse.json(
@@ -53,7 +61,7 @@ export async function POST(
         p_token: token,
         p_user_id: userId,
       })
-      .single();
+      .single<AcceptInvitationResult>();
 
     if (error) {
       logger.error({
@@ -98,7 +106,7 @@ export async function POST(
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to accept invitation';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error accepting invitation');
+    logger.error({ error }, 'Unexpected error accepting invitation');
 
     return NextResponse.json(
       { error: errorMessage },

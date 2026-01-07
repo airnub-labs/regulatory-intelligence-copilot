@@ -3,10 +3,12 @@ import 'server-only';
 import {
   createDefaultLlmRouter,
   createPolicyStore,
+  type LlmPolicyStore,
 } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBackend } from '@reg-copilot/reg-intel-cache';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 const logger = createLogger('LlmRouterWiring');
 
@@ -32,6 +34,9 @@ const supabaseInternalClient =
       })
     : null;
 
+const nextPhase = process.env.NEXT_PHASE;
+const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
+
 // ============================================================================
 // Redis Setup
 // ============================================================================
@@ -44,16 +49,26 @@ const redisClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 // ============================================================================
 
 if (!supabaseInternalClient) {
-  throw new Error('Supabase credentials are required to build the policy store');
+  if (!isProductionBuildPhase) {
+    throw new Error('Supabase credentials are required to build the policy store');
+  }
+  logger.warn({ phase: nextPhase }, 'Supabase client not available during build - using placeholder policy store');
 }
 
 // Type assertion to work around "Type instantiation is excessively deep" error
-export const policyStore = createPolicyStore({
-  supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
-  redis: redisClient ?? undefined,
-  cacheTtlSeconds: 300, // 5 minutes
-  schema: 'copilot_internal',
-} as Parameters<typeof createPolicyStore>[0]);
+// During build phase, we create a placeholder that will throw at runtime if used
+export const policyStore: LlmPolicyStore = supabaseInternalClient
+  ? createPolicyStore({
+      supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
+      redis: redisClient ?? undefined,
+      cacheTtlSeconds: 300, // 5 minutes
+      schema: 'copilot_internal',
+    } as Parameters<typeof createPolicyStore>[0])
+  : (new Proxy({} as LlmPolicyStore, {
+      get: () => {
+        throw new Error('PolicyStore not initialized - Supabase credentials required');
+      },
+    }));
 
 // Log which store implementation is being used
 if (redisClient) {

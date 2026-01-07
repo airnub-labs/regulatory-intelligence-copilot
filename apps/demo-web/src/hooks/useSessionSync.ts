@@ -34,6 +34,13 @@ export function useSessionSync() {
     const checkInterval = 30000 // 30 seconds
 
     async function checkSync() {
+      // Capture session state at check time
+      if (!session?.user?.id || !session?.user?.currentTenantId) {
+        return
+      }
+
+      const userId = session.user.id
+      const currentTenantId = session.user.currentTenantId
       const now = Date.now()
 
       // Rate limit checks
@@ -53,7 +60,7 @@ export function useSessionSync() {
 
         const { data: dbTenantId, error } = await supabase
           .rpc('get_current_tenant_id', {
-            p_user_id: session.user.id,
+            p_user_id: userId,
           })
           .single()
 
@@ -62,9 +69,9 @@ export function useSessionSync() {
           return
         }
 
-        if (dbTenantId && dbTenantId !== session.user.currentTenantId) {
+        if (dbTenantId && dbTenantId !== currentTenantId) {
           console.warn('Session out of sync with database, auto-healing...', {
-            jwtTenantId: session.user.currentTenantId,
+            jwtTenantId: currentTenantId,
             dbTenantId,
           })
 
@@ -79,11 +86,11 @@ export function useSessionSync() {
               try {
                 const { data: checkAgain } = await supabase
                   .rpc('get_current_tenant_id', {
-                    p_user_id: session.user.id,
+                    p_user_id: userId,
                   })
                   .single()
 
-                if (checkAgain && checkAgain !== session.user.currentTenantId) {
+                if (checkAgain && checkAgain !== currentTenantId) {
                   console.error('Session still out of sync after healing, forcing reload')
                   window.location.reload()
                 } else {

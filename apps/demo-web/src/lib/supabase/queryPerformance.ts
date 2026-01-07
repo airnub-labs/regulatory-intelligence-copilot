@@ -199,14 +199,14 @@ export async function getUserTenantCount(userId: string): Promise<number> {
       .rpc('get_user_tenant_count', {
         p_user_id: userId,
       })
-      .single()
+      .single<number>()
 
     if (error) {
       logger.error({ error, userId }, 'Failed to get user tenant count')
       return 0
     }
 
-    return data || 0
+    return (data as number) || 0
   } catch (error) {
     logger.error({ error, userId }, 'Failed to get user tenant count')
     return 0

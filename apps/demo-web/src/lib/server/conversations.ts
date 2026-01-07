@@ -164,17 +164,27 @@ const configRedisClient = ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClien
 const conversationRedisClient = ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
 
 if (!supabaseClient || !supabaseInternalClient) {
-  throw new Error('Supabase credentials are required for conversation storage in multi-instance deployments');
+  if (!isProductionBuildPhase) {
+    throw new Error('Supabase credentials are required for conversation storage in multi-instance deployments');
+  }
+  logger.warn({ phase: nextPhase }, 'Supabase clients not available during build - using placeholder stores');
 }
 
 // Create conversation store with optional caching
-export const conversationStore: ConversationStore = createConversationStore({
-  supabase: supabaseClient,
-  supabaseInternal: supabaseInternalClient,
-  redis: conversationRedisClient ?? undefined,
-  enableCaching: ENABLE_CONVERSATION_CACHING,
-  cacheTtlSeconds: 60, // 1 minute for active conversations
-});
+// During build phase, we create a placeholder that will throw at runtime if used
+export const conversationStore: ConversationStore = (supabaseClient && supabaseInternalClient)
+  ? createConversationStore({
+      supabase: supabaseClient,
+      supabaseInternal: supabaseInternalClient,
+      redis: conversationRedisClient ?? undefined,
+      enableCaching: ENABLE_CONVERSATION_CACHING,
+      cacheTtlSeconds: 60, // 1 minute for active conversations
+    })
+  : (new Proxy({} as ConversationStore, {
+      get: () => {
+        throw new Error('ConversationStore not initialized - Supabase credentials required');
+      },
+    }));
 
 // Log which conversation store implementation is being used
 if (conversationRedisClient) {
@@ -194,23 +204,35 @@ if (conversationRedisClient) {
   logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
 }
 
-export const conversationContextStore = new SupabaseConversationContextStore(
-  supabaseClient,
-  supabaseInternalClient
-);
+export const conversationContextStore = (supabaseClient && supabaseInternalClient)
+  ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient)
+  : (new Proxy({} as InstanceType<typeof SupabaseConversationContextStore>, {
+      get: () => {
+        throw new Error('ConversationContextStore not initialized - Supabase credentials required');
+      },
+    }));
 
-export const conversationPathStore = new SupabaseConversationPathStore(
-  supabaseClient,
-  supabaseInternalClient
-);
+export const conversationPathStore = (supabaseClient && supabaseInternalClient)
+  ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient)
+  : (new Proxy({} as InstanceType<typeof SupabaseConversationPathStore>, {
+      get: () => {
+        throw new Error('ConversationPathStore not initialized - Supabase credentials required');
+      },
+    }));
 
 // Create conversation config store with caching
-export const conversationConfigStore: ConversationConfigStore = createConversationConfigStore({
-  supabase: supabaseInternalClient,
-  redis: configRedisClient ?? undefined,
-  cacheTtlSeconds: 300, // 5 minutes
-  logger,
-});
+export const conversationConfigStore: ConversationConfigStore = supabaseInternalClient
+  ? createConversationConfigStore({
+      supabase: supabaseInternalClient,
+      redis: configRedisClient ?? undefined,
+      cacheTtlSeconds: 300, // 5 minutes
+      logger,
+    })
+  : (new Proxy({} as ConversationConfigStore, {
+      get: () => {
+        throw new Error('ConversationConfigStore not initialized - Supabase credentials required');
+      },
+    }));
 
 // Log which config store implementation is being used
 if (configRedisClient) {

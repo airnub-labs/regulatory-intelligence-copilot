@@ -3,21 +3,28 @@ import 'next-auth/jwt'
 
 declare module 'next-auth' {
   interface Session {
-    user?: {
-      id?: string
-      email?: string | null
+    user: {
+      id: string
+      email: string
       name?: string | null
-      tenantId?: string
+      currentTenantId?: string
     }
   }
 
   interface User {
-    tenantId?: string
+    id: string
+    email: string
+    name?: string
+    currentTenantId?: string
   }
 }
 
 declare module 'next-auth/jwt' {
   interface JWT {
-    tenantId?: string
+    sub: string
+    email: string
+    name?: string
+    currentTenantId?: string
+    lastValidated?: number
   }
 }
