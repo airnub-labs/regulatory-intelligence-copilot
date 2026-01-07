@@ -16,17 +16,17 @@ interface AcceptInvitationResult {
 }
 
 /**
- * POST /api/invitations/[token]/accept
+ * POST /api/invitations/[id]/accept
  *
- * Accept a workspace invitation using the token.
+ * Accept a workspace invitation using the token (passed as id param).
  * Leverages Supabase's accept_workspace_invitation RPC function.
  */
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ token: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { token } = await context.params;
+    const { id: token } = await context.params;
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
