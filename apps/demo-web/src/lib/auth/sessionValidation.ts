@@ -210,7 +210,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     // ✅ No null check - cache.set() is no-op if Redis down
     const { data: currentTenantId } = await adminSupabase
       .rpc('get_current_tenant_id', { p_user_id: userId })
-      .single()
+      .single<string>()
 
     // MEDIUM-2: Verify user still has access to current tenant
     // If removed from active workspace, auto-switch to another workspace
@@ -220,10 +220,10 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
           p_user_id: userId,
           p_tenant_id: currentTenantId,
         })
-        .single()
+        .single<{ has_access: boolean; role: string }>()
 
       // If no longer has access, switch to another workspace
-      if (!access || !(access as any).has_access) {
+      if (!access || !access.has_access) {
         logger.warn(
           { userId, tenantId: currentTenantId },
           'User lost access to active tenant, auto-switching...'
@@ -235,7 +235,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
 
         if (tenants && tenants.length > 0) {
           // Switch to first available workspace (prefer personal)
-          const personalWorkspace = tenants.find((t: any) => t.tenant_type === 'personal')
+          const personalWorkspace = tenants.find((t: { tenant_type: string }) => t.tenant_type === 'personal')
           const targetWorkspace = personalWorkspace || tenants[0]
           const newTenantId = targetWorkspace.tenant_id
 
@@ -273,7 +273,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       }
     }
 
-    await validationCache.set(userId, true, currentTenantId as string | undefined)
+    await validationCache.set(userId, true, currentTenantId ?? undefined)
     authMetrics.recordCacheMiss(userId, validationDuration, true)
 
     return {
@@ -281,7 +281,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
       user: {
         id: data.user.id,
         email: data.user.email,
-        currentTenantId: currentTenantId as string | undefined,
+        currentTenantId: currentTenantId ?? undefined,
       },
     }
   } catch (error) {

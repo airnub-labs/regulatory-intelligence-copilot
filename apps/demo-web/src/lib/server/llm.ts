@@ -3,6 +3,7 @@ import 'server-only';
 import {
   createDefaultLlmRouter,
   createPolicyStore,
+  type LlmPolicyStore,
 } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
@@ -10,8 +11,6 @@ import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBacken
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 const logger = createLogger('LlmRouterWiring');
-const nextPhase = process.env.NEXT_PHASE;
-const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
 
 /**
  * Individual flag to enable/disable LLM policy caching specifically.
@@ -25,10 +24,8 @@ const ENABLE_LLM_POLICY_CACHE = process.env.ENABLE_LLM_POLICY_CACHE !== 'false';
 // ============================================================================
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-// eslint-disable-next-line tenant-security/no-unsafe-service-role -- System infrastructure: LLM policy store initialization
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 
-// eslint-disable-next-line tenant-security/no-unsafe-service-role -- System infrastructure: LLM policy store client
 const supabaseInternalClient =
   supabaseUrl && supabaseServiceKey
     ? createClient(supabaseUrl, supabaseServiceKey, {
@@ -36,6 +33,9 @@ const supabaseInternalClient =
         db: { schema: 'copilot_internal' },
       })
     : null;
+
+const nextPhase = process.env.NEXT_PHASE;
+const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
 
 // ============================================================================
 // Redis Setup
@@ -49,43 +49,44 @@ const redisClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 // ============================================================================
 
 if (!supabaseInternalClient) {
-  if (isProductionBuildPhase) {
-    logger.warn('Supabase credentials missing during build phase - policy store will be unavailable');
-  } else {
+  if (!isProductionBuildPhase) {
     throw new Error('Supabase credentials are required to build the policy store');
   }
+  logger.warn({ phase: nextPhase }, 'Supabase client not available during build - using placeholder policy store');
 }
 
 // Type assertion to work around "Type instantiation is excessively deep" error
-// During build phase, this may be undefined, but routes won't be called
-export const policyStore = (supabaseInternalClient
+// During build phase, we create a placeholder that will throw at runtime if used
+export const policyStore: LlmPolicyStore = supabaseInternalClient
   ? createPolicyStore({
       supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
       redis: redisClient ?? undefined,
       cacheTtlSeconds: 300, // 5 minutes
       schema: 'copilot_internal',
     } as Parameters<typeof createPolicyStore>[0])
-  : undefined) as ReturnType<typeof createPolicyStore>;
+  : (new Proxy({} as LlmPolicyStore, {
+      get: () => {
+        throw new Error('PolicyStore not initialized - Supabase credentials required');
+      },
+    }));
 
 // Log which store implementation is being used
-if (supabaseInternalClient) {
-  if (redisClient) {
-    logger.info(
-      {
-        supabaseUrl,
-        hasRedis: true,
-        cacheTtl: 300,
-        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingPolicyStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_LLM_POLICY_CACHE
-      ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
-      : 'Redis credentials not configured';
-    logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
-  }
+if (redisClient) {
+  logger.info(
+    {
+      supabaseUrl,
+      hasRedis: true,
+      cacheTtl: 300,
+      llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingPolicyStore (Supabase + Redis)'
+  );
+} else {
+  const reason = !ENABLE_LLM_POLICY_CACHE
+    ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
+    : 'Redis credentials not configured';
+  logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
 }
 
 // ============================================================================

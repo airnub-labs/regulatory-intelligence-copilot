@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import type { ExtendedSession } from '@/types/auth';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 
 const logger = createLogger('CancelInvitationAPI');
+
+interface CancelInvitationResult {
+  success: boolean;
+  error?: string;
+  cancelled_at?: string;
+}
 
 /**
  * DELETE /api/invitations/[id]
@@ -16,11 +21,11 @@ const logger = createLogger('CancelInvitationAPI');
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  let session: ExtendedSession | null = null;
   try {
-    session = await getServerSession(authOptions) as ExtendedSession | null;
+    const { id } = await context.params;
+    const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -30,7 +35,7 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    const { id: invitationId } = await params;
+    const invitationId = id;
 
     if (!invitationId) {
       return NextResponse.json(
@@ -55,7 +60,7 @@ export async function DELETE(
         p_invitation_id: invitationId,
         p_user_id: userId,
       })
-      .single();
+      .single<CancelInvitationResult>();
 
     if (error) {
       logger.error({
@@ -70,15 +75,15 @@ export async function DELETE(
       );
     }
 
-    if (!(data as any).success) {
+    if (!data.success) {
       logger.warn({
         userId,
         invitationId,
-        error: (data as any).error,
+        error: data.error,
       }, 'Invitation cancellation validation failed');
 
       return NextResponse.json(
-        { error: (data as any).error },
+        { error: data.error },
         { status: 400 }
       );
     }
@@ -90,12 +95,12 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      cancelledAt: (data as any).cancelled_at,
+      cancelledAt: data.cancelled_at,
     });
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to cancel invitation';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error cancelling invitation');
+    logger.error({ error }, 'Unexpected error cancelling invitation');
 
     return NextResponse.json(
       { error: errorMessage },

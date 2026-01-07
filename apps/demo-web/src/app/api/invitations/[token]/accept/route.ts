@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import type { ExtendedSession } from '@/types/auth';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 
 const logger = createLogger('AcceptInvitationAPI');
+
+interface AcceptInvitationResult {
+  success: boolean;
+  error?: string;
+  tenant_id?: string;
+  role?: string;
+  already_member?: boolean;
+}
 
 /**
  * POST /api/invitations/[token]/accept
@@ -16,11 +23,11 @@ const logger = createLogger('AcceptInvitationAPI');
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ token: string }> }
+  context: { params: Promise<{ token: string }> }
 ) {
-  let session: ExtendedSession | null = null;
   try {
-    session = await getServerSession(authOptions) as ExtendedSession | null;
+    const { token } = await context.params;
+    const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -30,7 +37,6 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    const { token } = await params;
 
     if (!token) {
       return NextResponse.json(
@@ -55,7 +61,7 @@ export async function POST(
         p_token: token,
         p_user_id: userId,
       })
-      .single();
+      .single<AcceptInvitationResult>();
 
     if (error) {
       logger.error({
@@ -70,37 +76,37 @@ export async function POST(
       );
     }
 
-    if (!(data as any).success) {
+    if (!data.success) {
       logger.warn({
         userId,
         token,
-        error: (data as any).error,
+        error: data.error,
       }, 'Invitation acceptance validation failed');
 
       return NextResponse.json(
-        { error: (data as any).error },
+        { error: data.error },
         { status: 400 }
       );
     }
 
     logger.info({
       userId,
-      tenantId: (data as any).tenant_id,
-      role: (data as any).role,
-      alreadyMember: (data as any).already_member,
+      tenantId: data.tenant_id,
+      role: data.role,
+      alreadyMember: data.already_member,
     }, 'Workspace invitation accepted successfully');
 
     // Return success with workspace details
     return NextResponse.json({
       success: true,
-      workspaceId: (data as any).tenant_id,
-      role: (data as any).role,
-      alreadyMember: (data as any).already_member || false,
+      workspaceId: data.tenant_id,
+      role: data.role,
+      alreadyMember: data.already_member || false,
     });
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to accept invitation';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error accepting invitation');
+    logger.error({ error }, 'Unexpected error accepting invitation');
 
     return NextResponse.json(
       { error: errorMessage },

@@ -9,6 +9,17 @@ import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServ
 
 const logger = createLogger('InvitationsAPI');
 
+interface InvitationResult {
+  success: boolean;
+  error?: string;
+  invitation_id?: string;
+  email?: string;
+  role?: string;
+  workspace_name?: string;
+  invite_url?: string;
+  expires_at?: string;
+}
+
 /**
  * POST /api/invitations
  *
@@ -66,7 +77,7 @@ export async function POST(request: NextRequest) {
         p_role: role,
         p_invited_by: userId,
       })
-      .single();
+      .single<InvitationResult>();
 
     if (error) {
       logger.error({
@@ -120,7 +131,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to create invitation';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error creating invitation');
+    logger.error({ error }, 'Unexpected error creating invitation');
 
     return NextResponse.json(
       { error: errorMessage },
@@ -180,7 +191,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to get invitations';
-    logger.error({ error, userId: session?.user?.id }, 'Unexpected error getting invitations');
+    logger.error({ error }, 'Unexpected error getting invitations');
 
     return NextResponse.json(
       { error: errorMessage },

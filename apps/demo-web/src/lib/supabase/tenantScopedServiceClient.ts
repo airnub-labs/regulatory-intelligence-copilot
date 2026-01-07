@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 
@@ -77,7 +77,7 @@ export function createTenantScopedServiceClient(
         return cookies.getAll();
       },
       setAll(cookieList) {
-        cookieList.forEach(({ name, value, options }) => {
+        cookieList.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
           cookies.set(name, value, options);
         });
       },
@@ -114,7 +114,7 @@ export function createTenantScopedServiceClient(
 
               if (typeof original === 'function') {
                 return function(...args: any[]) {
-                  const result = (original as any).apply(qbTarget, args);
+                  const result = (original as Function).apply(qbTarget, args);
 
                   // Auto-inject tenant_id filter for SELECT/UPDATE/DELETE
                   if (['select', 'update', 'delete'].includes(qbProp as string)) {
@@ -216,7 +216,7 @@ export function createUnrestrictedServiceClient(
         return cookies.getAll();
       },
       setAll(cookieList) {
-        cookieList.forEach(({ name, value, options }) => {
+        cookieList.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
           cookies.set(name, value, options);
         });
       },
