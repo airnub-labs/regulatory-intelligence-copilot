@@ -11,6 +11,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { AppHeader } from '@/components/layout/app-header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Download, RefreshCw, DollarSign, Activity, TrendingUp, Zap, Calendar, BarChart3 } from 'lucide-react';
 
 interface CostAggregate {
   dimension: string;
@@ -53,34 +60,18 @@ interface CostMetrics {
 
 type TimeRange = '24h' | '7d' | '30d' | 'all';
 
-/**
- * Simple Bar Chart Component (no external dependencies)
- */
-function SimpleBarChart({ data, title }: { data: { label: string; value: number }[]; title: string }) {
-  if (data.length === 0) return null;
-  const maxValue = Math.max(...data.map(d => d.value));
-
-  return (
-    <div className="chart-container">
-      <h3 className="chart-title">{title}</h3>
-      <div className="bar-chart">
-        {data.slice(0, 5).map((item, idx) => (
-          <div key={idx} className="bar-item">
-            <span className="bar-label" title={item.label}>
-              {item.label.length > 15 ? item.label.substring(0, 15) + '...' : item.label}
-            </span>
-            <div className="bar-track">
-              <div
-                className="bar-fill"
-                style={{ width: maxValue > 0 ? `${(item.value / maxValue) * 100}%` : '0%' }}
-              />
-            </div>
-            <span className="bar-value">${item.value.toFixed(2)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function getTimeRangeStart(range: TimeRange): Date | undefined {
+  const now = new Date();
+  switch (range) {
+    case '24h':
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    case '7d':
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case '30d':
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case 'all':
+      return undefined;
+  }
 }
 
 /**
@@ -128,20 +119,6 @@ function exportToCSV(metrics: CostMetrics, timeRange: TimeRange) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-}
-
-function getTimeRangeStart(range: TimeRange): Date | undefined {
-  const now = new Date();
-  switch (range) {
-    case '24h':
-      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    case '7d':
-      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    case '30d':
-      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    case 'all':
-      return undefined;
-  }
 }
 
 export default function CostAnalyticsDashboard() {
@@ -333,770 +310,355 @@ export default function CostAnalyticsDashboard() {
 
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="spinner" />
-        <p>Loading cost data from Supabase...</p>
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Real-time LLM cost tracking and budget management"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
+          <div className="flex flex-col items-center gap-4 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p>Loading cost data from Supabase...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="dashboard-error">
-        <div className="error-icon">!</div>
-        <h2>Failed to Load Cost Data</h2>
-        <p>{error}</p>
-        <button onClick={fetchMetrics}>Retry</button>
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Real-time LLM cost tracking and budget management"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
+          <Card className="mx-4 max-w-md">
+            <CardHeader>
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                <Activity className="h-6 w-6 text-destructive" />
+              </div>
+              <CardTitle>Failed to Load Cost Data</CardTitle>
+              <CardDescription>{error}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={fetchMetrics} className="w-full">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   if (!metrics) {
     return (
-      <div className="dashboard-empty">
-        <p>No cost data available yet.</p>
-        <p className="hint">Cost data will appear once LLM requests are made.</p>
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Real-time LLM cost tracking and budget management"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="mx-auto max-w-6xl px-4 py-8">
+          <Card>
+            <CardContent className="flex min-h-[400px] flex-col items-center justify-center gap-2 py-16">
+              <BarChart3 className="h-12 w-12 text-muted-foreground" />
+              <p className="text-muted-foreground">No cost data available yet.</p>
+              <p className="text-sm text-muted-foreground">Cost data will appear once LLM requests are made.</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="cost-analytics">
-      <header className="dashboard-header">
-        <div>
-          <h1>LLM Cost Dashboard</h1>
-          <p className="subtitle">Real-time cost tracking from Supabase</p>
-        </div>
-        <div className="time-range-selector">
-          <button
-            className={timeRange === '24h' ? 'active' : ''}
-            onClick={() => setTimeRange('24h')}
-          >
-            24 Hours
-          </button>
-          <button
-            className={timeRange === '7d' ? 'active' : ''}
-            onClick={() => setTimeRange('7d')}
-          >
-            7 Days
-          </button>
-          <button
-            className={timeRange === '30d' ? 'active' : ''}
-            onClick={() => setTimeRange('30d')}
-          >
-            30 Days
-          </button>
-          <button
-            className={timeRange === 'all' ? 'active' : ''}
-            onClick={() => setTimeRange('all')}
-          >
-            All Time
-          </button>
-          <button className="refresh-btn" onClick={fetchMetrics} title="Refresh data">
-            ↻
-          </button>
-          <button
-            className="export-btn"
-            onClick={() => metrics && exportToCSV(metrics, timeRange)}
-            title="Export to CSV"
-          >
-            📥 Export CSV
-          </button>
-        </div>
-      </header>
+    <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+      <AppHeader
+        subtitle="Real-time LLM cost tracking and budget management"
+        primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+      />
 
-      {/* Summary Cards */}
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-icon">📅</div>
-          <div className="metric-content">
-            <div className="metric-value">{formatCurrency(metrics.totalCostToday)}</div>
-            <div className="metric-label">Today</div>
+      <main className="mx-auto max-w-6xl space-y-6 px-4 pb-8 pt-4">
+        {/* Header with time range selector */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Cost Analytics</h1>
+            <p className="text-sm text-muted-foreground">Monitor LLM usage and spending across your organization</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+              <TabsList>
+                <TabsTrigger value="24h">24h</TabsTrigger>
+                <TabsTrigger value="7d">7d</TabsTrigger>
+                <TabsTrigger value="30d">30d</TabsTrigger>
+                <TabsTrigger value="all">All</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button variant="outline" size="icon" onClick={fetchMetrics} title="Refresh data">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={() => exportToCSV(metrics, timeRange)} title="Export CSV">
+              <Download className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-icon">📊</div>
-          <div className="metric-content">
-            <div className="metric-value">{formatCurrency(metrics.totalCostWeek)}</div>
-            <div className="metric-label">This Week</div>
-          </div>
+        {/* Metric Cards */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Today</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(metrics.totalCostToday)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">This Week</CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(metrics.totalCostWeek)}</div>
+            </CardContent>
+          </Card>
+          <Card className="border-primary/50 bg-gradient-to-br from-primary/10 via-primary/5 to-background">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">This Month</CardTitle>
+              <DollarSign className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatCurrency(metrics.totalCostMonth)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Requests</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatNumber(metrics.totalRequests)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg/Request</CardTitle>
+              <Zap className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">${metrics.avgCostPerRequest.toFixed(4)}</div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="metric-card highlight">
-          <div className="metric-icon">💰</div>
-          <div className="metric-content">
-            <div className="metric-value">{formatCurrency(metrics.totalCostMonth)}</div>
-            <div className="metric-label">This Month</div>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon">🔢</div>
-          <div className="metric-content">
-            <div className="metric-value">{formatNumber(metrics.totalRequests)}</div>
-            <div className="metric-label">Total Requests</div>
-          </div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-icon">⚡</div>
-          <div className="metric-content">
-            <div className="metric-value">${metrics.avgCostPerRequest.toFixed(4)}</div>
-            <div className="metric-label">Avg Cost/Request</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      {(metrics.byModel.length > 0 || metrics.byProvider.length > 0) && (
-        <section className="charts-section">
-          <h2>Cost Distribution</h2>
-          <div className="charts-grid">
-            <SimpleBarChart
-              title="Top Models by Cost"
-              data={metrics.byModel.map(m => ({ label: m.value || 'Unknown', value: m.totalCostUsd }))}
-            />
-            <SimpleBarChart
-              title="Top Providers by Cost"
-              data={metrics.byProvider.map(p => ({ label: p.value || 'Unknown', value: p.totalCostUsd }))}
-            />
-          </div>
-        </section>
-      )}
-
-      {/* Quota Status */}
-      {metrics.quotas.length > 0 && (
-        <section className="quota-section">
-          <h2>Budget Status</h2>
-          <div className="quota-cards">
-            {metrics.quotas.map((quota) => {
-              const usagePercent = (quota.currentSpendUsd / quota.limitUsd) * 100;
-              const remaining = quota.limitUsd - quota.currentSpendUsd;
-              return (
-                <div
-                  key={quota.id}
-                  className={`quota-card ${quota.isExceeded ? 'exceeded' : quota.warningExceeded ? 'warning' : ''}`}
-                >
-                  <div className="quota-header">
-                    <span className="quota-scope">
-                      {quota.scope === 'platform' ? 'Platform Budget' : `${quota.scope}: ${quota.scopeId}`}
-                    </span>
-                    <span className="quota-period">{quota.period}</span>
-                  </div>
-                  <div className="quota-progress">
-                    <div className="progress-bar">
+        {/* Quota Status */}
+        {metrics.quotas.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget Status</CardTitle>
+              <CardDescription>Monitor spending against configured limits</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {metrics.quotas.map((quota) => {
+                const usagePercent = (quota.currentSpendUsd / quota.limitUsd) * 100;
+                const remaining = quota.limitUsd - quota.currentSpendUsd;
+                return (
+                  <div key={quota.id} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {quota.scope === 'platform' ? 'Platform Budget' : `${quota.scope}: ${quota.scopeId}`}
+                        </span>
+                        <Badge variant="outline" className="capitalize">{quota.period}</Badge>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {formatCurrency(quota.currentSpendUsd)} / {formatCurrency(quota.limitUsd)}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                       <div
-                        className="progress-fill"
+                        className={`h-full transition-all ${
+                          quota.isExceeded
+                            ? 'bg-destructive'
+                            : quota.warningExceeded
+                            ? 'bg-yellow-500'
+                            : 'bg-primary'
+                        }`}
                         style={{ width: `${Math.min(usagePercent, 100)}%` }}
                       />
                     </div>
-                    <div className="progress-labels">
-                      <span>{formatCurrency(quota.currentSpendUsd)} used</span>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
                       <span>{formatCurrency(remaining)} remaining</span>
+                      {quota.isExceeded && (
+                        <Badge variant="destructive">Budget exceeded</Badge>
+                      )}
+                      {quota.warningExceeded && !quota.isExceeded && (
+                        <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                          {usagePercent.toFixed(0)}% used
+                        </Badge>
+                      )}
                     </div>
                   </div>
-                  <div className="quota-limit">
-                    Limit: {formatCurrency(quota.limitUsd)} / {quota.period}
-                  </div>
-                  {quota.isExceeded && (
-                    <div className="quota-alert exceeded">Budget exceeded!</div>
-                  )}
-                  {quota.warningExceeded && !quota.isExceeded && (
-                    <div className="quota-alert warning">
-                      Warning: {usagePercent.toFixed(0)}% used
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Breakdown Tables */}
-      <div className="dashboard-content">
-        {/* By Provider */}
-        <section className="breakdown-section">
-          <h2>Cost by Provider</h2>
-          {metrics.byProvider.length > 0 ? (
-            <div className="breakdown-table">
-              <div className="table-header">
-                <div>Provider</div>
-                <div>Requests</div>
-                <div>Total Cost</div>
-                <div>Avg/Request</div>
-              </div>
-              {metrics.byProvider.map((item) => (
-                <div key={item.value} className="table-row">
-                  <div className="provider-name">{item.value || 'Unknown'}</div>
-                  <div>{formatNumber(item.requestCount)}</div>
-                  <div className="cost-value">{formatCurrency(item.totalCostUsd)}</div>
-                  <div>${item.avgCostPerRequest.toFixed(4)}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="no-data">No provider data yet</p>
-          )}
-        </section>
-
-        {/* By Model */}
-        <section className="breakdown-section">
-          <h2>Cost by Model</h2>
-          {metrics.byModel.length > 0 ? (
-            <div className="breakdown-table">
-              <div className="table-header">
-                <div>Model</div>
-                <div>Requests</div>
-                <div>Total Cost</div>
-                <div>Avg/Request</div>
-              </div>
-              {metrics.byModel.map((item) => (
-                <div key={item.value} className="table-row">
-                  <div className="model-name">{item.value || 'Unknown'}</div>
-                  <div>{formatNumber(item.requestCount)}</div>
-                  <div className="cost-value">{formatCurrency(item.totalCostUsd)}</div>
-                  <div>${item.avgCostPerRequest.toFixed(4)}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="no-data">No model data yet</p>
-          )}
-        </section>
-
-        {/* By Touchpoint */}
-        <section className="breakdown-section">
-          <h2>Cost by Touchpoint</h2>
-          {metrics.byTouchpoint.length > 0 ? (
-            <div className="breakdown-table">
-              <div className="table-header">
-                <div>Touchpoint</div>
-                <div>Requests</div>
-                <div>Total Cost</div>
-                <div>Avg/Request</div>
-              </div>
-              {metrics.byTouchpoint.map((item) => (
-                <div key={item.value} className="table-row">
-                  <div className="touchpoint-name">{item.value || 'Unknown'}</div>
-                  <div>{formatNumber(item.requestCount)}</div>
-                  <div className="cost-value">{formatCurrency(item.totalCostUsd)}</div>
-                  <div>${item.avgCostPerRequest.toFixed(4)}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="no-data">No touchpoint data yet</p>
-          )}
-        </section>
-
-        {/* By Tenant */}
-        <section className="breakdown-section">
-          <h2>Cost by Tenant</h2>
-          {metrics.byTenant.length > 0 ? (
-            <div className="breakdown-table">
-              <div className="table-header">
-                <div>Tenant</div>
-                <div>Requests</div>
-                <div>Total Cost</div>
-                <div>Avg/Request</div>
-              </div>
-              {metrics.byTenant.map((item) => (
-                <div key={item.value} className="table-row">
-                  <div className="tenant-name">{item.value || 'Unknown'}</div>
-                  <div>{formatNumber(item.requestCount)}</div>
-                  <div className="cost-value">{formatCurrency(item.totalCostUsd)}</div>
-                  <div>${item.avgCostPerRequest.toFixed(4)}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="no-data">No tenant data yet</p>
-          )}
-        </section>
-      </div>
-
-      <style>{`
-        .cost-analytics {
-          padding: 2rem;
-          max-width: 1400px;
-          margin: 0 auto;
-        }
-
-        .dashboard-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 2rem;
-          flex-wrap: wrap;
-          gap: 1rem;
-        }
-
-        .dashboard-header h1 {
-          font-size: 2rem;
-          font-weight: 700;
-          color: #111827;
-          margin: 0;
-        }
-
-        .subtitle {
-          color: #6b7280;
-          margin-top: 0.25rem;
-        }
-
-        .time-range-selector {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .time-range-selector button {
-          padding: 0.5rem 1rem;
-          border: 1px solid #e5e7eb;
-          background: white;
-          border-radius: 0.375rem;
-          cursor: pointer;
-          transition: all 0.2s;
-          font-size: 0.875rem;
-        }
-
-        .time-range-selector button:hover {
-          background: #f3f4f6;
-        }
-
-        .time-range-selector button.active {
-          background: #3b82f6;
-          color: white;
-          border-color: #3b82f6;
-        }
-
-        .refresh-btn {
-          font-size: 1.25rem;
-          padding: 0.5rem 0.75rem !important;
-        }
-
-        .export-btn {
-          background: #10b981;
-          color: white;
-          border: none;
-          font-weight: 500;
-        }
-
-        .export-btn:hover {
-          background: #059669;
-        }
-
-        /* Charts Section */
-        .charts-section {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 0.75rem;
-          border: 1px solid #e5e7eb;
-          margin-bottom: 2rem;
-        }
-
-        .charts-section h2 {
-          margin: 0 0 1rem 0;
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-
-        .charts-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 1.5rem;
-        }
-
-        .chart-container {
-          padding: 1rem;
-          background: #f9fafb;
-          border-radius: 0.5rem;
-        }
-
-        .chart-title {
-          margin: 0 0 1rem 0;
-          font-size: 1rem;
-          font-weight: 500;
-          color: #374151;
-        }
-
-        .bar-chart {
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-        }
-
-        .bar-item {
-          display: grid;
-          grid-template-columns: 100px 1fr 70px;
-          gap: 0.5rem;
-          align-items: center;
-        }
-
-        .bar-label {
-          font-size: 0.75rem;
-          color: #6b7280;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .bar-track {
-          height: 20px;
-          background: #e5e7eb;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-
-        .bar-fill {
-          height: 100%;
-          background: linear-gradient(90deg, #3b82f6, #8b5cf6);
-          border-radius: 4px;
-          transition: width 0.3s ease;
-        }
-
-        .bar-value {
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: #374151;
-          text-align: right;
-        }
-
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 2rem;
-        }
-
-        .metric-card {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 0.75rem;
-          border: 1px solid #e5e7eb;
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .metric-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .metric-card.highlight {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-          color: white;
-          border: none;
-        }
-
-        .metric-icon {
-          font-size: 2rem;
-        }
-
-        .metric-content {
-          flex: 1;
-        }
-
-        .metric-value {
-          font-size: 1.75rem;
-          font-weight: 700;
-          margin-bottom: 0.25rem;
-        }
-
-        .metric-label {
-          font-size: 0.875rem;
-          opacity: 0.8;
-        }
-
-        .quota-section {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 0.75rem;
-          border: 1px solid #e5e7eb;
-          margin-bottom: 2rem;
-        }
-
-        .quota-section h2 {
-          margin: 0 0 1rem 0;
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-
-        .quota-cards {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 1rem;
-        }
-
-        .quota-card {
-          padding: 1rem;
-          border-radius: 0.5rem;
-          border: 1px solid #e5e7eb;
-          background: #f9fafb;
-        }
-
-        .quota-card.warning {
-          border-color: #fbbf24;
-          background: #fffbeb;
-        }
-
-        .quota-card.exceeded {
-          border-color: #ef4444;
-          background: #fef2f2;
-        }
-
-        .quota-header {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 0.75rem;
-        }
-
-        .quota-scope {
-          font-weight: 600;
-        }
-
-        .quota-period {
-          text-transform: capitalize;
-          color: #6b7280;
-          font-size: 0.875rem;
-        }
-
-        .quota-progress {
-          margin-bottom: 0.5rem;
-        }
-
-        .progress-bar {
-          height: 8px;
-          background: #e5e7eb;
-          border-radius: 4px;
-          overflow: hidden;
-          margin-bottom: 0.5rem;
-        }
-
-        .progress-fill {
-          height: 100%;
-          background: #10b981;
-          border-radius: 4px;
-          transition: width 0.3s;
-        }
-
-        .quota-card.warning .progress-fill {
-          background: #f59e0b;
-        }
-
-        .quota-card.exceeded .progress-fill {
-          background: #ef4444;
-        }
-
-        .progress-labels {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.75rem;
-          color: #6b7280;
-        }
-
-        .quota-limit {
-          font-size: 0.875rem;
-          color: #374151;
-        }
-
-        .quota-alert {
-          margin-top: 0.5rem;
-          padding: 0.5rem;
-          border-radius: 0.25rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-        }
-
-        .quota-alert.warning {
-          background: #fef3c7;
-          color: #92400e;
-        }
-
-        .quota-alert.exceeded {
-          background: #fee2e2;
-          color: #991b1b;
-        }
-
-        .dashboard-content {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-          gap: 1.5rem;
-        }
-
-        .breakdown-section {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 0.75rem;
-          border: 1px solid #e5e7eb;
-        }
-
-        .breakdown-section h2 {
-          margin: 0 0 1rem 0;
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #111827;
-        }
-
-        .breakdown-table {
-          font-size: 0.875rem;
-        }
-
-        .table-header {
-          display: grid;
-          grid-template-columns: 2fr 1fr 1.5fr 1fr;
-          gap: 1rem;
-          padding: 0.75rem;
-          background: #f9fafb;
-          border-radius: 0.375rem;
-          font-weight: 600;
-          color: #374151;
-          margin-bottom: 0.5rem;
-        }
-
-        .table-row {
-          display: grid;
-          grid-template-columns: 2fr 1fr 1.5fr 1fr;
-          gap: 1rem;
-          padding: 0.75rem;
-          border-radius: 0.375rem;
-          transition: background 0.2s;
-        }
-
-        .table-row:hover {
-          background: #f9fafb;
-        }
-
-        .provider-name,
-        .model-name,
-        .touchpoint-name,
-        .tenant-name {
-          font-weight: 500;
-          color: #3b82f6;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .cost-value {
-          font-weight: 600;
-          color: #059669;
-        }
-
-        .no-data {
-          color: #9ca3af;
-          font-style: italic;
-          text-align: center;
-          padding: 2rem;
-        }
-
-        .dashboard-loading {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 400px;
-          color: #6b7280;
-        }
-
-        .dashboard-error {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          min-height: 400px;
-          text-align: center;
-        }
-
-        .error-icon {
-          width: 3rem;
-          height: 3rem;
-          background: #fee2e2;
-          color: #dc2626;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.5rem;
-          font-weight: bold;
-          margin-bottom: 1rem;
-        }
-
-        .dashboard-error h2 {
-          color: #991b1b;
-          margin: 0 0 0.5rem 0;
-        }
-
-        .dashboard-error p {
-          color: #6b7280;
-          margin: 0 0 1rem 0;
-        }
-
-        .dashboard-error button {
-          padding: 0.5rem 1rem;
-          background: #3b82f6;
-          color: white;
-          border: none;
-          border-radius: 0.375rem;
-          cursor: pointer;
-        }
-
-        .dashboard-empty {
-          text-align: center;
-          padding: 4rem 2rem;
-          color: #6b7280;
-        }
-
-        .dashboard-empty .hint {
-          font-size: 0.875rem;
-          margin-top: 0.5rem;
-        }
-
-        .spinner {
-          width: 2rem;
-          height: 2rem;
-          border: 3px solid rgba(59, 130, 246, 0.3);
-          border-top-color: #3b82f6;
-          border-radius: 50%;
-          animation: spin 0.6s linear infinite;
-          margin-bottom: 1rem;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        @media (max-width: 768px) {
-          .cost-analytics {
-            padding: 1rem;
-          }
-
-          .dashboard-header {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .time-range-selector {
-            justify-content: center;
-          }
-
-          .dashboard-content {
-            grid-template-columns: 1fr;
-          }
-
-          .table-header,
-          .table-row {
-            grid-template-columns: 1.5fr 1fr 1fr 1fr;
-            gap: 0.5rem;
-            font-size: 0.75rem;
-          }
-        }
-      `}</style>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Cost Breakdown Tables */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* By Provider */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost by Provider</CardTitle>
+              <CardDescription>LLM provider usage breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics.byProvider.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Provider</TableHead>
+                      <TableHead className="text-right">Requests</TableHead>
+                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-right">Avg/Req</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metrics.byProvider.map((item) => (
+                      <TableRow key={item.value}>
+                        <TableCell className="font-medium">{item.value || 'Unknown'}</TableCell>
+                        <TableCell className="text-right">{formatNumber(item.requestCount)}</TableCell>
+                        <TableCell className="text-right font-semibold text-primary">
+                          {formatCurrency(item.totalCostUsd)}
+                        </TableCell>
+                        <TableCell className="text-right">${item.avgCostPerRequest.toFixed(4)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No provider data yet</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* By Model */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost by Model</CardTitle>
+              <CardDescription>Model-level cost analysis</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics.byModel.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Model</TableHead>
+                      <TableHead className="text-right">Requests</TableHead>
+                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-right">Avg/Req</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metrics.byModel.map((item) => (
+                      <TableRow key={item.value}>
+                        <TableCell className="font-medium">{item.value || 'Unknown'}</TableCell>
+                        <TableCell className="text-right">{formatNumber(item.requestCount)}</TableCell>
+                        <TableCell className="text-right font-semibold text-primary">
+                          {formatCurrency(item.totalCostUsd)}
+                        </TableCell>
+                        <TableCell className="text-right">${item.avgCostPerRequest.toFixed(4)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No model data yet</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* By Touchpoint */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost by Touchpoint</CardTitle>
+              <CardDescription>Usage by task or feature</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics.byTouchpoint.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Touchpoint</TableHead>
+                      <TableHead className="text-right">Requests</TableHead>
+                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-right">Avg/Req</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metrics.byTouchpoint.map((item) => (
+                      <TableRow key={item.value}>
+                        <TableCell className="font-medium">{item.value || 'Unknown'}</TableCell>
+                        <TableCell className="text-right">{formatNumber(item.requestCount)}</TableCell>
+                        <TableCell className="text-right font-semibold text-primary">
+                          {formatCurrency(item.totalCostUsd)}
+                        </TableCell>
+                        <TableCell className="text-right">${item.avgCostPerRequest.toFixed(4)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No touchpoint data yet</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* By Tenant */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cost by Tenant</CardTitle>
+              <CardDescription>Multi-tenant usage breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metrics.byTenant.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Tenant</TableHead>
+                      <TableHead className="text-right">Requests</TableHead>
+                      <TableHead className="text-right">Total Cost</TableHead>
+                      <TableHead className="text-right">Avg/Req</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {metrics.byTenant.map((item) => (
+                      <TableRow key={item.value}>
+                        <TableCell className="font-medium">{item.value || 'Unknown'}</TableCell>
+                        <TableCell className="text-right">{formatNumber(item.requestCount)}</TableCell>
+                        <TableCell className="text-right font-semibold text-primary">
+                          {formatCurrency(item.totalCostUsd)}
+                        </TableCell>
+                        <TableCell className="text-right">${item.avgCostPerRequest.toFixed(4)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No tenant data yet</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }

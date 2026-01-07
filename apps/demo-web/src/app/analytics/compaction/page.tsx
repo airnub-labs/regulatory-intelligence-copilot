@@ -15,6 +15,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { AppHeader } from '@/components/layout/app-header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, RefreshCw, Database, Zap, Gauge, CheckCircle2, BarChart3, Clock } from 'lucide-react';
 
 interface CompactionMetrics {
   totalOperations: number;
@@ -99,32 +106,68 @@ export default function CompactionAnalytics() {
 
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="spinner" />
-        <p>Loading compaction analytics...</p>
-        <style>{dashboardStyles}</style>
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Conversation compression performance metrics and analytics"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
+          <div className="flex flex-col items-center gap-4 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p>Loading compaction analytics...</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="dashboard-error">
-        <div className="error-icon">!</div>
-        <h2>Failed to Load Metrics</h2>
-        <p>{error}</p>
-        <button onClick={fetchMetrics}>Retry</button>
-        <style>{dashboardStyles}</style>
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Conversation compression performance metrics and analytics"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
+          <Card className="mx-4 max-w-md">
+            <CardHeader>
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+                <Database className="h-6 w-6 text-destructive" />
+              </div>
+              <CardTitle>Failed to Load Metrics</CardTitle>
+              <CardDescription>{error}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={fetchMetrics} className="w-full">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
 
   if (!metrics) {
     return (
-      <div className="dashboard-empty">
-        <p>No compaction data available yet.</p>
-        <p className="hint">Compaction metrics will appear once operations are performed.</p>
-        <style>{dashboardStyles}</style>
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Conversation compression performance metrics and analytics"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="mx-auto max-w-6xl px-4 py-8">
+          <Card>
+            <CardContent className="flex min-h-[400px] flex-col items-center justify-center gap-2 py-16">
+              <BarChart3 className="h-12 w-12 text-muted-foreground" />
+              <p className="text-muted-foreground">No compaction data available yet.</p>
+              <p className="text-sm text-muted-foreground">Compaction metrics will appear once operations are performed.</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -133,534 +176,228 @@ export default function CompactionAnalytics() {
   const hasData = metrics.totalOperations > 0;
 
   return (
-    <div className="compaction-analytics">
-      <header className="dashboard-header">
-        <div>
-          <h1>Compaction Analytics</h1>
-          <p className="subtitle">Conversation compression performance metrics</p>
-        </div>
-        <div className="time-range-selector">
-          {(['24h', '7d', '30d', 'all'] as TimeRange[]).map((range) => (
-            <button
-              key={range}
-              className={timeRange === range ? 'active' : ''}
-              onClick={() => setTimeRange(range)}
-            >
-              {range === '24h' ? '24 Hours' : range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : 'All Time'}
-            </button>
-          ))}
-          <button className="refresh-btn" onClick={fetchMetrics} title="Refresh data">
-            &#x21bb;
-          </button>
-        </div>
-      </header>
+    <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+      <AppHeader
+        subtitle="Conversation compression performance metrics and analytics"
+        primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+      />
 
-      {!hasData ? (
-        <div className="no-data-message">
-          <div className="no-data-icon">&#x1F4CA;</div>
-          <h2>No Compaction Operations Yet</h2>
-          <p>Compaction metrics will appear here once conversations are compacted.</p>
-          <p className="hint">
-            Compaction occurs automatically during long conversations or can be triggered manually.
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <div className="metric-icon">&#x1F4CA;</div>
-              <div className="metric-content">
-                <div className="metric-value">{formatNumber(metrics.totalOperations)}</div>
-                <div className="metric-label">Total Operations</div>
-              </div>
-            </div>
-
-            <div className="metric-card highlight">
-              <div className="metric-icon">&#x1F4BE;</div>
-              <div className="metric-content">
-                <div className="metric-value">{formatNumber(metrics.totalTokensSaved)}</div>
-                <div className="metric-label">Tokens Saved</div>
-              </div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-icon">&#x1F5DC;</div>
-              <div className="metric-content">
-                <div className="metric-value">{avgCompressionPercent}%</div>
-                <div className="metric-label">Avg Compression</div>
-              </div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-icon">&#x26A1;</div>
-              <div className="metric-content">
-                <div className="metric-value">{metrics.averageDurationMs}ms</div>
-                <div className="metric-label">Avg Duration</div>
-              </div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-icon">&#x1F4AC;</div>
-              <div className="metric-content">
-                <div className="metric-value">{formatNumber(metrics.totalMessagesRemoved)}</div>
-                <div className="metric-label">Messages Removed</div>
-              </div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-icon">&#x2705;</div>
-              <div className="metric-content">
-                <div className="metric-value">{metrics.successRate.toFixed(1)}%</div>
-                <div className="metric-label">Success Rate</div>
-              </div>
-            </div>
+      <main className="mx-auto max-w-6xl space-y-6 px-4 pb-8 pt-4">
+        {/* Header with time range selector */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Compaction Analytics</h1>
+            <p className="text-sm text-muted-foreground">Monitor conversation compression and token optimization</p>
           </div>
-
-          <div className="dashboard-content">
-            <section className="strategy-breakdown">
-              <h2>Strategy Performance</h2>
-              {metrics.strategyBreakdown.length > 0 ? (
-                <div className="strategy-table">
-                  <div className="table-header">
-                    <div>Strategy</div>
-                    <div>Operations</div>
-                    <div>Tokens Saved</div>
-                    <div>Avg Compression</div>
-                  </div>
-                  {metrics.strategyBreakdown.map((strategy) => (
-                    <div key={strategy.strategy} className="table-row">
-                      <div className="strategy-name">{strategy.strategy.replace(/_/g, ' ')}</div>
-                      <div>{strategy.operations.toLocaleString()}</div>
-                      <div>{formatNumber(strategy.tokensSaved)}</div>
-                      <div>{((1 - strategy.avgCompressionRatio) * 100).toFixed(1)}%</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="no-data">No strategy data available</p>
-              )}
-            </section>
-
-            <section className="recent-operations">
-              <h2>Recent Operations</h2>
-              {metrics.recentOperations.length > 0 ? (
-                <div className="operations-table">
-                  <div className="table-header">
-                    <div>Time</div>
-                    <div>Conversation</div>
-                    <div>Strategy</div>
-                    <div>Saved</div>
-                    <div>Status</div>
-                  </div>
-                  {metrics.recentOperations.map((op) => (
-                    <div key={op.id} className="table-row">
-                      <div className="time-cell">{formatTimestamp(op.timestamp)}</div>
-                      <div className="conversation-cell" title={op.conversationId || undefined}>
-                        {formatConversationId(op.conversationId)}
-                      </div>
-                      <div className="strategy-cell">{op.strategy.replace(/_/g, ' ')}</div>
-                      <div className="tokens-cell">{formatNumber(op.tokensSaved)}</div>
-                      <div className={`status-cell ${op.success ? 'success' : 'failed'}`}>
-                        {op.success ? '&#x2713;' : '&#x2717;'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="no-data">No recent operations</p>
-              )}
-            </section>
+          <div className="flex items-center gap-2">
+            <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+              <TabsList>
+                <TabsTrigger value="24h">24h</TabsTrigger>
+                <TabsTrigger value="7d">7d</TabsTrigger>
+                <TabsTrigger value="30d">30d</TabsTrigger>
+                <TabsTrigger value="all">All</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button variant="outline" size="icon" onClick={fetchMetrics} title="Refresh data">
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
+        </div>
 
-          {metrics.operationsUsingLlm > 0 && (
-            <section className="llm-usage">
-              <h2>LLM Usage</h2>
-              <div className="llm-stats">
-                <div className="llm-stat">
-                  <span className="stat-label">Operations using LLM:</span>
-                  <span className="stat-value">{metrics.operationsUsingLlm.toLocaleString()}</span>
-                </div>
-                <div className="llm-stat">
-                  <span className="stat-label">Total LLM cost:</span>
-                  <span className="stat-value">${metrics.totalCostUsd.toFixed(4)}</span>
-                </div>
+        {!hasData ? (
+          <Card className="border-dashed">
+            <CardContent className="flex min-h-[400px] flex-col items-center justify-center gap-4 py-16">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-muted">
+                <BarChart3 className="h-10 w-10 text-muted-foreground" />
               </div>
-            </section>
-          )}
-        </>
-      )}
+              <div className="text-center">
+                <h2 className="text-xl font-semibold">No Compaction Operations Yet</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Compaction metrics will appear here once conversations are compacted.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Compaction occurs automatically during long conversations or can be triggered manually.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Metric Cards */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Operations</CardTitle>
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatNumber(metrics.totalOperations)}</div>
+                </CardContent>
+              </Card>
 
-      <style>{dashboardStyles}</style>
+              <Card className="border-primary/50 bg-gradient-to-br from-primary/10 via-primary/5 to-background">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Tokens Saved</CardTitle>
+                  <Database className="h-4 w-4 text-primary" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatNumber(metrics.totalTokensSaved)}</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Compression</CardTitle>
+                  <Gauge className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{avgCompressionPercent}%</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Avg Duration</CardTitle>
+                  <Zap className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metrics.averageDurationMs}ms</div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Messages</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatNumber(metrics.totalMessagesRemoved)}</div>
+                  <p className="text-xs text-muted-foreground">Removed</p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+                  <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{metrics.successRate.toFixed(1)}%</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Strategy Performance Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Strategy Performance</CardTitle>
+                <CardDescription>Compaction strategy effectiveness breakdown</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {metrics.strategyBreakdown.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Strategy</TableHead>
+                        <TableHead className="text-right">Operations</TableHead>
+                        <TableHead className="text-right">Tokens Saved</TableHead>
+                        <TableHead className="text-right">Avg Compression</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metrics.strategyBreakdown.map((strategy) => (
+                        <TableRow key={strategy.strategy}>
+                          <TableCell className="font-medium capitalize">
+                            {strategy.strategy.replace(/_/g, ' ')}
+                          </TableCell>
+                          <TableCell className="text-right">{strategy.operations.toLocaleString()}</TableCell>
+                          <TableCell className="text-right font-semibold text-primary">
+                            {formatNumber(strategy.tokensSaved)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {((1 - strategy.avgCompressionRatio) * 100).toFixed(1)}%
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="py-8 text-center text-sm text-muted-foreground">No strategy data available</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Operations Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Operations</CardTitle>
+                <CardDescription>Latest compaction operations and their results</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {metrics.recentOperations.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Conversation</TableHead>
+                        <TableHead>Strategy</TableHead>
+                        <TableHead className="text-right">Tokens Saved</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {metrics.recentOperations.map((op) => (
+                        <TableRow key={op.id}>
+                          <TableCell className="text-muted-foreground">{formatTimestamp(op.timestamp)}</TableCell>
+                          <TableCell className="font-mono text-xs" title={op.conversationId || undefined}>
+                            {formatConversationId(op.conversationId)}
+                          </TableCell>
+                          <TableCell className="capitalize">{op.strategy.replace(/_/g, ' ')}</TableCell>
+                          <TableCell className="text-right font-medium">{formatNumber(op.tokensSaved)}</TableCell>
+                          <TableCell className="text-center">
+                            {op.success ? (
+                              <Badge variant="outline" className="border-green-500 text-green-600">
+                                Success
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive">Failed</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="py-8 text-center text-sm text-muted-foreground">No recent operations</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* LLM Usage Card */}
+            {metrics.operationsUsingLlm > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>LLM Usage</CardTitle>
+                  <CardDescription>Operations using LLM for intelligent compaction</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <span className="text-sm text-muted-foreground">Operations using LLM</span>
+                      <span className="text-2xl font-bold">{metrics.operationsUsingLlm.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <span className="text-sm text-muted-foreground">Total LLM cost</span>
+                      <span className="text-2xl font-bold">${metrics.totalCostUsd.toFixed(4)}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+      </main>
     </div>
   );
 }
-
-const dashboardStyles = `
-  .compaction-analytics {
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-
-  .dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-
-  .dashboard-header h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    color: #111827;
-    margin: 0;
-  }
-
-  .subtitle {
-    color: #6b7280;
-    margin-top: 0.25rem;
-  }
-
-  .time-range-selector {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-  }
-
-  .time-range-selector button {
-    padding: 0.5rem 1rem;
-    border: 1px solid #e5e7eb;
-    background: white;
-    border-radius: 0.375rem;
-    cursor: pointer;
-    transition: all 0.2s;
-    font-size: 0.875rem;
-  }
-
-  .time-range-selector button:hover {
-    background: #f3f4f6;
-  }
-
-  .time-range-selector button.active {
-    background: #3b82f6;
-    color: white;
-    border-color: #3b82f6;
-  }
-
-  .refresh-btn {
-    font-size: 1.25rem;
-    padding: 0.5rem 0.75rem !important;
-  }
-
-  .no-data-message {
-    text-align: center;
-    padding: 4rem 2rem;
-    background: white;
-    border-radius: 0.75rem;
-    border: 1px solid #e5e7eb;
-  }
-
-  .no-data-icon {
-    font-size: 4rem;
-    margin-bottom: 1rem;
-  }
-
-  .no-data-message h2 {
-    color: #374151;
-    margin: 0 0 0.5rem 0;
-  }
-
-  .no-data-message p {
-    color: #6b7280;
-    margin: 0;
-  }
-
-  .no-data-message .hint {
-    font-size: 0.875rem;
-    margin-top: 0.5rem;
-  }
-
-  .metrics-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-  }
-
-  .metric-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    border: 1px solid #e5e7eb;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-
-  .metric-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  }
-
-  .metric-card.highlight {
-    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-    color: white;
-    border: none;
-  }
-
-  .metric-icon {
-    font-size: 2rem;
-  }
-
-  .metric-content {
-    flex: 1;
-  }
-
-  .metric-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-  }
-
-  .metric-label {
-    font-size: 0.875rem;
-    opacity: 0.8;
-  }
-
-  .dashboard-content {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 2rem;
-  }
-
-  @media (min-width: 1024px) {
-    .dashboard-content {
-      grid-template-columns: 1fr 1fr;
-    }
-  }
-
-  section {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    border: 1px solid #e5e7eb;
-  }
-
-  section h2 {
-    margin: 0 0 1rem 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #111827;
-  }
-
-  .strategy-table,
-  .operations-table {
-    font-size: 0.875rem;
-  }
-
-  .table-header {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1.5fr 1fr;
-    gap: 1rem;
-    padding: 0.75rem;
-    background: #f9fafb;
-    border-radius: 0.375rem;
-    font-weight: 600;
-    color: #374151;
-    margin-bottom: 0.5rem;
-  }
-
-  .operations-table .table-header {
-    grid-template-columns: 1fr 1.5fr 1.5fr 1fr 0.5fr;
-  }
-
-  .table-row {
-    display: grid;
-    grid-template-columns: 2fr 1fr 1.5fr 1fr;
-    gap: 1rem;
-    padding: 0.75rem;
-    border-radius: 0.375rem;
-    transition: background 0.2s;
-  }
-
-  .operations-table .table-row {
-    grid-template-columns: 1fr 1.5fr 1.5fr 1fr 0.5fr;
-  }
-
-  .table-row:hover {
-    background: #f9fafb;
-  }
-
-  .strategy-name {
-    text-transform: capitalize;
-    font-weight: 500;
-    color: #3b82f6;
-  }
-
-  .time-cell {
-    color: #6b7280;
-  }
-
-  .conversation-cell {
-    font-family: monospace;
-    font-size: 0.75rem;
-    color: #6b7280;
-  }
-
-  .strategy-cell {
-    text-transform: capitalize;
-  }
-
-  .tokens-cell {
-    font-weight: 500;
-  }
-
-  .status-cell {
-    text-align: center;
-  }
-
-  .status-cell.success {
-    color: #10b981;
-  }
-
-  .status-cell.failed {
-    color: #ef4444;
-  }
-
-  .no-data {
-    color: #9ca3af;
-    font-style: italic;
-    text-align: center;
-    padding: 2rem;
-  }
-
-  .llm-usage {
-    margin-top: 2rem;
-  }
-
-  .llm-stats {
-    display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
-  }
-
-  .llm-stat {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .stat-label {
-    color: #6b7280;
-  }
-
-  .stat-value {
-    font-weight: 600;
-    color: #374151;
-  }
-
-  .dashboard-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 400px;
-    color: #6b7280;
-  }
-
-  .dashboard-error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 400px;
-    text-align: center;
-  }
-
-  .error-icon {
-    width: 3rem;
-    height: 3rem;
-    background: #fee2e2;
-    color: #dc2626;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    font-weight: bold;
-    margin-bottom: 1rem;
-  }
-
-  .dashboard-error h2 {
-    color: #991b1b;
-    margin: 0 0 0.5rem 0;
-  }
-
-  .dashboard-error p {
-    color: #6b7280;
-    margin: 0 0 1rem 0;
-  }
-
-  .dashboard-error button {
-    padding: 0.5rem 1rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 0.375rem;
-    cursor: pointer;
-  }
-
-  .dashboard-empty {
-    text-align: center;
-    padding: 4rem 2rem;
-    color: #6b7280;
-  }
-
-  .dashboard-empty .hint {
-    font-size: 0.875rem;
-    margin-top: 0.5rem;
-  }
-
-  .spinner {
-    width: 2rem;
-    height: 2rem;
-    border: 3px solid rgba(59, 130, 246, 0.3);
-    border-top-color: #3b82f6;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    margin-bottom: 1rem;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @media (max-width: 768px) {
-    .compaction-analytics {
-      padding: 1rem;
-    }
-
-    .dashboard-header {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    .time-range-selector {
-      justify-content: center;
-    }
-
-    .dashboard-content {
-      grid-template-columns: 1fr;
-    }
-
-    .table-header,
-    .table-row {
-      font-size: 0.75rem;
-      gap: 0.5rem;
-    }
-  }
-`;
