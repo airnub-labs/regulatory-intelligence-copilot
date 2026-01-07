@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     // Get and verify tenant context
     const session = await getServerSession(authOptions);
-    const { userId, tenantId, role } = await getTenantContext(session);
+    const { userId, tenantId } = await getTenantContext(session);
 
     const headers = new Headers(request.headers);
     headers.set('x-user-id', userId);

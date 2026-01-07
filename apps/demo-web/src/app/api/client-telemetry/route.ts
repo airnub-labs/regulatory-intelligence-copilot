@@ -215,7 +215,7 @@ export async function POST(request: Request) {
   try {
     // CRITICAL: Add authentication check - telemetry endpoint should be protected
     const session = await getServerSession(authOptions) as ExtendedSession | null;
-    const { userId, tenantId } = await getTenantContext(session);
+    await getTenantContext(session);
 
     // Check rate limit using distributed rate limiter (Redis/Upstash)
     // ✅ No null check - rateLimiter ALWAYS exists (transparent failover)

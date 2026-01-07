@@ -24,7 +24,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   try {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
-    const { userId, tenantId, role } = await getTenantContext(session);
+    const { userId, tenantId } = await getTenantContext(session);
 
     return requestContext.run({ tenantId, userId, conversationId }, () =>
     withSpan(

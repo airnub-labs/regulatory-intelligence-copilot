@@ -23,7 +23,7 @@ export async function POST(
 
   try {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
-    const { userId, tenantId, role } = await getTenantContext(session);
+    const { userId, tenantId } = await getTenantContext(session);
 
     return requestContext.run(
     { tenantId, userId },
@@ -106,7 +106,7 @@ export async function DELETE(
 
   try {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
-    const { userId, tenantId, role } = await getTenantContext(session);
+    const { userId, tenantId } = await getTenantContext(session);
 
     return requestContext.run(
     { tenantId, userId },

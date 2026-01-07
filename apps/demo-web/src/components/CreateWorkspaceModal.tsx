@@ -15,7 +15,7 @@ interface CreateWorkspaceModalProps {
 }
 
 export function CreateWorkspaceModal({ isOpen, onClose }: CreateWorkspaceModalProps) {
-  const { data: session, update } = useSession()
+  const { update } = useSession()
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [type, setType] = useState<'team' | 'enterprise'>('team')

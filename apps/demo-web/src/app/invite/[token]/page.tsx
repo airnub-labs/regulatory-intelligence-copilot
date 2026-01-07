@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { Loader2, Mail, CheckCircle, XCircle } from 'lucide-react'
@@ -9,7 +9,7 @@ import { Card } from '@/components/ui/card'
 
 export default function AcceptInvitePage({ params }: { params: { token: string } }) {
   const router = useRouter()
-  const { data: session, status } = useSession()
+  const { status } = useSession()
   const [accepting, setAccepting] = useState(false)
   const [result, setResult] = useState<{
     success: boolean
@@ -17,14 +17,7 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
     workspaceId?: string
   } | null>(null)
 
-  useEffect(() => {
-    // Auto-accept if user is already logged in
-    if (status === 'authenticated' && !accepting && !result) {
-      handleAccept()
-    }
-  }, [status])
-
-  const handleAccept = async () => {
+  const handleAccept = useCallback(async () => {
     setAccepting(true)
     try {
       const response = await fetch(`/api/invitations/${params.token}/accept`, {
@@ -54,7 +47,7 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
           message: data.error || 'Failed to accept invitation',
         })
       }
-    } catch (error) {
+    } catch {
       setResult({
         success: false,
         message: 'An error occurred while accepting the invitation',
@@ -62,7 +55,14 @@ export default function AcceptInvitePage({ params }: { params: { token: string }
     } finally {
       setAccepting(false)
     }
-  }
+  }, [params.token, router])
+
+  useEffect(() => {
+    // Auto-accept if user is already logged in
+    if (status === 'authenticated' && !accepting && !result) {
+      handleAccept()
+    }
+  }, [status, accepting, result, handleAccept])
 
   if (status === 'loading' || accepting) {
     return (

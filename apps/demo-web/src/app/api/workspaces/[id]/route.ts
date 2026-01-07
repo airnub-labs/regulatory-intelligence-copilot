@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
-import { getTenantContext } from '@/lib/auth/tenantContext';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 
@@ -115,7 +114,7 @@ export async function DELETE(
 
       if (!tenantsError && tenants && tenants.length > 0) {
         // Find first non-deleted workspace
-        const alternativeTenant = tenants.find((t: any) => t.deleted_at === null);
+        const alternativeTenant = tenants.find((t: { deleted_at: string | null }) => t.deleted_at === null);
 
         if (alternativeTenant) {
           logger.info({

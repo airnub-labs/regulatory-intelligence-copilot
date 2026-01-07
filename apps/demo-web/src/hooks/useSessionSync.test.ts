@@ -48,7 +48,7 @@ describe('useSessionSync', () => {
     });
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     // Fast-forward time
     vi.advanceTimersByTime(30000);
@@ -63,7 +63,7 @@ describe('useSessionSync', () => {
     });
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     await waitFor(() => {
       expect(mockSupabaseRpc).toHaveBeenCalledWith('get_current_tenant_id', {
@@ -90,7 +90,7 @@ describe('useSessionSync', () => {
     mockSessionUpdate.mockResolvedValue(undefined);
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     await waitFor(() => {
       expect(mockSupabaseRpc).toHaveBeenCalledWith('get_current_tenant_id', {
@@ -128,7 +128,7 @@ describe('useSessionSync', () => {
     mockSessionUpdate.mockResolvedValue(undefined);
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     await waitFor(() => {
       expect(mockSessionUpdate).toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe('useSessionSync', () => {
     mockSessionUpdate.mockRejectedValue(new Error('Update failed'));
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     await waitFor(() => {
       expect(mockReload).toHaveBeenCalled();
@@ -165,7 +165,7 @@ describe('useSessionSync', () => {
     });
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     await waitFor(() => {
       expect(mockSupabaseRpc).toHaveBeenCalledTimes(1);
@@ -197,7 +197,7 @@ describe('useSessionSync', () => {
     );
 
     const { useSessionSync } = await import('./useSessionSync');
-    const { result } = renderHook(() => useSessionSync());
+    renderHook(() => useSessionSync());
 
     await waitFor(() => {
       expect(mockSessionUpdate).toHaveBeenCalledTimes(1);

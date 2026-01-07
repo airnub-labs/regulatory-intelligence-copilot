@@ -43,7 +43,7 @@ import type { ExtendedSession } from '@/types/auth';
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
-    const { userId, tenantId, role } = await getTenantContext(session);
+    await getTenantContext(session);
 
     const costService = getCostTrackingServiceIfInitialized();
 

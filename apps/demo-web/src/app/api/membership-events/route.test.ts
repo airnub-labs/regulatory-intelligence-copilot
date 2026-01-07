@@ -9,9 +9,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const mockSupabaseRpc = vi.fn();
 const mockSupabaseFrom = vi.fn();
-const mockSupabaseInsert = vi.fn();
-const mockSupabaseUpdate = vi.fn();
-const mockSupabaseDelete = vi.fn();
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({
@@ -29,13 +26,6 @@ describe('Membership Change Events Database Functions', () => {
     it('should create event when membership added (INSERT)', async () => {
       // This test would verify the trigger fires on INSERT
       // In a real integration test with actual database:
-
-      const newMembership = {
-        tenant_id: 'workspace-123',
-        user_id: 'user-456',
-        role: 'member',
-        status: 'active',
-      };
 
       // Mock the insert
       const selectMock = {

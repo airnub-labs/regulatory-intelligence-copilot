@@ -27,7 +27,7 @@ export interface SlowQueryLog {
   table_name?: string
   function_name?: string
   execution_time_ms: number
-  query_params?: Record<string, any>
+  query_params?: Record<string, string | number | boolean | null>
 }
 
 export interface QueryPerformanceStats {
@@ -262,7 +262,7 @@ export async function getRLSIndexUsage(): Promise<
  * )
  * console.log(JSON.stringify(plan, null, 2))
  */
-export async function analyzeQueryPlan(query: string): Promise<any> {
+export async function analyzeQueryPlan(query: string): Promise<unknown[]> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('analyzeQueryPlan should only be used in development')
   }
