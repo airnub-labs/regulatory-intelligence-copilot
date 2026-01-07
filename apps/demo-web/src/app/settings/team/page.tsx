@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { Loader2, Users, Mail, Shield, Calendar, ArrowLeft } from 'lucide-react'
+import { Loader2, Users, Mail, Shield, Calendar } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { AppHeader } from '@/components/layout/app-header'
 
 interface TeamMember {
   user_id: string
@@ -116,29 +116,34 @@ export default function TeamSettingsPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+        <AppHeader
+          subtitle="Manage team members, roles, and workspace permissions"
+          primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+        />
+        <div className="flex min-h-[calc(100vh-5rem)] items-center justify-center">
+          <div className="flex flex-col items-center gap-4 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <p>Loading team settings...</p>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push('/')}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Chat
-          </Button>
-        </div>
+    <div className="relative min-h-screen bg-gradient-to-b from-background via-muted/40 to-background">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.18),transparent_32%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_35%)] blur-3xl" />
+      <AppHeader
+        subtitle="Manage team members, roles, and workspace permissions"
+        primaryAction={{ label: 'Back to chat', href: '/', variant: 'outline' }}
+      />
 
+      <main className="mx-auto max-w-4xl space-y-6 px-4 pb-8 pt-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Team Settings</h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Manage members and permissions for {currentTenant?.tenant_name}
           </p>
         </div>
@@ -219,7 +224,7 @@ export default function TeamSettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </main>
     </div>
   )
 }
