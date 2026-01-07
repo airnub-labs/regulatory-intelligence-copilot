@@ -128,7 +128,7 @@ export async function POST(
               conversationId,
               pathId,
             });
-            const pinnedMessageIds = new Set<string>(pinnedMessages.map((m: any) => m.id as string));
+            const pinnedMessageIds = new Set(pinnedMessages.map(m => m.id));
 
             logger.info({
               tenantId,

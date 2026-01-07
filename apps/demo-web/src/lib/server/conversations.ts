@@ -167,81 +167,70 @@ const configRedisClient = ENABLE_CONVERSATION_CONFIG_CACHE ? sharedKeyValueClien
 const conversationRedisClient = ENABLE_CONVERSATION_CACHING ? sharedKeyValueClient : null;
 
 if (!supabaseClient || !supabaseInternalClient) {
-  if (isProductionBuildPhase) {
-    logger.info({ mode: normalizeConversationStoreMode }, 'Using in-memory conversation store');
-  } else {
-    throw new Error('Supabase credentials are required for conversation storage in multi-instance deployments');
-  }
+  throw new Error('Supabase credentials are required for conversation storage in multi-instance deployments');
 }
 
 // Create conversation store with optional caching
-// Note: During build phase, this will be undefined but routes won't be called
-export const conversationStore = (supabaseClient && supabaseInternalClient
-  ? createConversationStore({
-      supabase: supabaseClient,
-      supabaseInternal: supabaseInternalClient,
-      redis: conversationRedisClient ?? undefined,
-      enableCaching: ENABLE_CONVERSATION_CACHING,
-      cacheTtlSeconds: 60, // 1 minute for active conversations,
-    })
-  : undefined) as ConversationStore;
+export const conversationStore: ConversationStore = createConversationStore({
+  supabase: supabaseClient,
+  supabaseInternal: supabaseInternalClient,
+  redis: conversationRedisClient ?? undefined,
+  enableCaching: ENABLE_CONVERSATION_CACHING,
+  cacheTtlSeconds: 60, // 1 minute for active conversations
+});
 
 // Log which conversation store implementation is being used
-if (conversationStore) {
-  if (conversationRedisClient) {
-    logger.info(
-      {
-        hasRedis: true,
-        cacheTtl: 60,
-        conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingConversationStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_CONVERSATION_CACHING
-      ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
-      : 'Redis credentials not configured';
-    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
-  }
+if (conversationRedisClient) {
+  logger.info(
+    {
+      hasRedis: true,
+      cacheTtl: 60,
+      conversationCachingEnabled: ENABLE_CONVERSATION_CACHING,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingConversationStore (Supabase + Redis)'
+  );
+} else {
+  const reason = !ENABLE_CONVERSATION_CACHING
+    ? 'conversation caching not enabled (set ENABLE_CONVERSATION_CACHING=true)'
+    : 'Redis credentials not configured';
+  logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationStore (no caching)');
 }
 
-export const conversationContextStore = (supabaseClient && supabaseInternalClient
-  ? new SupabaseConversationContextStore(supabaseClient, supabaseInternalClient)
-  : undefined) as any;
+export const conversationContextStore = new SupabaseConversationContextStore(
+  supabaseClient,
+  supabaseInternalClient
+);
 
-export const conversationPathStore = (supabaseClient && supabaseInternalClient
-  ? new SupabaseConversationPathStore(supabaseClient, supabaseInternalClient)
-  : undefined) as any;
+export const conversationPathStore = new SupabaseConversationPathStore(
+  supabaseClient,
+  supabaseInternalClient
+);
 
 // Create conversation config store with caching
-export const conversationConfigStore = (supabaseInternalClient
-  ? createConversationConfigStore({
-      supabase: supabaseInternalClient,
-      redis: configRedisClient ?? undefined,
-      cacheTtlSeconds: 300, // 5 minutes
-      logger,
-    })
-  : undefined) as ConversationConfigStore;
+export const conversationConfigStore: ConversationConfigStore = createConversationConfigStore({
+  supabase: supabaseInternalClient,
+  redis: configRedisClient ?? undefined,
+  cacheTtlSeconds: 300, // 5 minutes
+  logger,
+});
 
 // Log which config store implementation is being used
-if (conversationConfigStore) {
-  if (configRedisClient) {
-    logger.info(
-      {
-        hasRedis: true,
-        cacheTtl: 300,
-        conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
-        backend: describeRedisBackendSelection(cacheBackend)
-      },
-      'Using CachingConversationConfigStore (Supabase + Redis)'
-    );
-  } else {
-    const reason = !ENABLE_CONVERSATION_CONFIG_CACHE
-      ? 'conversation config cache disabled via ENABLE_CONVERSATION_CONFIG_CACHE=false'
-      : 'Redis credentials not configured';
-    logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
-  }
+if (configRedisClient) {
+  logger.info(
+    {
+      hasRedis: true,
+      cacheTtl: 300,
+      conversationConfigCacheEnabled: ENABLE_CONVERSATION_CONFIG_CACHE,
+      backend: describeRedisBackendSelection(cacheBackend)
+    },
+    'Using CachingConversationConfigStore (Supabase + Redis)'
+  );
+} else {
+  const reason = !ENABLE_CONVERSATION_CONFIG_CACHE
+    ? 'conversation config cache disabled via ENABLE_CONVERSATION_CONFIG_CACHE=false'
+    : 'Redis credentials not configured';
+  logger.info({ hasRedis: false, reason }, 'Using SupabaseConversationConfigStore (no caching)');
 }
 
 // Configure event hubs with Redis support for distributed SSE
@@ -384,58 +373,22 @@ let executionContextManager: ExecutionContextManager | undefined;
 if (e2bApiKey) {
   if (!supabaseClient) {
     const message = 'Supabase client required for execution context manager when E2B is enabled';
-    if (isProductionBuildPhase) {
-      logger.warn(message);
-    } else {
-      logger.error(message);
-      throw new Error(message);
-    }
-  } else {
-    executionContextManager = createExecutionContextManager({
-      supabaseClient,
-      e2bApiKey,
-      defaultTtlMinutes: 30,
-      sandboxTimeoutMs: 600000, // 10 minutes
-      enableLogging: true,
-      quotaCheckCallback: checkE2BQuotaBeforeOperation, // Phase 3: Pre-request E2B quota gate
-    });
-
-    logger.info('ExecutionContextManager initialized with E2B integration and quota enforcement');
+    logger.error(message);
+    throw new Error(message);
   }
+
+  executionContextManager = createExecutionContextManager({
+    supabaseClient,
+    e2bApiKey,
+    defaultTtlMinutes: 30,
+    sandboxTimeoutMs: 600000, // 10 minutes
+    enableLogging: true,
+    quotaCheckCallback: checkE2BQuotaBeforeOperation, // Phase 3: Pre-request E2B quota gate
+  });
+
+  logger.info('ExecutionContextManager initialized with E2B integration and quota enforcement');
 } else {
   logger.info('E2B_API_KEY not configured; code execution tools disabled');
 }
 
 export { executionContextManager };
-
-/**
- * Helper functions to get stores with runtime validation
- * These throw helpful errors if stores aren't initialized
- */
-export function getConversationStore(): ConversationStore {
-  if (!conversationStore) {
-    throw new Error('Conversation store not initialized. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.');
-  }
-  return conversationStore;
-}
-
-export function getConversationContextStore() {
-  if (!conversationContextStore) {
-    throw new Error('Conversation context store not initialized. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.');
-  }
-  return conversationContextStore;
-}
-
-export function getConversationPathStore() {
-  if (!conversationPathStore) {
-    throw new Error('Conversation path store not initialized. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.');
-  }
-  return conversationPathStore;
-}
-
-export function getConversationConfigStore(): ConversationConfigStore {
-  if (!conversationConfigStore) {
-    throw new Error('Conversation config store not initialized. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are configured.');
-  }
-  return conversationConfigStore;
-}

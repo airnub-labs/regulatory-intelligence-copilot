@@ -31,21 +31,13 @@ export const dynamic = 'force-dynamic';
 
 const logger = createLogger('ChatRoute');
 
-// Lazy initialization to avoid undefined stores during build phase
-let handler: ReturnType<typeof createChatRouteHandler> | null = null;
-
-function getHandler() {
-  if (!handler) {
-    handler = createChatRouteHandler({
-      conversationStore,
-      conversationContextStore,
-      eventHub: conversationEventHub as unknown as ConversationEventHub,
-      conversationListEventHub: conversationListEventHub as unknown as ConversationListEventHub,
-      executionContextManager,
-    });
-  }
-  return handler;
-}
+const handler = createChatRouteHandler({
+  conversationStore,
+  conversationContextStore,
+  eventHub: conversationEventHub as unknown as ConversationEventHub,
+  conversationListEventHub: conversationListEventHub as unknown as ConversationListEventHub,
+  executionContextManager,
+});
 
 const headerSetter = {
   set(carrier: Headers, key: string, value: string) {
@@ -152,7 +144,7 @@ export async function POST(request: Request) {
           headers.set('traceparent', `00-${activeSpanContext.traceId}-${activeSpanContext.spanId}-01`);
         }
 
-        return getHandler()(
+        return handler(
           new Request(request.url, {
             method: request.method,
             headers,
