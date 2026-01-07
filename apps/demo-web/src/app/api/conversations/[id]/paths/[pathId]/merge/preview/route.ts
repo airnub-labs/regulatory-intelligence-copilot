@@ -124,7 +124,7 @@ export async function POST(
             );
 
             return NextResponse.json({
-              messagesToMerge: preview.messagesToMerge.map((msg: any) => ({
+              messagesToMerge: preview.messagesToMerge.map((msg) => ({
                 id: msg.id,
                 role: msg.role,
                 content: msg.content,
