@@ -13,26 +13,57 @@ The current approach to handling missing credentials during build time has grown
 
 ---
 
+## Recent Improvements (from Lint Fix Implementation)
+
+The recent lint fix work introduced a well-designed **service client hierarchy** that addresses the security concerns:
+
+| Client Factory | Purpose | Location |
+|----------------|---------|----------|
+| `createInfrastructureServiceClient()` | Module-load infrastructure (stores, event hubs) | `infrastructureServiceClient.ts` |
+| `createMiddlewareServiceClient()` | Middleware/proxy session validation | `middlewareServiceClient.ts` |
+| `createTenantScopedServiceClient()` | User requests with tenant isolation | `tenantScopedServiceClient.ts` |
+| `createUnrestrictedServiceClient()` | Cross-tenant admin operations | `tenantScopedServiceClient.ts` |
+
+**This is a positive architectural improvement** - it clearly separates concerns and enforces security at the ESLint level.
+
+However, the **build phase detection pattern** remains as a separate concern that still needs addressing:
+
+```typescript
+// Still present in conversations.ts:75 and llm.ts:37
+const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  if (isProductionBuildPhase) {
+    logger.warn(...);  // Silent continue during build
+  } else {
+    throw new Error(...);  // Fail in dev
+  }
+}
+
+// Still creates Proxy placeholders (llm.ts:66-70)
+export const policyStore: LlmPolicyStore = supabaseInternalClient
+  ? createPolicyStore({...})
+  : (new Proxy({} as LlmPolicyStore, {
+      get: () => {
+        throw new Error('PolicyStore not initialized...');
+      },
+    }));
+```
+
+---
+
 ## Current Implementation Analysis
 
-### Pattern 1: `PHASE_PRODUCTION_BUILD` Detection
+### Pattern 1: `PHASE_PRODUCTION_BUILD` Detection (Still Present)
 
 **Files affected:**
-- `src/lib/server/conversations.ts:24,74`
-- `src/lib/server/llm.ts:11,38`
+- `src/lib/server/conversations.ts:25,75`
+- `src/lib/server/llm.ts:11,37`
 
 ```typescript
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 const nextPhase = process.env.NEXT_PHASE;
 const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  if (isProductionBuildPhase) {
-    logger.warn(...);  // Silent continue
-  } else {
-    throw new Error(...);  // Fail in dev
-  }
-}
 ```
 
 **Issues:**
@@ -40,18 +71,18 @@ if (!supabaseUrl || !supabaseServiceKey) {
 - Creates asymmetric behavior: builds silently succeed, runtime mysteriously fails
 - Developers in CI/CD environments may not notice missing credentials
 
-### Pattern 2: Proxy Placeholder Objects
+### Pattern 2: Proxy Placeholder Objects (Still Present)
 
 **Files affected:**
 - `src/lib/server/conversations.ts:183-187,209-213,217-221,231-235`
-- `src/lib/server/llm.ts:67-71`
+- `src/lib/server/llm.ts:66-70`
 
 ```typescript
-export const conversationStore: ConversationStore = supabaseClient
-  ? createConversationStore({...})
-  : (new Proxy({} as ConversationStore, {
+export const policyStore: LlmPolicyStore = supabaseInternalClient
+  ? createPolicyStore({...})
+  : (new Proxy({} as LlmPolicyStore, {
       get: () => {
-        throw new Error('ConversationStore not initialized - Supabase credentials required');
+        throw new Error('PolicyStore not initialized - Supabase credentials required');
       },
     }));
 ```
@@ -62,7 +93,7 @@ export const conversationStore: ConversationStore = supabaseClient
 - Stack trace points to Proxy trap, not the root cause
 - Type system lies - TypeScript thinks the store is valid
 
-### Pattern 3: Graceful Null Returns
+### Pattern 3: Graceful Null Returns (Unchanged)
 
 **Files affected:**
 - `src/lib/costTracking.ts:58-78`
@@ -84,40 +115,34 @@ function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } 
 - Logs drowned in noise - warnings appear every startup
 - No way to distinguish "intentionally disabled" from "misconfigured"
 
-### Pattern 4: Environment Variable Fallbacks
+### Pattern 4: Environment Variable Fallbacks (Still Present)
 
-**Multiple files use inconsistent fallbacks:**
+**Multiple files still use inconsistent fallbacks:**
 
 ```typescript
-// Pattern A: Server key fallback
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-
-// Pattern B: URL fallback
+// conversations.ts:63-66
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
+const supabaseRealtimeKey =
+  supabaseServiceKey ?? process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Pattern C: Anon key cascade
-const supabaseRealtimeKey = supabaseServiceKey ??
-  process.env.SUPABASE_ANON_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// llm.ts:26-27
+const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 ```
 
-**Issues:**
-- No single source of truth for which env var to use
-- Fallback chains obscure configuration requirements
-- Different files may resolve to different credentials
+**Note:** The new `createInfrastructureServiceClient()` uses only `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (no fallbacks), which is an improvement. But the calling code still checks multiple variables before deciding to call it.
 
 ### Pattern 5: Combined `isDevLike` and `isProductionBuildPhase` Checks
 
 ```typescript
+// conversations.ts:68,338
 const isDevLike = process.env.NODE_ENV !== 'production';
-const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
 
-// Later...
+// Later used in combination:
 if (isDevLike || isProductionBuildPhase) {
   logger.warn(...);
-  // Create stub
-} else {
-  throw new Error(...);
+  // Create stub event hubs
 }
 ```
 
@@ -225,7 +250,7 @@ REDIS_CACHING_ENABLED=false
 
 ### Approach 3: Lazy Factory with Fail-Fast
 
-Replace top-level initialization with lazy factories:
+Replace top-level initialization with lazy factories. The new `createInfrastructureServiceClient()` is already a step in this direction, but extend it to stores:
 
 ```typescript
 // Current: Runs at module load, creates Proxy if missing
@@ -239,44 +264,18 @@ let _conversationStore: ConversationStore | null = null;
 export function getConversationStore(): ConversationStore {
   if (!_conversationStore) {
     // Validate at first use, fail fast with clear message
-    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new ConfigurationError(
-        'ConversationStore requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY',
-        { required: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] }
-      );
-    }
-    _conversationStore = createConversationStore({...});
+    const client = createInfrastructureServiceClient('ConversationStore');
+    _conversationStore = createConversationStore({ supabase: client, ... });
   }
   return _conversationStore;
 }
 ```
 
 **Benefits:**
-- Clear error message with missing variables listed
+- `createInfrastructureServiceClient` already throws with clear error if credentials missing
+- No Proxy indirection needed
 - Stack trace points to actual caller
-- No Proxy indirection
 - Services only initialized when actually used
-
-### Approach 4: Build vs Runtime Separation
-
-```typescript
-// next.config.js - Only PUBLIC vars are required at build
-const requiredBuildVars = [
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-];
-
-// Validate only in production builds
-if (process.env.NODE_ENV === 'production') {
-  for (const key of requiredBuildVars) {
-    if (!process.env[key]) {
-      throw new Error(`Missing required build-time env: ${key}`);
-    }
-  }
-}
-
-// Runtime vars validated at startup via t3-env
-```
 
 ---
 
@@ -311,14 +310,43 @@ if (process.env.NODE_ENV === 'production') {
 1. Remove all `PHASE_PRODUCTION_BUILD` imports and checks
 2. Remove all `isProductionBuildPhase` conditionals
 3. Remove all Proxy placeholder objects
-4. Convert to lazy factory pattern
+4. Convert to lazy factory pattern leveraging `createInfrastructureServiceClient()`
+
+**Example refactor for `llm.ts`:**
+
+```typescript
+// Before (current)
+const supabaseInternalClient = supabaseUrl && supabaseServiceKey
+  ? createInfrastructureServiceClient('LlmPolicyStore', {...})
+  : null;
+
+export const policyStore: LlmPolicyStore = supabaseInternalClient
+  ? createPolicyStore({...})
+  : new Proxy(...);
+
+// After (proposed)
+let _policyStore: LlmPolicyStore | null = null;
+
+export function getPolicyStore(): LlmPolicyStore {
+  if (!_policyStore) {
+    // createInfrastructureServiceClient throws if credentials missing
+    const client = createInfrastructureServiceClient('LlmPolicyStore', {
+      db: { schema: 'copilot_internal' },
+    });
+    _policyStore = createPolicyStore({ supabase: client, ... });
+  }
+  return _policyStore;
+}
+
+// Update callers from policyStore.method() to getPolicyStore().method()
+```
 
 ### Phase 4: Consolidate Environment Variables
 
 1. Standardize on single variable names (no fallbacks):
-   - `SUPABASE_URL` (server) vs `NEXT_PUBLIC_SUPABASE_URL` (client)
+   - `NEXT_PUBLIC_SUPABASE_URL` (align with `createInfrastructureServiceClient`)
    - `SUPABASE_SERVICE_ROLE_KEY` (only name, no fallback)
-   - Remove `SUPABASE_SERVICE_KEY` alias
+   - Remove `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` aliases
 
 2. Document all variables in `.env.example` with required/optional status
 
@@ -330,13 +358,14 @@ if (process.env.NODE_ENV === 'production') {
 src/
 ├── env.ts                    # t3-env schema (single source of truth)
 ├── lib/
-│   ├── services/
-│   │   ├── supabase.ts       # Lazy factory for Supabase clients
-│   │   ├── redis.ts          # Lazy factory for Redis client
-│   │   └── index.ts          # Re-exports
+│   ├── supabase/
+│   │   ├── infrastructureServiceClient.ts  # ✅ Already exists
+│   │   ├── middlewareServiceClient.ts      # ✅ Already exists
+│   │   ├── tenantScopedServiceClient.ts    # ✅ Already exists
+│   │   └── client.ts                       # Browser client
 │   ├── server/
-│   │   ├── conversations.ts  # Uses getSupabaseClient()
-│   │   └── llm.ts            # Uses getSupabaseClient()
+│   │   ├── conversations.ts  # Refactor: lazy factory, no Proxy
+│   │   └── llm.ts            # Refactor: lazy factory, no Proxy
 │   └── features/
 │       ├── costTracking.ts   # Checks env.COST_TRACKING_ENABLED
 │       └── e2b.ts            # Checks env.E2B_ENABLED
@@ -359,7 +388,7 @@ export const env = createEnv({
     NEXTAUTH_URL: z.string().url().optional(),
 
     // Supabase (required for core functionality)
-    SUPABASE_URL: z.string().url(),
+    // Using NEXT_PUBLIC_SUPABASE_URL to align with createInfrastructureServiceClient
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 
     // Redis (optional - graceful degradation to no-cache)
@@ -395,7 +424,6 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
     NEXTAUTH_URL: process.env.NEXTAUTH_URL,
-    SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     REDIS_URL: process.env.REDIS_URL,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
@@ -429,38 +457,6 @@ export function getFeatureFlags(): FeatureFlags {
 
 ---
 
-## Example: Refactored Service Factory
-
-```typescript
-// src/lib/services/supabase.ts
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { env } from '@/env';
-
-let _serviceClient: SupabaseClient | null = null;
-let _internalClient: SupabaseClient | null = null;
-
-export function getSupabaseServiceClient(): SupabaseClient {
-  if (!_serviceClient) {
-    _serviceClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-  }
-  return _serviceClient;
-}
-
-export function getSupabaseInternalClient(): SupabaseClient {
-  if (!_internalClient) {
-    _internalClient = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: 'copilot_internal' },
-    });
-  }
-  return _internalClient;
-}
-```
-
----
-
 ## CI/CD Configuration
 
 ### GitHub Actions Example
@@ -486,7 +482,6 @@ jobs:
     environment: production
     # Real secrets injected at deploy time
     env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 ```
 
@@ -494,16 +489,28 @@ jobs:
 
 ## Summary
 
-| Current Approach | Problem | Recommended Solution |
-|-----------------|---------|---------------------|
-| `PHASE_PRODUCTION_BUILD` | Internal API, unreliable | `SKIP_ENV_VALIDATION` flag |
-| Proxy placeholders | Deferred errors, bad DX | Lazy factory with fail-fast |
-| Credential-sniffing | Silent feature disable | Explicit feature flags |
-| Variable fallbacks | Unclear requirements | Single source of truth (t3-env) |
-| `isDevLike \|\| isProductionBuildPhase` | Confusing logic | Remove, use explicit flags |
+| Current Pattern | Status | Recommended Solution |
+|-----------------|--------|---------------------|
+| Service client hierarchy | ✅ Resolved | Keep `create*ServiceClient()` factories |
+| `PHASE_PRODUCTION_BUILD` | ❌ Remains | `SKIP_ENV_VALIDATION` flag via t3-env |
+| Proxy placeholders | ❌ Remains | Lazy factory with fail-fast |
+| Credential-sniffing | ❌ Remains | Explicit feature flags |
+| Variable fallbacks | ⚠️ Partially resolved | Use single names via t3-env |
+| `isDevLike \|\| isProductionBuildPhase` | ❌ Remains | Remove, use explicit flags |
+
+**Relationship to Lint Fix Work:**
+- The lint fix implementation created a solid foundation with the service client hierarchy
+- Build phase detection is an orthogonal concern - it's about *when* to require credentials, not *how* to create clients
+- This proposal builds on top of the lint fixes, not replacing them
 
 **Next Steps:**
 1. Review this document
 2. Decide on migration timeline
 3. Create implementation issues for each phase
 4. Begin with Phase 1 (t3-env foundation)
+
+---
+
+**Document Version**: 2.0
+**Last Updated**: 2026-01-07
+**Status**: Updated to reflect lint fix implementation
