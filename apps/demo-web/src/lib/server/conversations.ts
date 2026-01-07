@@ -84,7 +84,6 @@ const supabaseRealtimeClient = createClient(supabaseUrl, supabaseRealtimeKey, {
 });
 
 async function validateSupabaseHealth() {
-  if (!supabaseClient || !supabaseInternalClient) return;
   // Use internal client since healthcheck function is in copilot_internal schema
   const { data, error } = await supabaseInternalClient.rpc('conversation_store_healthcheck');
   if (error) {

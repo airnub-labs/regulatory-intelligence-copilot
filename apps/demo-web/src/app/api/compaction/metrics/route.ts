@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     const endTime = new Date();
 
     // Fetch aggregated metrics for THIS tenant only
-    const { data: metricsData, error: metricsError } = await supabase.rpc(
+    const { data: metricsData, error: metricsError } = await (supabase.rpc as any)(
       'get_compaction_metrics',
       {
         p_start_time: startTime?.toISOString() || null,
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch strategy breakdown for THIS tenant only
-    const { data: strategyData, error: strategyError } = await supabase.rpc(
+    const { data: strategyData, error: strategyError } = await (supabase.rpc as any)(
       'get_compaction_strategy_breakdown',
       {
         p_start_time: startTime?.toISOString() || null,
@@ -123,7 +123,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch recent operations for THIS tenant only
-    const { data: recentData, error: recentError } = await supabase.rpc(
+    const { data: recentData, error: recentError } = await (supabase.rpc as any)(
       'get_recent_compaction_operations',
       {
         p_limit: 10,
