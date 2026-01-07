@@ -13,7 +13,6 @@ import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
-import type { ExtendedSession } from '@/types/auth';
 import {
   conversationContextStore,
   conversationEventHub,
@@ -31,21 +30,13 @@ export const dynamic = 'force-dynamic';
 
 const logger = createLogger('ChatRoute');
 
-// Lazy initialization to avoid undefined stores during build phase
-let handler: ReturnType<typeof createChatRouteHandler> | null = null;
-
-function getHandler() {
-  if (!handler) {
-    handler = createChatRouteHandler({
-      conversationStore,
-      conversationContextStore,
-      eventHub: conversationEventHub as unknown as ConversationEventHub,
-      conversationListEventHub: conversationListEventHub as unknown as ConversationListEventHub,
-      executionContextManager,
-    });
-  }
-  return handler;
-}
+const handler = createChatRouteHandler({
+  conversationStore,
+  conversationContextStore,
+  eventHub: conversationEventHub as unknown as ConversationEventHub,
+  conversationListEventHub: conversationListEventHub as unknown as ConversationListEventHub,
+  executionContextManager,
+});
 
 const headerSetter = {
   set(carrier: Headers, key: string, value: string) {
@@ -56,7 +47,7 @@ const headerSetter = {
 export async function POST(request: Request) {
   try {
     // Get and verify tenant context
-    const session = await getServerSession(authOptions) as ExtendedSession | null;
+    const session = await getServerSession(authOptions);
     const { userId, tenantId, role } = await getTenantContext(session);
 
     const headers = new Headers(request.headers);
@@ -152,7 +143,7 @@ export async function POST(request: Request) {
           headers.set('traceparent', `00-${activeSpanContext.traceId}-${activeSpanContext.spanId}-01`);
         }
 
-        return getHandler()(
+        return handler(
           new Request(request.url, {
             method: request.method,
             headers,
