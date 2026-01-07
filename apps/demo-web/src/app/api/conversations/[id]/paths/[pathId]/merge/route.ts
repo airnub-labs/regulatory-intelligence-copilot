@@ -259,7 +259,7 @@ export async function POST(
 
               // Estimate tokens (rough: ~4 chars per token)
               const totalContent = previewForMetrics.messagesToMerge
-                .map((m) => m.content)
+                .map((m: any) => m.content)
                 .join(' ');
               const estimatedTokensBefore = Math.ceil(totalContent.length / 4);
               const estimatedTokensAfter = Math.ceil((finalSummaryContent?.length ?? 0) / 4);

@@ -7,8 +7,11 @@ import {
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
 import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBackend } from '@reg-copilot/reg-intel-cache';
+import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
 const logger = createLogger('LlmRouterWiring');
+const nextPhase = process.env.NEXT_PHASE;
+const isProductionBuildPhase = nextPhase === PHASE_PRODUCTION_BUILD;
 
 /**
  * Individual flag to enable/disable LLM policy caching specifically.
@@ -46,34 +49,43 @@ const redisClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 // ============================================================================
 
 if (!supabaseInternalClient) {
-  throw new Error('Supabase credentials are required to build the policy store');
+  if (isProductionBuildPhase) {
+    logger.warn('Supabase credentials missing during build phase - policy store will be unavailable');
+  } else {
+    throw new Error('Supabase credentials are required to build the policy store');
+  }
 }
 
 // Type assertion to work around "Type instantiation is excessively deep" error
-export const policyStore = createPolicyStore({
-  supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
-  redis: redisClient ?? undefined,
-  cacheTtlSeconds: 300, // 5 minutes
-  schema: 'copilot_internal',
-} as Parameters<typeof createPolicyStore>[0]);
+// During build phase, this may be undefined, but routes won't be called
+export const policyStore = (supabaseInternalClient
+  ? createPolicyStore({
+      supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
+      redis: redisClient ?? undefined,
+      cacheTtlSeconds: 300, // 5 minutes
+      schema: 'copilot_internal',
+    } as Parameters<typeof createPolicyStore>[0])
+  : undefined) as ReturnType<typeof createPolicyStore>;
 
 // Log which store implementation is being used
-if (redisClient) {
-  logger.info(
-    {
-      supabaseUrl,
-      hasRedis: true,
-      cacheTtl: 300,
-      llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
-      backend: describeRedisBackendSelection(cacheBackend)
-    },
-    'Using CachingPolicyStore (Supabase + Redis)'
-  );
-} else {
-  const reason = !ENABLE_LLM_POLICY_CACHE
-    ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
-    : 'Redis credentials not configured';
-  logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
+if (supabaseInternalClient) {
+  if (redisClient) {
+    logger.info(
+      {
+        supabaseUrl,
+        hasRedis: true,
+        cacheTtl: 300,
+        llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
+        backend: describeRedisBackendSelection(cacheBackend)
+      },
+      'Using CachingPolicyStore (Supabase + Redis)'
+    );
+  } else {
+    const reason = !ENABLE_LLM_POLICY_CACHE
+      ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
+      : 'Redis credentials not configured';
+    logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
+  }
 }
 
 // ============================================================================

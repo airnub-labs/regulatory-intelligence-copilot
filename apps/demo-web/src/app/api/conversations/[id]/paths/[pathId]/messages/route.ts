@@ -88,7 +88,7 @@ export async function GET(
             );
 
             return NextResponse.json({
-              messages: messages.map((msg) => ({
+              messages: messages.map((msg: any) => ({
                 id: msg.id,
                 conversationId: msg.conversationId,
                 pathId: msg.pathId,
