@@ -5,10 +5,11 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const context = await getTenantContext(session);
 
     return NextResponse.json({

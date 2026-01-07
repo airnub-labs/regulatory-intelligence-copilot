@@ -22,6 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationStore, conversationPathStore } from '@/lib/server/conversations';
 import { PathCompactionService, type PathCompactionStrategy } from '@reg-copilot/reg-intel-conversations/compaction';
 import { countTokensForMessages } from '@reg-copilot/reg-intel-core';
@@ -40,7 +41,7 @@ export async function GET(
   const { id: conversationId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(

@@ -78,7 +78,7 @@ export async function getTenantContext(
     })
     .single();
 
-  if (error || !access?.has_access) {
+  if (error || !(access as any)?.has_access) {
     logger.error(
       { userId, currentTenantId, error },
       'Tenant access verification failed'
@@ -87,13 +87,13 @@ export async function getTenantContext(
   }
 
   logger.debug(
-    { userId, tenantId: currentTenantId, role: access.role },
+    { userId, tenantId: currentTenantId, role: (access as any).role },
     'Tenant context verified'
   );
 
   return {
     userId,
     tenantId: currentTenantId,
-    role: access.role,
+    role: (access as any).role,
   };
 }

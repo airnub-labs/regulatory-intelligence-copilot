@@ -27,7 +27,7 @@ export function useSessionSync() {
   const isHealingRef = useRef<boolean>(false)
 
   useEffect(() => {
-    if (!session?.user?.id || !session?.user?.currentTenantId) {
+    if (!session?.user?.id || !(session?.user as any)?.currentTenantId) {
       return
     }
 
@@ -53,7 +53,7 @@ export function useSessionSync() {
 
         const { data: dbTenantId, error } = await supabase
           .rpc('get_current_tenant_id', {
-            p_user_id: session.user.id,
+            p_user_id: session!.user!.id,
           })
           .single()
 
@@ -62,9 +62,9 @@ export function useSessionSync() {
           return
         }
 
-        if (dbTenantId && dbTenantId !== session.user.currentTenantId) {
+        if (dbTenantId && dbTenantId !== (session!.user! as any).currentTenantId) {
           console.warn('Session out of sync with database, auto-healing...', {
-            jwtTenantId: session.user.currentTenantId,
+            jwtTenantId: (session!.user! as any).currentTenantId,
             dbTenantId,
           })
 
@@ -79,11 +79,11 @@ export function useSessionSync() {
               try {
                 const { data: checkAgain } = await supabase
                   .rpc('get_current_tenant_id', {
-                    p_user_id: session.user.id,
+                    p_user_id: session!.user!.id,
                   })
                   .single()
 
-                if (checkAgain && checkAgain !== session.user.currentTenantId) {
+                if (checkAgain && checkAgain !== (session!.user! as any).currentTenantId) {
                   console.error('Session still out of sync after healing, forcing reload')
                   window.location.reload()
                 } else {

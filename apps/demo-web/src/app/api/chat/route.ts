@@ -13,6 +13,7 @@ import { getServerSession } from 'next-auth/next';
 
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import {
   conversationContextStore,
   conversationEventHub,
@@ -47,7 +48,7 @@ const headerSetter = {
 export async function POST(request: Request) {
   try {
     // Get and verify tenant context
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     const headers = new Headers(request.headers);
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
   if (!quotaCheck.allowed) {
     logger.warn({
       tenantId,
-      userId: session.user.id,
+      userId,
       reason: quotaCheck.reason,
     }, 'Chat request denied due to LLM quota exceeded');
 

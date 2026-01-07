@@ -3,6 +3,7 @@ import { getRateLimiter } from '@/lib/rateLimiter';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 
 const logger = createLogger('ClientTelemetryRoute');
 const rateLimiter = getRateLimiter();
@@ -213,7 +214,7 @@ const processEvent = (event: ClientTelemetryEvent): void => {
 export async function POST(request: Request) {
   try {
     // CRITICAL: Add authentication check - telemetry endpoint should be protected
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId } = await getTenantContext(session);
 
     // Check rate limit using distributed rate limiter (Redis/Upstash)

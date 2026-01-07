@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 import { cookies } from 'next/headers';
 
@@ -64,7 +65,7 @@ function getTimeRangeStart(range: string): Date | null {
 export async function GET(request: NextRequest) {
   try {
     // SECURITY: Require authentication
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -77,10 +78,11 @@ export async function GET(request: NextRequest) {
 
     // Use unrestricted client - already validated user has access to their tenant above
     const cookieStore = await cookies();
-    const supabase = createUnrestrictedServiceClient(cookieStore, {
-      operation: 'fetch-compaction-metrics',
+    const supabase = createUnrestrictedServiceClient(
+      'fetch-compaction-metrics',
       userId,
-    });
+      cookieStore
+    );
 
     const { searchParams } = new URL(request.url);
     const timeRange = searchParams.get('timeRange') || '7d';

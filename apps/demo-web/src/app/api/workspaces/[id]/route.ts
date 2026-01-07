@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 
@@ -21,10 +22,11 @@ const logger = createLogger('WorkspaceDeletionAPI');
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -34,7 +36,7 @@ export async function DELETE(
     }
 
     const userId = session.user.id;
-    const workspaceId = params.id;
+    const { id: workspaceId } = await params;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -156,10 +158,11 @@ export async function DELETE(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -169,7 +172,7 @@ export async function PATCH(
     }
 
     const userId = session.user.id;
-    const workspaceId = params.id;
+    const { id: workspaceId } = await params;
 
     if (!workspaceId) {
       return NextResponse.json(
@@ -261,10 +264,11 @@ export async function PATCH(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -274,7 +278,7 @@ export async function GET(
     }
 
     const userId = session.user.id;
-    const workspaceId = params.id;
+    const { id: workspaceId } = await params;
 
     if (!workspaceId) {
       return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
+import type { ExtendedSession } from '@/types/auth';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
@@ -15,10 +16,11 @@ const logger = createLogger('AcceptInvitationAPI');
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -28,7 +30,7 @@ export async function POST(
     }
 
     const userId = session.user.id;
-    const token = params.token;
+    const { token } = await params;
 
     if (!token) {
       return NextResponse.json(

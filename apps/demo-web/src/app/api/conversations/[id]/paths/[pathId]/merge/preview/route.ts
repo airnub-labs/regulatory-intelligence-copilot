@@ -6,6 +6,7 @@ import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-o
 
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationPathStore, conversationStore } from '@/lib/server/conversations';
 import { generateMergeSummary } from '@/lib/server/mergeSummarizer';
 
@@ -29,7 +30,7 @@ export async function POST(
   const { id: conversationId, pathId: sourcePathId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(

@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationStore, conversationEventHub } from '@/lib/server/conversations';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 import { cookies } from 'next/headers';
@@ -23,7 +24,7 @@ export async function GET(
   const { id: conversationId, messageId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -53,10 +54,11 @@ export async function GET(
 
           try {
             const cookieStore = await cookies();
-            const supabase = createUnrestrictedServiceClient(cookieStore, {
-              operation: 'get-message',
+            const supabase = createUnrestrictedServiceClient(
+              'get-message',
               userId,
-            });
+              cookieStore
+            );
 
             const { data: message, error } = await supabase
               .from('conversation_messages_view')
@@ -120,7 +122,7 @@ export async function PATCH(
   const { id: conversationId, messageId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -165,10 +167,11 @@ export async function PATCH(
 
           try {
             const cookieStore = await cookies();
-            const supabase = createUnrestrictedServiceClient(cookieStore, {
-              operation: 'update-message-metadata',
+            const supabase = createUnrestrictedServiceClient(
+              'update-message-metadata',
               userId,
-            });
+              cookieStore
+            );
 
             // First verify the message exists and belongs to this conversation
             const { data: existingMessage, error: fetchError } = await supabase
@@ -269,7 +272,7 @@ export async function DELETE(
   const { id: conversationId, messageId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(

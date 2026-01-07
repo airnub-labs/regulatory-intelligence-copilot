@@ -30,6 +30,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { conversationStore } from '@/lib/server/conversations';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
@@ -76,7 +77,7 @@ export async function GET(
   const { id: conversationId } = await context.params;
 
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     return requestContext.run(
@@ -110,10 +111,11 @@ export async function GET(
             // Fetch compaction history from Supabase using unrestricted service client
             // (already validated user has access to this conversation above)
             const cookieStore = await cookies();
-            const supabase = createUnrestrictedServiceClient(cookieStore, {
-              operation: 'fetch-compaction-history',
+            const supabase = createUnrestrictedServiceClient(
+              'fetch-compaction-history',
               userId,
-            });
+              cookieStore
+            );
 
             // Query compaction_operations table for this conversation
             const { data, error } = await supabase

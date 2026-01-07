@@ -235,7 +235,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
 
         if (tenants && tenants.length > 0) {
           // Switch to first available workspace (prefer personal)
-          const personalWorkspace = tenants.find((t) => t.tenant_type === 'personal')
+          const personalWorkspace = tenants.find((t: any) => t.tenant_type === 'personal')
           const targetWorkspace = personalWorkspace || tenants[0]
           const newTenantId = targetWorkspace.tenant_id
 

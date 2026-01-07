@@ -206,7 +206,7 @@ export async function getUserTenantCount(userId: string): Promise<number> {
       return 0
     }
 
-    return data || 0
+    return (data as number) || 0
   } catch (error) {
     logger.error({ error, userId }, 'Failed to get user tenant count')
     return 0

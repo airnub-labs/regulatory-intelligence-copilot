@@ -79,8 +79,8 @@ export function useMembershipMonitor() {
 
         // Check if removed from current workspace
         const removedFromCurrent = events.find(
-          (e) =>
-            e.tenant_id === session.user.currentTenantId &&
+          (e: MembershipEvent) =>
+            e.tenant_id === (session?.user as any)?.currentTenantId &&
             (e.event_type === 'removed' || e.event_type === 'suspended')
         )
 
@@ -121,11 +121,11 @@ export function useMembershipMonitor() {
       }
 
       // Switch to first available workspace (prefer personal)
-      const personalWorkspace = tenants.find((t) => t.tenant_type === 'personal')
+      const personalWorkspace = tenants.find((t: any) => t.tenant_type === 'personal')
       const targetWorkspace = personalWorkspace || tenants[0]
 
       console.info('Auto-switching workspace after removal', {
-        from: session.user.currentTenantId,
+        from: (session.user as any).currentTenantId,
         to: targetWorkspace.tenant_id,
         reason: 'removed_from_active_workspace',
       })

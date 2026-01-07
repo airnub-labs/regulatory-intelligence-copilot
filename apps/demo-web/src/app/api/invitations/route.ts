@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
 
@@ -17,8 +18,9 @@ const logger = createLogger('InvitationsAPI');
  * Request body: { email: string, role: 'admin' | 'member' | 'viewer' }
  */
 export async function POST(request: NextRequest) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -134,8 +136,9 @@ export async function POST(request: NextRequest) {
  * Uses Supabase's get_my_pending_invitations RPC function.
  */
 export async function GET(request: NextRequest) {
+  let session: ExtendedSession | null = null;
   try {
-    const session = await getServerSession(authOptions);
+    session = await getServerSession(authOptions) as ExtendedSession | null;
 
     if (!session?.user?.id) {
       return NextResponse.json(

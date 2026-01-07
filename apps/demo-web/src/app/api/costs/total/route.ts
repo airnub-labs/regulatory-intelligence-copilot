@@ -26,6 +26,7 @@ import { getServerSession } from 'next-auth/next';
 import { getCostTrackingServiceIfInitialized } from '@reg-copilot/reg-intel-observability';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
+import type { ExtendedSession } from '@/types/auth';
 
 interface TotalCostRequest {
   scope: 'platform' | 'tenant' | 'user' | 'task' | 'conversation';
@@ -36,7 +37,7 @@ interface TotalCostRequest {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as ExtendedSession | null;
     const { userId, tenantId, role } = await getTenantContext(session);
 
     const costService = getCostTrackingServiceIfInitialized();
