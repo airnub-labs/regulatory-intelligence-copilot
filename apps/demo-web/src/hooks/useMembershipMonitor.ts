@@ -47,54 +47,7 @@ export function useMembershipMonitor() {
   const [isHandlingRemoval, setIsHandlingRemoval] = useState(false)
   const lastCheckRef = useRef<number>(0)
 
-  const checkForEvents = useCallback(async () => {
-    if (!session?.user?.id) return
-
-    // Rate limit checks
-    const now = Date.now()
-    const checkInterval = 10000 // 10 seconds
-
-    if (now - lastCheckRef.current < checkInterval) {
-      return
-    }
-
-    lastCheckRef.current = now
-
-    try {
-      const supabase = createClient()
-
-      const { data: events, error } = await supabase
-        .rpc('get_pending_membership_events', {
-          p_user_id: session.user.id,
-        })
-
-      if (error) {
-        console.error('Failed to check membership events:', error)
-        return
-      }
-
-      if (events && events.length > 0) {
-        setPendingEvents(events)
-        setShowNotification(true)
-
-        // Check if removed from current workspace
-        const removedFromCurrent = (events as MembershipEvent[]).find(
-          (e: MembershipEvent) =>
-            e.tenant_id === session.user.currentTenantId &&
-            (e.event_type === 'removed' || e.event_type === 'suspended')
-        )
-
-        if (removedFromCurrent && !isHandlingRemoval) {
-          // Auto-switch to another workspace
-          await handleRemovedFromActiveWorkspace()
-        }
-      }
-    } catch (error) {
-      console.error('Membership event check failed:', error)
-    }
-  }, [session, isHandlingRemoval])
-
-  const handleRemovedFromActiveWorkspace = async () => {
+  const handleRemovedFromActiveWorkspace = useCallback(async () => {
     if (!session?.user?.id || isHandlingRemoval) return
 
     setIsHandlingRemoval(true)
@@ -154,7 +107,54 @@ export function useMembershipMonitor() {
     } finally {
       setIsHandlingRemoval(false)
     }
-  }
+  }, [session, router, updateSession, isHandlingRemoval])
+
+  const checkForEvents = useCallback(async () => {
+    if (!session?.user?.id) return
+
+    // Rate limit checks
+    const now = Date.now()
+    const checkInterval = 10000 // 10 seconds
+
+    if (now - lastCheckRef.current < checkInterval) {
+      return
+    }
+
+    lastCheckRef.current = now
+
+    try {
+      const supabase = createClient()
+
+      const { data: events, error } = await supabase
+        .rpc('get_pending_membership_events', {
+          p_user_id: session.user.id,
+        })
+
+      if (error) {
+        console.error('Failed to check membership events:', error)
+        return
+      }
+
+      if (events && events.length > 0) {
+        setPendingEvents(events)
+        setShowNotification(true)
+
+        // Check if removed from current workspace
+        const removedFromCurrent = (events as MembershipEvent[]).find(
+          (e: MembershipEvent) =>
+            e.tenant_id === session.user.currentTenantId &&
+            (e.event_type === 'removed' || e.event_type === 'suspended')
+        )
+
+        if (removedFromCurrent && !isHandlingRemoval) {
+          // Auto-switch to another workspace
+          await handleRemovedFromActiveWorkspace()
+        }
+      }
+    } catch (error) {
+      console.error('Membership event check failed:', error)
+    }
+  }, [session, isHandlingRemoval, handleRemovedFromActiveWorkspace])
 
   const dismissNotification = async () => {
     if (pendingEvents.length === 0 || !session?.user?.id) return

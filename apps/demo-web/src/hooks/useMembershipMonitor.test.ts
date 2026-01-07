@@ -50,7 +50,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     // Fast-forward time
     vi.advanceTimersByTime(10000);
@@ -65,7 +65,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(mockSupabaseRpc).toHaveBeenCalledWith('get_pending_membership_events', {
@@ -92,7 +92,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(result.current.showNotification).toBe(true);
@@ -142,7 +142,7 @@ describe('useMembershipMonitor', () => {
     mockSessionUpdate.mockResolvedValue(undefined);
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(mockSupabaseRpc).toHaveBeenCalledWith('get_user_tenants');
@@ -179,7 +179,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(result.current.pendingEvents).toHaveLength(1);
@@ -209,7 +209,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(mockRouterPush).toHaveBeenCalledWith('/no-workspaces');
@@ -240,7 +240,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(result.current.pendingEvents).toHaveLength(1);
@@ -266,7 +266,7 @@ describe('useMembershipMonitor', () => {
     });
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(mockSupabaseRpc).toHaveBeenCalledTimes(1);
@@ -310,7 +310,7 @@ describe('useMembershipMonitor', () => {
     );
 
     const { useMembershipMonitor } = await import('./useMembershipMonitor');
-    const { result } = renderHook(() => useMembershipMonitor());
+    renderHook(() => useMembershipMonitor());
 
     await waitFor(() => {
       expect(result.current.isHandlingRemoval).toBe(true);

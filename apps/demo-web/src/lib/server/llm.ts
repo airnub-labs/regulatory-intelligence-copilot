@@ -6,7 +6,7 @@ import {
   type LlmPolicyStore,
 } from '@reg-copilot/reg-intel-llm';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
-import { createClient } from '@supabase/supabase-js';
+import { createInfrastructureServiceClient } from '@/lib/supabase/infrastructureServiceClient';
 import { createKeyValueClient, describeRedisBackendSelection, resolveRedisBackend } from '@reg-copilot/reg-intel-cache';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 
@@ -28,8 +28,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.
 
 const supabaseInternalClient =
   supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
+    ? createInfrastructureServiceClient('LlmPolicyStore', {
         db: { schema: 'copilot_internal' },
       })
     : null;

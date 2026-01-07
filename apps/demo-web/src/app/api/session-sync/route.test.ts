@@ -55,7 +55,7 @@ describe('Session Sync Database Functions', () => {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .rpc('get_current_tenant_id', { p_user_id: 'user-no-tenant' })
         .single();
 
@@ -173,7 +173,7 @@ describe('Session Sync Database Functions', () => {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
 
-      const { data } = await supabase
+      await supabase
         .rpc('get_session_sync_stats', { p_hours_back: 168 }) // 7 days
         .single();
 

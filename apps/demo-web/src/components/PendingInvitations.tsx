@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Mail, Check, X } from 'lucide-react'
+import { Loader2, Mail, Check } from 'lucide-react'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
 
@@ -55,7 +55,7 @@ export function PendingInvitations() {
       })
 
       if (response.ok) {
-        const data = await response.json()
+        await response.json()
         // Refresh invitations list
         await loadInvitations()
         // Refresh page to show new workspace

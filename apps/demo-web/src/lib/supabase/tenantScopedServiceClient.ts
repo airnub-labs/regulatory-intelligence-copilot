@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 const logger = createLogger('TenantScopedServiceClient');
@@ -55,7 +56,7 @@ const TENANT_SCOPED_TABLES = [
  */
 export function createTenantScopedServiceClient(
   options: TenantScopedClientOptions,
-  cookies: any
+  cookies: ReadonlyRequestCookies
 ): SupabaseClient {
   const { tenantId, userId, operation } = options;
 
@@ -77,7 +78,7 @@ export function createTenantScopedServiceClient(
         return cookies.getAll();
       },
       setAll(cookieList) {
-        cookieList.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
+        cookieList.forEach(({ name, value, options }) => {
           cookies.set(name, value, options);
         });
       },
@@ -100,7 +101,7 @@ export function createTenantScopedServiceClient(
           }, 'Service role query initiated');
 
           // Check if this table is tenant-scoped
-          const isTenantScoped = TENANT_SCOPED_TABLES.includes(tableName as any);
+          const isTenantScoped = (TENANT_SCOPED_TABLES as readonly string[]).includes(tableName);
 
           if (!isTenantScoped) {
             // Not a tenant-scoped table, return query builder as-is
@@ -113,8 +114,8 @@ export function createTenantScopedServiceClient(
               const original = qbTarget[qbProp as keyof typeof qbTarget];
 
               if (typeof original === 'function') {
-                return function(...args: any[]) {
-                  const result = (original as Function).apply(qbTarget, args);
+                return function(...args: unknown[]) {
+                  const result = (original as (...a: unknown[]) => unknown).apply(qbTarget, args);
 
                   // Auto-inject tenant_id filter for SELECT/UPDATE/DELETE
                   if (['select', 'update', 'delete'].includes(qbProp as string)) {
@@ -196,7 +197,7 @@ export function createTenantScopedServiceClient(
 export function createUnrestrictedServiceClient(
   reason: string,
   userId: string,
-  cookies: any
+  cookies: ReadonlyRequestCookies
 ): SupabaseClient {
   logger.warn({
     userId,
@@ -216,7 +217,7 @@ export function createUnrestrictedServiceClient(
         return cookies.getAll();
       },
       setAll(cookieList) {
-        cookieList.forEach(({ name, value, options }: { name: string; value: string; options?: any }) => {
+        cookieList.forEach(({ name, value, options }) => {
           cookies.set(name, value, options);
         });
       },
@@ -250,9 +251,9 @@ export function createUnrestrictedServiceClient(
  * ```
  */
 export async function createTenantScopedServiceClientFromSession(
-  session: any,
+  session: { user?: { id?: string; currentTenantId?: string } },
   operation: string,
-  cookies: any
+  cookies: ReadonlyRequestCookies
 ): Promise<SupabaseClient> {
   if (!session?.user?.id) {
     throw new Error('Valid session required');

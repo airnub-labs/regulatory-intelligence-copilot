@@ -21,6 +21,7 @@ import {
 } from '@reg-copilot/reg-intel-cache';
 import { createTracingFetch, createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient } from '@supabase/supabase-js';
+import { createInfrastructureServiceClient } from '@/lib/supabase/infrastructureServiceClient';
 import { PHASE_PRODUCTION_BUILD } from 'next/constants';
 import { createExecutionContextManager } from '@reg-copilot/reg-intel-next-adapter';
 import { checkE2BQuotaBeforeOperation } from '../e2bCostTracking';
@@ -85,16 +86,14 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabaseClient =
   supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
+    ? createInfrastructureServiceClient('ConversationStore', {
         global: { fetch: tracingFetch },
       })
     : null;
 
 const supabaseInternalClient =
   supabaseUrl && supabaseServiceKey
-    ? createClient(supabaseUrl, supabaseServiceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
+    ? createInfrastructureServiceClient('ConversationStoreInternal', {
         db: { schema: 'copilot_internal' },
         global: { fetch: tracingFetch },
       })
@@ -102,11 +101,19 @@ const supabaseInternalClient =
 
 const supabaseRealtimeClient =
   supabaseUrl && supabaseRealtimeKey
-    ? supabaseClient ??
-      createClient(supabaseUrl, supabaseRealtimeKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        global: { fetch: tracingFetch },
-      })
+    ? supabaseClient ?? (() => {
+        // If supabaseRealtimeKey is the service role key, use infrastructure client
+        // Otherwise create a client with the provided key (could be anon key)
+        if (supabaseRealtimeKey === supabaseServiceKey && supabaseServiceKey) {
+          return createInfrastructureServiceClient('ConversationRealtimeStore', {
+            global: { fetch: tracingFetch },
+          });
+        }
+        return createClient(supabaseUrl, supabaseRealtimeKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+          global: { fetch: tracingFetch },
+        });
+      })()
     : null;
 
 async function validateSupabaseHealth() {

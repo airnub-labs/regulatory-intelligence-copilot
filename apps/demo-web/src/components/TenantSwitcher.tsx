@@ -24,7 +24,7 @@ interface TenantSwitcherProps {
 }
 
 export function TenantSwitcher({ onCreateWorkspace, className }: TenantSwitcherProps) {
-  const { data: session, update } = useSession()
+  const { update } = useSession()
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(true)
   const [switching, setSwitching] = useState(false)

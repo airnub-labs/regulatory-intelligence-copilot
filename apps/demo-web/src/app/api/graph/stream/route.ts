@@ -53,7 +53,7 @@ export async function GET(request: Request) {
   try {
     // Get and verify tenant context
     const session = await getServerSession(authOptions) as ExtendedSession | null;
-    const { userId, tenantId, role } = await getTenantContext(session);
+    const { userId, tenantId } = await getTenantContext(session);
 
     const { searchParams } = new URL(request.url);
     const jurisdictions = searchParams.get('jurisdictions')?.split(',') || ['IE'];

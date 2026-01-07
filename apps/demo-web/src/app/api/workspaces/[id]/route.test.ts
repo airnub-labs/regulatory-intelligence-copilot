@@ -49,7 +49,7 @@ vi.mock('next/headers', () => ({
 }));
 
 vi.mock('@/lib/supabase/tenantScopedServiceClient', () => ({
-  createUnrestrictedServiceClient: (...args: any[]) => mockCreateUnrestrictedServiceClient(...args),
+  createUnrestrictedServiceClient: (...args: unknown[]) => mockCreateUnrestrictedServiceClient(...args),
 }));
 
 describe('DELETE /api/workspaces/[id]', () => {

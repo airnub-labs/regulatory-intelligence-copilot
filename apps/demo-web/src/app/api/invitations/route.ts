@@ -93,16 +93,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!(data as any).success) {
+    if (!data?.success) {
       logger.warn({
         userId,
         tenantId,
         email,
-        error: (data as any).error,
+        error: data?.error,
       }, 'Invitation creation validation failed');
 
       return NextResponse.json(
-        { error: (data as any).error },
+        { error: data?.error || 'Invitation creation failed' },
         { status: 400 }
       );
     }
@@ -110,22 +110,22 @@ export async function POST(request: NextRequest) {
     logger.info({
       userId,
       tenantId,
-      invitationId: (data as any).invitation_id,
-      email: (data as any).email,
-      role: (data as any).role,
-      workspaceName: (data as any).workspace_name,
+      invitationId: data.invitation_id,
+      email: data.email,
+      role: data.role,
+      workspaceName: data.workspace_name,
     }, 'Workspace invitation created successfully');
 
     // Return invitation details (including URL for sharing)
     return NextResponse.json({
       success: true,
       invitation: {
-        id: (data as any).invitation_id,
-        email: (data as any).email,
-        role: (data as any).role,
-        workspaceName: (data as any).workspace_name,
-        inviteUrl: (data as any).invite_url,
-        expiresAt: (data as any).expires_at,
+        id: data.invitation_id,
+        email: data.email,
+        role: data.role,
+        workspaceName: data.workspace_name,
+        inviteUrl: data.invite_url,
+        expiresAt: data.expires_at,
       },
     });
 
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
  * Get all pending invitations for the current user.
  * Uses Supabase's get_my_pending_invitations RPC function.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   let session: ExtendedSession | null = null;
   try {
     session = await getServerSession(authOptions) as ExtendedSession | null;
