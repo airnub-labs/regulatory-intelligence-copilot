@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { getCostTrackingServiceIfInitialized } from '@reg-copilot/reg-intel-observability';
+import { initializeCostTracking } from '@/lib/costTracking';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
 import type { ExtendedSession } from '@/types/auth';
@@ -41,7 +42,12 @@ export async function GET(request: Request): Promise<NextResponse> {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
     await getTenantContext(session);
 
-    const costService = getCostTrackingServiceIfInitialized();
+    // Initialize cost tracking if not already done (handles Next.js worker processes)
+    let costService = getCostTrackingServiceIfInitialized();
+    if (!costService || !costService.hasQuotas()) {
+      initializeCostTracking();
+      costService = getCostTrackingServiceIfInitialized();
+    }
 
     if (!costService || !costService.hasQuotas()) {
       return NextResponse.json(
@@ -82,7 +88,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
     await getTenantContext(session);
 
-    const costService = getCostTrackingServiceIfInitialized();
+    // Initialize cost tracking if not already done (handles Next.js worker processes)
+    let costService = getCostTrackingServiceIfInitialized();
+    if (!costService || !costService.hasQuotas()) {
+      initializeCostTracking();
+      costService = getCostTrackingServiceIfInitialized();
+    }
 
     if (!costService || !costService.hasQuotas()) {
       return NextResponse.json(
@@ -126,7 +137,12 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     const session = await getServerSession(authOptions) as ExtendedSession | null;
     await getTenantContext(session);
 
-    const costService = getCostTrackingServiceIfInitialized();
+    // Initialize cost tracking if not already done (handles Next.js worker processes)
+    let costService = getCostTrackingServiceIfInitialized();
+    if (!costService || !costService.hasQuotas()) {
+      initializeCostTracking();
+      costService = getCostTrackingServiceIfInitialized();
+    }
 
     if (!costService || !costService.hasQuotas()) {
       return NextResponse.json(

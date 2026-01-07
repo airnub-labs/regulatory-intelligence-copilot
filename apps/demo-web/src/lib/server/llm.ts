@@ -40,32 +40,54 @@ const redisClient = cacheBackend ? createKeyValueClient(cacheBackend) : null;
 // Policy Store Configuration
 // ============================================================================
 
-// Type assertion to work around "Type instantiation is excessively deep" error
-export const policyStore: LlmPolicyStore = createPolicyStore({
-  supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
-  redis: redisClient ?? undefined,
-  cacheTtlSeconds: 300, // 5 minutes
-  schema: 'copilot_internal',
-} as Parameters<typeof createPolicyStore>[0]);
+let policyStoreInstance: LlmPolicyStore | null = null;
 
-// Log which store implementation is being used
-if (redisClient) {
-  logger.info(
-    {
-      supabaseUrl,
-      hasRedis: true,
-      cacheTtl: 300,
-      llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
-      backend: describeRedisBackendSelection(cacheBackend)
-    },
-    'Using CachingPolicyStore (Supabase + Redis)'
-  );
-} else {
-  const reason = !ENABLE_LLM_POLICY_CACHE
-    ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
-    : 'Redis credentials not configured';
-  logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
+/**
+ * Get or create the policy store instance.
+ * Lazily initialized to handle Next.js worker processes.
+ */
+function getPolicyStore(): LlmPolicyStore {
+  if (policyStoreInstance) {
+    return policyStoreInstance;
+  }
+
+  try {
+    // Type assertion to work around "Type instantiation is excessively deep" error
+    policyStoreInstance = createPolicyStore({
+      supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
+      redis: redisClient ?? undefined,
+      cacheTtlSeconds: 300, // 5 minutes
+      schema: 'copilot_internal',
+    } as Parameters<typeof createPolicyStore>[0]);
+
+    // Log which store implementation is being used
+    if (redisClient) {
+      logger.info(
+        {
+          supabaseUrl,
+          hasRedis: true,
+          cacheTtl: 300,
+          llmPolicyCacheEnabled: ENABLE_LLM_POLICY_CACHE,
+          backend: describeRedisBackendSelection(cacheBackend)
+        },
+        'Using CachingPolicyStore (Supabase + Redis)'
+      );
+    } else {
+      const reason = !ENABLE_LLM_POLICY_CACHE
+        ? 'LLM policy cache disabled via ENABLE_LLM_POLICY_CACHE=false'
+        : 'Redis credentials not configured';
+      logger.info({ supabaseUrl, hasRedis: false, reason }, 'Using SupabasePolicyStore (no caching)');
+    }
+
+    return policyStoreInstance;
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to create policy store');
+    throw error;
+  }
 }
+
+// Export for backward compatibility
+export const policyStore: LlmPolicyStore = getPolicyStore();
 
 // ============================================================================
 // LLM Router
@@ -79,7 +101,8 @@ if (redisClient) {
  */
 export function createLlmRouter() {
   try {
-    return createDefaultLlmRouter({ policyStore });
+    const store = getPolicyStore();
+    return createDefaultLlmRouter({ policyStore: store });
   } catch (error) {
     logger.error({ err: error }, 'Failed to create LLM router');
     throw error;

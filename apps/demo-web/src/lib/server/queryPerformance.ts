@@ -47,7 +47,7 @@ export async function getQueryPerformanceStats(
   minExecutionTimeMs: number = 100
 ): Promise<QueryPerformanceStats[]> {
   try {
-    const { data, error } = await supabaseInternal.rpc('get_query_performance_stats', {
+    const { data, error } = await (supabaseInternal.rpc as any)('get_query_performance_stats', {
       p_hours_back: hoursBack,
       p_min_execution_time_ms: minExecutionTimeMs,
     });
@@ -75,7 +75,7 @@ export async function getQueryPerformanceStats(
  */
 export async function getUserTenantCount(userId: string): Promise<number> {
   try {
-    const { data, error } = await supabaseInternal.rpc('get_user_tenant_count', {
+    const { data, error } = await (supabaseInternal.rpc as any)('get_user_tenant_count', {
       p_user_id: userId,
     });
 
@@ -110,7 +110,7 @@ export async function getRLSIndexUsage(): Promise<
   }>
 > {
   try {
-    const { data, error } = await supabaseInternal.rpc('get_rls_index_usage');
+    const { data, error } = await (supabaseInternal.rpc as any)('get_rls_index_usage');
 
     if (error) {
       logger.error({ error }, 'Failed to get RLS index usage');
@@ -145,7 +145,7 @@ export async function analyzeQueryPlan(query: string): Promise<unknown> {
   }
 
   try {
-    const { data, error } = await supabaseInternal.rpc('analyze_query_performance', {
+    const { data, error } = await (supabaseInternal.rpc as any)('analyze_query_performance', {
       p_query: query,
     });
 
@@ -174,7 +174,7 @@ export async function conversationStoreHealthcheck(): Promise<
   }>
 > {
   try {
-    const { data, error } = await supabaseInternal.rpc('conversation_store_healthcheck');
+    const { data, error } = await (supabaseInternal.rpc as any)('conversation_store_healthcheck');
 
     if (error) {
       logger.error({ error }, 'Failed to run conversation store healthcheck');
