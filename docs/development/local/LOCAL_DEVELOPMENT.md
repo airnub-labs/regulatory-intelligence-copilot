@@ -32,34 +32,29 @@ docker compose -f docker/docker-compose.yml up -d memgraph memgraph-mcp
 # 3. Start Supabase (first run takes 5-10 minutes)
 supabase start
 
-# 4. Seed Supabase database and get demo user credentials
+# 4. Seed Supabase database
 supabase db reset
 
-# 5. Get demo user and tenant IDs
-PGPASSWORD=postgres psql "postgresql://postgres@localhost:54322/postgres" \
-  -c "SELECT id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id FROM auth.users WHERE email='demo.user@example.com';"
-
-# 6. Create environment file for web app
+# 5. Create environment file for web app
 cd apps/demo-web
 cp .env.local.example .env.local
 # Edit .env.local with:
 # - Your LLM API keys (at least one: GROQ_API_KEY or OPENAI_API_KEY)
 # - PERPLEXITY_API_KEY for web search
 # - Supabase credentials from `supabase start` output
-# - Demo user/tenant IDs from step 5
 # - NEXTAUTH_SECRET (generate with: openssl rand -base64 32)
 
-# 7. Setup Memgraph indices (recommended for performance)
+# 6. Setup Memgraph indices (recommended for performance)
 cd ../..  # Back to repository root
 pnpm setup:indices
 
-# 8. Seed Memgraph with demo data
+# 7. Seed Memgraph with demo data
 pnpm seed:all
 
-# 9. Start the development server
+# 8. Start the development server
 pnpm dev
 
-# 10. Open the application
+# 9. Open the application
 # Chat UI: http://localhost:3000
 # Memgraph Lab: http://localhost:7444
 # Supabase Studio: http://localhost:54323
@@ -339,7 +334,7 @@ Save these for your `.env` file.
 
 ### Seed Demo Data and Configure the App
 
-1. **Reset and seed** the local database so the demo tenant, user, personas, and quick prompts exist:
+1. **Reset and seed** the local database:
 
    ```bash
    supabase db reset
@@ -350,31 +345,14 @@ Save these for your `.env` file.
    - Runs all migrations from `supabase/migrations/`
    - Runs the seed file `supabase/seed/demo_seed.sql`
 
-2. **Extract demo user credentials** (the seed generates random IDs):
-
-   ```bash
-   # Uses the default local Supabase Postgres port and password
-   PGPASSWORD=postgres psql "postgresql://postgres@localhost:54322/postgres" \
-     -c "SELECT id as demo_user_id, raw_user_meta_data->>'tenant_id' as demo_tenant_id FROM auth.users WHERE email='demo.user@example.com';"
-   ```
-
-   **Save these IDs** - you'll need them for `.env.local`.
-
-3. **Configure the web app** by adding these values to `apps/demo-web/.env.local`:
+2. **Configure the web app** by adding Supabase values to `apps/demo-web/.env.local`:
 
    ```bash
    # Supabase connection (from `supabase start` output)
    NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
    NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
    SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
-
-   # Demo user credentials (from query above)
-   SUPABASE_DEMO_TENANT_ID=<demo_tenant_id-from-query>
-   NEXT_PUBLIC_SUPABASE_DEMO_USER_ID=<demo_user_id-from-query>
-   NEXT_PUBLIC_SUPABASE_DEMO_EMAIL=demo.user@example.com
    ```
-
-   The demo web app uses these values to authenticate as the seeded demo user.
 
 ### Stop Supabase
 
@@ -443,12 +421,9 @@ NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key-from-supabase-start>
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key-from-supabase-start>
 
-# Authentication (NextAuth + Supabase demo user)
+# Authentication (NextAuth)
 NEXTAUTH_SECRET=<generate-with-`openssl rand -hex 32`>
 NEXTAUTH_URL=http://localhost:3000
-NEXT_PUBLIC_SUPABASE_DEMO_EMAIL=demo.user@example.com
-# The demo seed sets password to Password123! for the seeded user in supabase/seed/demo_seed.sql
-# The tenant and user IDs are generated at seed time; pull them with the psql command above.
 
 # -----------------------------------------------------------------------------
 # E2B Configuration (optional)
@@ -488,8 +463,6 @@ LOG_LEVEL=debug
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase API URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key (server-side only) |
-| `SUPABASE_DEMO_TENANT_ID` | Yes (demo) | Tenant ID returned by the seed query for the demo user |
-| `NEXT_PUBLIC_SUPABASE_DEMO_USER_ID` | Yes (demo) | User ID returned by the seed query for the demo user |
 | `COPILOT_CONVERSATIONS_MODE` | No | Conversation store mode: `auto` (default) uses Supabase when credentials are set, otherwise memory; `supabase` forces Supabase; `memory` forces in-memory (testing only) |
 | `COPILOT_GRAPH_WRITE_MODE` | No | Concept capture write mode: `auto` (default) uses Memgraph when `MEMGRAPH_URI` is present, otherwise disables writes; `memgraph` requires Memgraph connectivity; `memory` forces in-memory no-op writes |
 | `E2B_API_KEY` | No | E2B sandbox API key |

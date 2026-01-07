@@ -106,11 +106,6 @@ See [`.env.example`](./.env.example) for details.
    - `NEXTAUTH_SECRET` - Secret for NextAuth (generate with `openssl rand -base64 32`)
    - `NEXTAUTH_URL` - Your application URL (e.g., http://localhost:3000)
 
-5. **Demo User:**
-   - `SUPABASE_DEMO_TENANT_ID` - Default tenant ID from seed data
-   - `NEXT_PUBLIC_SUPABASE_DEMO_USER_ID` - Default user ID from seed data
-   - `NEXT_PUBLIC_SUPABASE_DEMO_EMAIL` - Default user email
-
 #### Optional Variables
 
 1. **Code Execution:**
@@ -174,9 +169,6 @@ MEMGRAPH_URI=bolt://localhost:7687
 NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx
 SUPABASE_SERVICE_ROLE_KEY=eyJxxx
-SUPABASE_DEMO_TENANT_ID=xxx
-NEXT_PUBLIC_SUPABASE_DEMO_USER_ID=xxx
-NEXT_PUBLIC_SUPABASE_DEMO_EMAIL=demo.user@example.com
 NEXTAUTH_SECRET=$(openssl rand -base64 32)
 NEXTAUTH_URL=http://localhost:3000
 ```

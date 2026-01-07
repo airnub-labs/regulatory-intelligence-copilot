@@ -327,9 +327,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
 
 # Supabase Admin Configuration (Strongly Recommended)
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-
-# Fallback Tenant ID
-SUPABASE_DEMO_TENANT_ID=default
 ```
 
 **Without Service Role Key**: Session validation falls back to `profiles` table query. This requires:

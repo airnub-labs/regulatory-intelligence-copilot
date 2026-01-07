@@ -1,5 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { ReadonlyRequestCookies } from 'next/dist/server/web/spec-extension/adapters/request-cookies';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 
@@ -73,6 +73,9 @@ export function createTenantScopedServiceClient(
   }
 
   const client = createServerClient(supabaseUrl, supabaseServiceKey, {
+    db: {
+      schema: 'copilot_internal',
+    },
     cookies: {
       getAll() {
         return cookies.getAll();
@@ -181,23 +184,20 @@ export function createTenantScopedServiceClient(
  * // VALID: Creating new tenant
  * const supabase = createUnrestrictedServiceClient(
  *   'Creating new tenant - no tenant_id exists yet',
- *   userId,
- *   cookies()
+ *   userId
  * );
  * await supabase.from('tenants').insert({ name, slug, owner_id: userId });
  *
  * // INVALID: Lazy querying
  * const supabase = createUnrestrictedServiceClient(
  *   'Need to query conversations', // ❌ Wrong!
- *   userId,
- *   cookies()
+ *   userId
  * );
  * ```
  */
 export function createUnrestrictedServiceClient(
   reason: string,
-  userId: string,
-  cookies: ReadonlyRequestCookies
+  userId: string
 ): SupabaseClient {
   logger.warn({
     userId,
@@ -211,16 +211,16 @@ export function createUnrestrictedServiceClient(
     throw new Error('Supabase configuration missing');
   }
 
-  return createServerClient(supabaseUrl, supabaseServiceKey, {
-    cookies: {
-      getAll() {
-        return cookies.getAll();
-      },
-      setAll(cookieList) {
-        cookieList.forEach(({ name, value, options }) => {
-          cookies.set(name, value, options);
-        });
-      },
+  // Use createClient directly for service role operations (not createServerClient)
+  // Service role bypasses RLS and doesn't need cookie-based session management
+  // Type assertion needed because Supabase generics are complex with custom schemas
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    db: {
+      schema: 'copilot_internal',
+    },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
     },
   }) as unknown as SupabaseClient;
 }

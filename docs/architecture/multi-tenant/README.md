@@ -751,8 +751,8 @@ describe('TenantScopedServiceClient', () => {
 
 **Before** (CRITICAL VULNERABILITY):
 ```typescript
-// ❌ UNSAFE - Grants access to demo tenant if user lacks tenant_id
-const tenantId = user.tenantId ?? process.env.SUPABASE_DEMO_TENANT_ID ?? 'default';
+// ❌ UNSAFE - Grants access to a default tenant if user lacks tenant_id
+const tenantId = user.tenantId ?? 'default';
 ```
 
 **After** (SECURE):

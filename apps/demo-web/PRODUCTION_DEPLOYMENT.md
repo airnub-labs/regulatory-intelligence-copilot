@@ -53,7 +53,6 @@ NEXTAUTH_URL=https://your-production-domain.com
 NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
-SUPABASE_DEMO_TENANT_ID=default
 ```
 
 ### Required for Multi-Instance Deployments
