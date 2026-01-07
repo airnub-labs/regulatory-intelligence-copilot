@@ -17,7 +17,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
 import type { ExtendedSession } from '@/types/auth';
-import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
+import { createInfrastructureServiceClient } from '@/lib/supabase/infrastructureServiceClient';
 
 interface CompactionMetricsResponse {
   totalOperations: number;
@@ -75,11 +75,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No active tenant' }, { status: 400 });
     }
 
-    // Use unrestricted client - already validated user has access to their tenant above
-    const supabase = createUnrestrictedServiceClient(
-      'fetch-compaction-metrics',
-      userId
-    );
+    // Use infrastructure client with copilot_internal schema for analytics functions
+    const supabase = createInfrastructureServiceClient('CompactionMetrics', {
+      db: { schema: 'copilot_internal' }
+    });
 
     const { searchParams } = new URL(request.url);
     const timeRange = searchParams.get('timeRange') || '7d';

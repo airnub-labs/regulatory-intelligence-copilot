@@ -54,7 +54,12 @@ begin
       updated_at,
       last_sign_in_at,
       raw_app_meta_data,
-      raw_user_meta_data
+      raw_user_meta_data,
+      confirmation_token,
+      recovery_token,
+      email_change_token_new,
+      email_change_token_current,
+      email_change
     )
     values (
       demo_user_id,
@@ -74,7 +79,12 @@ begin
         'full_name', demo_full_name,
         'email_verified', true,
         'phone_verified', false
-      )
+      ),
+      '',
+      '',
+      '',
+      '',
+      ''
     );
   else
     -- Reuse and refresh existing demo user
@@ -96,7 +106,12 @@ begin
              'full_name', demo_full_name,
              'email_verified', true,
              'phone_verified', false
-           )
+           ),
+           confirmation_token = '',
+           recovery_token = '',
+           email_change_token_new = '',
+           email_change_token_current = '',
+           email_change = ''
      where id = demo_user_id;
   end if;
 
@@ -171,6 +186,21 @@ begin
     demo_tenant_id,
     '{}'::jsonb,
     demo_now,
+    demo_now
+  )
+  on conflict (user_id) do update
+    set current_tenant_id = demo_tenant_id,
+        updated_at = demo_now;
+
+  -- Also populate user_tenant_contexts (used by session sync monitoring)
+  insert into copilot_internal.user_tenant_contexts (
+    user_id,
+    current_tenant_id,
+    updated_at
+  )
+  values (
+    demo_user_id,
+    demo_tenant_id,
     demo_now
   )
   on conflict (user_id) do update
@@ -435,7 +465,12 @@ begin
     raw_user_meta_data,
     raw_app_meta_data,
     aud,
-    role
+    role,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change_token_current,
+    email_change
   ) values (
     alice_id,
     '00000000-0000-0000-0000-000000000000',
@@ -447,12 +482,22 @@ begin
     jsonb_build_object('full_name', 'Alice Anderson'),
     jsonb_build_object('provider', 'email', 'providers', array['email']),
     'authenticated',
-    'authenticated'
+    'authenticated',
+    '',
+    '',
+    '',
+    '',
+    ''
   )
   on conflict (id) do update
     set encrypted_password = test_password_hash,
         email_confirmed_at = demo_now,
-        updated_at = demo_now;
+        updated_at = demo_now,
+        confirmation_token = '',
+        recovery_token = '',
+        email_change_token_new = '',
+        email_change_token_current = '',
+        email_change = '';
 
   -- Bob Builder
   insert into auth.users (
@@ -466,7 +511,12 @@ begin
     raw_user_meta_data,
     raw_app_meta_data,
     aud,
-    role
+    role,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change_token_current,
+    email_change
   ) values (
     bob_id,
     '00000000-0000-0000-0000-000000000000',
@@ -478,12 +528,22 @@ begin
     jsonb_build_object('full_name', 'Bob Builder'),
     jsonb_build_object('provider', 'email', 'providers', array['email']),
     'authenticated',
-    'authenticated'
+    'authenticated',
+    '',
+    '',
+    '',
+    '',
+    ''
   )
   on conflict (id) do update
     set encrypted_password = test_password_hash,
         email_confirmed_at = demo_now,
-        updated_at = demo_now;
+        updated_at = demo_now,
+        confirmation_token = '',
+        recovery_token = '',
+        email_change_token_new = '',
+        email_change_token_current = '',
+        email_change = '';
 
   -- Charlie Chen
   insert into auth.users (
@@ -497,7 +557,12 @@ begin
     raw_user_meta_data,
     raw_app_meta_data,
     aud,
-    role
+    role,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change_token_current,
+    email_change
   ) values (
     charlie_id,
     '00000000-0000-0000-0000-000000000000',
@@ -509,31 +574,47 @@ begin
     jsonb_build_object('full_name', 'Charlie Chen'),
     jsonb_build_object('provider', 'email', 'providers', array['email']),
     'authenticated',
-    'authenticated'
+    'authenticated',
+    '',
+    '',
+    '',
+    '',
+    ''
   )
   on conflict (id) do update
     set encrypted_password = test_password_hash,
         email_confirmed_at = demo_now,
-        updated_at = demo_now;
+        updated_at = demo_now,
+        confirmation_token = '',
+        recovery_token = '',
+        email_change_token_new = '',
+        email_change_token_current = '',
+        email_change = '';
 
   -- Create email identities for test users
-  insert into auth.identities (id, user_id, provider, provider_id, identity_data)
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data, created_at, updated_at)
   values
     (gen_random_uuid(), alice_id, 'email', 'alice@example.com',
-     jsonb_build_object('sub', 'alice@example.com', 'email', 'alice@example.com'))
-  on conflict (provider, provider_id) do nothing;
+     jsonb_build_object('sub', 'alice@example.com', 'email', 'alice@example.com'),
+     demo_now, demo_now)
+  on conflict (provider, provider_id) do update
+    set updated_at = demo_now;
 
-  insert into auth.identities (id, user_id, provider, provider_id, identity_data)
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data, created_at, updated_at)
   values
     (gen_random_uuid(), bob_id, 'email', 'bob@example.com',
-     jsonb_build_object('sub', 'bob@example.com', 'email', 'bob@example.com'))
-  on conflict (provider, provider_id) do nothing;
+     jsonb_build_object('sub', 'bob@example.com', 'email', 'bob@example.com'),
+     demo_now, demo_now)
+  on conflict (provider, provider_id) do update
+    set updated_at = demo_now;
 
-  insert into auth.identities (id, user_id, provider, provider_id, identity_data)
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data, created_at, updated_at)
   values
     (gen_random_uuid(), charlie_id, 'email', 'charlie@example.com',
-     jsonb_build_object('sub', 'charlie@example.com', 'email', 'charlie@example.com'))
-  on conflict (provider, provider_id) do nothing;
+     jsonb_build_object('sub', 'charlie@example.com', 'email', 'charlie@example.com'),
+     demo_now, demo_now)
+  on conflict (provider, provider_id) do update
+    set updated_at = demo_now;
 
   raise notice 'Created/updated test users: Alice, Bob, Charlie';
 
@@ -619,6 +700,18 @@ begin
         updated_at = demo_now;
 
   raise notice 'Set active tenants for test users';
+
+  -- Also populate user_tenant_contexts (used by session sync monitoring)
+  insert into copilot_internal.user_tenant_contexts (user_id, current_tenant_id, updated_at)
+  values
+    (alice_id, alice_personal_id, demo_now),
+    (bob_id, bob_personal_id, demo_now),
+    (charlie_id, charlie_personal_id, demo_now)
+  on conflict (user_id) do update
+    set current_tenant_id = excluded.current_tenant_id,
+        updated_at = demo_now;
+
+  raise notice 'Set user tenant contexts for test users';
 
   ---------------------------------------------------------------------------
   -- 6. Create Sample Conversations
