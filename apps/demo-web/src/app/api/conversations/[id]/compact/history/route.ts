@@ -34,7 +34,6 @@ import type { ExtendedSession } from '@/types/auth';
 import { conversationStore } from '@/lib/server/conversations';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
-import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -110,11 +109,9 @@ export async function GET(
 
             // Fetch compaction history from Supabase using unrestricted service client
             // (already validated user has access to this conversation above)
-            const cookieStore = await cookies();
             const supabase = createUnrestrictedServiceClient(
               'fetch-compaction-history',
-              userId,
-              cookieStore
+              userId
             );
 
             // Query compaction_operations table for this conversation

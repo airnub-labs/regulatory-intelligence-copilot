@@ -7,7 +7,6 @@ import { getTenantContext } from '@/lib/auth/tenantContext';
 import type { ExtendedSession } from '@/types/auth';
 import { conversationStore, conversationEventHub } from '@/lib/server/conversations';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
-import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,11 +52,9 @@ export async function GET(
           }
 
           try {
-            const cookieStore = await cookies();
             const supabase = createUnrestrictedServiceClient(
               'get-message',
-              userId,
-              cookieStore
+              userId
             );
 
             const { data: message, error } = await supabase
@@ -166,11 +163,9 @@ export async function PATCH(
           }
 
           try {
-            const cookieStore = await cookies();
             const supabase = createUnrestrictedServiceClient(
               'update-message-metadata',
-              userId,
-              cookieStore
+              userId
             );
 
             // First verify the message exists and belongs to this conversation

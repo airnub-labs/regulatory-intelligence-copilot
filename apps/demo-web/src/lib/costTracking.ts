@@ -24,6 +24,7 @@ import {
 } from '@reg-copilot/reg-intel-observability';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { env } from '@/env';
 
 const logger = createLogger('CostTracking');
 
@@ -53,26 +54,16 @@ function getNotificationService(): NotificationService {
  * Supabase is required in both local development and production.
  * For local development, use `supabase start` to run a local Supabase instance.
  *
- * @returns Credentials or null if not configured
+ * @returns Credentials
  */
-function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
+function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } {
   // Avoid initializing in browser
   if (typeof window !== 'undefined') {
     throw new Error('Cost tracking must be initialized on the server');
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // eslint-disable-next-line tenant-security/no-unsafe-service-role -- System initialization at startup, no user/tenant context
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    logger.warn(
-      'Supabase credentials required for cost tracking. ' +
-        'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables. ' +
-        'For local development, run `supabase start` to start a local Supabase instance.'
-    );
-    return null;
-  }
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
   return { supabaseUrl, supabaseKey };
 }
@@ -88,13 +79,6 @@ function createCostTrackingProviders(): {
   quotas: SupabaseQuotaProvider;
 } {
   const credentials = getSupabaseCredentials();
-
-  if (!credentials) {
-    return { storage: null, quotas: null } as unknown as {
-      storage: SupabaseCostStorage;
-      quotas: SupabaseQuotaProvider;
-    };
-  }
 
   const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -136,6 +120,12 @@ function createCostTrackingProviders(): {
  */
 export const initializeCostTracking = (): void => {
   try {
+    // Check if cost tracking is enabled
+    if (!env.COST_TRACKING_ENABLED) {
+      logger.info('Cost tracking disabled via COST_TRACKING_ENABLED=false');
+      return;
+    }
+
     // Check if already initialized
     const { getCostTrackingServiceIfInitialized } = require('@reg-copilot/reg-intel-observability');
     if (getCostTrackingServiceIfInitialized()) {
@@ -145,11 +135,6 @@ export const initializeCostTracking = (): void => {
 
     // Create Supabase-backed providers
     const { storage, quotas } = createCostTrackingProviders();
-
-    if (!storage || !quotas) {
-      logger.warn('Skipping cost tracking initialization due to missing Supabase credentials');
-      return;
-    }
 
     // Initialize cost tracking
     const costService = initCostTracking({

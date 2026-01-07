@@ -29,6 +29,7 @@ import {
   createTransparentCache,
   type TransparentCache,
 } from '@reg-copilot/reg-intel-cache';
+import { env } from '@/env';
 
 const logger = createLogger('E2BCostTracking');
 
@@ -53,23 +54,14 @@ function getNotificationService(): NotificationService {
 /**
  * Get Supabase credentials from environment
  */
-function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
+function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } {
   // Avoid initializing in browser
   if (typeof window !== 'undefined') {
     throw new Error('E2B cost tracking must be initialized on the server');
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // eslint-disable-next-line tenant-security/no-unsafe-service-role -- System initialization at startup, no user/tenant context
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    logger.warn(
-      'Supabase credentials required for E2B cost tracking. ' +
-        'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables.'
-    );
-    return null;
-  }
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
   return { supabaseUrl, supabaseKey };
 }
@@ -79,6 +71,12 @@ function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } 
  */
 export const initializeE2BCostTracking = (): void => {
   try {
+    // Check if E2B is enabled
+    if (!env.E2B_ENABLED) {
+      logger.info('E2B cost tracking disabled via E2B_ENABLED=false');
+      return;
+    }
+
     // Check if already initialized
     if (e2bCostTrackingService) {
       logger.info('E2B cost tracking already initialized');
@@ -87,10 +85,6 @@ export const initializeE2BCostTracking = (): void => {
 
     // Get Supabase credentials
     const credentials = getSupabaseCredentials();
-    if (!credentials) {
-      logger.warn('Skipping E2B cost tracking initialization due to missing Supabase credentials');
-      return;
-    }
 
     // Create Supabase client
     const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {

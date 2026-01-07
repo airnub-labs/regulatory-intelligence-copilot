@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
@@ -44,14 +43,11 @@ export async function DELETE(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call cancel RPC
     // The RPC function enforces owner/admin permission checks
     const supabase = createUnrestrictedServiceClient(
       'Cancelling workspace invitation - RPC validates permissions',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call Supabase function

@@ -89,8 +89,7 @@ export const authOptions: NextAuthOptions = {
         // - Creating personal tenant (new tenant, no tenant_id exists yet)
         const supabaseAdmin = createUnrestrictedServiceClient(
           'Get or create personal tenant during authentication',
-          userId,
-          cookieStore
+          userId
         )
 
         let currentTenantId: string | null = null

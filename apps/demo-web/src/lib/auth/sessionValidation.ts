@@ -149,8 +149,7 @@ export async function validateUserExists(userId: string): Promise<ValidateUserRe
     // that don't have tenant_id (auth operations are cross-tenant by nature)
     const adminSupabase = createUnrestrictedServiceClient(
       'Session validation - checking auth.users and tenant RPC',
-      userId,
-      cookieStore
+      userId
     )
 
     // Check if user exists in auth.users

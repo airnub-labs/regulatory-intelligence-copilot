@@ -18,7 +18,6 @@ import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
 import type { ExtendedSession } from '@/types/auth';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
-import { cookies } from 'next/headers';
 
 interface CompactionMetricsResponse {
   totalOperations: number;
@@ -77,11 +76,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Use unrestricted client - already validated user has access to their tenant above
-    const cookieStore = await cookies();
     const supabase = createUnrestrictedServiceClient(
       'fetch-compaction-metrics',
-      userId,
-      cookieStore
+      userId
     );
 
     const { searchParams } = new URL(request.url);

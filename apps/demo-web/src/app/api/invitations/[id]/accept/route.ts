@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { cookies } from 'next/headers';
 import { authOptions } from '@/lib/auth/options';
 import { createLogger } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
@@ -45,14 +44,11 @@ export async function POST(
       );
     }
 
-    const cookieStore = await cookies();
-
     // SECURITY: Use unrestricted service client to call accept RPC
     // The RPC function validates email match and creates membership
     const supabase = createUnrestrictedServiceClient(
       'Accepting workspace invitation - RPC validates email match',
-      userId,
-      cookieStore
+      userId
     );
 
     // Call Supabase function
