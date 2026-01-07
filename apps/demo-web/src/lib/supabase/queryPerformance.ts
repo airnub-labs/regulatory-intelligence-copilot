@@ -1,15 +1,21 @@
 /**
  * Query Performance Monitoring Utilities
  *
- * LOW-1: RLS Policy Performance Optimization
+ * ⚠️ DEPRECATION NOTICE:
+ * The admin functions in this file (getQueryPerformanceStats, getUserTenantCount,
+ * getRLSIndexUsage, analyzeQueryPlan) have been moved to copilot_internal schema
+ * for security reasons and are no longer accessible via client-side code.
  *
- * Utilities for monitoring and analyzing query performance,
- * particularly for RLS policy-heavy queries.
+ * Use @/lib/server/queryPerformance instead for server-side monitoring.
+ *
+ * ONLY logSlowQuery() and measureQuery() remain in this file for client-side use.
+ *
+ * LOW-1: RLS Policy Performance Optimization
  *
  * USAGE:
  * - In development: Use logSlowQuery() to identify bottlenecks
  * - In production: Queries slower than threshold are automatically logged
- * - Use getQueryPerformanceStats() to analyze trends
+ * - For admin stats: Use @/lib/server/queryPerformance (server-side only)
  */
 
 import { createClient } from '@/lib/supabase/client'
@@ -146,80 +152,39 @@ export async function measureQuery<T>(
 }
 
 /**
- * Gets query performance statistics for analysis
+ * @deprecated This function has been moved to copilot_internal schema for security.
+ * Use @/lib/server/queryPerformance.getQueryPerformanceStats() instead (server-side only).
  *
- * @param hoursBack - Number of hours to analyze (default: 24)
- * @param minExecutionTimeMs - Minimum execution time to include (default: 100ms)
- * @returns Performance statistics grouped by query type and table
- *
- * @example
- * const stats = await getQueryPerformanceStats(24, 100)
- * stats.forEach(stat => {
- *   console.log(`${stat.table_name}: avg ${stat.avg_execution_time_ms}ms`)
- * })
+ * This client-side version will no longer work after migration 20260107000006.
  */
 export async function getQueryPerformanceStats(
   hoursBack: number = 24,
   minExecutionTimeMs: number = 100
 ): Promise<QueryPerformanceStats[]> {
-  try {
-    const supabase = createClient()
-
-    const { data, error } = await supabase.rpc('get_query_performance_stats', {
-      p_hours_back: hoursBack,
-      p_min_execution_time_ms: minExecutionTimeMs,
-    })
-
-    if (error) {
-      logger.error({ error }, 'Failed to get query performance stats')
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    logger.error({ error }, 'Failed to get query performance stats')
-    return []
-  }
+  logger.error(
+    'getQueryPerformanceStats has been deprecated. Use @/lib/server/queryPerformance instead (server-side only)'
+  );
+  throw new Error(
+    'getQueryPerformanceStats is now a server-side only function. Import from @/lib/server/queryPerformance'
+  );
 }
 
 /**
- * Gets the number of tenants a user belongs to
- *
- * Useful for identifying users who may experience RLS performance issues
- * due to large numbers of tenant memberships.
- *
- * @param userId - User ID
- * @returns Number of active tenants
+ * @deprecated This function has been moved to copilot_internal schema for security.
+ * Use @/lib/server/queryPerformance.getUserTenantCount() instead (server-side only).
  */
 export async function getUserTenantCount(userId: string): Promise<number> {
-  try {
-    const supabase = createClient()
-
-    const { data, error } = await supabase
-      .rpc('get_user_tenant_count', {
-        p_user_id: userId,
-      })
-      .single<number>()
-
-    if (error) {
-      logger.error({ error, userId }, 'Failed to get user tenant count')
-      return 0
-    }
-
-    return (data as number) || 0
-  } catch (error) {
-    logger.error({ error, userId }, 'Failed to get user tenant count')
-    return 0
-  }
+  logger.error(
+    'getUserTenantCount has been deprecated. Use @/lib/server/queryPerformance instead (server-side only)'
+  );
+  throw new Error(
+    'getUserTenantCount is now a server-side only function. Import from @/lib/server/queryPerformance'
+  );
 }
 
 /**
- * Gets RLS index usage statistics
- *
- * Use this to verify that indexes created for RLS optimization
- * are actually being used by queries.
- *
- * @returns Index usage statistics
+ * @deprecated This function has been moved to copilot_internal schema for security.
+ * Use @/lib/server/queryPerformance.getRLSIndexUsage() instead (server-side only).
  */
 export async function getRLSIndexUsage(): Promise<
   Array<{
@@ -231,57 +196,23 @@ export async function getRLSIndexUsage(): Promise<
     index_size_mb: number
   }>
 > {
-  try {
-    const supabase = createClient()
-
-    const { data, error } = await supabase.rpc('get_rls_index_usage')
-
-    if (error) {
-      logger.error({ error }, 'Failed to get RLS index usage')
-      return []
-    }
-
-    return data || []
-  } catch (error) {
-    logger.error({ error }, 'Failed to get RLS index usage')
-    return []
-  }
+  logger.error(
+    'getRLSIndexUsage has been deprecated. Use @/lib/server/queryPerformance instead (server-side only)'
+  );
+  throw new Error(
+    'getRLSIndexUsage is now a server-side only function. Import from @/lib/server/queryPerformance'
+  );
 }
 
 /**
- * Development helper: Analyzes a query with EXPLAIN ANALYZE
- *
- * WARNING: Only use in development. This executes the query!
- *
- * @param query - SQL query to analyze
- * @returns Query execution plan
- *
- * @example
- * const plan = await analyzeQueryPlan(
- *   'SELECT * FROM conversations WHERE tenant_id = \'xxx\''
- * )
- * console.log(JSON.stringify(plan, null, 2))
+ * @deprecated This function has been moved to copilot_internal schema for security.
+ * Use @/lib/server/queryPerformance.analyzeQueryPlan() instead (server-side only).
  */
 export async function analyzeQueryPlan(query: string): Promise<unknown[]> {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('analyzeQueryPlan should only be used in development')
-  }
-
-  try {
-    const supabase = createClient()
-
-    const { data, error } = await supabase.rpc('analyze_query_performance', {
-      p_query: query,
-    })
-
-    if (error) {
-      logger.error({ error, query }, 'Failed to analyze query')
-      throw error
-    }
-
-    return data
-  } catch (error) {
-    logger.error({ error, query }, 'Failed to analyze query')
-    throw error
-  }
+  logger.error(
+    'analyzeQueryPlan has been deprecated. Use @/lib/server/queryPerformance instead (server-side only)'
+  );
+  throw new Error(
+    'analyzeQueryPlan is now a server-side only function. Import from @/lib/server/queryPerformance'
+  );
 }

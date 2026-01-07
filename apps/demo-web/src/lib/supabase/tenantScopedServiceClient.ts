@@ -73,9 +73,8 @@ export function createTenantScopedServiceClient(
   }
 
   const client = createServerClient(supabaseUrl, supabaseServiceKey, {
-    db: {
-      schema: 'copilot_internal',
-    },
+    // NOTE: Don't set db.schema here - RPC functions are in public schema
+    // Tables will be referenced as copilot_internal.table_name in queries
     cookies: {
       getAll() {
         return cookies.getAll();
@@ -93,7 +92,9 @@ export function createTenantScopedServiceClient(
     get(target, prop) {
       if (prop === 'from') {
         return (tableName: string) => {
-          const queryBuilder = target.from(tableName);
+          // Qualify table names with copilot_internal schema since we don't set default schema
+          const qualifiedTableName = `copilot_internal.${tableName}`;
+          const queryBuilder = target.from(qualifiedTableName);
 
           // Log service role access
           logger.debug({
@@ -214,10 +215,9 @@ export function createUnrestrictedServiceClient(
   // Use createClient directly for service role operations (not createServerClient)
   // Service role bypasses RLS and doesn't need cookie-based session management
   // Type assertion needed because Supabase generics are complex with custom schemas
+  // NOTE: Don't set db.schema here - RPC functions are in public schema
+  // Tables will be referenced as copilot_internal.table_name in queries
   return createClient(supabaseUrl, supabaseServiceKey, {
-    db: {
-      schema: 'copilot_internal',
-    },
     auth: {
       persistSession: false,
       autoRefreshToken: false,

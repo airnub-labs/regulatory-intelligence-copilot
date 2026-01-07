@@ -97,7 +97,6 @@ export const authOptions: NextAuthOptions = {
         // Check if user has active tenant
         const { data: activeId } = await supabaseAdmin
           .rpc('get_current_tenant_id', { p_user_id: userId })
-          .single<string>()
 
         if (activeId) {
           currentTenantId = activeId as string
