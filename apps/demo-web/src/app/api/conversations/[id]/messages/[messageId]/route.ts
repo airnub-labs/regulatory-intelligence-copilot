@@ -7,7 +7,6 @@ import { getTenantContext } from '@/lib/auth/tenantContext';
 import type { ExtendedSession } from '@/types/auth';
 import { conversationStore, conversationEventHub } from '@/lib/server/conversations';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
-import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 

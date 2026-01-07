@@ -25,6 +25,7 @@ import {
   createTransparentCache,
   type TransparentCache,
 } from '@reg-copilot/reg-intel-cache';
+import { env } from '@/env';
 
 const logger = createLogger('PricingInit');
 
@@ -34,26 +35,16 @@ const logger = createLogger('PricingInit');
  * Supabase is required in both local development and production.
  * For local development, use `supabase start` to run a local Supabase instance.
  *
- * @returns Credentials or null if not configured
+ * @returns Credentials
  */
-function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } | null {
+function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } {
   // Avoid initializing in browser
   if (typeof window !== 'undefined') {
     throw new Error('Pricing service must be initialized on the server');
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  // eslint-disable-next-line tenant-security/no-unsafe-service-role -- System initialization at startup, no user/tenant context
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    logger.warn(
-      'Supabase credentials required for dynamic pricing. ' +
-        'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables. ' +
-        'For local development, run `supabase start` to start a local Supabase instance.'
-    );
-    return null;
-  }
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
   return { supabaseUrl, supabaseKey };
 }
@@ -72,6 +63,12 @@ function getSupabaseCredentials(): { supabaseUrl: string; supabaseKey: string } 
  */
 export const initializePricingService = (): void => {
   try {
+    // Check if cost tracking is enabled (pricing service is required for cost tracking)
+    if (!env.COST_TRACKING_ENABLED) {
+      logger.info('Pricing service disabled (COST_TRACKING_ENABLED=false)');
+      return;
+    }
+
     // Check if already initialized
     const { getPricingServiceIfInitialized } = require('@reg-copilot/reg-intel-observability');
     if (getPricingServiceIfInitialized()) {
@@ -81,11 +78,6 @@ export const initializePricingService = (): void => {
 
     // Get credentials
     const credentials = getSupabaseCredentials();
-
-    if (!credentials) {
-      logger.warn('Skipping pricing service initialization due to missing Supabase credentials');
-      return;
-    }
 
     // Create Supabase client
     const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {

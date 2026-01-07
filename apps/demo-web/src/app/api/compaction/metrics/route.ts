@@ -18,7 +18,6 @@ import { authOptions } from '@/lib/auth/options';
 import { getTenantContext } from '@/lib/auth/tenantContext';
 import type { ExtendedSession } from '@/types/auth';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
-import { cookies } from 'next/headers';
 
 interface CompactionMetricsResponse {
   totalOperations: number;

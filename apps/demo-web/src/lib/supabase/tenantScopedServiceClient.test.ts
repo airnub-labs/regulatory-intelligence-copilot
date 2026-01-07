@@ -76,16 +76,10 @@ describe('createTenantScopedServiceClient', () => {
 });
 
 describe('createUnrestrictedServiceClient', () => {
-  const mockCookies = {
-    getAll: () => [],
-    set: vi.fn(),
-  };
-
   it('should create unrestricted client with valid reason', () => {
     const client = createUnrestrictedServiceClient(
       'Creating new tenant - no tenant_id exists yet',
-      'user-123',
-      mockCookies
+      'user-123'
     );
 
     expect(client).toBeDefined();
@@ -98,8 +92,7 @@ describe('createUnrestrictedServiceClient', () => {
     expect(() => {
       createUnrestrictedServiceClient(
         'Valid reason',
-        'user-123',
-        mockCookies
+        'user-123'
       );
     }).toThrow('Supabase configuration missing');
   });
@@ -108,8 +101,7 @@ describe('createUnrestrictedServiceClient', () => {
     expect(() => {
       createUnrestrictedServiceClient(
         'Admin operation across all tenants',
-        'admin-user',
-        mockCookies
+        'admin-user'
       );
     }).not.toThrow();
   });
@@ -198,8 +190,7 @@ describe('Security validation', () => {
     expect(() => {
       createUnrestrictedServiceClient(
         'Valid reason',
-        'user-123',
-        mockCookies
+        'user-123'
       );
     }).not.toThrow();
   });

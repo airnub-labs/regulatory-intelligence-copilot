@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth/next'
-import { cookies } from 'next/headers'
 import { authOptions } from '@/lib/auth/options'
 import { getTenantContext } from '@/lib/auth/tenantContext'
 import type { ExtendedSession } from '@/types/auth';

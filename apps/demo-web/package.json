@@ -34,15 +34,16 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
+    "@reg-copilot/reg-intel-cache": "workspace:*",
     "@reg-copilot/reg-intel-conversations": "workspace:*",
     "@reg-copilot/reg-intel-core": "workspace:*",
-    "@reg-copilot/reg-intel-cache": "workspace:*",
     "@reg-copilot/reg-intel-llm": "workspace:*",
     "@reg-copilot/reg-intel-next-adapter": "workspace:*",
     "@reg-copilot/reg-intel-observability": "workspace:*",
     "@reg-copilot/reg-intel-ui": "workspace:*",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.49.0",
+    "@t3-oss/env-nextjs": "^0.13.10",
     "@upstash/ratelimit": "^2.0.4",
     "@upstash/redis": "^1.34.3",
     "ai": "^5.0.0",
@@ -61,7 +62,8 @@
     "react-force-graph-2d": "^1.29.0",
     "require-in-the-middle": "8.0.1",
     "tailwind-merge": "^3.4.0",
-    "thread-stream": "^3.1.0"
+    "thread-stream": "^3.1.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.0",

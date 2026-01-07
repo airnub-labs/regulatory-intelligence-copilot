@@ -34,7 +34,6 @@ import type { ExtendedSession } from '@/types/auth';
 import { conversationStore } from '@/lib/server/conversations';
 import { createLogger, requestContext, withSpan } from '@reg-copilot/reg-intel-observability';
 import { createUnrestrictedServiceClient } from '@/lib/supabase/tenantScopedServiceClient';
-import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
