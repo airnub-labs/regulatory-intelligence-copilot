@@ -55,15 +55,12 @@ export class SupabasePolicyStore implements LlmPolicyStore {
   private readonly tableName = 'tenant_llm_policies';
 
   constructor(
-    private readonly supabase: SupabaseLikeClient,
-    private readonly schema: 'public' | 'copilot_internal' = 'copilot_internal'
+    private readonly supabase: SupabaseLikeClient
   ) {}
 
   private get table() {
-    // Use schema-qualified table name if using copilot_internal
-    return this.schema === 'copilot_internal'
-      ? `${this.schema}.${this.tableName}`
-      : this.tableName;
+    // Return plain table name - Supabase client should be configured with schema
+    return this.tableName;
   }
 
   async getPolicy(tenantId: string): Promise<TenantLlmPolicy | null> {
@@ -218,7 +215,7 @@ export interface PolicyStoreConfig {
   supabase?: SupabaseLikeClient;
   redis?: RedisKeyValueClient;
   cacheTtlSeconds?: number;
-  schema?: 'public' | 'copilot_internal';
+  // Note: Schema should be configured on the Supabase client itself, not passed here
 }
 
 /**
@@ -241,7 +238,7 @@ export function createPolicyStore(config: PolicyStoreConfig): LlmPolicyStore {
     throw new Error('Supabase client is required to create a PolicyStore');
   }
 
-  const supabaseStore = new SupabasePolicyStore(config.supabase, config.schema);
+  const supabaseStore = new SupabasePolicyStore(config.supabase);
 
   // ✅ ALWAYS return CachingPolicyStore - factory never returns different types
   // Use provided Redis client or PassThroughRedis when unavailable

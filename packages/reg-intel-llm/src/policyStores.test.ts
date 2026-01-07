@@ -359,15 +359,9 @@ describe('CachingPolicyStore', () => {
 });
 
 describe('Store Construction', () => {
-  it('should create SupabasePolicyStore with copilot_internal schema', () => {
+  it('should create SupabasePolicyStore (schema configured on client)', () => {
     const supabase = createMockSupabaseClient();
-    const store = new SupabasePolicyStore(supabase, 'copilot_internal');
-    expect(store).toBeInstanceOf(SupabasePolicyStore);
-  });
-
-  it('should create SupabasePolicyStore with public schema', () => {
-    const supabase = createMockSupabaseClient();
-    const store = new SupabasePolicyStore(supabase, 'public');
+    const store = new SupabasePolicyStore(supabase);
     expect(store).toBeInstanceOf(SupabasePolicyStore);
   });
 

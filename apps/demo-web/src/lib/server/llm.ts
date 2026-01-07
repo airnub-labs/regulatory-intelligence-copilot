@@ -53,11 +53,11 @@ function getPolicyStore(): LlmPolicyStore {
 
   try {
     // Type assertion to work around "Type instantiation is excessively deep" error
+    // NOTE: Do NOT pass schema parameter - supabaseInternalClient is already configured with schema: 'copilot_internal'
     policyStoreInstance = createPolicyStore({
       supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
       redis: redisClient ?? undefined,
       cacheTtlSeconds: 300, // 5 minutes
-      schema: 'copilot_internal',
     } as Parameters<typeof createPolicyStore>[0]);
 
     // Log which store implementation is being used

@@ -804,15 +804,19 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
     // Update the conversation's active_path_id to point to this new primary path
     const { error: updateError } = await this.internalClient
       .from('conversations')
-      .update({ active_path_id: pathId })
+      .update({
+        active_path_id: pathId,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', input.conversationId)
       .eq('tenant_id', input.tenantId);
 
     if (updateError) {
-      logger.warn(
-        { ...input, pathId, error: updateError },
-        'Failed to set active_path_id on conversation, but path was created'
+      logger.error(
+        { ...input, pathId, error: updateError, errorMessage: updateError.message, errorDetails: updateError.details },
+        'Failed to set active_path_id on conversation'
       );
+      throw new Error(`Failed to set active_path_id: ${updateError.message}`);
     }
 
     return (await this.getPath({ tenantId: input.tenantId, pathId }))!;

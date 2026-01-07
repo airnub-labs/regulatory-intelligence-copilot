@@ -24,6 +24,7 @@ import {
 import type {
   LlmRouter,
   LlmCompletionOptions,
+  LlmPolicyStore,
 } from '@reg-copilot/reg-intel-llm';
 import {
   ToolRegistry,
@@ -67,6 +68,8 @@ export interface ChatRouteHandlerOptions {
   eventHub?: ConversationEventHub;
   conversationListEventHub?: ConversationListEventHub;
   executionContextManager?: ExecutionContextManager;
+  llmRouter?: LlmRouter;
+  policyStore?: LlmPolicyStore;
 }
 
 /**
@@ -570,7 +573,8 @@ export function createChatRouteHandler(options?: ChatRouteHandlerOptions) {
 
   const getOrCreateEngine = () => {
     if (!complianceEngine) {
-      llmRouter = createDefaultLlmRouter();
+      // Use provided llmRouter or create one with policyStore
+      llmRouter = options?.llmRouter ?? createDefaultLlmRouter({ policyStore: options?.policyStore });
       const llmClient = new LlmRouterClientAdapter(llmRouter);
       complianceEngine = createComplianceEngine({
         llmRouter,

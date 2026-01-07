@@ -52,7 +52,7 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
   ) {}
 
   async recordCost(record: Omit<E2BCostRecord, 'id' | 'timestamp'>): Promise<void> {
-    const { error } = await this.client.from('copilot_internal.e2b_cost_records').insert({
+    const { error } = await this.client.from('e2b_cost_records').insert({
       execution_context_id: record.executionContextId,
       sandbox_id: record.sandboxId,
       tier: record.tier,
@@ -116,7 +116,7 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
 
     // Get quota details
     const { data: quotaData, error: quotaError } = await this.client
-      .from('copilot_internal.cost_quotas')
+      .from('cost_quotas')
       .select('*')
       .eq('scope', 'tenant')
       .eq('scope_id', tenantId)
@@ -193,7 +193,7 @@ export class SupabaseE2BCostTrackingService implements E2BCostTrackingService {
     };
 
     const { data, error } = await this.client
-      .from('copilot_internal.e2b_cost_records')
+      .from('e2b_cost_records')
       .select('total_cost_usd, execution_time_seconds')
       .eq('tenant_id', tenantId)
       .gte('timestamp', `now() - interval '${periodMap[period]}'`);

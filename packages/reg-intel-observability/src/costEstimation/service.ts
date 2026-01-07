@@ -154,7 +154,7 @@ export class SupabaseCostEstimationService implements CostEstimationService {
 
     try {
       const { data, error } = await this.client
-        .from('copilot_internal.llm_cost_estimates')
+        .from('llm_cost_estimates')
         .select('estimated_cost_usd')
         .eq('provider', params.provider.toLowerCase())
         .eq('model', params.model.toLowerCase())
@@ -231,7 +231,7 @@ export class SupabaseCostEstimationService implements CostEstimationService {
 
     try {
       const { data, error } = await this.client
-        .from('copilot_internal.e2b_cost_estimates')
+        .from('e2b_cost_estimates')
         .select('estimated_cost_usd')
         .eq('tier', params.tier.toLowerCase())
         .eq('region', region.toLowerCase())

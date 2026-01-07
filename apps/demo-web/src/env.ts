@@ -31,7 +31,7 @@ export const env = createEnv({
 
     // Feature flags (explicit opt-in/out)
     COST_TRACKING_ENABLED: z.coerce.boolean().default(true),
-    E2B_ENABLED: z.coerce.boolean().default(false),
+    E2B_ENABLED: z.coerce.boolean().default(true),
     REDIS_CACHING_ENABLED: z.coerce.boolean().default(true),
 
     // E2B (required only if E2B_ENABLED=true)

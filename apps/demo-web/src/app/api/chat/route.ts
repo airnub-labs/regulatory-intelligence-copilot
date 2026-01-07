@@ -20,6 +20,7 @@ import {
   conversationStore,
   executionContextManager,
 } from '@/lib/server/conversations';
+import { policyStore } from '@/lib/server/llm';
 import { checkLLMQuotaBeforeRequest } from '@/lib/costTracking';
 import { createQuotaExceededStreamResponse, calculateRetryAfter } from '@/lib/quotaErrors';
 import { getCostEstimationService } from '@/lib/costEstimation';
@@ -36,6 +37,7 @@ const handler = createChatRouteHandler({
   eventHub: conversationEventHub as unknown as ConversationEventHub,
   conversationListEventHub: conversationListEventHub as unknown as ConversationListEventHub,
   executionContextManager,
+  policyStore,
 });
 
 const headerSetter = {
