@@ -21,13 +21,10 @@ RUN cp -r /tmp/ai-toolkit/integrations/mcp-memgraph/* /app/ \
 # Install dependencies using pip
 RUN pip install --no-cache-dir .
 
-# Default environment variables
+# Default environment variables (can be overridden by docker-compose)
+# These are just defaults for standalone usage
 ENV MCP_TRANSPORT=streamable-http
-ENV MEMGRAPH_URL=bolt://host.docker.internal:7687
-ENV MEMGRAPH_USER=memgraph
-ENV MEMGRAPH_USERNAME=memgraph
-ENV MEMGRAPH_PASSWORD=
-ENV MCP_READ_ONLY=true
+ENV MCP_READ_ONLY=false
 
 # Expose HTTP port (used when MCP_TRANSPORT=streamable-http)
 EXPOSE 8000

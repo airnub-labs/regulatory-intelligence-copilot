@@ -21,6 +21,7 @@ export interface SupabaseLikeClient {
     select(columns?: string): {
       eq(column: string, value: unknown): {
         single(): Promise<{ data: unknown; error: { message: string } | null }>;
+        maybeSingle(): Promise<{ data: unknown; error: { message: string } | null }>;
       };
     };
     upsert(
@@ -68,13 +69,9 @@ export class SupabasePolicyStore implements LlmPolicyStore {
       .from(this.table)
       .select('*')
       .eq('tenant_id', tenantId)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      // PGRST116 = no rows found, not an error
-      if (error.message.includes('PGRST116')) {
-        return null;
-      }
       logger.error({ tenantId, error: error.message }, 'Failed to get policy');
       throw new Error(`Failed to get policy: ${error.message}`);
     }
