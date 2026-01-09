@@ -1,0 +1,54 @@
+{
+  "legal": {
+    "jurisdiction": "Rep\u00fablica Portuguesa",
+    "regulator": "Comiss\u00e3o do Mercado de Valores Mobili\u00e1rios",
+    "dataProtection": "Comiss\u00e3o Nacional de Prote\u00e7\u00e3o de Dados",
+    "taxAuthority": "Autoridade Tribut\u00e1ria e Aduaneira",
+    "disclaimer": "Esta informa\u00e7\u00e3o \u00e9 apenas orientativa e n\u00e3o constitui aconselhamento jur\u00eddico ou financeiro ao abrigo da lei portuguesa."
+  },
+  "tax": {
+    "iva": "IVA",
+    "ivaRate": "23%",
+    "irs": "IRS",
+    "irsFull": "Imposto sobre o Rendimento das Pessoas Singulares",
+    "irc": "IRC",
+    "ircFull": "Imposto sobre o Rendimento das Pessoas Coletivas",
+    "imi": "IMI",
+    "imiFull": "Imposto Municipal sobre Im\u00f3veis"
+  },
+  "regulatory": {
+    "pension": "Fundo de Pens\u00f5es",
+    "socialSecurity": "Seguran\u00e7a Social",
+    "nif": "NIF",
+    "nifFull": "N\u00famero de Identifica\u00e7\u00e3o Fiscal",
+    "niss": "NISS",
+    "nissFull": "N\u00famero de Identifica\u00e7\u00e3o da Seguran\u00e7a Social"
+  },
+  "currency": {
+    "code": "EUR",
+    "symbol": "\u20ac",
+    "format": "{amount, number, ::currency/EUR}",
+    "example": "1.234,56 \u20ac"
+  },
+  "formats": {
+    "dateShort": "dd/MM/yyyy",
+    "dateLong": "d 'de' MMMM 'de' yyyy",
+    "phonePrefix": "+351",
+    "postcode": "C\u00f3digo Postal",
+    "postcodeExample": "1000-001"
+  },
+  "address": {
+    "distrito": "Distrito",
+    "codigoPostal": "C\u00f3digo Postal"
+  },
+  "documents": {
+    "passport": "Passaporte Portugu\u00eas",
+    "cartaoCidadao": "Cart\u00e3o de Cidad\u00e3o",
+    "cartaConducao": "Carta de Condu\u00e7\u00e3o"
+  },
+  "vocabulary": {
+    "autocarro": "autocarro",
+    "telemovel": "telem\u00f3vel",
+    "ficheiro": "ficheiro"
+  }
+}

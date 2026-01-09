@@ -1,0 +1,52 @@
+{
+  "legal": {
+    "jurisdiction": "United Kingdom",
+    "regulator": "Financial Conduct Authority",
+    "dataProtection": "Information Commissioner's Office",
+    "taxAuthority": "HM Revenue and Customs",
+    "disclaimer": "This information is for guidance only and does not constitute legal or financial advice under UK law."
+  },
+  "tax": {
+    "vat": "VAT",
+    "vatRate": "20%",
+    "incomeTax": "Income Tax",
+    "ni": "National Insurance",
+    "cgt": "Capital Gains Tax",
+    "iht": "Inheritance Tax",
+    "councilTax": "Council Tax"
+  },
+  "regulatory": {
+    "pension": "Workplace Pension",
+    "socialWelfare": "Benefits",
+    "nationalInsuranceNumber": "National Insurance Number",
+    "workVisa": "Work Visa"
+  },
+  "currency": {
+    "code": "GBP",
+    "symbol": "\u00a3",
+    "format": "{amount, number, ::currency/GBP}",
+    "example": "\u00a31,234.56"
+  },
+  "formats": {
+    "dateShort": "dd/MM/yyyy",
+    "dateLong": "d MMMM yyyy",
+    "phonePrefix": "+44",
+    "postcode": "Postcode",
+    "postcodeExample": "SW1A 1AA"
+  },
+  "address": {
+    "county": "County",
+    "postcode": "Postcode"
+  },
+  "documents": {
+    "passport": "British Passport",
+    "drivingLicence": "Driving Licence",
+    "biometricCard": "Biometric Residence Permit"
+  },
+  "spelling": {
+    "colour": "colour",
+    "licence": "licence",
+    "organise": "organise",
+    "centre": "centre"
+  }
+}

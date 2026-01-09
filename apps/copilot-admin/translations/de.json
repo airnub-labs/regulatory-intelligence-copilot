@@ -1,0 +1,759 @@
+{
+  "common": {
+    "appName": "Copilot Admin",
+    "loading": "Wird geladen...",
+    "error": "Ein Fehler ist aufgetreten",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "create": "Erstellen",
+    "search": "Suchen",
+    "refresh": "Aktualisieren",
+    "noResults": "Keine Ergebnisse gefunden",
+    "itemCount": "{count, plural, =0 {Keine Elemente} one {# Element} other {# Elemente}}",
+    "lastUpdated": "Zuletzt aktualisiert {date, date, medium}",
+    "changeLanguage": "Sprache ändern",
+    "selectLanguage": "Sprache auswählen",
+    "close": "Schließen",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "actions": "Aktionen"
+  },
+  "auth": {
+    "login": "Anmelden",
+    "logout": "Abmelden",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "forgotPassword": "Passwort vergessen?",
+    "signInTitle": "Bei Ihrem Konto anmelden",
+    "signInDescription": "Geben Sie Ihre Anmeldedaten ein, um auf das Admin-Dashboard zuzugreifen",
+    "invalidCredentials": "Ungültige E-Mail oder Passwort",
+    "signingIn": "Anmeldung läuft...",
+    "signedOut": "Sie wurden abgemeldet",
+    "sessionExpires": "Sitzung läuft ab {relativeTime, date, relative}"
+  },
+  "nav": {
+    "home": "Startseite",
+    "dashboard": "Dashboard",
+    "analytics": "Analytik",
+    "settings": "Einstellungen",
+    "help": "Hilfe"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Willkommen zurück, {name}",
+    "overview": "Übersicht",
+    "recentActivity": "Aktuelle Aktivität",
+    "activityCount": "{count, plural, =0 {Keine aktuelle Aktivität} one {# Aktivität} other {# Aktivitäten}}"
+  },
+  "home": {
+    "title": "Willkommen bei Copilot Admin",
+    "description": "Verwalten Sie Ihren Regulatory Intelligence Copilot von hier aus."
+  },
+  "errors": {
+    "notFound": {
+      "title": "404",
+      "description": "Seite nicht gefunden",
+      "goHome": "Zur Startseite"
+    },
+    "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
+    "unauthorized": "Sie sind nicht berechtigt, diese Aktion durchzuführen."
+  },
+  "validation": {
+    "required": "Dieses Feld ist erforderlich",
+    "email": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
+    "minLength": "Muss mindestens {min, number} Zeichen haben",
+    "maxLength": "Darf nicht mehr als {max, number} Zeichen haben"
+  },
+  "time": {
+    "relative": {
+      "past": "vor {value, plural, one {# {unit}} other {# {unit}n}}",
+      "future": "in {value, plural, one {# {unit}} other {# {unit}n}}"
+    }
+  },
+  "notifications": {
+    "title": "Benachrichtigungen",
+    "pageTitle": "Benachrichtigungen",
+    "pageDescription": "Ihre Benachrichtigungen anzeigen und verwalten",
+    "count": "{count, plural, =0 {Keine Benachrichtigungen} one {# Benachrichtigung} other {# Benachrichtigungen}}",
+    "unread": "{count, plural, =0 {Keine ungelesenen} one {# ungelesen} other {# ungelesen}}",
+    "unreadCount": "{count, plural, =0 {Keine ungelesenen Benachrichtigungen} one {# ungelesene Benachrichtigung} other {# ungelesene Benachrichtigungen}}",
+    "openNotifications": "Benachrichtigungen öffnen",
+    "noNotifications": "Keine Benachrichtigungen",
+    "noNotificationsDescription": "Sie sind auf dem neuesten Stand! Neue Benachrichtigungen werden hier angezeigt.",
+    "viewAll": "Alle Benachrichtigungen anzeigen",
+    "markRead": "Als gelesen markieren",
+    "markAllRead": "Alle als gelesen markieren",
+    "dismiss": "Verwerfen",
+    "archive": "Archivieren",
+    "selectNotification": "Benachrichtigung auswählen",
+    "selectAll": "Alle auswählen",
+    "deselectAll": "Alle abwählen",
+    "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+    "totalNotifications": "Gesamt Benachrichtigungen",
+    "unreadNotifications": "Ungelesen",
+    "archivedNotifications": "Archiviert",
+    "tabAll": "Alle",
+    "tabUnread": "Ungelesen",
+    "tabArchived": "Archiviert",
+    "filterByPriority": "Nach Priorität filtern",
+    "allPriorities": "Alle Prioritäten",
+    "priority_critical": "Kritisch",
+    "priority_high": "Hoch",
+    "priority_medium": "Mittel",
+    "priority_low": "Niedrig"
+  },
+  "administrators": {
+    "pageTitle": "Administratorverwaltung",
+    "pageDescription": "Verwalten Sie Administratorkonten für den Zugriff auf das Copilot Admin Dashboard",
+    "totalAdmins": "Gesamt Administratoren",
+    "activeAdmins": "Aktiv",
+    "pendingInvitations": "Ausstehende Einladungen",
+    "multiTenantAdmins": "Multi-Mandant",
+    "tenantAccessColumn": "Mandantenzugriff",
+    "tenant": "Mandant",
+    "tenants": "Mandanten",
+    "accessLevel_full": "Vollzugriff",
+    "accessLevel_limited": "Eingeschränkter Zugriff",
+    "accessLevel_readonly": "Nur Lesen",
+    "tabUsers": "Benutzer",
+    "tabRoles": "Rollen",
+    "inviteAdmin": "Administrator einladen",
+    "export": "Exportieren",
+    "searchUsers": "Nach Name oder E-Mail suchen",
+    "filterByRole": "Nach Rolle filtern",
+    "filterByStatus": "Nach Status filtern",
+    "allRoles": "Alle Rollen",
+    "allStatuses": "Alle Status",
+    "userColumn": "Benutzer",
+    "roleColumn": "Rolle",
+    "statusColumn": "Status",
+    "lastLoginColumn": "Letzte Anmeldung",
+    "actionsColumn": "Aktionen",
+    "userActions": "Benutzeraktionen",
+    "userEmail": "E-Mail-Adresse",
+    "userName": "Anzeigename",
+    "userRole": "Rolle",
+    "selectRole": "Wählen Sie eine Rolle",
+    "statusActive": "Aktiv",
+    "statusInactive": "Inaktiv",
+    "statusPending": "Ausstehend",
+    "role_super_admin": "Super-Admin",
+    "role_platform_engineer": "Plattform-Ingenieur",
+    "role_account_manager": "Kundenbetreuer",
+    "role_compliance_auditor": "Compliance-Prüfer",
+    "role_support_tier_3": "Support Stufe 3",
+    "role_support_tier_2": "Support Stufe 2",
+    "role_support_tier_1": "Support Stufe 1",
+    "role_viewer": "Betrachter",
+    "roleDescription_super_admin": "Vollständiger Plattformzugriff. Kann alle Benutzer, Einstellungen, Mandanten und Infrastruktur verwalten.",
+    "roleDescription_platform_engineer": "Infrastrukturbetrieb. Verwaltet Deployments, Skalierung und Servicezustand.",
+    "roleDescription_account_manager": "Kundenerfolg. Beschränkt auf zugewiesene Mandanten, kann Mandantenbenutzer verwalten.",
+    "roleDescription_compliance_auditor": "Sicherheit und Compliance. Nur-Lese-Zugriff auf Audit-Protokolle und Compliance-Berichte.",
+    "roleDescription_support_tier_3": "Engineering-Support. Codezugriff, Log-Anzeige, Produktions-Debugging und Hotfix-Fähigkeiten.",
+    "roleDescription_support_tier_2": "Eskalationssupport. Mandantenübergreifender Zugriff, als Benutzer anzeigen, kann Einstellungen bearbeiten und Daten exportieren.",
+    "roleDescription_support_tier_1": "Erstsupport. Nur zugewiesene Mandanten, kann Benutzer und Unterhaltungen anzeigen, an Stufe 2 eskalieren.",
+    "roleDescription_viewer": "Nur-Lese-Zugriff auf Dashboards und Berichte.",
+    "addUserTitle": "Administrator einladen",
+    "addUserDescription": "Senden Sie eine Einladung an einen neuen Administrator",
+    "editUserTitle": "Administrator bearbeiten",
+    "editUserDescription": "Aktualisieren Sie Administratordetails und Berechtigungen",
+    "deleteUserTitle": "Administrator entfernen",
+    "deleteUserDescription": "Sind Sie sicher, dass Sie {name} entfernen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "sendInvitation": "Einladung senden",
+    "user": "Benutzer",
+    "users": "Benutzer",
+    "permissions": "Berechtigungen",
+    "permFullAccess": "Vollzugriff",
+    "permManageUsers": "Benutzer verwalten",
+    "permManageInfra": "Infrastruktur verwalten",
+    "permViewInfra": "Infrastruktur anzeigen",
+    "permViewReports": "Berichte anzeigen",
+    "permViewAudit": "Audit-Protokolle anzeigen",
+    "permExportAudit": "Audit-Protokolle exportieren",
+    "permViewUsers": "Benutzer anzeigen",
+    "permViewTenants": "Mandanten anzeigen",
+    "permViewDashboard": "Dashboard anzeigen",
+    "permCrossTenant": "Mandantenübergreifender Zugriff",
+    "permViewAsUser": "Als Benutzer anzeigen",
+    "permEditPrefs": "Einstellungen bearbeiten",
+    "permViewLogs": "Protokolle anzeigen",
+    "permDebugQueries": "Abfragen debuggen",
+    "permProdAccess": "Produktionszugang",
+    "permCodeAccess": "Code-Zugang",
+    "permEscalateEng": "An Technik eskalieren",
+    "permAssignedTenants": "Nur Zugewiesene Mandanten",
+    "permViewConversations": "Unterhaltungen anzeigen",
+    "permEscalateT2": "An Stufe 2 eskalieren",
+    "viewDetails": "Details anzeigen",
+    "pagination": {
+      "showing": "Zeige {from} bis {to} von {total}",
+      "page": "Seite {current} von {total}",
+      "previous": "Zurück",
+      "next": "Weiter"
+    },
+    "sheet": {
+      "profile": "Profil",
+      "activity": "Aktivität",
+      "accountInfo": "Kontoinformationen",
+      "createdAt": "Erstellt",
+      "lastLogin": "Letzte Anmeldung",
+      "recentActivity": "Neueste Aktivität"
+    },
+    "dialog": {
+      "title": "Administratordetails: {name}",
+      "titleDefault": "Administratordetails",
+      "description": "Administratorprofil und Aktivität anzeigen und verwalten"
+    }
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "navigation": "Einstellungen-Navigation",
+    "contentArea": "Einstellungen-Inhaltsbereich",
+    "backToHome": "Zurück zur Startseite",
+    "profile": "Profil",
+    "profileDescription": "Verwalten Sie Ihre persönlichen Daten",
+    "preferences": "Präferenzen",
+    "preferencesDescription": "Passen Sie Ihre Erfahrung an",
+    "users": "Admin-Benutzer",
+    "usersDescription": "Verwalten Sie Administratorkonten",
+    "profileTitle": "Persönliche Informationen",
+    "userAvatar": "Benutzer-Avatar",
+    "displayName": "Anzeigename",
+    "emailAddress": "E-Mail-Adresse",
+    "accountInfo": "Kontoinformationen",
+    "accountInfoDescription": "Schreibgeschützte Kontodetails",
+    "userId": "Benutzer-ID",
+    "role": "Rolle",
+    "roleAdmin": "Administrator",
+    "accountCreated": "Konto erstellt",
+    "languageRegion": "Sprache & Region",
+    "languageRegionDescription": "Legen Sie Ihre bevorzugte Sprache und regionale Einstellungen fest",
+    "displayLanguage": "Anzeigesprache",
+    "selectLanguage": "Wählen Sie eine Sprache",
+    "languageHint": "Die Oberfläche wird in dieser Sprache angezeigt",
+    "timezone": "Zeitzone",
+    "timezoneHint": "Wird automatisch basierend auf Ihrer ausgewählten Region festgelegt",
+    "appearance": "Erscheinungsbild",
+    "appearanceDescription": "Passen Sie das Aussehen der Anwendung an",
+    "colorTheme": "Farbschema",
+    "selectTheme": "Wählen Sie ein Schema",
+    "themeLight": "Hell",
+    "themeDark": "Dunkel",
+    "themeSystem": "System",
+    "themeHint": "Wählen Sie zwischen hellem und dunklem Modus oder folgen Sie Ihrer Systempräferenz",
+    "notifications": "Benachrichtigungen",
+    "notificationsDescription": "Konfigurieren Sie, wie Sie Benachrichtigungen erhalten",
+    "emailUpdates": "E-Mail-Updates",
+    "emailUpdatesHint": "Erhalten Sie wichtige Updates zu Ihrem Konto per E-Mail",
+    "systemAlerts": "Systemwarnungen",
+    "systemAlertsHint": "Werden Sie über Systemwartungen und kritische Probleme benachrichtigt",
+    "weeklyDigest": "Wöchentliche Zusammenfassung",
+    "weeklyDigestHint": "Erhalten Sie eine wöchentliche Zusammenfassung von Aktivitäten und Berichten",
+    "usersTitle": "Administratorverwaltung",
+    "addUser": "Benutzer hinzufügen",
+    "addUserTitle": "Administrator einladen",
+    "addUserDescription": "Senden Sie eine Einladung an einen neuen Administrator",
+    "editUserTitle": "Administrator bearbeiten",
+    "editUserDescription": "Aktualisieren Sie Administratordetails und Berechtigungen",
+    "deleteUserTitle": "Administrator entfernen",
+    "deleteUserDescription": "Sind Sie sicher, dass Sie {name} entfernen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "inviteUser": "Einladung senden",
+    "searchUsers": "Nach Name oder E-Mail suchen",
+    "filterByRole": "Nach Rolle filtern",
+    "filterByStatus": "Nach Status filtern",
+    "allRoles": "Alle Rollen",
+    "allStatuses": "Alle Status",
+    "userColumn": "Benutzer",
+    "roleColumn": "Rolle",
+    "statusColumn": "Status",
+    "lastLoginColumn": "Letzte Anmeldung",
+    "actionsColumn": "Aktionen",
+    "userActions": "Benutzeraktionen",
+    "userEmail": "E-Mail-Adresse",
+    "userName": "Anzeigename",
+    "userRole": "Rolle",
+    "selectRole": "Wählen Sie eine Rolle",
+    "statusActive": "Aktiv",
+    "statusInactive": "Inaktiv",
+    "statusPending": "Ausstehend",
+    "role_super_admin": "Super-Admin",
+    "role_platform_engineer": "Plattform-Ingenieur",
+    "role_account_manager": "Kundenbetreuer",
+    "role_compliance_auditor": "Compliance-Prüfer",
+    "role_support_tier_3": "Support Stufe 3",
+    "role_support_tier_2": "Support Stufe 2",
+    "role_support_tier_1": "Support Stufe 1",
+    "role_viewer": "Betrachter",
+    "roleDescription_super_admin": "Vollständiger Plattformzugriff. Kann alle Benutzer, Einstellungen, Mandanten und Infrastruktur verwalten.",
+    "roleDescription_platform_engineer": "Infrastrukturbetrieb. Verwaltet Deployments, Skalierung und Servicezustand.",
+    "roleDescription_account_manager": "Kundenerfolg. Beschränkt auf zugewiesene Mandanten, kann Mandantenbenutzer verwalten.",
+    "roleDescription_compliance_auditor": "Sicherheit und Compliance. Nur-Lese-Zugriff auf Audit-Protokolle und Compliance-Berichte.",
+    "roleDescription_support_tier_3": "Engineering-Support. Codezugriff, Log-Anzeige, Produktions-Debugging und Hotfix-Fähigkeiten.",
+    "roleDescription_support_tier_2": "Eskalationssupport. Mandantenübergreifender Zugriff, als Benutzer anzeigen, kann Einstellungen bearbeiten und Daten exportieren.",
+    "roleDescription_support_tier_1": "Erstsupport. Nur zugewiesene Mandanten, kann Benutzer und Unterhaltungen anzeigen, an Stufe 2 eskalieren.",
+    "roleDescription_viewer": "Nur-Lese-Zugriff auf Dashboards und Berichte.",
+    "rolesOverview": "Rollenberechtigungen",
+    "rolesOverviewDescription": "Verstehen Sie die verschiedenen Administratorrollen und ihre Fähigkeiten"
+  },
+  "adminView": {
+    "title": "Benutzer-Support-Modus",
+    "description": "Wählen Sie einen Benutzer aus, um dessen Einstellungen in seinem Namen anzuzeigen oder zu bearbeiten",
+    "selectUserToView": "Wählen Sie einen Benutzer, um dessen Einstellungen anzuzeigen",
+    "searchUsers": "Benutzer suchen...",
+    "loading": "Benutzer werden geladen...",
+    "noUsersFound": "Keine Benutzer gefunden",
+    "users": "Benutzer",
+    "viewingUserSettings": "Benutzereinstellungen anzeigen",
+    "viewingAs": "Anzeige als {name}",
+    "stopViewing": "Benutzeransicht beenden",
+    "viewOwnSettings": "Meine Einstellungen anzeigen",
+    "selectUserHelp": "Als Administrator können Sie die Einstellungen anderer Benutzer einsehen und verwalten, um Support zu leisten.",
+    "readOnly": "Nur Lesen",
+    "editingUserProfile": "Profil für {name} bearbeiten",
+    "editingUserPreferences": "Präferenzen für {name} bearbeiten",
+    "role_super_admin": "Super-Admin",
+    "role_platform_engineer": "Plattform-Ingenieur",
+    "role_account_manager": "Kundenbetreuer",
+    "role_compliance_auditor": "Compliance-Prüfer",
+    "role_support_tier_3": "Support Stufe 3",
+    "role_support_tier_2": "Support Stufe 2",
+    "role_support_tier_1": "Support Stufe 1",
+    "role_viewer": "Betrachter",
+    "auditNotice": "Alle Änderungen werden zu Compliance-Zwecken protokolliert"
+  },
+  "userManagement": {
+    "title": "Plattformbenutzer",
+    "description": "Endbenutzer des Regulatory Intelligence Copilot und ihre Mandantenmitgliedschaften verwalten",
+    "stats": {
+      "totalUsers": "Benutzer Gesamt",
+      "activeUsers": "Aktive Benutzer",
+      "trialUsers": "Testbenutzer",
+      "multiTenantUsers": "Multi-Mandant"
+    },
+    "export": "Exportieren",
+    "filters": {
+      "byStatus": "Nach Status filtern",
+      "byPlan": "Nach Plan filtern",
+      "allStatuses": "Alle Status",
+      "allPlans": "Alle Pläne"
+    },
+    "table": {
+      "user": "Benutzer",
+      "status": "Status",
+      "tenantRoles": "Rolle & Mandanten",
+      "tenant": "Mandant",
+      "tenants": "Mandanten",
+      "lastLogin": "Letzte Anmeldung"
+    },
+    "pagination": {
+      "showing": "Zeige {from} bis {to} von {total}",
+      "page": "Seite {current} von {total}",
+      "previous": "Zurück",
+      "next": "Weiter"
+    },
+    "actions": {
+      "viewDetails": "Details anzeigen"
+    },
+    "userList": "Benutzer",
+    "searchUsers": "Benutzer suchen...",
+    "noUsersFound": "Keine Benutzer gefunden",
+    "selectUser": "Benutzer auswählen",
+    "selectUserDescription": "Wählen Sie einen Benutzer aus der Liste, um seine Details anzuzeigen und zu verwalten",
+    "tabs": {
+      "profile": "Profil",
+      "tenants": "Mandanten",
+      "workspaces": "Arbeitsbereiche",
+      "billing": "Abrechnung",
+      "preferences": "Einstellungen",
+      "permissions": "Berechtigungen",
+      "users": "Benutzer",
+      "roles": "Rollen"
+    },
+    "profileSection": {
+      "basicInfo": "Grundinformationen",
+      "roleInfo": "Rolleninformationen",
+      "accountDetails": "Kontodetails",
+      "userId": "Benutzer-ID",
+      "createdAt": "Konto erstellt",
+      "lastLogin": "Letzte Anmeldung",
+      "tenantCount": "Mandantenmitgliedschaften",
+      "neverLoggedIn": "Nie angemeldet"
+    },
+    "preferencesSection": {
+      "title": "Benutzereinstellungen",
+      "description": "Anzeige-, Sprach- und regionale Einstellungen für diesen Benutzer verwalten."
+    },
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "pending": "Ausstehend"
+    },
+    "theme": {
+      "light": "Hell",
+      "dark": "Dunkel",
+      "system": "System"
+    },
+    "profile": {
+      "displayName": "Anzeigename",
+      "email": "E-Mail-Adresse",
+      "role": "Rolle",
+      "status": "Status",
+      "preferences": "Präferenzen",
+      "locale": "Regionale Einstellungen",
+      "timezone": "Zeitzone",
+      "theme": "Thema"
+    },
+    "tenants": {
+      "title": "Mandantenmitgliedschaften",
+      "multiTenantNote": "Benutzer können in verschiedenen Mandanten unterschiedliche Rollen haben",
+      "name": "Mandant",
+      "status": "Status",
+      "role": "Rolle",
+      "joinedAt": "Beigetreten",
+      "primary": "Primär",
+      "addToTenant": "Zu Mandant hinzufügen",
+      "addToTenantDescription": "Diesen Benutzer zu einem bestehenden Mandanten hinzufügen",
+      "selectTenant": "Mandant auswählen",
+      "selectTenantPlaceholder": "Mandant auswählen..."
+    },
+    "workspaces": {
+      "title": "Arbeitsbereichmitgliedschaften",
+      "name": "Arbeitsbereich",
+      "status": "Status",
+      "role": "Rolle",
+      "members": "Mitglieder",
+      "addToWorkspace": "Zu Arbeitsbereich hinzufügen",
+      "addToWorkspaceDescription": "Diesen Benutzer zu einem bestehenden Arbeitsbereich hinzufügen",
+      "selectWorkspace": "Arbeitsbereich auswählen",
+      "selectWorkspacePlaceholder": "Arbeitsbereich auswählen...",
+      "archive": "Archivieren",
+      "unarchive": "Aus Archiv holen",
+      "restore": "Wiederherstellen"
+    },
+    "dialog": {
+      "title": "Benutzerdetails: {name}",
+      "titleDefault": "Benutzerdetails",
+      "description": "Benutzerprofil, Mandanten, Arbeitsbereiche und Abrechnung anzeigen und verwalten"
+    },
+    "billing": {
+      "subscriptions": "Abonnements",
+      "paymentHistory": "Zahlungsverlauf",
+      "plan": "Plan",
+      "status": "Status",
+      "amount": "Betrag",
+      "startDate": "Startdatum",
+      "type": "Typ",
+      "date": "Datum",
+      "paymentMethod": "Zahlungsmethode",
+      "invoice": "Rechnung",
+      "viewInvoice": "Rechnung anzeigen",
+      "grantSubscription": "Abonnement gewähren",
+      "grantSubscriptionDescription": "Diesem Benutzer manuell ein Abonnement gewähren",
+      "selectPlan": "Plan auswählen",
+      "duration": "Dauer",
+      "month": "Monat",
+      "months": "Monate",
+      "freeGrant": "Kostenlose Gewährung",
+      "paidSubscription": "Bezahltes Abonnement",
+      "reason": "Grund",
+      "reasonPlaceholder": "Grund für die Gewährung eingeben (z.B. Partnerprogramm)",
+      "grant": "Abonnement gewähren",
+      "free": "Kostenlos",
+      "paid": "Bezahlt",
+      "cancel": "Kündigen"
+    },
+    "roles": {
+      "owner": "Eigentümer",
+      "admin": "Administrator",
+      "member": "Mitglied",
+      "viewer": "Betrachter"
+    },
+    "roleDescriptions": {
+      "owner": "Volle Kontrolle über den Mandanten. Kann Abrechnung verwalten, Benutzer einladen/entfernen und die Organisation löschen.",
+      "admin": "Kann Benutzer, Arbeitsbereiche und die meisten Einstellungen verwalten. Kein Zugriff auf Abrechnung und kann Organisation nicht löschen.",
+      "member": "Kann an Arbeitsbereichen teilnehmen und auf gemeinsame Ressourcen zugreifen. Kann keine Benutzer oder Einstellungen verwalten.",
+      "viewer": "Nur-Lese-Zugriff auf gemeinsame Ressourcen. Kann keine Inhalte erstellen oder ändern."
+    },
+    "roleCount": {
+      "singular": "Benutzer mit dieser Rolle",
+      "plural": "Benutzer mit dieser Rolle"
+    },
+    "roleCategories": {
+      "tenantManagement": "Mandantenverwaltung",
+      "workspaceManagement": "Arbeitsbereichsverwaltung",
+      "userManagement": "Benutzerverwaltung",
+      "dataAccess": "Datenzugriff"
+    },
+    "platformPermissions": {
+      "permManageTenant": "Mandant verwalten",
+      "permManageBilling": "Abrechnung verwalten",
+      "permInviteUsers": "Benutzer einladen",
+      "permRemoveUsers": "Benutzer entfernen",
+      "permViewBilling": "Abrechnung anzeigen",
+      "permCreateWorkspace": "Arbeitsbereiche erstellen",
+      "permDeleteWorkspace": "Arbeitsbereiche löschen",
+      "permManageWorkspaceSettings": "Arbeitsbereich-Einstellungen verwalten",
+      "permJoinWorkspace": "Arbeitsbereichen beitreten",
+      "permViewWorkspace": "Arbeitsbereiche anzeigen",
+      "permAssignRoles": "Rollen zuweisen",
+      "permManageMembers": "Mitglieder verwalten",
+      "permViewAllUsers": "Alle Benutzer anzeigen",
+      "permViewMembers": "Mitglieder anzeigen",
+      "permFullDataAccess": "Voller Datenzugriff",
+      "permExportData": "Daten exportieren",
+      "permDeleteData": "Daten löschen",
+      "permViewOwnData": "Eigene Daten anzeigen",
+      "permExportOwnData": "Eigene Daten exportieren"
+    },
+    "permissionsSection": {
+      "title": "Benutzerberechtigungen",
+      "description": "Verwalten Sie Berechtigungen und Zugriff für diesen Benutzer über seine Mandantenmitgliedschaften.",
+      "rolePermissions": "Rollenbasierte Berechtigungen",
+      "additionalGroups": "Zusätzliche Berechtigungsgruppen",
+      "additionalGroupsDescription": "Erteilen Sie zusätzliche Fähigkeiten über die Benutzerrolle hinaus",
+      "assigned": "Zugewiesen"
+    },
+    "permissionGroups": {
+      "data_export": {
+        "name": "Datenexport",
+        "description": "Export von Benutzerdaten und Berichten erlauben"
+      },
+      "conversation_export": {
+        "name": "Konversationsexport",
+        "description": "Export des Konversationsverlaufs erlauben"
+      },
+      "report_access": {
+        "name": "Berichtszugriff",
+        "description": "Zugriff auf Analysen und Berichte"
+      },
+      "api_access": {
+        "name": "API-Zugriff",
+        "description": "API-Schlüsselgenerierung und -zugriff erlauben"
+      },
+      "bulk_operations": {
+        "name": "Massenoperationen",
+        "description": "Massen-Datenoperationen erlauben"
+      }
+    }
+  },
+  "permissions": {
+    "title": "Berechtigungen",
+    "description": "Verwalten Sie Zugriffsberechtigungen für Benutzer und Rollen",
+    "effectivePermissions": "Effektive Berechtigungen",
+    "effectivePermissionsDescription": "Berechtigungen, berechnet aus Rolle, Gruppen und einzelnen Zuweisungen",
+    "permissionSource": {
+      "role": "Aus Rolle",
+      "group": "Aus Gruppe",
+      "grant": "Einzelne Zuweisung"
+    },
+    "categories": {
+      "users": "Benutzerverwaltung",
+      "billing": "Abrechnung & Finanzen",
+      "infrastructure": "Infrastruktur",
+      "settings": "Einstellungen",
+      "tenants": "Mandantenverwaltung",
+      "conversations": "Unterhaltungen",
+      "data": "Daten & DSGVO",
+      "audit": "Audit & Compliance",
+      "reports": "Berichte & Analytik",
+      "dashboard": "Dashboard",
+      "escalation": "Eskalation",
+      "support": "Support-Betrieb"
+    },
+    "items": {
+      "users_create": "Benutzer erstellen",
+      "users_view": "Benutzer anzeigen",
+      "users_view_cross_tenant": "Benutzer über Mandanten hinweg anzeigen",
+      "users_edit": "Benutzer bearbeiten",
+      "users_edit_preferences": "Benutzereinstellungen bearbeiten",
+      "users_edit_permissions": "Benutzerberechtigungen bearbeiten",
+      "users_delete": "Benutzer löschen",
+      "users_unlock_account": "Benutzerkonten entsperren",
+      "users_invite": "Benutzer einladen",
+      "users_view_as": "Als Benutzer anzeigen",
+      "billing_view_invoices": "Rechnungen anzeigen",
+      "billing_manage_subscriptions": "Abonnements verwalten",
+      "billing_manage_payment_methods": "Zahlungsmethoden verwalten",
+      "billing_view_usage": "Nutzungsmetriken anzeigen",
+      "billing_export_reports": "Abrechnungsberichte exportieren",
+      "billing_grant_credits": "Guthaben gewähren",
+      "infrastructure_view": "Infrastruktur anzeigen",
+      "infrastructure_manage": "Infrastruktur verwalten",
+      "infrastructure_view_health": "Dienststatus anzeigen",
+      "infrastructure_manage_features": "Feature-Flags verwalten",
+      "settings_view": "Einstellungen anzeigen",
+      "settings_manage": "Einstellungen verwalten",
+      "settings_manage_api_keys": "API-Schlüssel verwalten",
+      "settings_view_api_keys": "API-Schlüssel anzeigen",
+      "tenants_view": "Mandanten anzeigen",
+      "tenants_view_all": "Alle Mandanten anzeigen",
+      "tenants_manage": "Mandanten verwalten",
+      "tenants_create": "Mandanten erstellen",
+      "tenants_delete": "Mandanten löschen",
+      "tenants_view_metadata": "Mandanten-Metadaten anzeigen",
+      "conversations_view": "Unterhaltungen anzeigen",
+      "conversations_view_content": "Unterhaltungsinhalte anzeigen",
+      "conversations_annotate": "Unterhaltungen kommentieren",
+      "conversations_delete": "Unterhaltungen löschen",
+      "conversations_export": "Unterhaltungen exportieren",
+      "data_export_user": "Benutzerdaten exportieren",
+      "data_export_audit": "Audit-Daten exportieren",
+      "data_delete_user": "Benutzerdaten löschen (DSGVO)",
+      "data_view_processing": "Datenverarbeitung anzeigen",
+      "audit_view": "Audit-Protokolle anzeigen",
+      "audit_export": "Audit-Protokolle exportieren",
+      "audit_configure": "Audit-Einstellungen konfigurieren",
+      "audit_view_compliance": "Compliance-Berichte anzeigen",
+      "reports_view": "Berichte anzeigen",
+      "reports_export": "Berichte exportieren",
+      "reports_create": "Berichte erstellen",
+      "reports_schedule": "Berichte planen",
+      "dashboard_view": "Dashboard anzeigen",
+      "dashboard_customize": "Dashboard anpassen",
+      "escalation_to_tier2": "An Stufe 2 eskalieren",
+      "escalation_to_tier3": "An Stufe 3 eskalieren",
+      "escalation_to_engineering": "An Engineering eskalieren",
+      "escalation_receive": "Eskalationen erhalten",
+      "support_view_logs": "Systemprotokolle anzeigen",
+      "support_debug_queries": "Abfragen debuggen",
+      "support_prod_access": "Produktionszugriff",
+      "support_code_access": "Codezugriff",
+      "support_hotfix": "Hotfixes bereitstellen"
+    },
+    "groups": {
+      "user_management_full": {
+        "name": "Vollständige Benutzerverwaltung",
+        "description": "Erstellen, bearbeiten und löschen Sie Benutzer und verwalten Sie ihre Berechtigungen auf der gesamten Plattform"
+      },
+      "user_management_read": {
+        "name": "Benutzerverwaltung (Nur Lesen)",
+        "description": "Benutzerprofile und Kontoinformationen anzeigen"
+      },
+      "user_support_basic": {
+        "name": "Basis-Benutzer-Support",
+        "description": "Benutzer anzeigen und bei grundlegenden Kontoproblemen helfen"
+      },
+      "user_support_advanced": {
+        "name": "Erweiterter Benutzer-Support",
+        "description": "Benutzereinstellungen bearbeiten, Konten entsperren und als Benutzer anzeigen"
+      },
+      "billing_full": {
+        "name": "Vollständiger Abrechnungszugriff",
+        "description": "Alle Abrechnungen, Abonnements und Zahlungsmethoden anzeigen und verwalten"
+      },
+      "billing_read": {
+        "name": "Abrechnung (Nur Lesen)",
+        "description": "Rechnungen und Abrechnungsinformationen anzeigen"
+      },
+      "infrastructure_full": {
+        "name": "Vollständiger Infrastrukturzugriff",
+        "description": "Bereitstellungen, Skalierung und Service-Konfiguration verwalten"
+      },
+      "infrastructure_read": {
+        "name": "Infrastruktur (Nur Lesen)",
+        "description": "Infrastrukturstatus und Leistungsmetriken anzeigen"
+      },
+      "tenant_management_full": {
+        "name": "Vollständige Mandantenverwaltung",
+        "description": "Mandanten und deren Konfigurationen erstellen, bearbeiten und löschen"
+      },
+      "tenant_view_all": {
+        "name": "Alle Mandanten anzeigen",
+        "description": "Alle Mandanten auf der Plattform anzeigen"
+      },
+      "tenant_view_assigned": {
+        "name": "Zugewiesene Mandanten anzeigen",
+        "description": "Nur Mandanten anzeigen, die Ihrem Konto zugewiesen sind"
+      },
+      "cross_tenant_access": {
+        "name": "Mandantenübergreifender Zugriff",
+        "description": "Zugriff auf Benutzer und Daten über mehrere Mandanten hinweg"
+      },
+      "data_export": {
+        "name": "Datenexport",
+        "description": "Benutzerdaten und Audit-Protokolle für Compliance exportieren"
+      },
+      "audit_full": {
+        "name": "Vollständiger Audit-Zugriff",
+        "description": "Audit-Protokolle anzeigen, exportieren und konfigurieren"
+      },
+      "audit_read": {
+        "name": "Audit (Nur Lesen)",
+        "description": "Audit-Protokolle und Compliance-Berichte anzeigen"
+      },
+      "compliance_reporting": {
+        "name": "Compliance-Berichterstellung",
+        "description": "Compliance- und Audit-Berichte anzeigen und exportieren"
+      },
+      "conversation_full": {
+        "name": "Vollständiger Unterhaltungszugriff",
+        "description": "Unterhaltungen anzeigen, kommentieren, löschen und exportieren"
+      },
+      "conversation_read": {
+        "name": "Unterhaltung (Nur Lesen)",
+        "description": "Unterhaltungs-Metadaten anzeigen"
+      },
+      "conversation_support": {
+        "name": "Unterstützung von Unterhaltungen",
+        "description": "Unterhaltungsinhalte anzeigen und Kommentare hinzufügen"
+      },
+      "reports_full": {
+        "name": "Vollständiger Berichtszugriff",
+        "description": "Berichte anzeigen, erstellen, exportieren und planen"
+      },
+      "reports_read": {
+        "name": "Berichte (Nur Lesen)",
+        "description": "Berichte und Dashboards anzeigen"
+      },
+      "support_engineering": {
+        "name": "Support-Engineering",
+        "description": "Zugriff auf Protokolle, Debugging-Tools und Produktionssysteme"
+      },
+      "support_tier3_ops": {
+        "name": "Stufe-3-Betrieb",
+        "description": "Erweitertes Debugging, Codezugriff und Hotfix-Bereitstellung"
+      },
+      "dashboard_full": {
+        "name": "Vollständiger Dashboard-Zugriff",
+        "description": "Dashboards anzeigen und anpassen"
+      },
+      "dashboard_read": {
+        "name": "Dashboard (Nur Lesen)",
+        "description": "Dashboards und Metriken anzeigen"
+      },
+      "escalation_tier1": {
+        "name": "Stufe-1-Eskalation",
+        "description": "Probleme an Stufe-2-Support eskalieren"
+      },
+      "escalation_tier2": {
+        "name": "Stufe-2-Eskalation",
+        "description": "Probleme an Stufe 3 eskalieren und Stufe-1-Eskalationen erhalten"
+      },
+      "escalation_tier3": {
+        "name": "Stufe-3-Eskalation",
+        "description": "An Engineering eskalieren und Stufe-2-Eskalationen erhalten"
+      }
+    },
+    "ui": {
+      "additionalGroups": "Zusätzliche Berechtigungsgruppen",
+      "additionalGroupsDescription": "Ordnen Sie zusätzliche Berechtigungsgruppen jenseits der Standardrolle zu",
+      "selectGroups": "Berechtigungsgruppen auswählen",
+      "individualGrants": "Individuelle Berechtigungszuweisungen",
+      "individualGrantsDescription": "Gewähren Sie spezifische Berechtigungen, die nicht in der Rolle oder in Gruppen enthalten sind",
+      "selectPermissions": "Berechtigungen zum Gewähren auswählen",
+      "individualRevocations": "Berechtigungswiderrufe",
+      "individualRevocationsDescription": "Widerrufen Sie spezifische Berechtigungen aus der Rolle oder aus Gruppen",
+      "selectRevocations": "Berechtigungen zum Widerrufen auswählen",
+      "noPermissions": "Keine Berechtigungen zugewiesen",
+      "permissionCount": "{count, plural, =0 {Keine Berechtigungen} one {# Berechtigung} other {# Berechtigungen}}",
+      "groupCount": "{count, plural, =0 {Keine Gruppen} one {# Gruppe} other {# Gruppen}}",
+      "fromRole": "Von Rolle geerbt",
+      "fromGroup": "Von Gruppe geerbt",
+      "directGrant": "Direkt gewährt",
+      "revoked": "Widerrufen"
+    }
+  }
+}

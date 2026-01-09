@@ -1,0 +1,61 @@
+{
+  "common": {
+    "email": "Courriel"
+  },
+  "auth": {
+    "email": "Courriel",
+    "forgotPassword": "Mot de passe oubli\u00e9?"
+  },
+  "legal": {
+    "jurisdiction": "Canada (Qu\u00e9bec)",
+    "regulator": "Autorit\u00e9 des march\u00e9s financiers",
+    "dataProtection": "Commission d'acc\u00e8s \u00e0 l'information",
+    "taxAuthority": "Revenu Qu\u00e9bec / Agence du revenu du Canada",
+    "disclaimer": "Ces renseignements sont fournis \u00e0 titre indicatif seulement et ne constituent pas un avis juridique ou financier selon les lois canadiennes et qu\u00e9b\u00e9coises."
+  },
+  "tax": {
+    "tps": "TPS",
+    "tpsFull": "Taxe sur les produits et services",
+    "tvq": "TVQ",
+    "tvqFull": "Taxe de vente du Qu\u00e9bec",
+    "impotRevenu": "Imp\u00f4t sur le revenu",
+    "rrq": "RRQ",
+    "rrqFull": "R\u00e9gime de rentes du Qu\u00e9bec"
+  },
+  "regulatory": {
+    "pension": "REER",
+    "pensionFull": "R\u00e9gime enregistr\u00e9 d'\u00e9pargne-retraite",
+    "socialSecurity": "Assurance-emploi",
+    "nas": "NAS",
+    "nasFull": "Num\u00e9ro d'assurance sociale",
+    "ramq": "RAMQ"
+  },
+  "currency": {
+    "code": "CAD",
+    "symbol": "$",
+    "format": "{amount, number, ::currency/CAD}",
+    "example": "1 234,56 $"
+  },
+  "formats": {
+    "dateShort": "yyyy-MM-dd",
+    "dateLong": "d MMMM yyyy",
+    "phonePrefix": "+1",
+    "postcode": "Code postal",
+    "postcodeExample": "H2X 1Y4"
+  },
+  "address": {
+    "province": "Province",
+    "codePostal": "Code postal"
+  },
+  "documents": {
+    "passport": "Passeport canadien",
+    "permisConduire": "Permis de conduire",
+    "carteAssuranceMaladie": "Carte d'assurance maladie"
+  },
+  "vocabulary": {
+    "shopping": "magasiner",
+    "weekend": "fin de semaine",
+    "email": "courriel",
+    "parking": "stationnement"
+  }
+}

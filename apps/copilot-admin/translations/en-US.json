@@ -1,0 +1,52 @@
+{
+  "legal": {
+    "jurisdiction": "United States",
+    "regulator": "Securities and Exchange Commission",
+    "dataProtection": "Federal Trade Commission",
+    "taxAuthority": "Internal Revenue Service",
+    "disclaimer": "This information is for guidance only and does not constitute legal or financial advice under US law."
+  },
+  "tax": {
+    "salesTax": "Sales Tax",
+    "incomeTax": "Federal Income Tax",
+    "stateTax": "State Tax",
+    "fica": "FICA",
+    "cgt": "Capital Gains Tax",
+    "estateTax": "Estate Tax",
+    "propertyTax": "Property Tax"
+  },
+  "regulatory": {
+    "pension": "401(k)",
+    "socialWelfare": "Social Security",
+    "ssn": "Social Security Number",
+    "workVisa": "Work Visa"
+  },
+  "currency": {
+    "code": "USD",
+    "symbol": "$",
+    "format": "{amount, number, ::currency/USD}",
+    "example": "$1,234.56"
+  },
+  "formats": {
+    "dateShort": "MM/dd/yyyy",
+    "dateLong": "MMMM d, yyyy",
+    "phonePrefix": "+1",
+    "postcode": "ZIP Code",
+    "postcodeExample": "10001"
+  },
+  "address": {
+    "state": "State",
+    "zipCode": "ZIP Code"
+  },
+  "documents": {
+    "passport": "US Passport",
+    "drivingLicense": "Driver's License",
+    "greenCard": "Green Card"
+  },
+  "spelling": {
+    "color": "color",
+    "license": "license",
+    "organize": "organize",
+    "center": "center"
+  }
+}

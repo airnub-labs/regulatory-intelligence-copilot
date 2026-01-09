@@ -44,8 +44,7 @@ BEGIN
     WHERE
         tenant_id = p_tenant_id
         AND conversation_id = p_conversation_id
-        AND id = p_message_id
-        AND deleted_at IS NULL;
+        AND id = p_message_id;
 
     RETURN FOUND;
 END;
@@ -108,7 +107,6 @@ BEGIN
         AND m.conversation_id = p_conversation_id
         AND m.path_id = p_path_id
         AND m.is_pinned = true
-        AND m.deleted_at IS NULL
     ORDER BY m.created_at ASC;
 END;
 $$;
@@ -134,8 +132,7 @@ BEGIN
         WHERE
             tenant_id = p_tenant_id
             AND conversation_id = p_conversation_id
-            AND is_pinned = true
-            AND deleted_at IS NULL;
+            AND is_pinned = true;
     ELSE
         -- Count for specific path
         SELECT COUNT(*)
@@ -145,8 +142,7 @@ BEGIN
             tenant_id = p_tenant_id
             AND conversation_id = p_conversation_id
             AND path_id = p_path_id
-            AND is_pinned = true
-            AND deleted_at IS NULL;
+            AND is_pinned = true;
     END IF;
 
     RETURN v_count;

@@ -1,0 +1,48 @@
+{
+  "legal": {
+    "jurisdiction": "Poblacht na hÉireann",
+    "regulator": "Banc Ceannais na hÉireann",
+    "dataProtection": "An Coimisiún um Chosaint Sonraí",
+    "taxAuthority": "Na Coimisinéirí Ioncaim",
+    "disclaimer": "Is le haghaidh treorach amháin é an fhaisnéis seo agus ní hionann é agus comhairle dlí nó airgeadais faoi dhlí na hÉireann."
+  },
+  "tax": {
+    "vat": "CBL",
+    "vatFull": "Cáin Bhreisluacha",
+    "vatRate": "23%",
+    "incomeTax": "Cáin Ioncaim",
+    "prsi": "ÁSPC",
+    "prsiFull": "Árachas Sóisialach Pá-Choibhneasa",
+    "usc": "MSU",
+    "uscFull": "Muirear Sóisialta Uilíoch",
+    "cgt": "Cáin Ghnóthachan Caipitiúil",
+    "cat": "Cáin Fháltas Caipitiúil",
+    "lpt": "Cáin Mhaoine Áitiúil"
+  },
+  "regulatory": {
+    "pension": "CPCS",
+    "pensionFull": "Cuntas Pearsanta Coigiltis Scoir",
+    "socialWelfare": "Leas Sóisialach",
+    "ppsn": "Uimhir PSP",
+    "ppsnFull": "Uimhir Phearsanta Seirbhíse Poiblí",
+    "employmentPermit": "Cead Fostaíochta"
+  },
+  "currency": {
+    "code": "EUR",
+    "symbol": "€",
+    "format": "{amount, number, ::currency/EUR}"
+  },
+  "formats": {
+    "phonePrefix": "+353",
+    "postcode": "Éirchód"
+  },
+  "address": {
+    "county": "Contae",
+    "eircode": "Éirchód"
+  },
+  "documents": {
+    "passport": "Pas Éireannach",
+    "drivingLicence": "Ceadúnas Tiomána",
+    "publicServicesCard": "Cárta Seirbhísí Poiblí"
+  }
+}

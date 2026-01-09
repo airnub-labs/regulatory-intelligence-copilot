@@ -1,0 +1,759 @@
+{
+  "common": {
+    "appName": "Riarthóir Copilot",
+    "loading": "Ag lódáil...",
+    "error": "Tharla earráid",
+    "save": "Sábháil",
+    "cancel": "Cealú",
+    "delete": "Scrios",
+    "edit": "Athraigh",
+    "create": "Cruthaigh",
+    "search": "Cuardaigh",
+    "refresh": "Athnuaigh",
+    "noResults": "Ní bhfuarthas aon torthaí",
+    "itemCount": "{count, plural, =0 {Gan míreanna} one {# mhír amháin} two {# mhír} few {# mhír} other {# mír}}",
+    "lastUpdated": "Nuashonraíodh {date, date, medium}",
+    "changeLanguage": "Athraigh teanga",
+    "selectLanguage": "Roghnaigh teanga",
+    "close": "Dún",
+    "add": "Cuir Leis",
+    "remove": "Bain",
+    "actions": "Gníomhartha"
+  },
+  "auth": {
+    "login": "Sighál isteach",
+    "logout": "Sigh amach",
+    "email": "Ríomhphost",
+    "password": "Focal faire",
+    "forgotPassword": "Focal faire dearmadta?",
+    "signInTitle": "Sighál isteach i do chuntas",
+    "signInDescription": "Cuir isteach do chuid faisnéise chun rochtain a fháil ar an deaschár riarthóra",
+    "invalidCredentials": "Ríomhphost nó focal faire neamhbhailí",
+    "signingIn": "Ag sighál isteach...",
+    "signedOut": "Tá tú sínithe amach anois",
+    "sessionExpires": "Téann an seisiún in éag {relativeTime, date, relative}"
+  },
+  "nav": {
+    "home": "Baile",
+    "dashboard": "Deaschár",
+    "analytics": "Anailísíc",
+    "settings": "Socruithe",
+    "help": "Cabhair"
+  },
+  "dashboard": {
+    "title": "Deaschár",
+    "welcome": "Fáilte ar ais, {name}",
+    "overview": "Forbhreathnú",
+    "recentActivity": "Gníomhaocht le Déanaí",
+    "activityCount": "{count, plural, =0 {Gan ghníomhaocht le déanaí} one {# ghníomhaocht amháin} two {# ghníomhaocht} few {# ghníomhaocht} other {# gníomhaocht}}"
+  },
+  "home": {
+    "title": "Fáilte go Riarthóir Copilot",
+    "description": "Bainistigh do Chomhchúntóir Faisnéise Rialála ón áit seo."
+  },
+  "errors": {
+    "notFound": {
+      "title": "404",
+      "description": "Ní bhfuarthas an leathanach",
+      "goHome": "Téigh Abhaile"
+    },
+    "generic": "Chuaigh rud éigin mícheart. Bain triail eile as.",
+    "network": "Earráid líonra. Seiceáil do nasc.",
+    "unauthorized": "Níúl cead agat an gníomh seo a dhéanamh."
+  },
+  "validation": {
+    "required": "Tá an réimse seo riachtanach",
+    "email": "Cuir isteach seoladh ríomhphost bailí",
+    "minLength": "Caithfidh {min, number} carachtar ar a laghad a bheith ann",
+    "maxLength": "Ní féidir níos mó ná {max, number} carachtar a bheith ann"
+  },
+  "time": {
+    "relative": {
+      "past": "{value, plural, one {# {unit} ó shin} two {# {unit} ó shin} few {# {unit} ó shin} other {# {unit} ó shin}}",
+      "future": "i {value, plural, one {# {unit}} two {# {unit}} few {# {unit}} other {# {unit}}}"
+    }
+  },
+  "notifications": {
+    "title": "Fógraí",
+    "pageTitle": "Fógraí",
+    "pageDescription": "Féach ar d'fhógraí agus bainistigh iad",
+    "count": "{count, plural, =0 {Gan fhógraí} one {# fhógra amháin} two {# fhógra} few {# fhógra} other {# fógra}}",
+    "unread": "{count, plural, =0 {Gan ceann neamhléite} one {# neamhléite} other {# neamhléite}}",
+    "unreadCount": "{count, plural, =0 {Gan fhógraí neamhléite} one {# fhógra neamhléite} other {# fógra neamhléite}}",
+    "openNotifications": "Oscail fógraí",
+    "noNotifications": "Gan fhógraí",
+    "noNotificationsDescription": "Tá tú suas chun dáta! Beidh fógraí nua le feiceáil anseo.",
+    "viewAll": "Féach ar gach fógra",
+    "markRead": "Marcáil mar léite",
+    "markAllRead": "Marcáil gach ceann mar léite",
+    "dismiss": "Díbir",
+    "archive": "Cartlann",
+    "selectNotification": "Roghnaigh fógra",
+    "selectAll": "Roghnaigh gach ceann",
+    "deselectAll": "Díroghnaigh gach ceann",
+    "selectedCount": "{count, plural, one {# roghnaithe} other {# roghnaithe}}",
+    "totalNotifications": "Fógraí Iomlán",
+    "unreadNotifications": "Neamhléite",
+    "archivedNotifications": "Cartlannaithe",
+    "tabAll": "Gach",
+    "tabUnread": "Neamhléite",
+    "tabArchived": "Cartlannaithe",
+    "filterByPriority": "Scag de réir tosaíochta",
+    "allPriorities": "Gach Tosaíocht",
+    "priority_critical": "Criticiúil",
+    "priority_high": "Ard",
+    "priority_medium": "Meánach",
+    "priority_low": "Íseal"
+  },
+  "administrators": {
+    "pageTitle": "Bainistíocht Riarthóirí",
+    "pageDescription": "Bainistigh cuntais riarthóirí le haghaidh rochtain ar dheaschár Riarthóir Copilot",
+    "totalAdmins": "Riarthóirí Iomlán",
+    "activeAdmins": "Gníomhach",
+    "pendingInvitations": "Cuirí ar Feitheamh",
+    "multiTenantAdmins": "Il-Tionónta",
+    "tenantAccessColumn": "Rochtain Tionónta",
+    "tenant": "tionónta",
+    "tenants": "tionóntaí",
+    "accessLevel_full": "Rochtain Iomlán",
+    "accessLevel_limited": "Rochtain Teoranta",
+    "accessLevel_readonly": "Inléite Amháin",
+    "tabUsers": "Úsáideoirí",
+    "tabRoles": "Róil",
+    "inviteAdmin": "Tabhair Cuireadh do Riarthóir",
+    "export": "Easpórtáil",
+    "searchUsers": "Cuardaigh de réir ainm nó ríomhphost",
+    "filterByRole": "Scagadh de réir róil",
+    "filterByStatus": "Scagadh de réir stádas",
+    "allRoles": "Gach Ról",
+    "allStatuses": "Gach Stádas",
+    "userColumn": "Úsáideoir",
+    "roleColumn": "Ról",
+    "statusColumn": "Stádas",
+    "lastLoginColumn": "Logáil Isteach Deireanach",
+    "actionsColumn": "Gníomhartha",
+    "userActions": "Gníomhartha úsáideora",
+    "userEmail": "Seoladh Ríomhphost",
+    "userName": "Ainm Taispein",
+    "userRole": "Ról",
+    "selectRole": "Roghnaigh ról",
+    "statusActive": "Gníomhach",
+    "statusInactive": "Neamhghníomhach",
+    "statusPending": "Ar Feitheamh",
+    "role_super_admin": "Shar-Riarthóir",
+    "role_platform_engineer": "Innealtóir Ardáin",
+    "role_account_manager": "Bainisteoir Cuntais",
+    "role_compliance_auditor": "Iniúchóir Comhlíonta",
+    "role_support_tier_3": "Tacaíocht Leibhéal 3",
+    "role_support_tier_2": "Tacaíocht Leibhéal 2",
+    "role_support_tier_1": "Tacaíocht Leibhéal 1",
+    "role_viewer": "Féachadóir",
+    "roleDescription_super_admin": "Rochtain iomlán ar an ardán. Is féidir gach úsáideoir, socruithe, tionónta agus bonneagar a bhainistiú.",
+    "roleDescription_platform_engineer": "Oibríochtaí bonneagair. Bainistíonn imlonnuithe, scálú agus sláinte seirbhíse.",
+    "roleDescription_account_manager": "Rath custaiméirí. Scóipthe do thionóntaí sannta, is féidir úsáideoirí tionónta a bhainistiú.",
+    "roleDescription_compliance_auditor": "Slándáil agus comhlíonadh. Rochtain inléite amháin ar logaí iniúchta agus tuarascálacha comhlíonta.",
+    "roleDescription_support_tier_3": "Tacaíocht innealtóireachta. Rochtain chóid, amharc logaí, dífhabhtú táirgeachta, agus cumais bhreisithe.",
+    "roleDescription_support_tier_2": "Tacaíocht ardaithe. Rochtain trasainneánacha, amharc mar úsáideoir, féadann roghanna a chur in eagar agus sonraí a easpórtáil.",
+    "roleDescription_support_tier_1": "Tacaíocht tosaigh. Tionóntaí sannta amháin, féadann úsáideoirí agus comhráite a fheiceáil, ardú go Leibhéal 2.",
+    "roleDescription_viewer": "Rochtain inléite amháin ar dheaschár agus tuarascálacha.",
+    "addUserTitle": "Tabhair Cuireadh do Riarthóir",
+    "addUserDescription": "Seol cuireadh chuig riarthóir nua",
+    "editUserTitle": "Athraigh Riarthóir",
+    "editUserDescription": "Nuashonraigh sonraí agus ceadanna riarthóra",
+    "deleteUserTitle": "Bain Riarthóir",
+    "deleteUserDescription": "An bhfuil tú cinnte gur mhaith leat {name} a bhaint? Ní féidir an gníomh seo a chur ar ceal.",
+    "sendInvitation": "Seol Cuireadh",
+    "user": "úsáideoir",
+    "users": "úsáideoirí",
+    "permissions": "Ceadanna",
+    "permFullAccess": "Rochtain Iomlán",
+    "permManageUsers": "Bainistigh Úsáideoirí",
+    "permManageInfra": "Bainistigh Bonneagar",
+    "permViewInfra": "Féach ar Bhonneagar",
+    "permViewReports": "Féach ar Thuarascálacha",
+    "permViewAudit": "Féach ar Logaí Iniúchta",
+    "permExportAudit": "Easpórtáil Logaí Iniúchta",
+    "permViewUsers": "Féach ar Úsáideoirí",
+    "permViewTenants": "Féach ar Thionóntaí",
+    "permViewDashboard": "Féach ar Dheaschár",
+    "permCrossTenant": "Rochtain Tras-Tionónta",
+    "permViewAsUser": "Amharc mar Úsáideoir",
+    "permEditPrefs": "Cuir Roghanna in Eagar",
+    "permViewLogs": "Féach ar Logaí",
+    "permDebugQueries": "Dífhabhtú Fiosrúcháin",
+    "permProdAccess": "Rochtain Táirgthe",
+    "permCodeAccess": "Rochtain Cód",
+    "permEscalateEng": "Ardaigh go hInnealtóireacht",
+    "permAssignedTenants": "Tionóntaí Sannta Amháin",
+    "permViewConversations": "Féach ar Chomhráite",
+    "permEscalateT2": "Ardaigh go Leibhéal 2",
+    "viewDetails": "Féach ar Shonraí",
+    "pagination": {
+      "showing": "Ag taispeáint {from} go {to} as {total}",
+      "page": "Leathanach {current} as {total}",
+      "previous": "Roimhe",
+      "next": "Ar aghaidh"
+    },
+    "sheet": {
+      "profile": "Próifíl",
+      "activity": "Gníomhaíocht",
+      "accountInfo": "Faisnéis Chuntais",
+      "createdAt": "Cruthaithe",
+      "lastLogin": "Logáil Isteach Deireanach",
+      "recentActivity": "Gníomhaíocht Dhéanach"
+    },
+    "dialog": {
+      "title": "Sonraí Riarthóra: {name}",
+      "titleDefault": "Sonraí Riarthóra",
+      "description": "Féach ar agus bainistigh próifíl agus gníomhaíocht riarthóra"
+    }
+  },
+  "settings": {
+    "title": "Socruithe",
+    "navigation": "Nascáil socruithe",
+    "contentArea": "Ábhar socruithe",
+    "backToHome": "Ar ais abhaile",
+    "profile": "Próifíl",
+    "profileDescription": "Bainistigh d'fhaisnéis phearsanta",
+    "preferences": "Roghanna",
+    "preferencesDescription": "Saincheap do thaithneamh",
+    "users": "Úsáidí Riarthóra",
+    "usersDescription": "Bainistigh cuntais riarthóra",
+    "profileTitle": "Faisnéis Phearsanta",
+    "userAvatar": "Abhatár úsáideora",
+    "displayName": "Ainm Taispein",
+    "emailAddress": "Seoladh Ríomhphost",
+    "accountInfo": "Faisnéis Chuntais",
+    "accountInfoDescription": "Sonraí cuntais inléite amháin",
+    "userId": "Aitheantas Úsáideora",
+    "role": "Ról",
+    "roleAdmin": "Riarthóir",
+    "accountCreated": "Cuntas Cruthaithe",
+    "languageRegion": "Teanga & Réigiún",
+    "languageRegionDescription": "Socraigh do rogha teanga agus socruithe réigiúnach",
+    "displayLanguage": "Teanga Taispein",
+    "selectLanguage": "Roghnaigh teanga",
+    "languageHint": "Taispeánfar an comhéadan sa teanga seo",
+    "timezone": "Críos Ama",
+    "timezoneHint": "Socraíodh go huathoibríoch bunaithe ar do réigiún roghnaithe",
+    "appearance": "Cuma",
+    "appearanceDescription": "Saincheap conas a fhéachann an feidhmchlár",
+    "colorTheme": "Téama Dath",
+    "selectTheme": "Roghnaigh téama",
+    "themeLight": "Geal",
+    "themeDark": "Dorcha",
+    "themeSystem": "Córas",
+    "themeHint": "Roghnaigh idir mód geal agus dorcha, nó lean do rogha córais",
+    "notifications": "Fograithe",
+    "notificationsDescription": "Cumaisc conas a fhaigheann tú fograithe",
+    "emailUpdates": "Nuashonruithe Ríomhphost",
+    "emailUpdatesHint": "Faigh nuashonruithe tábhachtacha faoi do chuntas trí ríomhphost",
+    "systemAlerts": "Ailtéanna Córais",
+    "systemAlertsHint": "Fógra a fháil faoi chothabháil córais agus saincheisteanna críoscách",
+    "weeklyDigest": "Díleataigh Seachtainiúil",
+    "weeklyDigestHint": "Achoimre sheachtainiúil ar ghníomhaocht agus tuarascálacha a fháil",
+    "usersTitle": "Bainistíocht Riarthóirí",
+    "addUser": "Cuir Úsáideoir Leis",
+    "addUserTitle": "Tabhair Cuireadh do Riarthóir",
+    "addUserDescription": "Seol cuireadh chuig riarthóir nua",
+    "editUserTitle": "Athraigh Riarthóir",
+    "editUserDescription": "Nuashonraigh sonraí agus ceadanna riarthóra",
+    "deleteUserTitle": "Bain Riarthóir",
+    "deleteUserDescription": "An bhfuil tú cinnte gur mhaith leat {name} a bhaint? Ní féidir an gníomh seo a chur ar ceal.",
+    "inviteUser": "Seol Cuireadh",
+    "searchUsers": "Cuardaigh de réir ainm nó ríomhphost",
+    "filterByRole": "Scagadh de réir róil",
+    "filterByStatus": "Scagadh de réir stádas",
+    "allRoles": "Gach Ról",
+    "allStatuses": "Gach Stádas",
+    "userColumn": "Úsáideoir",
+    "roleColumn": "Ról",
+    "statusColumn": "Stádas",
+    "lastLoginColumn": "Logáil Isteach Deireanach",
+    "actionsColumn": "Gníomhartha",
+    "userActions": "Gníomhartha úsáideora",
+    "userEmail": "Seoladh Ríomhphost",
+    "userName": "Ainm Taispein",
+    "userRole": "Ról",
+    "selectRole": "Roghnaigh ról",
+    "statusActive": "Gníomhach",
+    "statusInactive": "Neamhghníomhach",
+    "statusPending": "Ar Feitheamh",
+    "role_super_admin": "Shar-Riarthóir",
+    "role_platform_engineer": "Innealtóir Ardáin",
+    "role_account_manager": "Bainisteoir Cuntais",
+    "role_compliance_auditor": "Iniúchóir Comhlíonta",
+    "role_support_tier_3": "Tacaíocht Leibhéal 3",
+    "role_support_tier_2": "Tacaíocht Leibhéal 2",
+    "role_support_tier_1": "Tacaíocht Leibhéal 1",
+    "role_viewer": "Féachadóir",
+    "roleDescription_super_admin": "Rochtain iomlán ar an ardán. Is féidir gach úsáideoir, socruithe, tionónta agus bonneagar a bhainistiú.",
+    "roleDescription_platform_engineer": "Oibríochtaí bonneagair. Bainistíonn imlonnuithe, scálú agus sláinte seirbhíse.",
+    "roleDescription_account_manager": "Rath custaiméirí. Scóipthe do thionóntaí sannta, is féidir úsáideoirí tionónta a bhainistiú.",
+    "roleDescription_compliance_auditor": "Slándáil agus comhlíonadh. Rochtain inléite amháin ar logaí iniúchta agus tuarascálacha comhlíonta.",
+    "roleDescription_support_tier_3": "Tacaíocht innealtóireachta. Rochtain chóid, amharc logaí, dífhabhtú táirgeachta, agus cumais bhreisithe.",
+    "roleDescription_support_tier_2": "Tacaíocht ardaithe. Rochtain trasainneánacha, amharc mar úsáideoir, féadann roghanna a chur in eagar agus sonraí a easpórtáil.",
+    "roleDescription_support_tier_1": "Tacaíocht tosaigh. Tionóntaí sannta amháin, féadann úsáideoirí agus comhráite a fheiceáil, ardú go Leibhéal 2.",
+    "roleDescription_viewer": "Rochtain inléite amháin ar dheaschár agus tuarascálacha.",
+    "rolesOverview": "Ceadanna Ról",
+    "rolesOverviewDescription": "Na róil éagsúla riarthóra agus a gcumais a thuiscint"
+  },
+  "adminView": {
+    "title": "Mód Tacaíochta Úsáideora",
+    "description": "Roghnaigh úsáideoir chun a socruithe a fheiceáil nó a athrú ar a son",
+    "selectUserToView": "Roghnaigh úsáideoir chun a socruithe a fheiceáil",
+    "searchUsers": "Cuardaigh úsáideoirí...",
+    "loading": "Ag lódáil úsáideoirí...",
+    "noUsersFound": "Ní bhfuarthas aon úsáideoirí",
+    "users": "Úsáideoirí",
+    "viewingUserSettings": "Ag Féachaint ar Shocruithe Úsáideora",
+    "viewingAs": "Ag féachaint mar {name}",
+    "stopViewing": "Scoir ó Amharc Úsáideora",
+    "viewOwnSettings": "Féach ar Mo Shocruithe",
+    "selectUserHelp": "Mar riarthóir, is féidir leat socruithe úsáideoirí eile a fheiceáil agus a bhainistiú chun tacaíocht a sholáthar.",
+    "readOnly": "Inléite Amháin",
+    "editingUserProfile": "Próifíl {name} á athrú",
+    "editingUserPreferences": "Roghanna {name} á athrú",
+    "role_super_admin": "Shar-Riarthóir",
+    "role_platform_engineer": "Innealtóir Ardáin",
+    "role_account_manager": "Bainisteoir Cuntais",
+    "role_compliance_auditor": "Iniúchóir Comhlíonta",
+    "role_support_tier_3": "Tacaíocht Leibhéal 3",
+    "role_support_tier_2": "Tacaíocht Leibhéal 2",
+    "role_support_tier_1": "Tacaíocht Leibhéal 1",
+    "role_viewer": "Féachadóir",
+    "auditNotice": "Logáiltear gach athrú ar mhaithe le comhlíonadh"
+  },
+  "userManagement": {
+    "title": "Úsáideoirí Ardáin",
+    "description": "Bainistigh úsáideoirí deiridh an Chomhchúntóir Faisnéise Rialála agus a mballraíochtaí tionónta",
+    "stats": {
+      "totalUsers": "Úsáideoirí Iomlán",
+      "activeUsers": "Úsáideoirí Gníomhacha",
+      "trialUsers": "Úsáideoirí Trialacha",
+      "multiTenantUsers": "Il-Tionónta"
+    },
+    "export": "Easpórtáil",
+    "filters": {
+      "byStatus": "Scag de réir stádais",
+      "byPlan": "Scag de réir plean",
+      "allStatuses": "Gach Stádas",
+      "allPlans": "Gach Plean"
+    },
+    "table": {
+      "user": "Úsáideoir",
+      "status": "Stádas",
+      "tenantRoles": "Ról & Tionóntaí",
+      "tenant": "tionónta",
+      "tenants": "tionóntaí",
+      "lastLogin": "Logáil Isteach Deireanach"
+    },
+    "pagination": {
+      "showing": "Ag taispeáint {from} go {to} de {total}",
+      "page": "Leathanach {current} de {total}",
+      "previous": "Roimhe",
+      "next": "Ar Aghaidh"
+    },
+    "actions": {
+      "viewDetails": "Féach ar Sonraí"
+    },
+    "userList": "Úsáideoirí",
+    "searchUsers": "Cuardaigh úsáideoirí...",
+    "noUsersFound": "Ní bhfuarthas aon úsáideoirí",
+    "selectUser": "Roghnaigh Úsáideoir",
+    "selectUserDescription": "Roghnaigh úsáideoir ón liosta chun a sonraí a fheiceáil agus a bhainistiú",
+    "tabs": {
+      "profile": "Próifíl",
+      "tenants": "Tionóntaí",
+      "workspaces": "Spásanna Oibre",
+      "billing": "Billeáil",
+      "permissions": "Ceadanna",
+      "users": "Úsáideoirí",
+      "roles": "Róil",
+      "preferences": "Roghanna"
+    },
+    "profileSection": {
+      "basicInfo": "Bunfhaisnéis",
+      "roleInfo": "Faisnéis Róil",
+      "accountDetails": "Sonraí Cuntais",
+      "userId": "Aitheantas Úsáideora",
+      "createdAt": "Cuntas Cruthaithe",
+      "lastLogin": "Logáil Isteach Deireanach",
+      "tenantCount": "Ballraíocht Tionónta",
+      "neverLoggedIn": "Níor logáil isteach riamh"
+    },
+    "preferencesSection": {
+      "title": "Roghanna Úsáideora",
+      "description": "Bainistigh socruithe taispeána, teanga agus réigiúnacha don úsáideoir seo."
+    },
+    "status": {
+      "active": "Gníomhach",
+      "inactive": "Neamhghníomhach",
+      "pending": "Ar Feitheamh"
+    },
+    "theme": {
+      "light": "Geal",
+      "dark": "Dorcha",
+      "system": "Córas"
+    },
+    "profile": {
+      "displayName": "Ainm Taispeána",
+      "email": "Seoladh Ríomhphoist",
+      "role": "Ról",
+      "status": "Stádas",
+      "preferences": "Roghanna",
+      "locale": "Logchaighdeán",
+      "timezone": "Crios Ama",
+      "theme": "Téama"
+    },
+    "tenants": {
+      "title": "Ballraíocht Tionóntaí",
+      "multiTenantNote": "Is féidir le húsáideoirí róil éagsúla a bheith acu i dtionóntaí éagsúla",
+      "name": "Tionónta",
+      "status": "Stádas",
+      "role": "Ról",
+      "joinedAt": "Dul isteach",
+      "primary": "Príomha",
+      "addToTenant": "Cuir le Tionónta",
+      "addToTenantDescription": "Cuir an úsáideoir seo le tionónta atá ann cheana",
+      "selectTenant": "Roghnaigh Tionónta",
+      "selectTenantPlaceholder": "Roghnaigh tionónta..."
+    },
+    "workspaces": {
+      "title": "Ballraíocht Spásanna Oibre",
+      "name": "Spás Oibre",
+      "status": "Stádas",
+      "role": "Ról",
+      "members": "Baill",
+      "addToWorkspace": "Cuir le Spás Oibre",
+      "addToWorkspaceDescription": "Cuir an úsáideoir seo le spás oibre atá ann cheana",
+      "selectWorkspace": "Roghnaigh Spás Oibre",
+      "selectWorkspacePlaceholder": "Roghnaigh spás oibre...",
+      "archive": "Cartlannaigh",
+      "unarchive": "Díchartlannaigh",
+      "restore": "Athchóirigh"
+    },
+    "dialog": {
+      "title": "Sonraí Úsáideora: {name}",
+      "titleDefault": "Sonraí Úsáideora",
+      "description": "Féach ar agus bainistigh próifíl, tionóntaí, spásanna oibre, agus billeáil úsáideora"
+    },
+    "billing": {
+      "subscriptions": "Síntiúis",
+      "paymentHistory": "Stair Íocaíochta",
+      "plan": "Plean",
+      "status": "Stádas",
+      "amount": "Méid",
+      "startDate": "Dáta Tosaithe",
+      "type": "Cineál",
+      "date": "Dáta",
+      "paymentMethod": "Modh Íocaíochta",
+      "invoice": "Sonrasc",
+      "viewInvoice": "Féach ar Shonrasc",
+      "grantSubscription": "Bronntanas Síntiús",
+      "grantSubscriptionDescription": "Tabhair síntiús don úsáideoir seo de láimh",
+      "selectPlan": "Roghnaigh plean",
+      "duration": "Fad",
+      "month": "mí",
+      "months": "míonna",
+      "freeGrant": "Bronntanas Saor in Aisce",
+      "paidSubscription": "Síntiús Íoctha",
+      "reason": "Cúis",
+      "reasonPlaceholder": "Cuir isteach cúis don bhronntanas (m.sh., Clár Comhpháirtí)",
+      "grant": "Bronn Síntiús",
+      "free": "Saor",
+      "paid": "Íoctha",
+      "cancel": "Cealú"
+    },
+    "roles": {
+      "owner": "Úinéir",
+      "admin": "Riarthóir",
+      "member": "Ball",
+      "viewer": "Féachadóir"
+    },
+    "roleDescriptions": {
+      "owner": "Smacht iomlán ar an tionónta. Is féidir billeáil a bhainistiú, úsáideoirí a chuireadh/a bhaint, agus an eagraíocht a scriosadh.",
+      "admin": "Is féidir úsáideoirí, spásanna oibre, agus formhór na socruithe a bhainistiú. Ní féidir rochtain a fháil ar bhilleáil ná an eagraíocht a scriosadh.",
+      "member": "Is féidir páirt a ghlacadh i spásanna oibre agus rochtain a fháil ar acmhainní comhroinnte. Ní féidir úsáideoirí ná socruithe a bhainistiú.",
+      "viewer": "Rochtain léitheoireachta amháin ar acmhainní comhroinnte. Ní féidir ábhar a chruthú ná a mhodhnú."
+    },
+    "roleCount": {
+      "singular": "úsáideoir leis an ról seo",
+      "plural": "úsáideoirí leis an ról seo"
+    },
+    "roleCategories": {
+      "tenantManagement": "Bainistíocht Tionónta",
+      "workspaceManagement": "Bainistíocht Spás Oibre",
+      "userManagement": "Bainistíocht Úsáideoirí",
+      "dataAccess": "Rochtain Sonraí"
+    },
+    "platformPermissions": {
+      "permManageTenant": "Bainistigh Tionónta",
+      "permManageBilling": "Bainistigh Billeáil",
+      "permInviteUsers": "Cuir Úsáideoirí ar Cuireadh",
+      "permRemoveUsers": "Bain Úsáideoirí",
+      "permViewBilling": "Féach ar Bhilleáil",
+      "permCreateWorkspace": "Cruthaigh Spásanna Oibre",
+      "permDeleteWorkspace": "Scrios Spásanna Oibre",
+      "permManageWorkspaceSettings": "Bainistigh Socruithe Spás Oibre",
+      "permJoinWorkspace": "Bí Páirteach i Spásanna Oibre",
+      "permViewWorkspace": "Féach ar Spásanna Oibre",
+      "permAssignRoles": "Sann Róil",
+      "permManageMembers": "Bainistigh Baill",
+      "permViewAllUsers": "Féach ar Gach Úsáideoir",
+      "permViewMembers": "Féach ar Bhaill",
+      "permFullDataAccess": "Rochtain Iomlán Sonraí",
+      "permExportData": "Easpórtáil Sonraí",
+      "permDeleteData": "Scrios Sonraí",
+      "permViewOwnData": "Féach ar Do Shonraí Féin",
+      "permExportOwnData": "Easpórtáil Do Shonraí Féin"
+    },
+    "permissionsSection": {
+      "title": "Ceadanna Úsáideora",
+      "description": "Bainistigh ceadanna agus rochtain don úsáideoir seo thar a mballraíochtaí tionónta.",
+      "rolePermissions": "Ceadanna Bunaithe ar Ról",
+      "additionalGroups": "Grúpaí Ceada Breise",
+      "additionalGroupsDescription": "Tabhair cumais bhreise thar ról an úsáideora",
+      "assigned": "Sannta"
+    },
+    "permissionGroups": {
+      "data_export": {
+        "name": "Easpórtáil Sonraí",
+        "description": "Ceadaigh easpórtáil sonraí úsáideora agus tuairiscí"
+      },
+      "conversation_export": {
+        "name": "Easpórtáil Comhrá",
+        "description": "Ceadaigh easpórtáil stair chomhrá"
+      },
+      "report_access": {
+        "name": "Rochtain Tuairiscí",
+        "description": "Rochtain ar anailísíocht agus tuairiscí"
+      },
+      "api_access": {
+        "name": "Rochtain API",
+        "description": "Ceadaigh giniúint agus rochtain eochair API"
+      },
+      "bulk_operations": {
+        "name": "Oibríochtaí Móra",
+        "description": "Ceadaigh oibríochtaí sonraí móra"
+      }
+    }
+  },
+  "permissions": {
+    "title": "Ceadanna",
+    "description": "Bainistigh ceadanna rochtana d'úsáideoirí agus do róil",
+    "effectivePermissions": "Ceadanna Éifeachtacha",
+    "effectivePermissionsDescription": "Ceadanna ríofa ó ról, grúpaí, agus bronntanais aonair",
+    "permissionSource": {
+      "role": "Ón Ról",
+      "group": "Ón nGrúpa",
+      "grant": "Bronntanas Aonair"
+    },
+    "categories": {
+      "users": "Bainistíocht Úsáideoirí",
+      "billing": "Billeáil & Airgeadas",
+      "infrastructure": "Bonneagar",
+      "settings": "Socruithe",
+      "tenants": "Bainistíocht Tionóntaí",
+      "conversations": "Comhráite",
+      "data": "Sonraí & GDPR",
+      "audit": "Iniúchadh & Comhlíonadh",
+      "reports": "Tuarascálacha & Anailísíc",
+      "dashboard": "Deaschár",
+      "escalation": "Ardú",
+      "support": "Oibríochtaí Tacaíochta"
+    },
+    "items": {
+      "users_create": "Cruthaigh úsáideoirí",
+      "users_view": "Féach ar úsáideoirí",
+      "users_view_cross_tenant": "Féach ar úsáideoirí trasna tionóntaí",
+      "users_edit": "Athraigh úsáideoirí",
+      "users_edit_preferences": "Athraigh roghanna úsáideoirí",
+      "users_edit_permissions": "Athraigh ceadanna úsáideoirí",
+      "users_delete": "Scrios úsáideoirí",
+      "users_unlock_account": "Díghlasáil cuntais úsáideoirí",
+      "users_invite": "Tabhair cuireadh d'úsáideoirí",
+      "users_view_as": "Féach mar úsáideoir",
+      "billing_view_invoices": "Féach ar shonraisc",
+      "billing_manage_subscriptions": "Bainistigh síntiúis",
+      "billing_manage_payment_methods": "Bainistigh modhanna íocaíochta",
+      "billing_view_usage": "Féach ar mhéadracht úsáide",
+      "billing_export_reports": "Easpórtáil tuarascálacha billeála",
+      "billing_grant_credits": "Bronn creidmheasanna",
+      "infrastructure_view": "Féach ar bhonneagar",
+      "infrastructure_manage": "Bainistigh bonneagar",
+      "infrastructure_view_health": "Féach ar shláinte seirbhíse",
+      "infrastructure_manage_features": "Bainistigh bratacha gné",
+      "settings_view": "Féach ar shocruithe",
+      "settings_manage": "Bainistigh socruithe",
+      "settings_manage_api_keys": "Bainistigh eochracha API",
+      "settings_view_api_keys": "Féach ar eochracha API",
+      "tenants_view": "Féach ar thionóntaí",
+      "tenants_view_all": "Féach ar gach tionónta",
+      "tenants_manage": "Bainistigh tionóntaí",
+      "tenants_create": "Cruthaigh tionóntaí",
+      "tenants_delete": "Scrios tionóntaí",
+      "tenants_view_metadata": "Féach ar mheiteashonraí tionóntaí",
+      "conversations_view": "Féach ar chomhráite",
+      "conversations_view_content": "Féach ar ábhar comhráite",
+      "conversations_annotate": "Nótáil comhráite",
+      "conversations_delete": "Scrios comhráite",
+      "conversations_export": "Easpórtáil comhráite",
+      "data_export_user": "Easpórtáil sonraí úsáideora",
+      "data_export_audit": "Easpórtáil sonraí iniúchta",
+      "data_delete_user": "Scrios sonraí úsáideora (GDPR)",
+      "data_view_processing": "Féach ar phróiseáil sonraí",
+      "audit_view": "Féach ar logaí iniúchta",
+      "audit_export": "Easpórtáil logaí iniúchta",
+      "audit_configure": "Cumraigh socruithe iniúchta",
+      "audit_view_compliance": "Féach ar thuarascálacha comhlíonta",
+      "reports_view": "Féach ar thuarascálacha",
+      "reports_export": "Easpórtáil tuarascálacha",
+      "reports_create": "Cruthaigh tuarascálacha",
+      "reports_schedule": "Sceideal tuarascálacha",
+      "dashboard_view": "Féach ar dheaschár",
+      "dashboard_customize": "Saincheap deaschár",
+      "escalation_to_tier2": "Ardaigh go Leibhéal 2",
+      "escalation_to_tier3": "Ardaigh go Leibhéal 3",
+      "escalation_to_engineering": "Ardaigh go hInnealtóireacht",
+      "escalation_receive": "Faigh arduithe",
+      "support_view_logs": "Féach ar logaí córais",
+      "support_debug_queries": "Dífhabhtaigh fiosruithe",
+      "support_prod_access": "Rochtain táirgeachta",
+      "support_code_access": "Rochtain chóid",
+      "support_hotfix": "Imscar breisithe"
+    },
+    "groups": {
+      "user_management_full": {
+        "name": "Bainistíocht Úsáideoirí Iomlán",
+        "description": "Cruthaigh, athraigh, scrios úsáideoirí agus bainistigh a gceadanna trasna an ardáin"
+      },
+      "user_management_read": {
+        "name": "Bainistíocht Úsáideoirí (Inléite Amháin)",
+        "description": "Féach ar phróifílí úsáideoirí agus faisnéis chuntais"
+      },
+      "user_support_basic": {
+        "name": "Tacaíocht Úsáideoirí Bunúsach",
+        "description": "Féach ar úsáideoirí agus cabhraigh le fadhbanna bunúsacha cuntais"
+      },
+      "user_support_advanced": {
+        "name": "Tacaíocht Úsáideoirí Ardleibhéal",
+        "description": "Athraigh roghanna úsáideoirí, díghlasáil cuntais, agus féach mar úsáideoir"
+      },
+      "billing_full": {
+        "name": "Rochtain Billeála Iomlán",
+        "description": "Féach agus bainistigh gach billeáil, síntiúis, agus modhanna íocaíochta"
+      },
+      "billing_read": {
+        "name": "Billeáil (Inléite Amháin)",
+        "description": "Féach ar shonraisc agus faisnéis bhilleála"
+      },
+      "infrastructure_full": {
+        "name": "Rochtain Bonneagar Iomlán",
+        "description": "Bainistigh imlonnuithe, scálú, agus cumraíocht seirbhíse"
+      },
+      "infrastructure_read": {
+        "name": "Bonneagar (Inléite Amháin)",
+        "description": "Féach ar stádas bonneagair agus méadracht sláinte"
+      },
+      "tenant_management_full": {
+        "name": "Bainistíocht Tionóntaí Iomlán",
+        "description": "Cruthaigh, athraigh, agus scrios tionóntaí agus a gcumraíochtaí"
+      },
+      "tenant_view_all": {
+        "name": "Féach ar Gach Tionónta",
+        "description": "Féach ar gach tionónta trasna an ardáin"
+      },
+      "tenant_view_assigned": {
+        "name": "Féach ar Thionóntaí Sannta",
+        "description": "Féach ar thionóntaí atá sannta do do chuntas amháin"
+      },
+      "cross_tenant_access": {
+        "name": "Rochtain Tras-Tionónta",
+        "description": "Rochtain ar úsáideoirí agus sonraí trasna tionóntaí iomadúla"
+      },
+      "data_export": {
+        "name": "Easpórtáil Sonraí",
+        "description": "Easpórtáil sonraí úsáideora agus logaí iniúchta le haghaidh comhlíonta"
+      },
+      "audit_full": {
+        "name": "Rochtain Iniúchta Iomlán",
+        "description": "Féach, easpórtáil, agus cumraigh logáil iniúchta"
+      },
+      "audit_read": {
+        "name": "Iniúchadh (Inléite Amháin)",
+        "description": "Féach ar logaí iniúchta agus tuarascálacha comhlíonta"
+      },
+      "compliance_reporting": {
+        "name": "Tuairisciú Comhlíonta",
+        "description": "Féach agus easpórtáil tuarascálacha comhlíonta agus iniúchta"
+      },
+      "conversation_full": {
+        "name": "Rochtain Comhráite Iomlán",
+        "description": "Féach, nótáil, scrios, agus easpórtáil comhráite"
+      },
+      "conversation_read": {
+        "name": "Comhráite (Inléite Amháin)",
+        "description": "Féach ar mheiteashonraí comhráite"
+      },
+      "conversation_support": {
+        "name": "Tacaíocht Comhráite",
+        "description": "Féach ar ábhar comhráite agus cuir nótaí leis"
+      },
+      "reports_full": {
+        "name": "Rochtain Tuarascálacha Iomlán",
+        "description": "Féach, cruthaigh, easpórtáil, agus sceideal tuarascálacha"
+      },
+      "reports_read": {
+        "name": "Tuarascálacha (Inléite Amháin)",
+        "description": "Féach ar thuarascálacha agus deaschár"
+      },
+      "support_engineering": {
+        "name": "Innealtóireacht Tacaíochta",
+        "description": "Rochtain ar logaí, uirlisí dífhabhtaithe, agus córais táirgeachta"
+      },
+      "support_tier3_ops": {
+        "name": "Oibríochtaí Leibhéal 3",
+        "description": "Dífhabhtú ardleibhéal, rochtain chóid, agus imscar breisithe"
+      },
+      "dashboard_full": {
+        "name": "Rochtain Deaschár Iomlán",
+        "description": "Féach agus saincheap deaschár"
+      },
+      "dashboard_read": {
+        "name": "Deaschár (Inléite Amháin)",
+        "description": "Féach ar dheaschár agus méadracht"
+      },
+      "escalation_tier1": {
+        "name": "Ardú Leibhéal 1",
+        "description": "Ardaigh saincheisteanna go tacaíocht Leibhéal 2"
+      },
+      "escalation_tier2": {
+        "name": "Ardú Leibhéal 2",
+        "description": "Ardaigh saincheisteanna go Leibhéal 3 agus faigh arduithe Leibhéal 1"
+      },
+      "escalation_tier3": {
+        "name": "Ardú Leibhéal 3",
+        "description": "Ardaigh go hinnealtóireacht agus faigh arduithe Leibhéal 2"
+      }
+    },
+    "ui": {
+      "additionalGroups": "Grúpaí Ceadanna Breise",
+      "additionalGroupsDescription": "Sann grúpaí ceadanna breise thar réamhshocruithe róil",
+      "selectGroups": "Roghnaigh grúpaí ceadanna",
+      "individualGrants": "Bronntanais Ceadanna Aonair",
+      "individualGrantsDescription": "Bronn ceadanna sonracha nach bhfuil san áireamh i ról nó grúpaí",
+      "selectPermissions": "Roghnaigh ceadanna le bronnadh",
+      "individualRevocations": "Cealuithe Ceadanna",
+      "individualRevocationsDescription": "Cealaigh ceadanna sonracha ó ról nó grúpaí",
+      "selectRevocations": "Roghnaigh ceadanna le cealú",
+      "noPermissions": "Níl aon cheadanna sannta",
+      "permissionCount": "{count, plural, =0 {Gan cheadanna} one {# chead amháin} two {# chead} few {# chead} other {# cead}}",
+      "groupCount": "{count, plural, =0 {Gan ghrúpaí} one {# ghrúpa amháin} two {# ghrúpa} few {# ghrúpa} other {# grúpa}}",
+      "fromRole": "Oidhreachtaithe ón ról",
+      "fromGroup": "Oidhreachtaithe ón ngrúpa",
+      "directGrant": "Bronnta go díreach",
+      "revoked": "Cealaithe"
+    }
+  }
+}

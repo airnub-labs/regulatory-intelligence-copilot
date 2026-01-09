@@ -1,0 +1,759 @@
+{
+  "common": {
+    "appName": "Copilot Admin",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "refresh": "Refresh",
+    "noResults": "No results found",
+    "itemCount": "{count, plural, =0 {No items} one {# item} other {# items}}",
+    "lastUpdated": "Last updated {date, date, medium}",
+    "changeLanguage": "Change language",
+    "selectLanguage": "Select language",
+    "close": "Close",
+    "add": "Add",
+    "remove": "Remove",
+    "actions": "Actions"
+  },
+  "auth": {
+    "login": "Sign in",
+    "logout": "Sign out",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "signInTitle": "Sign in to your account",
+    "signInDescription": "Enter your credentials to access the admin dashboard",
+    "invalidCredentials": "Invalid email or password",
+    "signingIn": "Signing in...",
+    "signedOut": "You have been signed out",
+    "sessionExpires": "Session expires {relativeTime, date, relative}"
+  },
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "help": "Help"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome back, {name}",
+    "overview": "Overview",
+    "recentActivity": "Recent Activity",
+    "activityCount": "{count, plural, =0 {No recent activity} one {# activity} other {# activities}}"
+  },
+  "home": {
+    "title": "Welcome to Copilot Admin",
+    "description": "Manage your Regulatory Intelligence Copilot from here."
+  },
+  "errors": {
+    "notFound": {
+      "title": "404",
+      "description": "Page not found",
+      "goHome": "Go Home"
+    },
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network error. Please check your connection.",
+    "unauthorized": "You are not authorized to perform this action."
+  },
+  "validation": {
+    "required": "This field is required",
+    "email": "Please enter a valid email address",
+    "minLength": "Must be at least {min, number} characters",
+    "maxLength": "Must be no more than {max, number} characters"
+  },
+  "time": {
+    "relative": {
+      "past": "{value, plural, one {# {unit} ago} other {# {unit}s ago}}",
+      "future": "in {value, plural, one {# {unit}} other {# {unit}s}}"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "pageTitle": "Notifications",
+    "pageDescription": "View and manage your notifications",
+    "count": "{count, plural, =0 {No notifications} one {# notification} other {# notifications}}",
+    "unread": "{count, plural, =0 {No unread} one {# unread} other {# unread}}",
+    "unreadCount": "{count, plural, =0 {No unread notifications} one {# unread notification} other {# unread notifications}}",
+    "openNotifications": "Open notifications",
+    "noNotifications": "No notifications",
+    "noNotificationsDescription": "You're all caught up! New notifications will appear here.",
+    "viewAll": "View all notifications",
+    "markRead": "Mark as read",
+    "markAllRead": "Mark all as read",
+    "dismiss": "Dismiss",
+    "archive": "Archive",
+    "selectNotification": "Select notification",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "totalNotifications": "Total Notifications",
+    "unreadNotifications": "Unread",
+    "archivedNotifications": "Archived",
+    "tabAll": "All",
+    "tabUnread": "Unread",
+    "tabArchived": "Archived",
+    "filterByPriority": "Filter by priority",
+    "allPriorities": "All Priorities",
+    "priority_critical": "Critical",
+    "priority_high": "High",
+    "priority_medium": "Medium",
+    "priority_low": "Low"
+  },
+  "administrators": {
+    "pageTitle": "Administrator Management",
+    "pageDescription": "Manage administrator accounts for Copilot Admin dashboard access",
+    "totalAdmins": "Total Administrators",
+    "activeAdmins": "Active",
+    "pendingInvitations": "Pending Invitations",
+    "multiTenantAdmins": "Multi-Tenant",
+    "tenantAccessColumn": "Tenant Access",
+    "tenant": "tenant",
+    "tenants": "tenants",
+    "accessLevel_full": "Full Access",
+    "accessLevel_limited": "Limited Access",
+    "accessLevel_readonly": "Read Only",
+    "tabUsers": "Users",
+    "tabRoles": "Roles",
+    "inviteAdmin": "Invite Administrator",
+    "export": "Export",
+    "searchUsers": "Search by name or email",
+    "filterByRole": "Filter by role",
+    "filterByStatus": "Filter by status",
+    "allRoles": "All Roles",
+    "allStatuses": "All Statuses",
+    "userColumn": "User",
+    "roleColumn": "Role",
+    "statusColumn": "Status",
+    "lastLoginColumn": "Last Login",
+    "actionsColumn": "Actions",
+    "userActions": "User actions",
+    "userEmail": "Email Address",
+    "userName": "Display Name",
+    "userRole": "Role",
+    "selectRole": "Select a role",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "statusPending": "Pending",
+    "role_super_admin": "Super Admin",
+    "role_platform_engineer": "Platform Engineer",
+    "role_account_manager": "Account Manager",
+    "role_compliance_auditor": "Compliance Auditor",
+    "role_support_tier_3": "Support Tier 3",
+    "role_support_tier_2": "Support Tier 2",
+    "role_support_tier_1": "Support Tier 1",
+    "role_viewer": "Viewer",
+    "roleDescription_super_admin": "Full platform access. Can manage all users, settings, tenants, and infrastructure.",
+    "roleDescription_platform_engineer": "Infrastructure operations. Manages deployments, scaling, and service health.",
+    "roleDescription_account_manager": "Customer success. Scoped to assigned tenants, can manage tenant users.",
+    "roleDescription_compliance_auditor": "Security and compliance. Read-only access to audit logs and compliance reports.",
+    "roleDescription_support_tier_3": "Engineering support. Code access, log viewing, production debugging, and hotfix capabilities.",
+    "roleDescription_support_tier_2": "Escalation support. Cross-tenant access, view-as-user, can edit preferences and export data.",
+    "roleDescription_support_tier_1": "Frontline support. Assigned tenants only, can view users and conversations, escalate to Tier 2.",
+    "roleDescription_viewer": "Read-only access to dashboards and reports.",
+    "addUserTitle": "Invite Administrator",
+    "addUserDescription": "Send an invitation to a new administrator",
+    "editUserTitle": "Edit Administrator",
+    "editUserDescription": "Update administrator details and permissions",
+    "deleteUserTitle": "Remove Administrator",
+    "deleteUserDescription": "Are you sure you want to remove {name}? This action cannot be undone.",
+    "sendInvitation": "Send Invitation",
+    "user": "user",
+    "users": "users",
+    "permissions": "Permissions",
+    "permFullAccess": "Full Access",
+    "permManageUsers": "Manage Users",
+    "permManageInfra": "Manage Infrastructure",
+    "permViewInfra": "View Infrastructure",
+    "permViewReports": "View Reports",
+    "permViewAudit": "View Audit Logs",
+    "permExportAudit": "Export Audit Logs",
+    "permViewUsers": "View Users",
+    "permViewTenants": "View Tenants",
+    "permViewDashboard": "View Dashboard",
+    "permCrossTenant": "Cross-Tenant Access",
+    "permViewAsUser": "View As User",
+    "permEditPrefs": "Edit Preferences",
+    "permViewLogs": "View Logs",
+    "permDebugQueries": "Debug Queries",
+    "permProdAccess": "Production Access",
+    "permCodeAccess": "Code Access",
+    "permEscalateEng": "Escalate to Engineering",
+    "permAssignedTenants": "Assigned Tenants Only",
+    "permViewConversations": "View Conversations",
+    "permEscalateT2": "Escalate to Tier 2",
+    "viewDetails": "View Details",
+    "pagination": {
+      "showing": "Showing {from} to {to} of {total}",
+      "page": "Page {current} of {total}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "sheet": {
+      "profile": "Profile",
+      "activity": "Activity",
+      "accountInfo": "Account Information",
+      "createdAt": "Created",
+      "lastLogin": "Last Login",
+      "recentActivity": "Recent Activity"
+    },
+    "dialog": {
+      "title": "Administrator Details: {name}",
+      "titleDefault": "Administrator Details",
+      "description": "View and manage administrator profile and activity"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "navigation": "Settings navigation",
+    "contentArea": "Settings content",
+    "backToHome": "Back to home",
+    "profile": "Profile",
+    "profileDescription": "Manage your personal information",
+    "preferences": "Preferences",
+    "preferencesDescription": "Customize your experience",
+    "users": "Admin Users",
+    "usersDescription": "Manage administrator accounts",
+    "profileTitle": "Personal Information",
+    "userAvatar": "User avatar",
+    "displayName": "Display Name",
+    "emailAddress": "Email Address",
+    "accountInfo": "Account Information",
+    "accountInfoDescription": "Read-only account details",
+    "userId": "User ID",
+    "role": "Role",
+    "roleAdmin": "Administrator",
+    "accountCreated": "Account Created",
+    "languageRegion": "Language & Region",
+    "languageRegionDescription": "Set your preferred language and regional settings",
+    "displayLanguage": "Display Language",
+    "selectLanguage": "Select a language",
+    "languageHint": "The interface will be displayed in this language",
+    "timezone": "Timezone",
+    "timezoneHint": "Automatically set based on your selected region",
+    "appearance": "Appearance",
+    "appearanceDescription": "Customize how the application looks",
+    "colorTheme": "Color Theme",
+    "selectTheme": "Select a theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "themeHint": "Choose between light and dark mode, or follow your system preference",
+    "notifications": "Notifications",
+    "notificationsDescription": "Configure how you receive notifications",
+    "emailUpdates": "Email Updates",
+    "emailUpdatesHint": "Receive important updates about your account via email",
+    "systemAlerts": "System Alerts",
+    "systemAlertsHint": "Get notified about system maintenance and critical issues",
+    "weeklyDigest": "Weekly Digest",
+    "weeklyDigestHint": "Receive a weekly summary of activity and reports",
+    "usersTitle": "Administrator Management",
+    "addUser": "Add User",
+    "addUserTitle": "Invite Administrator",
+    "addUserDescription": "Send an invitation to a new administrator",
+    "editUserTitle": "Edit Administrator",
+    "editUserDescription": "Update administrator details and permissions",
+    "deleteUserTitle": "Remove Administrator",
+    "deleteUserDescription": "Are you sure you want to remove {name}? This action cannot be undone.",
+    "inviteUser": "Send Invitation",
+    "searchUsers": "Search by name or email",
+    "filterByRole": "Filter by role",
+    "filterByStatus": "Filter by status",
+    "allRoles": "All Roles",
+    "allStatuses": "All Statuses",
+    "userColumn": "User",
+    "roleColumn": "Role",
+    "statusColumn": "Status",
+    "lastLoginColumn": "Last Login",
+    "actionsColumn": "Actions",
+    "userActions": "User actions",
+    "userEmail": "Email Address",
+    "userName": "Display Name",
+    "userRole": "Role",
+    "selectRole": "Select a role",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "statusPending": "Pending",
+    "role_super_admin": "Super Admin",
+    "role_platform_engineer": "Platform Engineer",
+    "role_account_manager": "Account Manager",
+    "role_compliance_auditor": "Compliance Auditor",
+    "role_support_tier_3": "Support Tier 3",
+    "role_support_tier_2": "Support Tier 2",
+    "role_support_tier_1": "Support Tier 1",
+    "role_viewer": "Viewer",
+    "roleDescription_super_admin": "Full platform access. Can manage all users, settings, tenants, and infrastructure.",
+    "roleDescription_platform_engineer": "Infrastructure operations. Manages deployments, scaling, and service health.",
+    "roleDescription_account_manager": "Customer success. Scoped to assigned tenants, can manage tenant users.",
+    "roleDescription_compliance_auditor": "Security and compliance. Read-only access to audit logs and compliance reports.",
+    "roleDescription_support_tier_3": "Engineering support. Code access, log viewing, production debugging, and hotfix capabilities.",
+    "roleDescription_support_tier_2": "Escalation support. Cross-tenant access, view-as-user, can edit preferences and export data.",
+    "roleDescription_support_tier_1": "Frontline support. Assigned tenants only, can view users and conversations, escalate to Tier 2.",
+    "roleDescription_viewer": "Read-only access to dashboards and reports.",
+    "rolesOverview": "Role Permissions",
+    "rolesOverviewDescription": "Understanding the different administrator roles and their capabilities"
+  },
+  "adminView": {
+    "title": "User Support Mode",
+    "description": "Select a user to view or edit their settings on their behalf",
+    "selectUserToView": "Select a user to view their settings",
+    "searchUsers": "Search users...",
+    "loading": "Loading users...",
+    "noUsersFound": "No users found",
+    "users": "Users",
+    "viewingUserSettings": "Viewing User Settings",
+    "viewingAs": "Viewing as {name}",
+    "stopViewing": "Exit User View",
+    "viewOwnSettings": "View My Settings",
+    "selectUserHelp": "As an administrator, you can view and manage settings for other users to provide support.",
+    "readOnly": "Read Only",
+    "editingUserProfile": "Editing profile for {name}",
+    "editingUserPreferences": "Editing preferences for {name}",
+    "role_super_admin": "Super Admin",
+    "role_platform_engineer": "Platform Engineer",
+    "role_account_manager": "Account Manager",
+    "role_compliance_auditor": "Compliance Auditor",
+    "role_support_tier_3": "Support Tier 3",
+    "role_support_tier_2": "Support Tier 2",
+    "role_support_tier_1": "Support Tier 1",
+    "role_viewer": "Viewer",
+    "auditNotice": "All changes are logged for compliance purposes"
+  },
+  "userManagement": {
+    "title": "Platform Users",
+    "description": "Manage end users of Regulatory Intelligence Copilot and their tenant memberships",
+    "stats": {
+      "totalUsers": "Total Users",
+      "activeUsers": "Active Users",
+      "trialUsers": "Trial Users",
+      "multiTenantUsers": "Multi-Tenant"
+    },
+    "export": "Export",
+    "filters": {
+      "byStatus": "Filter by status",
+      "byPlan": "Filter by plan",
+      "allStatuses": "All Statuses",
+      "allPlans": "All Plans"
+    },
+    "table": {
+      "user": "User",
+      "status": "Status",
+      "tenantRoles": "Role & Tenants",
+      "tenant": "tenant",
+      "tenants": "tenants",
+      "lastLogin": "Last Login"
+    },
+    "pagination": {
+      "showing": "Showing {from} to {to} of {total}",
+      "page": "Page {current} of {total}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "actions": {
+      "viewDetails": "View Details"
+    },
+    "userList": "Users",
+    "searchUsers": "Search users...",
+    "noUsersFound": "No users found",
+    "selectUser": "Select a User",
+    "selectUserDescription": "Choose a user from the list to view and manage their details",
+    "tabs": {
+      "profile": "Profile",
+      "tenants": "Tenants",
+      "workspaces": "Workspaces",
+      "billing": "Billing",
+      "preferences": "Preferences",
+      "permissions": "Permissions",
+      "users": "Users",
+      "roles": "Roles"
+    },
+    "profileSection": {
+      "basicInfo": "Basic Information",
+      "roleInfo": "Role Information",
+      "accountDetails": "Account Details",
+      "userId": "User ID",
+      "createdAt": "Account Created",
+      "lastLogin": "Last Login",
+      "tenantCount": "Tenant Memberships",
+      "neverLoggedIn": "Never logged in"
+    },
+    "preferencesSection": {
+      "title": "User Preferences",
+      "description": "Manage display, language, and regional settings for this user."
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "pending": "Pending"
+    },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
+    "profile": {
+      "displayName": "Display Name",
+      "email": "Email Address",
+      "role": "Role",
+      "status": "Status",
+      "preferences": "Preferences",
+      "locale": "Locale",
+      "timezone": "Timezone",
+      "theme": "Theme"
+    },
+    "tenants": {
+      "title": "Tenant Memberships",
+      "multiTenantNote": "Users can have different roles in different tenants",
+      "name": "Tenant",
+      "status": "Status",
+      "role": "Role",
+      "joinedAt": "Joined",
+      "primary": "Primary",
+      "addToTenant": "Add to Tenant",
+      "addToTenantDescription": "Add this user to an existing tenant",
+      "selectTenant": "Select Tenant",
+      "selectTenantPlaceholder": "Choose a tenant..."
+    },
+    "workspaces": {
+      "title": "Workspace Memberships",
+      "name": "Workspace",
+      "status": "Status",
+      "role": "Role",
+      "members": "Members",
+      "addToWorkspace": "Add to Workspace",
+      "addToWorkspaceDescription": "Add this user to an existing workspace",
+      "selectWorkspace": "Select Workspace",
+      "selectWorkspacePlaceholder": "Choose a workspace...",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "restore": "Restore"
+    },
+    "dialog": {
+      "title": "User Details: {name}",
+      "titleDefault": "User Details",
+      "description": "View and manage user profile, tenants, workspaces, and billing"
+    },
+    "billing": {
+      "subscriptions": "Subscriptions",
+      "paymentHistory": "Payment History",
+      "plan": "Plan",
+      "status": "Status",
+      "amount": "Amount",
+      "startDate": "Start Date",
+      "type": "Type",
+      "date": "Date",
+      "paymentMethod": "Payment Method",
+      "invoice": "Invoice",
+      "viewInvoice": "View Invoice",
+      "grantSubscription": "Grant Subscription",
+      "grantSubscriptionDescription": "Manually grant a subscription to this user",
+      "selectPlan": "Select a plan",
+      "duration": "Duration",
+      "month": "month",
+      "months": "months",
+      "freeGrant": "Free Grant",
+      "paidSubscription": "Paid Subscription",
+      "reason": "Reason",
+      "reasonPlaceholder": "Enter reason for grant (e.g., Partner program)",
+      "grant": "Grant Subscription",
+      "free": "Free",
+      "paid": "Paid",
+      "cancel": "Cancel"
+    },
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member",
+      "viewer": "Viewer"
+    },
+    "roleDescriptions": {
+      "owner": "Full control over the tenant. Can manage billing, invite/remove users, and delete the organization.",
+      "admin": "Can manage users, workspaces, and most settings. Cannot access billing or delete the organization.",
+      "member": "Can participate in workspaces and access shared resources. Cannot manage users or settings.",
+      "viewer": "Read-only access to shared resources. Cannot create or modify content."
+    },
+    "roleCount": {
+      "singular": "user with this role",
+      "plural": "users with this role"
+    },
+    "roleCategories": {
+      "tenantManagement": "Tenant Management",
+      "workspaceManagement": "Workspace Management",
+      "userManagement": "User Management",
+      "dataAccess": "Data Access"
+    },
+    "platformPermissions": {
+      "permManageTenant": "Manage Tenant",
+      "permManageBilling": "Manage Billing",
+      "permInviteUsers": "Invite Users",
+      "permRemoveUsers": "Remove Users",
+      "permViewBilling": "View Billing",
+      "permCreateWorkspace": "Create Workspaces",
+      "permDeleteWorkspace": "Delete Workspaces",
+      "permManageWorkspaceSettings": "Manage Workspace Settings",
+      "permJoinWorkspace": "Join Workspaces",
+      "permViewWorkspace": "View Workspaces",
+      "permAssignRoles": "Assign Roles",
+      "permManageMembers": "Manage Members",
+      "permViewAllUsers": "View All Users",
+      "permViewMembers": "View Members",
+      "permFullDataAccess": "Full Data Access",
+      "permExportData": "Export Data",
+      "permDeleteData": "Delete Data",
+      "permViewOwnData": "View Own Data",
+      "permExportOwnData": "Export Own Data"
+    },
+    "permissionsSection": {
+      "title": "User Permissions",
+      "description": "Manage permissions and access for this user across their tenant memberships.",
+      "rolePermissions": "Role-Based Permissions",
+      "additionalGroups": "Additional Permission Groups",
+      "additionalGroupsDescription": "Grant extra capabilities beyond the user's role",
+      "assigned": "Assigned"
+    },
+    "permissionGroups": {
+      "data_export": {
+        "name": "Data Export",
+        "description": "Allow exporting user data and reports"
+      },
+      "conversation_export": {
+        "name": "Conversation Export",
+        "description": "Allow exporting conversation history"
+      },
+      "report_access": {
+        "name": "Report Access",
+        "description": "Access to analytics and reports"
+      },
+      "api_access": {
+        "name": "API Access",
+        "description": "Allow API key generation and access"
+      },
+      "bulk_operations": {
+        "name": "Bulk Operations",
+        "description": "Allow bulk data operations"
+      }
+    }
+  },
+  "permissions": {
+    "title": "Permissions",
+    "description": "Manage access permissions for users and roles",
+    "effectivePermissions": "Effective Permissions",
+    "effectivePermissionsDescription": "Permissions calculated from role, groups, and individual grants",
+    "permissionSource": {
+      "role": "From Role",
+      "group": "From Group",
+      "grant": "Individual Grant"
+    },
+    "categories": {
+      "users": "User Management",
+      "billing": "Billing & Finance",
+      "infrastructure": "Infrastructure",
+      "settings": "Settings",
+      "tenants": "Tenant Management",
+      "conversations": "Conversations",
+      "data": "Data & GDPR",
+      "audit": "Audit & Compliance",
+      "reports": "Reports & Analytics",
+      "dashboard": "Dashboard",
+      "escalation": "Escalation",
+      "support": "Support Operations"
+    },
+    "items": {
+      "users_create": "Create users",
+      "users_view": "View users",
+      "users_view_cross_tenant": "View users across tenants",
+      "users_edit": "Edit users",
+      "users_edit_preferences": "Edit user preferences",
+      "users_edit_permissions": "Edit user permissions",
+      "users_delete": "Delete users",
+      "users_unlock_account": "Unlock user accounts",
+      "users_invite": "Invite users",
+      "users_view_as": "View as user",
+      "billing_view_invoices": "View invoices",
+      "billing_manage_subscriptions": "Manage subscriptions",
+      "billing_manage_payment_methods": "Manage payment methods",
+      "billing_view_usage": "View usage metrics",
+      "billing_export_reports": "Export billing reports",
+      "billing_grant_credits": "Grant credits",
+      "infrastructure_view": "View infrastructure",
+      "infrastructure_manage": "Manage infrastructure",
+      "infrastructure_view_health": "View service health",
+      "infrastructure_manage_features": "Manage feature flags",
+      "settings_view": "View settings",
+      "settings_manage": "Manage settings",
+      "settings_manage_api_keys": "Manage API keys",
+      "settings_view_api_keys": "View API keys",
+      "tenants_view": "View tenants",
+      "tenants_view_all": "View all tenants",
+      "tenants_manage": "Manage tenants",
+      "tenants_create": "Create tenants",
+      "tenants_delete": "Delete tenants",
+      "tenants_view_metadata": "View tenant metadata",
+      "conversations_view": "View conversations",
+      "conversations_view_content": "View conversation content",
+      "conversations_annotate": "Annotate conversations",
+      "conversations_delete": "Delete conversations",
+      "conversations_export": "Export conversations",
+      "data_export_user": "Export user data",
+      "data_export_audit": "Export audit data",
+      "data_delete_user": "Delete user data (GDPR)",
+      "data_view_processing": "View data processing",
+      "audit_view": "View audit logs",
+      "audit_export": "Export audit logs",
+      "audit_configure": "Configure audit settings",
+      "audit_view_compliance": "View compliance reports",
+      "reports_view": "View reports",
+      "reports_export": "Export reports",
+      "reports_create": "Create reports",
+      "reports_schedule": "Schedule reports",
+      "dashboard_view": "View dashboard",
+      "dashboard_customize": "Customize dashboard",
+      "escalation_to_tier2": "Escalate to Tier 2",
+      "escalation_to_tier3": "Escalate to Tier 3",
+      "escalation_to_engineering": "Escalate to Engineering",
+      "escalation_receive": "Receive escalations",
+      "support_view_logs": "View system logs",
+      "support_debug_queries": "Debug queries",
+      "support_prod_access": "Production access",
+      "support_code_access": "Code access",
+      "support_hotfix": "Deploy hotfixes"
+    },
+    "groups": {
+      "user_management_full": {
+        "name": "Full User Management",
+        "description": "Create, edit, delete users and manage their permissions across the platform"
+      },
+      "user_management_read": {
+        "name": "User Management (Read Only)",
+        "description": "View user profiles and account information"
+      },
+      "user_support_basic": {
+        "name": "Basic User Support",
+        "description": "View users and help with basic account issues"
+      },
+      "user_support_advanced": {
+        "name": "Advanced User Support",
+        "description": "Edit user preferences, unlock accounts, and view as user"
+      },
+      "billing_full": {
+        "name": "Full Billing Access",
+        "description": "View and manage all billing, subscriptions, and payment methods"
+      },
+      "billing_read": {
+        "name": "Billing (Read Only)",
+        "description": "View invoices and billing information"
+      },
+      "infrastructure_full": {
+        "name": "Full Infrastructure Access",
+        "description": "Manage deployments, scaling, and service configuration"
+      },
+      "infrastructure_read": {
+        "name": "Infrastructure (Read Only)",
+        "description": "View infrastructure status and health metrics"
+      },
+      "tenant_management_full": {
+        "name": "Full Tenant Management",
+        "description": "Create, edit, and delete tenants and their configurations"
+      },
+      "tenant_view_all": {
+        "name": "View All Tenants",
+        "description": "View all tenants across the platform"
+      },
+      "tenant_view_assigned": {
+        "name": "View Assigned Tenants",
+        "description": "View only tenants assigned to your account"
+      },
+      "cross_tenant_access": {
+        "name": "Cross-Tenant Access",
+        "description": "Access users and data across multiple tenants"
+      },
+      "data_export": {
+        "name": "Data Export",
+        "description": "Export user data and audit logs for compliance"
+      },
+      "audit_full": {
+        "name": "Full Audit Access",
+        "description": "View, export, and configure audit logging"
+      },
+      "audit_read": {
+        "name": "Audit (Read Only)",
+        "description": "View audit logs and compliance reports"
+      },
+      "compliance_reporting": {
+        "name": "Compliance Reporting",
+        "description": "View and export compliance and audit reports"
+      },
+      "conversation_full": {
+        "name": "Full Conversation Access",
+        "description": "View, annotate, delete, and export conversations"
+      },
+      "conversation_read": {
+        "name": "Conversation (Read Only)",
+        "description": "View conversation metadata"
+      },
+      "conversation_support": {
+        "name": "Conversation Support",
+        "description": "View conversation content and add annotations"
+      },
+      "reports_full": {
+        "name": "Full Reports Access",
+        "description": "View, create, export, and schedule reports"
+      },
+      "reports_read": {
+        "name": "Reports (Read Only)",
+        "description": "View reports and dashboards"
+      },
+      "support_engineering": {
+        "name": "Support Engineering",
+        "description": "Access to logs, debugging tools, and production systems"
+      },
+      "support_tier3_ops": {
+        "name": "Tier 3 Operations",
+        "description": "Advanced debugging, code access, and hotfix deployment"
+      },
+      "dashboard_full": {
+        "name": "Full Dashboard Access",
+        "description": "View and customize dashboards"
+      },
+      "dashboard_read": {
+        "name": "Dashboard (Read Only)",
+        "description": "View dashboards and metrics"
+      },
+      "escalation_tier1": {
+        "name": "Tier 1 Escalation",
+        "description": "Escalate issues to Tier 2 support"
+      },
+      "escalation_tier2": {
+        "name": "Tier 2 Escalation",
+        "description": "Escalate issues to Tier 3 and receive Tier 1 escalations"
+      },
+      "escalation_tier3": {
+        "name": "Tier 3 Escalation",
+        "description": "Escalate to engineering and receive Tier 2 escalations"
+      }
+    },
+    "ui": {
+      "additionalGroups": "Additional Permission Groups",
+      "additionalGroupsDescription": "Assign extra permission groups beyond the role defaults",
+      "selectGroups": "Select permission groups",
+      "individualGrants": "Individual Permission Grants",
+      "individualGrantsDescription": "Grant specific permissions not included in role or groups",
+      "selectPermissions": "Select permissions to grant",
+      "individualRevocations": "Permission Revocations",
+      "individualRevocationsDescription": "Revoke specific permissions from role or groups",
+      "selectRevocations": "Select permissions to revoke",
+      "noPermissions": "No permissions assigned",
+      "permissionCount": "{count, plural, =0 {No permissions} one {# permission} other {# permissions}}",
+      "groupCount": "{count, plural, =0 {No groups} one {# group} other {# groups}}",
+      "fromRole": "Inherited from role",
+      "fromGroup": "Inherited from group",
+      "directGrant": "Directly granted",
+      "revoked": "Revoked"
+    }
+  }
+}

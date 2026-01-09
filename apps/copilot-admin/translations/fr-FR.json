@@ -1,0 +1,47 @@
+{
+  "legal": {
+    "jurisdiction": "France",
+    "regulator": "Autorit\u00e9 des March\u00e9s Financiers",
+    "dataProtection": "CNIL",
+    "taxAuthority": "Direction G\u00e9n\u00e9rale des Finances Publiques",
+    "disclaimer": "Ces informations sont fournies \u00e0 titre indicatif et ne constituent pas un conseil juridique ou financier au sens du droit fran\u00e7ais."
+  },
+  "tax": {
+    "tva": "TVA",
+    "tvaRate": "20%",
+    "irpp": "Imp\u00f4t sur le Revenu",
+    "csg": "CSG",
+    "crds": "CRDS",
+    "taxeFonciere": "Taxe Fonci\u00e8re",
+    "taxeHabitation": "Taxe d'Habitation"
+  },
+  "regulatory": {
+    "pension": "Retraite",
+    "socialSecurity": "S\u00e9curit\u00e9 Sociale",
+    "nir": "NIR",
+    "nirFull": "Num\u00e9ro d'Inscription au R\u00e9pertoire",
+    "carteVitale": "Carte Vitale"
+  },
+  "currency": {
+    "code": "EUR",
+    "symbol": "\u20ac",
+    "format": "{amount, number, ::currency/EUR}",
+    "example": "1 234,56 \u20ac"
+  },
+  "formats": {
+    "dateShort": "dd/MM/yyyy",
+    "dateLong": "d MMMM yyyy",
+    "phonePrefix": "+33",
+    "postcode": "Code Postal",
+    "postcodeExample": "75001"
+  },
+  "address": {
+    "region": "R\u00e9gion",
+    "codePostal": "Code Postal"
+  },
+  "documents": {
+    "passport": "Passeport Fran\u00e7ais",
+    "cni": "Carte Nationale d'Identit\u00e9",
+    "permisConduire": "Permis de Conduire"
+  }
+}

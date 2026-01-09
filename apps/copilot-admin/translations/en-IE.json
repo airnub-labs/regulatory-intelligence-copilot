@@ -1,0 +1,48 @@
+{
+  "legal": {
+    "jurisdiction": "Republic of Ireland",
+    "regulator": "Central Bank of Ireland",
+    "dataProtection": "Data Protection Commission",
+    "taxAuthority": "Revenue Commissioners",
+    "disclaimer": "This information is for guidance only and does not constitute legal or financial advice under Irish law."
+  },
+  "tax": {
+    "vat": "VAT",
+    "vatRate": "23%",
+    "incomeTax": "Income Tax",
+    "prsi": "PRSI",
+    "usc": "USC",
+    "cgt": "Capital Gains Tax",
+    "cat": "Capital Acquisitions Tax",
+    "lpt": "Local Property Tax"
+  },
+  "regulatory": {
+    "pension": "PRSA",
+    "pensionFull": "Personal Retirement Savings Account",
+    "socialWelfare": "Social Welfare",
+    "ppsn": "PPS Number",
+    "employmentPermit": "Employment Permit"
+  },
+  "currency": {
+    "code": "EUR",
+    "symbol": "€",
+    "format": "{amount, number, ::currency/EUR}",
+    "example": "€1,234.56"
+  },
+  "formats": {
+    "dateShort": "dd/MM/yyyy",
+    "dateLong": "d MMMM yyyy",
+    "phonePrefix": "+353",
+    "postcode": "Eircode",
+    "postcodeExample": "D02 XY45"
+  },
+  "address": {
+    "county": "County",
+    "eircode": "Eircode"
+  },
+  "documents": {
+    "passport": "Irish Passport",
+    "drivingLicence": "Driving Licence",
+    "publicServicesCard": "Public Services Card"
+  }
+}

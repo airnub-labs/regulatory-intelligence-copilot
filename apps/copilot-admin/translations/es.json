@@ -1,0 +1,759 @@
+{
+  "common": {
+    "appName": "Copilot Admin",
+    "loading": "Cargando...",
+    "error": "Ocurrió un error",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "create": "Crear",
+    "search": "Buscar",
+    "refresh": "Actualizar",
+    "noResults": "No se encontraron resultados",
+    "itemCount": "{count, plural, =0 {Sin elementos} one {# elemento} other {# elementos}}",
+    "lastUpdated": "Última actualización {date, date, medium}",
+    "changeLanguage": "Cambiar idioma",
+    "selectLanguage": "Seleccionar idioma",
+    "close": "Cerrar",
+    "add": "Añadir",
+    "remove": "Eliminar",
+    "actions": "Acciones"
+  },
+  "auth": {
+    "login": "Iniciar sesión",
+    "logout": "Cerrar sesión",
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
+    "signInTitle": "Inicia sesión en tu cuenta",
+    "signInDescription": "Ingresa tus credenciales para acceder al panel de administración",
+    "invalidCredentials": "Correo electrónico o contraseña inválidos",
+    "signingIn": "Iniciando sesión...",
+    "signedOut": "Has cerrado sesión",
+    "sessionExpires": "La sesión expira {relativeTime, date, relative}"
+  },
+  "nav": {
+    "home": "Inicio",
+    "dashboard": "Panel",
+    "analytics": "Análisis",
+    "settings": "Configuración",
+    "help": "Ayuda"
+  },
+  "dashboard": {
+    "title": "Panel",
+    "welcome": "Bienvenido de nuevo, {name}",
+    "overview": "Resumen",
+    "recentActivity": "Actividad Reciente",
+    "activityCount": "{count, plural, =0 {Sin actividad reciente} one {# actividad} other {# actividades}}"
+  },
+  "home": {
+    "title": "Bienvenido a Copilot Admin",
+    "description": "Administra tu Copiloto de Inteligencia Regulatoria desde aquí."
+  },
+  "errors": {
+    "notFound": {
+      "title": "404",
+      "description": "Página no encontrada",
+      "goHome": "Ir al Inicio"
+    },
+    "generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "network": "Error de red. Por favor, verifica tu conexión.",
+    "unauthorized": "No estás autorizado para realizar esta acción."
+  },
+  "validation": {
+    "required": "Este campo es obligatorio",
+    "email": "Por favor, ingresa un correo electrónico válido",
+    "minLength": "Debe tener al menos {min, number} caracteres",
+    "maxLength": "Debe tener no más de {max, number} caracteres"
+  },
+  "time": {
+    "relative": {
+      "past": "hace {value, plural, one {# {unit}} other {# {unit}s}}",
+      "future": "en {value, plural, one {# {unit}} other {# {unit}s}}"
+    }
+  },
+  "notifications": {
+    "title": "Notificaciones",
+    "pageTitle": "Notificaciones",
+    "pageDescription": "Ver y gestionar tus notificaciones",
+    "count": "{count, plural, =0 {Sin notificaciones} one {# notificación} other {# notificaciones}}",
+    "unread": "{count, plural, =0 {Sin leer} one {# sin leer} other {# sin leer}}",
+    "unreadCount": "{count, plural, =0 {Sin notificaciones sin leer} one {# notificación sin leer} other {# notificaciones sin leer}}",
+    "openNotifications": "Abrir notificaciones",
+    "noNotifications": "Sin notificaciones",
+    "noNotificationsDescription": "¡Estás al día! Las nuevas notificaciones aparecerán aquí.",
+    "viewAll": "Ver todas las notificaciones",
+    "markRead": "Marcar como leída",
+    "markAllRead": "Marcar todas como leídas",
+    "dismiss": "Descartar",
+    "archive": "Archivar",
+    "selectNotification": "Seleccionar notificación",
+    "selectAll": "Seleccionar todas",
+    "deselectAll": "Deseleccionar todas",
+    "selectedCount": "{count, plural, one {# seleccionada} other {# seleccionadas}}",
+    "totalNotifications": "Total de Notificaciones",
+    "unreadNotifications": "Sin Leer",
+    "archivedNotifications": "Archivadas",
+    "tabAll": "Todas",
+    "tabUnread": "Sin Leer",
+    "tabArchived": "Archivadas",
+    "filterByPriority": "Filtrar por prioridad",
+    "allPriorities": "Todas las Prioridades",
+    "priority_critical": "Crítica",
+    "priority_high": "Alta",
+    "priority_medium": "Media",
+    "priority_low": "Baja"
+  },
+  "administrators": {
+    "pageTitle": "Gestión de Administradores",
+    "pageDescription": "Gestiona las cuentas de administradores para acceso al panel de Copilot Admin",
+    "totalAdmins": "Total de Administradores",
+    "activeAdmins": "Activos",
+    "pendingInvitations": "Invitaciones Pendientes",
+    "multiTenantAdmins": "Multi-Inquilino",
+    "tenantAccessColumn": "Acceso a Inquilinos",
+    "tenant": "inquilino",
+    "tenants": "inquilinos",
+    "accessLevel_full": "Acceso Completo",
+    "accessLevel_limited": "Acceso Limitado",
+    "accessLevel_readonly": "Solo Lectura",
+    "tabUsers": "Usuarios",
+    "tabRoles": "Roles",
+    "inviteAdmin": "Invitar Administrador",
+    "export": "Exportar",
+    "searchUsers": "Buscar por nombre o correo",
+    "filterByRole": "Filtrar por rol",
+    "filterByStatus": "Filtrar por estado",
+    "allRoles": "Todos los Roles",
+    "allStatuses": "Todos los Estados",
+    "userColumn": "Usuario",
+    "roleColumn": "Rol",
+    "statusColumn": "Estado",
+    "lastLoginColumn": "Último Acceso",
+    "actionsColumn": "Acciones",
+    "userActions": "Acciones del usuario",
+    "userEmail": "Correo Electrónico",
+    "userName": "Nombre para Mostrar",
+    "userRole": "Rol",
+    "selectRole": "Selecciona un rol",
+    "statusActive": "Activo",
+    "statusInactive": "Inactivo",
+    "statusPending": "Pendiente",
+    "role_super_admin": "Super Admin",
+    "role_platform_engineer": "Ingeniero de Plataforma",
+    "role_account_manager": "Gerente de Cuentas",
+    "role_compliance_auditor": "Auditor de Cumplimiento",
+    "role_support_tier_3": "Soporte Nivel 3",
+    "role_support_tier_2": "Soporte Nivel 2",
+    "role_support_tier_1": "Soporte Nivel 1",
+    "role_viewer": "Visualizador",
+    "roleDescription_super_admin": "Acceso completo a la plataforma. Puede gestionar todos los usuarios, configuraciones, inquilinos e infraestructura.",
+    "roleDescription_platform_engineer": "Operaciones de infraestructura. Gestiona despliegues, escalado y salud de servicios.",
+    "roleDescription_account_manager": "Éxito del cliente. Limitado a inquilinos asignados, puede gestionar usuarios de inquilinos.",
+    "roleDescription_compliance_auditor": "Seguridad y cumplimiento. Acceso de solo lectura a registros de auditoría e informes de cumplimiento.",
+    "roleDescription_support_tier_3": "Soporte de ingeniería. Acceso al código, visualización de registros, depuración de producción y capacidades de correcciones.",
+    "roleDescription_support_tier_2": "Soporte de escalación. Acceso entre inquilinos, ver como usuario, puede editar preferencias y exportar datos.",
+    "roleDescription_support_tier_1": "Soporte de primera línea. Solo inquilinos asignados, puede ver usuarios y conversaciones, escalar a Nivel 2.",
+    "roleDescription_viewer": "Acceso de solo lectura a paneles e informes.",
+    "addUserTitle": "Invitar Administrador",
+    "addUserDescription": "Envía una invitación a un nuevo administrador",
+    "editUserTitle": "Editar Administrador",
+    "editUserDescription": "Actualiza los detalles y permisos del administrador",
+    "deleteUserTitle": "Eliminar Administrador",
+    "deleteUserDescription": "¿Estás seguro de que deseas eliminar a {name}? Esta acción no se puede deshacer.",
+    "sendInvitation": "Enviar Invitación",
+    "user": "usuario",
+    "users": "usuarios",
+    "permissions": "Permisos",
+    "permFullAccess": "Acceso Completo",
+    "permManageUsers": "Gestionar Usuarios",
+    "permManageInfra": "Gestionar Infraestructura",
+    "permViewInfra": "Ver Infraestructura",
+    "permViewReports": "Ver Informes",
+    "permViewAudit": "Ver Registros de Auditoría",
+    "permExportAudit": "Exportar Registros de Auditoría",
+    "permViewUsers": "Ver Usuarios",
+    "permViewTenants": "Ver Inquilinos",
+    "permViewDashboard": "Ver Panel",
+    "permCrossTenant": "Acceso Entre Inquilinos",
+    "permViewAsUser": "Ver como Usuario",
+    "permEditPrefs": "Editar Preferencias",
+    "permViewLogs": "Ver Registros",
+    "permDebugQueries": "Depurar Consultas",
+    "permProdAccess": "Acceso a Producción",
+    "permCodeAccess": "Acceso al Código",
+    "permEscalateEng": "Escalar a Ingeniería",
+    "permAssignedTenants": "Solo Inquilinos Asignados",
+    "permViewConversations": "Ver Conversaciones",
+    "permEscalateT2": "Escalar a Nivel 2",
+    "viewDetails": "Ver Detalles",
+    "pagination": {
+      "showing": "Mostrando {from} a {to} de {total}",
+      "page": "Página {current} de {total}",
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "sheet": {
+      "profile": "Perfil",
+      "activity": "Actividad",
+      "accountInfo": "Información de Cuenta",
+      "createdAt": "Creado",
+      "lastLogin": "Último Inicio de Sesión",
+      "recentActivity": "Actividad Reciente"
+    },
+    "dialog": {
+      "title": "Detalles del Administrador: {name}",
+      "titleDefault": "Detalles del Administrador",
+      "description": "Ver y gestionar perfil y actividad del administrador"
+    }
+  },
+  "settings": {
+    "title": "Configuración",
+    "navigation": "Navegación de configuración",
+    "contentArea": "Área de contenido de configuración",
+    "backToHome": "Volver al inicio",
+    "profile": "Perfil",
+    "profileDescription": "Administra tu información personal",
+    "preferences": "Preferencias",
+    "preferencesDescription": "Personaliza tu experiencia",
+    "users": "Usuarios Admin",
+    "usersDescription": "Administra cuentas de administrador",
+    "profileTitle": "Información Personal",
+    "userAvatar": "Avatar del usuario",
+    "displayName": "Nombre para Mostrar",
+    "emailAddress": "Correo Electrónico",
+    "accountInfo": "Información de la Cuenta",
+    "accountInfoDescription": "Detalles de cuenta de solo lectura",
+    "userId": "ID de Usuario",
+    "role": "Rol",
+    "roleAdmin": "Administrador",
+    "accountCreated": "Cuenta Creada",
+    "languageRegion": "Idioma y Región",
+    "languageRegionDescription": "Configura tu idioma preferido y ajustes regionales",
+    "displayLanguage": "Idioma de Visualización",
+    "selectLanguage": "Selecciona un idioma",
+    "languageHint": "La interfaz se mostrará en este idioma",
+    "timezone": "Zona Horaria",
+    "timezoneHint": "Se configura automáticamente según tu región seleccionada",
+    "appearance": "Apariencia",
+    "appearanceDescription": "Personaliza cómo se ve la aplicación",
+    "colorTheme": "Tema de Color",
+    "selectTheme": "Selecciona un tema",
+    "themeLight": "Claro",
+    "themeDark": "Oscuro",
+    "themeSystem": "Sistema",
+    "themeHint": "Elige entre modo claro y oscuro, o sigue la preferencia de tu sistema",
+    "notifications": "Notificaciones",
+    "notificationsDescription": "Configura cómo recibes notificaciones",
+    "emailUpdates": "Actualizaciones por Correo",
+    "emailUpdatesHint": "Recibe actualizaciones importantes sobre tu cuenta por correo electrónico",
+    "systemAlerts": "Alertas del Sistema",
+    "systemAlertsHint": "Recibe notificaciones sobre mantenimiento del sistema y problemas críticos",
+    "weeklyDigest": "Resumen Semanal",
+    "weeklyDigestHint": "Recibe un resumen semanal de actividad e informes",
+    "usersTitle": "Gestión de Administradores",
+    "addUser": "Agregar Usuario",
+    "addUserTitle": "Invitar Administrador",
+    "addUserDescription": "Envía una invitación a un nuevo administrador",
+    "editUserTitle": "Editar Administrador",
+    "editUserDescription": "Actualiza los detalles y permisos del administrador",
+    "deleteUserTitle": "Eliminar Administrador",
+    "deleteUserDescription": "¿Estás seguro de que deseas eliminar a {name}? Esta acción no se puede deshacer.",
+    "inviteUser": "Enviar Invitación",
+    "searchUsers": "Buscar por nombre o correo",
+    "filterByRole": "Filtrar por rol",
+    "filterByStatus": "Filtrar por estado",
+    "allRoles": "Todos los Roles",
+    "allStatuses": "Todos los Estados",
+    "userColumn": "Usuario",
+    "roleColumn": "Rol",
+    "statusColumn": "Estado",
+    "lastLoginColumn": "Último Acceso",
+    "actionsColumn": "Acciones",
+    "userActions": "Acciones del usuario",
+    "userEmail": "Correo Electrónico",
+    "userName": "Nombre para Mostrar",
+    "userRole": "Rol",
+    "selectRole": "Selecciona un rol",
+    "statusActive": "Activo",
+    "statusInactive": "Inactivo",
+    "statusPending": "Pendiente",
+    "role_super_admin": "Super Admin",
+    "role_platform_engineer": "Ingeniero de Plataforma",
+    "role_account_manager": "Gerente de Cuentas",
+    "role_compliance_auditor": "Auditor de Cumplimiento",
+    "role_support_tier_3": "Soporte Nivel 3",
+    "role_support_tier_2": "Soporte Nivel 2",
+    "role_support_tier_1": "Soporte Nivel 1",
+    "role_viewer": "Visualizador",
+    "roleDescription_super_admin": "Acceso completo a la plataforma. Puede gestionar todos los usuarios, configuraciones, inquilinos e infraestructura.",
+    "roleDescription_platform_engineer": "Operaciones de infraestructura. Gestiona despliegues, escalado y salud de servicios.",
+    "roleDescription_account_manager": "Éxito del cliente. Limitado a inquilinos asignados, puede gestionar usuarios de inquilinos.",
+    "roleDescription_compliance_auditor": "Seguridad y cumplimiento. Acceso de solo lectura a registros de auditoría e informes de cumplimiento.",
+    "roleDescription_support_tier_3": "Soporte de ingeniería. Acceso al código, visualización de registros, depuración de producción y capacidades de correcciones.",
+    "roleDescription_support_tier_2": "Soporte de escalación. Acceso entre inquilinos, ver como usuario, puede editar preferencias y exportar datos.",
+    "roleDescription_support_tier_1": "Soporte de primera línea. Solo inquilinos asignados, puede ver usuarios y conversaciones, escalar a Nivel 2.",
+    "roleDescription_viewer": "Acceso de solo lectura a paneles e informes.",
+    "rolesOverview": "Permisos de Roles",
+    "rolesOverviewDescription": "Comprender los diferentes roles de administrador y sus capacidades"
+  },
+  "adminView": {
+    "title": "Modo de Soporte al Usuario",
+    "description": "Selecciona un usuario para ver o editar su configuración en su nombre",
+    "selectUserToView": "Selecciona un usuario para ver su configuración",
+    "searchUsers": "Buscar usuarios...",
+    "loading": "Cargando usuarios...",
+    "noUsersFound": "No se encontraron usuarios",
+    "users": "Usuarios",
+    "viewingUserSettings": "Viendo Configuración del Usuario",
+    "viewingAs": "Viendo como {name}",
+    "stopViewing": "Salir de Vista de Usuario",
+    "viewOwnSettings": "Ver Mi Configuración",
+    "selectUserHelp": "Como administrador, puedes ver y gestionar la configuración de otros usuarios para proporcionar soporte.",
+    "readOnly": "Solo Lectura",
+    "editingUserProfile": "Editando perfil de {name}",
+    "editingUserPreferences": "Editando preferencias de {name}",
+    "role_super_admin": "Super Admin",
+    "role_platform_engineer": "Ingeniero de Plataforma",
+    "role_account_manager": "Gerente de Cuentas",
+    "role_compliance_auditor": "Auditor de Cumplimiento",
+    "role_support_tier_3": "Soporte Nivel 3",
+    "role_support_tier_2": "Soporte Nivel 2",
+    "role_support_tier_1": "Soporte Nivel 1",
+    "role_viewer": "Visualizador",
+    "auditNotice": "Todos los cambios se registran con fines de cumplimiento"
+  },
+  "userManagement": {
+    "title": "Usuarios de la Plataforma",
+    "description": "Gestiona los usuarios finales del Copiloto de Inteligencia Regulatoria y sus membresías de inquilinos",
+    "stats": {
+      "totalUsers": "Usuarios Totales",
+      "activeUsers": "Usuarios Activos",
+      "trialUsers": "Usuarios en Prueba",
+      "multiTenantUsers": "Multi-Inquilino"
+    },
+    "export": "Exportar",
+    "filters": {
+      "byStatus": "Filtrar por estado",
+      "byPlan": "Filtrar por plan",
+      "allStatuses": "Todos los Estados",
+      "allPlans": "Todos los Planes"
+    },
+    "table": {
+      "user": "Usuario",
+      "status": "Estado",
+      "tenantRoles": "Rol e Inquilinos",
+      "tenant": "inquilino",
+      "tenants": "inquilinos",
+      "lastLogin": "Último Acceso"
+    },
+    "pagination": {
+      "showing": "Mostrando {from} a {to} de {total}",
+      "page": "Página {current} de {total}",
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "actions": {
+      "viewDetails": "Ver Detalles"
+    },
+    "userList": "Usuarios",
+    "searchUsers": "Buscar usuarios...",
+    "noUsersFound": "No se encontraron usuarios",
+    "selectUser": "Seleccionar Usuario",
+    "selectUserDescription": "Elige un usuario de la lista para ver y gestionar sus detalles",
+    "tabs": {
+      "profile": "Perfil",
+      "tenants": "Inquilinos",
+      "workspaces": "Espacios de Trabajo",
+      "billing": "Facturación",
+      "preferences": "Preferencias",
+      "permissions": "Permisos",
+      "users": "Usuarios",
+      "roles": "Roles"
+    },
+    "profileSection": {
+      "basicInfo": "Información Básica",
+      "roleInfo": "Información de Rol",
+      "accountDetails": "Detalles de Cuenta",
+      "userId": "ID de Usuario",
+      "createdAt": "Cuenta Creada",
+      "lastLogin": "Último Acceso",
+      "tenantCount": "Membresías de Inquilino",
+      "neverLoggedIn": "Nunca ha iniciado sesión"
+    },
+    "preferencesSection": {
+      "title": "Preferencias de Usuario",
+      "description": "Gestionar configuración de visualización, idioma y regional para este usuario."
+    },
+    "status": {
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "pending": "Pendiente"
+    },
+    "theme": {
+      "light": "Claro",
+      "dark": "Oscuro",
+      "system": "Sistema"
+    },
+    "profile": {
+      "displayName": "Nombre para Mostrar",
+      "email": "Correo Electrónico",
+      "role": "Rol",
+      "status": "Estado",
+      "preferences": "Preferencias",
+      "locale": "Configuración Regional",
+      "timezone": "Zona Horaria",
+      "theme": "Tema"
+    },
+    "tenants": {
+      "title": "Membresías de Inquilinos",
+      "multiTenantNote": "Los usuarios pueden tener diferentes roles en diferentes inquilinos",
+      "name": "Inquilino",
+      "status": "Estado",
+      "role": "Rol",
+      "joinedAt": "Fecha de Unión",
+      "primary": "Primario",
+      "addToTenant": "Añadir a Inquilino",
+      "addToTenantDescription": "Añadir este usuario a un inquilino existente",
+      "selectTenant": "Seleccionar Inquilino",
+      "selectTenantPlaceholder": "Elegir un inquilino..."
+    },
+    "workspaces": {
+      "title": "Membresías de Espacios de Trabajo",
+      "name": "Espacio de Trabajo",
+      "status": "Estado",
+      "role": "Rol",
+      "members": "Miembros",
+      "addToWorkspace": "Añadir a Espacio de Trabajo",
+      "addToWorkspaceDescription": "Añadir este usuario a un espacio de trabajo existente",
+      "selectWorkspace": "Seleccionar Espacio de Trabajo",
+      "selectWorkspacePlaceholder": "Elegir un espacio de trabajo...",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "restore": "Restaurar"
+    },
+    "dialog": {
+      "title": "Detalles del Usuario: {name}",
+      "titleDefault": "Detalles del Usuario",
+      "description": "Ver y gestionar perfil, inquilinos, espacios de trabajo y facturación del usuario"
+    },
+    "billing": {
+      "subscriptions": "Suscripciones",
+      "paymentHistory": "Historial de Pagos",
+      "plan": "Plan",
+      "status": "Estado",
+      "amount": "Cantidad",
+      "startDate": "Fecha de Inicio",
+      "type": "Tipo",
+      "date": "Fecha",
+      "paymentMethod": "Método de Pago",
+      "invoice": "Factura",
+      "viewInvoice": "Ver Factura",
+      "grantSubscription": "Otorgar Suscripción",
+      "grantSubscriptionDescription": "Otorgar manualmente una suscripción a este usuario",
+      "selectPlan": "Seleccionar un plan",
+      "duration": "Duración",
+      "month": "mes",
+      "months": "meses",
+      "freeGrant": "Otorgamiento Gratuito",
+      "paidSubscription": "Suscripción de Pago",
+      "reason": "Razón",
+      "reasonPlaceholder": "Introduzca la razón del otorgamiento (ej., Programa de socios)",
+      "grant": "Otorgar Suscripción",
+      "free": "Gratis",
+      "paid": "Pagado",
+      "cancel": "Cancelar"
+    },
+    "roles": {
+      "owner": "Propietario",
+      "admin": "Administrador",
+      "member": "Miembro",
+      "viewer": "Visualizador"
+    },
+    "roleDescriptions": {
+      "owner": "Control total sobre el inquilino. Puede gestionar facturación, invitar/eliminar usuarios y eliminar la organización.",
+      "admin": "Puede gestionar usuarios, espacios de trabajo y la mayoría de configuraciones. No puede acceder a facturación ni eliminar la organización.",
+      "member": "Puede participar en espacios de trabajo y acceder a recursos compartidos. No puede gestionar usuarios ni configuraciones.",
+      "viewer": "Acceso de solo lectura a recursos compartidos. No puede crear ni modificar contenido."
+    },
+    "roleCount": {
+      "singular": "usuario con este rol",
+      "plural": "usuarios con este rol"
+    },
+    "roleCategories": {
+      "tenantManagement": "Gestión de Inquilino",
+      "workspaceManagement": "Gestión de Espacio de Trabajo",
+      "userManagement": "Gestión de Usuarios",
+      "dataAccess": "Acceso a Datos"
+    },
+    "platformPermissions": {
+      "permManageTenant": "Gestionar Inquilino",
+      "permManageBilling": "Gestionar Facturación",
+      "permInviteUsers": "Invitar Usuarios",
+      "permRemoveUsers": "Eliminar Usuarios",
+      "permViewBilling": "Ver Facturación",
+      "permCreateWorkspace": "Crear Espacios de Trabajo",
+      "permDeleteWorkspace": "Eliminar Espacios de Trabajo",
+      "permManageWorkspaceSettings": "Gestionar Configuración de Espacio de Trabajo",
+      "permJoinWorkspace": "Unirse a Espacios de Trabajo",
+      "permViewWorkspace": "Ver Espacios de Trabajo",
+      "permAssignRoles": "Asignar Roles",
+      "permManageMembers": "Gestionar Miembros",
+      "permViewAllUsers": "Ver Todos los Usuarios",
+      "permViewMembers": "Ver Miembros",
+      "permFullDataAccess": "Acceso Completo a Datos",
+      "permExportData": "Exportar Datos",
+      "permDeleteData": "Eliminar Datos",
+      "permViewOwnData": "Ver Datos Propios",
+      "permExportOwnData": "Exportar Datos Propios"
+    },
+    "permissionsSection": {
+      "title": "Permisos de Usuario",
+      "description": "Gestiona permisos y acceso para este usuario en sus membresías de inquilino.",
+      "rolePermissions": "Permisos Basados en Rol",
+      "additionalGroups": "Grupos de Permisos Adicionales",
+      "additionalGroupsDescription": "Otorga capacidades adicionales más allá del rol del usuario",
+      "assigned": "Asignado"
+    },
+    "permissionGroups": {
+      "data_export": {
+        "name": "Exportación de Datos",
+        "description": "Permitir exportar datos de usuario e informes"
+      },
+      "conversation_export": {
+        "name": "Exportación de Conversaciones",
+        "description": "Permitir exportar historial de conversaciones"
+      },
+      "report_access": {
+        "name": "Acceso a Informes",
+        "description": "Acceso a análisis e informes"
+      },
+      "api_access": {
+        "name": "Acceso API",
+        "description": "Permitir generación y acceso a claves API"
+      },
+      "bulk_operations": {
+        "name": "Operaciones Masivas",
+        "description": "Permitir operaciones de datos masivas"
+      }
+    }
+  },
+  "permissions": {
+    "title": "Permisos",
+    "description": "Gestiona permisos de acceso para usuarios y roles",
+    "effectivePermissions": "Permisos Efectivos",
+    "effectivePermissionsDescription": "Permisos calculados a partir de rol, grupos y otorgamientos individuales",
+    "permissionSource": {
+      "role": "Del Rol",
+      "group": "Del Grupo",
+      "grant": "Otorgamiento Individual"
+    },
+    "categories": {
+      "users": "Gestión de Usuarios",
+      "billing": "Facturación y Finanzas",
+      "infrastructure": "Infraestructura",
+      "settings": "Configuración",
+      "tenants": "Gestión de Inquilinos",
+      "conversations": "Conversaciones",
+      "data": "Datos y GDPR",
+      "audit": "Auditoría y Cumplimiento",
+      "reports": "Informes y Análisis",
+      "dashboard": "Panel",
+      "escalation": "Escalación",
+      "support": "Operaciones de Soporte"
+    },
+    "items": {
+      "users_create": "Crear usuarios",
+      "users_view": "Ver usuarios",
+      "users_view_cross_tenant": "Ver usuarios en diferentes inquilinos",
+      "users_edit": "Editar usuarios",
+      "users_edit_preferences": "Editar preferencias de usuarios",
+      "users_edit_permissions": "Editar permisos de usuarios",
+      "users_delete": "Eliminar usuarios",
+      "users_unlock_account": "Desbloquear cuentas de usuarios",
+      "users_invite": "Invitar usuarios",
+      "users_view_as": "Ver como usuario",
+      "billing_view_invoices": "Ver facturas",
+      "billing_manage_subscriptions": "Gestionar suscripciones",
+      "billing_manage_payment_methods": "Gestionar métodos de pago",
+      "billing_view_usage": "Ver métricas de uso",
+      "billing_export_reports": "Exportar informes de facturación",
+      "billing_grant_credits": "Otorgar créditos",
+      "infrastructure_view": "Ver infraestructura",
+      "infrastructure_manage": "Gestionar infraestructura",
+      "infrastructure_view_health": "Ver salud del servicio",
+      "infrastructure_manage_features": "Gestionar banderas de características",
+      "settings_view": "Ver configuración",
+      "settings_manage": "Gestionar configuración",
+      "settings_manage_api_keys": "Gestionar claves API",
+      "settings_view_api_keys": "Ver claves API",
+      "tenants_view": "Ver inquilinos",
+      "tenants_view_all": "Ver todos los inquilinos",
+      "tenants_manage": "Gestionar inquilinos",
+      "tenants_create": "Crear inquilinos",
+      "tenants_delete": "Eliminar inquilinos",
+      "tenants_view_metadata": "Ver metadatos del inquilino",
+      "conversations_view": "Ver conversaciones",
+      "conversations_view_content": "Ver contenido de conversaciones",
+      "conversations_annotate": "Anotar conversaciones",
+      "conversations_delete": "Eliminar conversaciones",
+      "conversations_export": "Exportar conversaciones",
+      "data_export_user": "Exportar datos del usuario",
+      "data_export_audit": "Exportar datos de auditoría",
+      "data_delete_user": "Eliminar datos del usuario (GDPR)",
+      "data_view_processing": "Ver procesamiento de datos",
+      "audit_view": "Ver registros de auditoría",
+      "audit_export": "Exportar registros de auditoría",
+      "audit_configure": "Configurar ajustes de auditoría",
+      "audit_view_compliance": "Ver informes de cumplimiento",
+      "reports_view": "Ver informes",
+      "reports_export": "Exportar informes",
+      "reports_create": "Crear informes",
+      "reports_schedule": "Programar informes",
+      "dashboard_view": "Ver panel",
+      "dashboard_customize": "Personalizar panel",
+      "escalation_to_tier2": "Escalar a Nivel 2",
+      "escalation_to_tier3": "Escalar a Nivel 3",
+      "escalation_to_engineering": "Escalar a Ingeniería",
+      "escalation_receive": "Recibir escalaciones",
+      "support_view_logs": "Ver registros del sistema",
+      "support_debug_queries": "Depurar consultas",
+      "support_prod_access": "Acceso a producción",
+      "support_code_access": "Acceso al código",
+      "support_hotfix": "Desplegar correcciones de emergencia"
+    },
+    "groups": {
+      "user_management_full": {
+        "name": "Gestión Completa de Usuarios",
+        "description": "Crear, editar, eliminar usuarios y gestionar sus permisos en toda la plataforma"
+      },
+      "user_management_read": {
+        "name": "Gestión de Usuarios (Solo Lectura)",
+        "description": "Ver perfiles de usuarios e información de cuentas"
+      },
+      "user_support_basic": {
+        "name": "Soporte Básico de Usuarios",
+        "description": "Ver usuarios y ayudar con problemas básicos de cuentas"
+      },
+      "user_support_advanced": {
+        "name": "Soporte Avanzado de Usuarios",
+        "description": "Editar preferencias de usuarios, desbloquear cuentas y ver como usuario"
+      },
+      "billing_full": {
+        "name": "Acceso Completo a Facturación",
+        "description": "Ver y gestionar todas las facturas, suscripciones y métodos de pago"
+      },
+      "billing_read": {
+        "name": "Facturación (Solo Lectura)",
+        "description": "Ver facturas e información de facturación"
+      },
+      "infrastructure_full": {
+        "name": "Acceso Completo a Infraestructura",
+        "description": "Gestionar despliegues, escalado y configuración de servicios"
+      },
+      "infrastructure_read": {
+        "name": "Infraestructura (Solo Lectura)",
+        "description": "Ver estado de infraestructura y métricas de salud"
+      },
+      "tenant_management_full": {
+        "name": "Gestión Completa de Inquilinos",
+        "description": "Crear, editar y eliminar inquilinos y sus configuraciones"
+      },
+      "tenant_view_all": {
+        "name": "Ver Todos los Inquilinos",
+        "description": "Ver todos los inquilinos en la plataforma"
+      },
+      "tenant_view_assigned": {
+        "name": "Ver Inquilinos Asignados",
+        "description": "Ver solo los inquilinos asignados a tu cuenta"
+      },
+      "cross_tenant_access": {
+        "name": "Acceso Entre Inquilinos",
+        "description": "Acceder a usuarios y datos en múltiples inquilinos"
+      },
+      "data_export": {
+        "name": "Exportar Datos",
+        "description": "Exportar datos de usuarios y registros de auditoría para cumplimiento"
+      },
+      "audit_full": {
+        "name": "Acceso Completo a Auditoría",
+        "description": "Ver, exportar y configurar registro de auditoría"
+      },
+      "audit_read": {
+        "name": "Auditoría (Solo Lectura)",
+        "description": "Ver registros de auditoría e informes de cumplimiento"
+      },
+      "compliance_reporting": {
+        "name": "Informes de Cumplimiento",
+        "description": "Ver y exportar informes de cumplimiento y auditoría"
+      },
+      "conversation_full": {
+        "name": "Acceso Completo a Conversaciones",
+        "description": "Ver, anotar, eliminar y exportar conversaciones"
+      },
+      "conversation_read": {
+        "name": "Conversaciones (Solo Lectura)",
+        "description": "Ver metadatos de conversaciones"
+      },
+      "conversation_support": {
+        "name": "Soporte de Conversaciones",
+        "description": "Ver contenido de conversaciones y agregar anotaciones"
+      },
+      "reports_full": {
+        "name": "Acceso Completo a Informes",
+        "description": "Ver, crear, exportar y programar informes"
+      },
+      "reports_read": {
+        "name": "Informes (Solo Lectura)",
+        "description": "Ver informes y paneles"
+      },
+      "support_engineering": {
+        "name": "Soporte de Ingeniería",
+        "description": "Acceso a registros, herramientas de depuración y sistemas de producción"
+      },
+      "support_tier3_ops": {
+        "name": "Operaciones de Nivel 3",
+        "description": "Depuración avanzada, acceso al código y despliegue de correcciones de emergencia"
+      },
+      "dashboard_full": {
+        "name": "Acceso Completo al Panel",
+        "description": "Ver y personalizar paneles"
+      },
+      "dashboard_read": {
+        "name": "Panel (Solo Lectura)",
+        "description": "Ver paneles y métricas"
+      },
+      "escalation_tier1": {
+        "name": "Escalación de Nivel 1",
+        "description": "Escalar problemas a soporte de Nivel 2"
+      },
+      "escalation_tier2": {
+        "name": "Escalación de Nivel 2",
+        "description": "Escalar problemas a Nivel 3 y recibir escalaciones de Nivel 1"
+      },
+      "escalation_tier3": {
+        "name": "Escalación de Nivel 3",
+        "description": "Escalar a ingeniería y recibir escalaciones de Nivel 2"
+      }
+    },
+    "ui": {
+      "additionalGroups": "Grupos de Permisos Adicionales",
+      "additionalGroupsDescription": "Asignar grupos de permisos adicionales más allá de los predeterminados del rol",
+      "selectGroups": "Seleccionar grupos de permisos",
+      "individualGrants": "Otorgamientos de Permisos Individuales",
+      "individualGrantsDescription": "Otorgar permisos específicos no incluidos en el rol o grupos",
+      "selectPermissions": "Seleccionar permisos a otorgar",
+      "individualRevocations": "Revocaciones de Permisos",
+      "individualRevocationsDescription": "Revocar permisos específicos del rol o grupos",
+      "selectRevocations": "Seleccionar permisos a revocar",
+      "noPermissions": "Sin permisos asignados",
+      "permissionCount": "{count, plural, =0 {Sin permisos} one {# permiso} other {# permisos}}",
+      "groupCount": "{count, plural, =0 {Sin grupos} one {# grupo} other {# grupos}}",
+      "fromRole": "Heredado del rol",
+      "fromGroup": "Heredado del grupo",
+      "directGrant": "Otorgado directamente",
+      "revoked": "Revocado"
+    }
+  }
+}

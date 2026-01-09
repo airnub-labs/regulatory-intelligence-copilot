@@ -1,0 +1,46 @@
+{
+  "legal": {
+    "jurisdiction": "Bundesrepublik Deutschland",
+    "regulator": "Bundesanstalt f\u00fcr Finanzdienstleistungsaufsicht",
+    "dataProtection": "Bundesbeauftragte f\u00fcr den Datenschutz",
+    "taxAuthority": "Finanzamt",
+    "disclaimer": "Diese Informationen dienen nur der Orientierung und stellen keine Rechts- oder Finanzberatung nach deutschem Recht dar."
+  },
+  "tax": {
+    "mwst": "MwSt.",
+    "mwstFull": "Mehrwertsteuer",
+    "mwstRate": "19%",
+    "einkommensteuer": "Einkommensteuer",
+    "sozialversicherung": "Sozialversicherung",
+    "grundsteuer": "Grundsteuer",
+    "gewerbesteuer": "Gewerbesteuer"
+  },
+  "regulatory": {
+    "pension": "Rentenversicherung",
+    "socialSecurity": "Sozialversicherung",
+    "steuerIdentifikationsnummer": "Steueridentifikationsnummer",
+    "sozialversicherungsnummer": "Sozialversicherungsnummer"
+  },
+  "currency": {
+    "code": "EUR",
+    "symbol": "\u20ac",
+    "format": "{amount, number, ::currency/EUR}",
+    "example": "1.234,56 \u20ac"
+  },
+  "formats": {
+    "dateShort": "dd.MM.yyyy",
+    "dateLong": "d. MMMM yyyy",
+    "phonePrefix": "+49",
+    "postcode": "Postleitzahl",
+    "postcodeExample": "10115"
+  },
+  "address": {
+    "bundesland": "Bundesland",
+    "plz": "PLZ"
+  },
+  "documents": {
+    "passport": "Reisepass",
+    "personalausweis": "Personalausweis",
+    "fuehrerschein": "F\u00fchrerschein"
+  }
+}

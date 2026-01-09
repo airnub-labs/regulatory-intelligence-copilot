@@ -1,0 +1,47 @@
+{
+  "legal": {
+    "jurisdiction": "Espa\u00f1a",
+    "regulator": "Comisi\u00f3n Nacional del Mercado de Valores",
+    "dataProtection": "Agencia Espa\u00f1ola de Protecci\u00f3n de Datos",
+    "taxAuthority": "Agencia Tributaria",
+    "disclaimer": "Esta informaci\u00f3n es s\u00f3lo orientativa y no constituye asesoramiento legal o financiero seg\u00fan la ley espa\u00f1ola."
+  },
+  "tax": {
+    "iva": "IVA",
+    "ivaRate": "21%",
+    "irpf": "IRPF",
+    "ibi": "IBI",
+    "itp": "ITP",
+    "impuestoSociedades": "Impuesto de Sociedades"
+  },
+  "regulatory": {
+    "pension": "Plan de Pensiones",
+    "socialSecurity": "Seguridad Social",
+    "nie": "NIE",
+    "nieFull": "N\u00famero de Identidad de Extranjero",
+    "nif": "NIF",
+    "nifFull": "N\u00famero de Identificaci\u00f3n Fiscal"
+  },
+  "currency": {
+    "code": "EUR",
+    "symbol": "\u20ac",
+    "format": "{amount, number, ::currency/EUR}",
+    "example": "1.234,56 \u20ac"
+  },
+  "formats": {
+    "dateShort": "dd/MM/yyyy",
+    "dateLong": "d 'de' MMMM 'de' yyyy",
+    "phonePrefix": "+34",
+    "postcode": "C\u00f3digo Postal",
+    "postcodeExample": "28001"
+  },
+  "address": {
+    "province": "Provincia",
+    "postalCode": "C\u00f3digo Postal"
+  },
+  "documents": {
+    "passport": "Pasaporte Espa\u00f1ol",
+    "dni": "DNI",
+    "drivingLicence": "Permiso de Conducir"
+  }
+}

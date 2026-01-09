@@ -1075,3 +1075,392 @@ begin
   raise notice '========================================';
 
 end $$;
+
+-- ========================================
+-- Admin Users for Copilot Admin App
+-- ========================================
+-- Creates admin users with different roles for testing the
+-- Hybrid RBAC permission system in the copilot-admin app.
+--
+-- Admin credentials (all use same password as demo users):
+--   admin@example.com / Password123! (super_admin)
+--   platform.engineer@example.com / Password123! (platform_engineer)
+--   account.manager@example.com / Password123! (account_manager)
+--   compliance.auditor@example.com / Password123! (compliance_auditor)
+--   support.tier3@example.com / Password123! (support_tier_3)
+--   support.tier2@example.com / Password123! (support_tier_2)
+--   support.tier1@example.com / Password123! (support_tier_1)
+--   viewer@example.com / Password123! (viewer)
+-- ========================================
+
+do $$
+declare
+  -- Admin User IDs
+  admin_super_id uuid := 'ad000000-0000-0000-0000-000000000001';
+  admin_platform_id uuid := 'ad000000-0000-0000-0000-000000000002';
+  admin_account_id uuid := 'ad000000-0000-0000-0000-000000000003';
+  admin_compliance_id uuid := 'ad000000-0000-0000-0000-000000000004';
+  admin_t3_id uuid := 'ad000000-0000-0000-0000-000000000005';
+  admin_t2_id uuid := 'ad000000-0000-0000-0000-000000000006';
+  admin_t1_id uuid := 'ad000000-0000-0000-0000-000000000007';
+  admin_viewer_id uuid := 'ad000000-0000-0000-0000-000000000008';
+
+  -- Tenant IDs (from multi-tenant seed)
+  acme_corp_id uuid := 'aaaacccc-1111-2222-3333-444444444444';
+  startup_xyz_id uuid := 'bbbbeee0-5555-6666-7777-888888888888';
+
+  -- Pre-computed bcrypt hash for 'Password123!'
+  admin_password_hash text := '$2b$10$dFyws4yGmOsWeYY7FxFXeOhat4R6UmwWnGbj8xP//5fMmaGn7Iq6y';
+
+  demo_now timestamptz := now();
+begin
+
+  ---------------------------------------------------------------------------
+  -- 1. Create Admin Auth Users
+  ---------------------------------------------------------------------------
+
+  -- Super Admin
+  insert into auth.users (
+    id,
+    instance_id,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    created_at,
+    updated_at,
+    raw_user_meta_data,
+    raw_app_meta_data,
+    aud,
+    role,
+    confirmation_token,
+    recovery_token,
+    email_change_token_new,
+    email_change_token_current,
+    email_change
+  ) values (
+    admin_super_id,
+    '00000000-0000-0000-0000-000000000000',
+    'admin@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '90 days',
+    demo_now,
+    jsonb_build_object('full_name', 'Platform Admin', 'admin_role', 'super_admin'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '',
+    '',
+    '',
+    '',
+    ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Platform Engineer
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_platform_id,
+    '00000000-0000-0000-0000-000000000000',
+    'platform.engineer@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '60 days',
+    demo_now,
+    jsonb_build_object('full_name', 'Sarah Engineer', 'admin_role', 'platform_engineer'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Account Manager
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_account_id,
+    '00000000-0000-0000-0000-000000000000',
+    'account.manager@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '45 days',
+    demo_now,
+    jsonb_build_object('full_name', 'John Doe', 'admin_role', 'account_manager'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Compliance Auditor
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_compliance_id,
+    '00000000-0000-0000-0000-000000000000',
+    'compliance.auditor@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '30 days',
+    demo_now,
+    jsonb_build_object('full_name', 'Maria Garcia', 'admin_role', 'compliance_auditor'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Support Tier 3
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_t3_id,
+    '00000000-0000-0000-0000-000000000000',
+    'support.tier3@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '20 days',
+    demo_now,
+    jsonb_build_object('full_name', 'David Wilson', 'admin_role', 'support_tier_3'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Support Tier 2
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_t2_id,
+    '00000000-0000-0000-0000-000000000000',
+    'support.tier2@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '15 days',
+    demo_now,
+    jsonb_build_object('full_name', 'Bob Wilson', 'admin_role', 'support_tier_2'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Support Tier 1
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_t1_id,
+    '00000000-0000-0000-0000-000000000000',
+    'support.tier1@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '10 days',
+    demo_now,
+    jsonb_build_object('full_name', 'Jane Smith', 'admin_role', 'support_tier_1'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Viewer
+  insert into auth.users (
+    id, instance_id, email, encrypted_password, email_confirmed_at, created_at, updated_at,
+    raw_user_meta_data, raw_app_meta_data, aud, role,
+    confirmation_token, recovery_token, email_change_token_new, email_change_token_current, email_change
+  ) values (
+    admin_viewer_id,
+    '00000000-0000-0000-0000-000000000000',
+    'viewer@example.com',
+    admin_password_hash,
+    demo_now,
+    demo_now - interval '5 days',
+    demo_now,
+    jsonb_build_object('full_name', 'Alex Viewer', 'admin_role', 'viewer'),
+    jsonb_build_object('provider', 'email', 'providers', array['email']),
+    'authenticated',
+    'authenticated',
+    '', '', '', '', ''
+  )
+  on conflict (id) do update
+    set encrypted_password = admin_password_hash,
+        email_confirmed_at = demo_now,
+        updated_at = demo_now;
+
+  -- Create email identities for admin users
+  insert into auth.identities (id, user_id, provider, provider_id, identity_data, created_at, updated_at)
+  values
+    (gen_random_uuid(), admin_super_id, 'email', 'admin@example.com', jsonb_build_object('sub', 'admin@example.com', 'email', 'admin@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_platform_id, 'email', 'platform.engineer@example.com', jsonb_build_object('sub', 'platform.engineer@example.com', 'email', 'platform.engineer@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_account_id, 'email', 'account.manager@example.com', jsonb_build_object('sub', 'account.manager@example.com', 'email', 'account.manager@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_compliance_id, 'email', 'compliance.auditor@example.com', jsonb_build_object('sub', 'compliance.auditor@example.com', 'email', 'compliance.auditor@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_t3_id, 'email', 'support.tier3@example.com', jsonb_build_object('sub', 'support.tier3@example.com', 'email', 'support.tier3@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_t2_id, 'email', 'support.tier2@example.com', jsonb_build_object('sub', 'support.tier2@example.com', 'email', 'support.tier2@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_t1_id, 'email', 'support.tier1@example.com', jsonb_build_object('sub', 'support.tier1@example.com', 'email', 'support.tier1@example.com'), demo_now, demo_now),
+    (gen_random_uuid(), admin_viewer_id, 'email', 'viewer@example.com', jsonb_build_object('sub', 'viewer@example.com', 'email', 'viewer@example.com'), demo_now, demo_now)
+  on conflict (provider, provider_id) do update
+    set updated_at = demo_now;
+
+  raise notice 'Created admin auth users';
+
+  ---------------------------------------------------------------------------
+  -- 2. Create Admin User Profiles
+  ---------------------------------------------------------------------------
+
+  insert into copilot_internal.admin_users (
+    id,
+    email,
+    display_name,
+    role,
+    status,
+    tenant_id,
+    assigned_tenant_ids,
+    created_at,
+    updated_at,
+    last_login
+  )
+  values
+    -- Super Admin - full access
+    (admin_super_id, 'admin@example.com', 'Platform Admin', 'super_admin', 'active', null, '{}', demo_now - interval '90 days', demo_now, demo_now - interval '1 hour'),
+    -- Platform Engineer - infrastructure access
+    (admin_platform_id, 'platform.engineer@example.com', 'Sarah Engineer', 'platform_engineer', 'active', null, '{}', demo_now - interval '60 days', demo_now, demo_now - interval '2 hours'),
+    -- Account Manager - scoped to Acme Corp
+    (admin_account_id, 'account.manager@example.com', 'John Doe', 'account_manager', 'active', acme_corp_id, '{}', demo_now - interval '45 days', demo_now, demo_now - interval '3 hours'),
+    -- Compliance Auditor - audit access
+    (admin_compliance_id, 'compliance.auditor@example.com', 'Maria Garcia', 'compliance_auditor', 'pending', null, '{}', demo_now - interval '30 days', demo_now, null),
+    -- Support Tier 3 - engineering support with cross-tenant
+    (admin_t3_id, 'support.tier3@example.com', 'David Wilson', 'support_tier_3', 'active', null, array[acme_corp_id, startup_xyz_id], demo_now - interval '20 days', demo_now, demo_now - interval '4 hours'),
+    -- Support Tier 2 - escalation with cross-tenant
+    (admin_t2_id, 'support.tier2@example.com', 'Bob Wilson', 'support_tier_2', 'active', null, array[acme_corp_id, startup_xyz_id], demo_now - interval '15 days', demo_now, demo_now - interval '6 hours'),
+    -- Support Tier 1 - frontline with limited tenants
+    (admin_t1_id, 'support.tier1@example.com', 'Jane Smith', 'support_tier_1', 'active', null, array[acme_corp_id], demo_now - interval '10 days', demo_now, demo_now - interval '8 hours'),
+    -- Viewer - read-only
+    (admin_viewer_id, 'viewer@example.com', 'Alex Viewer', 'viewer', 'active', acme_corp_id, '{}', demo_now - interval '5 days', demo_now, demo_now - interval '12 hours')
+  on conflict (id) do update
+    set email = excluded.email,
+        display_name = excluded.display_name,
+        role = excluded.role,
+        status = excluded.status,
+        tenant_id = excluded.tenant_id,
+        assigned_tenant_ids = excluded.assigned_tenant_ids,
+        updated_at = demo_now,
+        last_login = excluded.last_login;
+
+  raise notice 'Created admin user profiles';
+
+  ---------------------------------------------------------------------------
+  -- 3. Create Sample Permission Configurations
+  ---------------------------------------------------------------------------
+
+  -- Support Tier 2 with additional data export group
+  insert into copilot_internal.admin_permission_configs (
+    user_id,
+    additional_groups,
+    permission_grants,
+    permission_revocations,
+    updated_by,
+    reason
+  )
+  values (
+    admin_t2_id,
+    array['data_export'],
+    array[]::text[],
+    array[]::text[],
+    admin_super_id,
+    'Granted data export for Q4 audit support'
+  )
+  on conflict (user_id) do update
+    set additional_groups = excluded.additional_groups,
+        reason = excluded.reason,
+        updated_by = excluded.updated_by,
+        updated_at = now();
+
+  -- Support Tier 1 with specific permission grant
+  insert into copilot_internal.admin_permission_configs (
+    user_id,
+    additional_groups,
+    permission_grants,
+    permission_revocations,
+    updated_by,
+    reason
+  )
+  values (
+    admin_t1_id,
+    array[]::text[],
+    array['conversations.annotate'],
+    array[]::text[],
+    admin_super_id,
+    'Granted annotation capability for training purposes'
+  )
+  on conflict (user_id) do update
+    set permission_grants = excluded.permission_grants,
+        reason = excluded.reason,
+        updated_by = excluded.updated_by,
+        updated_at = now();
+
+  raise notice 'Created sample permission configurations';
+
+  ---------------------------------------------------------------------------
+  -- Summary
+  ---------------------------------------------------------------------------
+  raise notice '========================================';
+  raise notice 'Admin Users Seed Data Complete!';
+  raise notice '========================================';
+  raise notice '';
+  raise notice 'Admin accounts created (Password123!):';
+  raise notice '  admin@example.com (super_admin)';
+  raise notice '  platform.engineer@example.com (platform_engineer)';
+  raise notice '  account.manager@example.com (account_manager)';
+  raise notice '  compliance.auditor@example.com (compliance_auditor)';
+  raise notice '  support.tier3@example.com (support_tier_3)';
+  raise notice '  support.tier2@example.com (support_tier_2)';
+  raise notice '  support.tier1@example.com (support_tier_1)';
+  raise notice '  viewer@example.com (viewer)';
+  raise notice '';
+  raise notice 'Permission config samples: 2';
+  raise notice '  - T2 with data_export group';
+  raise notice '  - T1 with conversations.annotate grant';
+  raise notice '========================================';
+
+end $$;
