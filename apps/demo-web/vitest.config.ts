@@ -4,8 +4,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    setupFiles: ['./src/test/setup.ts'],
   },
   resolve: {
     alias: {
@@ -17,6 +18,10 @@ export default defineConfig({
       '@reg-copilot/reg-intel-observability': path.resolve(
         __dirname,
         '../../packages/reg-intel-observability/src/index.ts'
+      ),
+      '@reg-copilot/reg-intel-ui': path.resolve(
+        __dirname,
+        '../../packages/reg-intel-ui/src/index.ts'
       ),
       '@reg-copilot/reg-intel-next-adapter': path.resolve(
         __dirname,

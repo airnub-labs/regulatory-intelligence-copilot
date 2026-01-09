@@ -881,11 +881,11 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
 
   // Message Pinning
   async pinMessage(input: PinMessageInput): Promise<void> {
-    if (!this.client.rpc) {
+    if (!this.internalClient.rpc) {
       throw new Error('Supabase client does not support RPC operations');
     }
 
-    const { error } = await this.client.rpc('pin_message', {
+    const { error } = await this.internalClient.rpc('pin_message', {
       p_tenant_id: input.tenantId,
       p_conversation_id: input.conversationId,
       p_message_id: input.messageId,
@@ -898,11 +898,11 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
   }
 
   async unpinMessage(input: UnpinMessageInput): Promise<void> {
-    if (!this.client.rpc) {
+    if (!this.internalClient.rpc) {
       throw new Error('Supabase client does not support RPC operations');
     }
 
-    const { error } = await this.client.rpc('unpin_message', {
+    const { error } = await this.internalClient.rpc('unpin_message', {
       p_tenant_id: input.tenantId,
       p_conversation_id: input.conversationId,
       p_message_id: input.messageId,
@@ -914,11 +914,11 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
   }
 
   async getPinnedMessages(input: GetPinnedMessagesInput): Promise<PathAwareMessage[]> {
-    if (!this.client.rpc) {
+    if (!this.internalClient.rpc) {
       throw new Error('Supabase client does not support RPC operations');
     }
 
-    const { data, error } = await this.client.rpc('get_pinned_messages', {
+    const { data, error } = await this.internalClient.rpc('get_pinned_messages', {
       p_tenant_id: input.tenantId,
       p_conversation_id: input.conversationId,
       p_path_id: input.pathId ?? null,
@@ -949,11 +949,11 @@ export class SupabaseConversationPathStore implements ConversationPathStore {
   }
 
   async getPinnedMessageCount(input: GetPinnedMessagesInput): Promise<number> {
-    if (!this.client.rpc) {
+    if (!this.internalClient.rpc) {
       throw new Error('Supabase client does not support RPC operations');
     }
 
-    const { data, error } = await this.client.rpc('get_pinned_message_count', {
+    const { data, error } = await this.internalClient.rpc('get_pinned_message_count', {
       p_tenant_id: input.tenantId,
       p_conversation_id: input.conversationId,
       p_path_id: input.pathId ?? null,

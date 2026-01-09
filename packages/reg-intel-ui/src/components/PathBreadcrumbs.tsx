@@ -97,25 +97,6 @@ export function PathBreadcrumbs({
   const breadcrumbs = buildBreadcrumbChain(activePath, paths);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // Auto-hide if only one path (nothing to navigate to)
-  if (breadcrumbs.length <= 1) return null;
-
-  const handlePathClick = (path: ClientPath, index: number) => {
-    // If clicking a non-active path, navigate to it
-    if (path.id !== activePath?.id) {
-      // Find the next path in the chain (the child of this path)
-      const nextPath = breadcrumbs[index + 1];
-
-      // If there's a child path, it has a branch point message
-      const branchPointMessageId = nextPath?.branchPointMessageId;
-
-      onNavigate(path.id, {
-        scrollToMessage: branchPointMessageId || undefined,
-        highlightMessage: !!branchPointMessageId,
-      });
-    }
-  };
-
   /**
    * Keyboard navigation handler
    * Only works when breadcrumb buttons have focus
@@ -156,6 +137,26 @@ export function PathBreadcrumbs({
         break;
     }
   }, [breadcrumbs.length]);
+
+  // Always show breadcrumbs for context, even when on main path
+  // IMPORTANT: This must come AFTER all hooks to comply with Rules of Hooks
+  if (breadcrumbs.length === 0) return null;
+
+  const handlePathClick = (path: ClientPath, index: number) => {
+    // If clicking a non-active path, navigate to it
+    if (path.id !== activePath?.id) {
+      // Find the next path in the chain (the child of this path)
+      const nextPath = breadcrumbs[index + 1];
+
+      // If there's a child path, it has a branch point message
+      const branchPointMessageId = nextPath?.branchPointMessageId;
+
+      onNavigate(path.id, {
+        scrollToMessage: branchPointMessageId || undefined,
+        highlightMessage: !!branchPointMessageId,
+      });
+    }
+  };
 
   return (
     <nav

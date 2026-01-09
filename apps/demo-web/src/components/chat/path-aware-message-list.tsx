@@ -492,8 +492,8 @@ function PathContextMessageList({
         latestId: msg.id,
         versions: [msg],
         isBranchable: msg.role === 'user' || msg.role === 'assistant',
-        hasBranches: false,
-        branchCount: 0,
+        hasBranches: (msg.branchedToPaths ?? []).length > 0,
+        branchCount: (msg.branchedToPaths ?? []).length,
       };
     });
   }, [messages]);

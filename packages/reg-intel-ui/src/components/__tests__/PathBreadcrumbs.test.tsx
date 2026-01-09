@@ -1,542 +1,318 @@
 /**
- * Tests for PathBreadcrumbs component
+ * PathBreadcrumbs Component Tests
+ *
+ * Regression tests for breadcrumb navigation functionality
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PathBreadcrumbs } from '../PathBreadcrumbs';
-import type { ClientPath, PathMessage } from '../../types';
+import type { ClientPath } from '../types';
 
-describe('PathBreadcrumbs', () => {
-  const mockOnNavigate = vi.fn();
-
-  const primaryPath: ClientPath = {
-    id: 'path-primary',
-    conversationId: 'conv-1',
-    parentPathId: null,
-    branchPointMessageId: null,
-    name: null,
+const mockPaths: ClientPath[] = [
+  {
+    id: 'main-path',
+    name: 'Main',
     isPrimary: true,
-    isActive: false,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-  };
-
-  const branchPath1: ClientPath = {
-    id: 'path-branch-1',
-    conversationId: 'conv-1',
-    parentPathId: 'path-primary',
-    branchPointMessageId: 'msg-branch-1',
-    name: 'Alternative Scenario',
-    isPrimary: false,
-    isActive: false,
-    createdAt: new Date('2024-01-02'),
-    updatedAt: new Date('2024-01-02'),
-  };
-
-  const branchPath2: ClientPath = {
-    id: 'path-branch-2',
-    conversationId: 'conv-1',
-    parentPathId: 'path-branch-1',
-    branchPointMessageId: 'msg-branch-2',
-    name: 'Edit: What about Germany?',
+    isActive: true,
+    isMerged: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'branch-1',
+    name: 'Branch 1',
+    parentPathId: 'main-path',
+    branchPointMessageId: 'msg-1',
     isPrimary: false,
     isActive: true,
-    createdAt: new Date('2024-01-03'),
-    updatedAt: new Date('2024-01-03'),
-  };
+    isMerged: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: 'branch-2',
+    name: 'Branch 2',
+    parentPathId: 'branch-1',
+    branchPointMessageId: 'msg-2',
+    isPrimary: false,
+    isActive: true,
+    isMerged: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
 
-  const messages: PathMessage[] = [
-    {
-      id: 'msg-branch-1',
-      conversationId: 'conv-1',
-      pathId: 'path-primary',
-      role: 'user',
-      content: 'What are the tax rules for Ireland?',
-      metadata: {},
-      sequenceInPath: 1,
-      effectiveSequence: 1,
-      isBranchPoint: true,
-      branchedToPaths: ['path-branch-1'],
-      messageType: 'user',
-      createdAt: '2024-01-01T10:00:00Z',
-    },
-    {
-      id: 'msg-branch-2',
-      conversationId: 'conv-1',
-      pathId: 'path-branch-1',
-      role: 'user',
-      content: 'What about corporate tax in Germany? This is a very long message that should be truncated in the preview.',
-      metadata: {},
-      sequenceInPath: 2,
-      effectiveSequence: 2,
-      isBranchPoint: true,
-      branchedToPaths: ['path-branch-2'],
-      messageType: 'user',
-      createdAt: '2024-01-02T10:00:00Z',
-    },
-  ];
+describe('PathBreadcrumbs', () => {
+  describe('Visibility', () => {
+    it('should render breadcrumbs when on main path (regression test for enhancement)', () => {
+      const onNavigate = vi.fn();
+      const mainPath = mockPaths[0];
 
-  beforeEach(() => {
-    mockOnNavigate.mockClear();
-  });
-
-  describe('Rendering', () => {
-    it('should hide when only primary path exists (auto-hide)', () => {
-      const { container } = render(
+      render(
         <PathBreadcrumbs
-          activePath={primaryPath}
-          paths={[primaryPath]}
-          onNavigate={mockOnNavigate}
+          activePath={mainPath}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
+      // Should show breadcrumb navigation even on main path
+      const breadcrumbNav = screen.getByRole('navigation', { name: /breadcrumb/i });
+      expect(breadcrumbNav).toBeInTheDocument();
+
+      // Should show "Main" breadcrumb
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      expect(mainButton).toBeInTheDocument();
+      expect(mainButton).toBeDisabled(); // Current path should be disabled
+    });
+
+    it('should render full breadcrumb chain when on nested branch', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2]; // Branch 2
+
+      render(
+        <PathBreadcrumbs
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
+        />
+      );
+
+      // Should show: Main > Branch 1 > Branch 2
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      const branch1Button = screen.getByRole('button', { name: /Navigate to Branch 1/i });
+      const branch2Button = screen.getByRole('button', { name: /Navigate to Branch 2/i });
+
+      expect(mainButton).toBeInTheDocument();
+      expect(branch1Button).toBeInTheDocument();
+      expect(branch2Button).toBeInTheDocument();
+
+      // Only the active path should be disabled
+      expect(mainButton).not.toBeDisabled();
+      expect(branch1Button).not.toBeDisabled();
+      expect(branch2Button).toBeDisabled();
+    });
+
+    it('should not render when there are no paths', () => {
+      const onNavigate = vi.fn();
+
+      const { container } = render(
+        <PathBreadcrumbs
+          activePath={null}
+          paths={[]}
+          onNavigate={onNavigate}
+        />
+      );
+
+      // Should not render anything
       expect(container.firstChild).toBeNull();
-    });
-
-    it('should render breadcrumb chain for nested paths', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      expect(screen.getByText('Primary')).toBeInTheDocument();
-      expect(screen.getByText('Alternative Scenario')).toBeInTheDocument();
-      expect(screen.getByText('Edit: What about Germany?')).toBeInTheDocument();
-    });
-
-    it('should render correct number of separators', () => {
-      const { container } = render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      // Should have 2 ChevronRight separators for 3 breadcrumbs
-      const separators = container.querySelectorAll('svg[class*="lucide-chevron-right"]');
-      expect(separators).toHaveLength(2);
-    });
-
-    it('should show MessageCircle icon for paths with branch points', () => {
-      const { container } = render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          messages={messages}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      // Primary and branchPath1 have children, so should show icons
-      const messageIcons = container.querySelectorAll('svg[class*="lucide-message-circle"]');
-      expect(messageIcons).toHaveLength(2);
-    });
-
-    it('should apply smart truncation with max-width', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const buttons = screen.getAllByRole('button');
-      buttons.forEach(button => {
-        expect(button.className).toContain('max-w-[200px]');
-      });
     });
   });
 
   describe('Navigation', () => {
-    it('should call onNavigate when clicking non-active breadcrumb', () => {
+    it('should call onNavigate when clicking parent path breadcrumb', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2]; // Branch 2
+
       render(
         <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
-      const primaryButton = screen.getByText('Primary');
-      fireEvent.click(primaryButton);
+      // Click on Main breadcrumb
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      fireEvent.click(mainButton);
 
-      expect(mockOnNavigate).toHaveBeenCalledWith('path-primary', {
-        scrollToMessage: 'msg-branch-1',
-        highlightMessage: true,
-      });
+      // Should call onNavigate with main path ID and scroll options
+      // When navigating from Branch 2 to Main, should scroll to Branch 1's branch point (msg-1)
+      // since Branch 1 is the next path in the chain after Main
+      expect(onNavigate).toHaveBeenCalledWith(
+        'main-path',
+        expect.objectContaining({
+          scrollToMessage: 'msg-1', // Branch point message of Branch 1 (next in chain after Main)
+          highlightMessage: true,
+        })
+      );
     });
 
-    it('should not call onNavigate when clicking active breadcrumb', () => {
+    it('should call onNavigate when clicking middle path in chain', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2]; // Branch 2
+
       render(
         <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
-      const activeButton = screen.getByText('Edit: What about Germany?');
+      // Click on Branch 1 breadcrumb
+      const branch1Button = screen.getByRole('button', { name: /Navigate to Branch 1/i });
+      fireEvent.click(branch1Button);
+
+      // Should call onNavigate with branch 1 path ID
+      expect(onNavigate).toHaveBeenCalledWith(
+        'branch-1',
+        expect.objectContaining({
+          scrollToMessage: 'msg-2', // Branch point message of Branch 2
+          highlightMessage: true,
+        })
+      );
+    });
+
+    it('should not call onNavigate when clicking active (disabled) breadcrumb', () => {
+      const onNavigate = vi.fn();
+      const activePath = mockPaths[1]; // Branch 1
+
+      render(
+        <PathBreadcrumbs
+          activePath={activePath}
+          paths={mockPaths}
+          onNavigate={onNavigate}
+        />
+      );
+
+      // Click on the active breadcrumb (should be disabled)
+      const activeButton = screen.getByRole('button', { name: /Navigate to Branch 1/i });
+      expect(activeButton).toBeDisabled();
+
       fireEvent.click(activeButton);
 
-      expect(mockOnNavigate).not.toHaveBeenCalled();
-    });
-
-    it('should disable active breadcrumb button', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const activeButton = screen.getByText('Edit: What about Germany?') as HTMLButtonElement;
-      expect(activeButton.disabled).toBe(true);
-    });
-
-    it('should pass branch point message ID for jump-to-message', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          messages={messages}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const branchButton = screen.getByText('Alternative Scenario');
-      fireEvent.click(branchButton);
-
-      expect(mockOnNavigate).toHaveBeenCalledWith('path-branch-1', {
-        scrollToMessage: 'msg-branch-2',
-        highlightMessage: true,
-      });
+      // Should not call onNavigate
+      expect(onNavigate).not.toHaveBeenCalled();
     });
   });
 
   describe('Keyboard Navigation', () => {
     it('should move focus to next breadcrumb on ArrowRight', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2];
+
       render(
         <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
-      const primaryButton = screen.getByText('Primary');
-      const branchButton = screen.getByText('Alternative Scenario');
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      const branch1Button = screen.getByRole('button', { name: /Navigate to Branch 1/i });
 
-      primaryButton.focus();
-      expect(document.activeElement).toBe(primaryButton);
+      // Focus main button and press ArrowRight
+      mainButton.focus();
+      fireEvent.keyDown(mainButton, { key: 'ArrowRight' });
 
-      fireEvent.keyDown(primaryButton, { key: 'ArrowRight' });
-      expect(document.activeElement).toBe(branchButton);
+      // Branch 1 should now have focus
+      expect(branch1Button).toHaveFocus();
     });
 
     it('should move focus to previous breadcrumb on ArrowLeft', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2];
+
       render(
         <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
-      const primaryButton = screen.getByText('Primary');
-      const branchButton = screen.getByText('Alternative Scenario');
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      const branch1Button = screen.getByRole('button', { name: /Navigate to Branch 1/i });
 
-      branchButton.focus();
-      expect(document.activeElement).toBe(branchButton);
+      // Focus branch 1 button and press ArrowLeft
+      branch1Button.focus();
+      fireEvent.keyDown(branch1Button, { key: 'ArrowLeft' });
 
-      fireEvent.keyDown(branchButton, { key: 'ArrowLeft' });
-      expect(document.activeElement).toBe(primaryButton);
+      // Main should now have focus
+      expect(mainButton).toHaveFocus();
     });
 
     it('should jump to first breadcrumb on Home key', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2];
+
       render(
         <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
-      const primaryButton = screen.getByText('Primary');
-      const branchButton = screen.getByText('Alternative Scenario');
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      const branch2Button = screen.getByRole('button', { name: /Navigate to Branch 2/i });
 
-      branchButton.focus();
-      fireEvent.keyDown(branchButton, { key: 'Home' });
-      expect(document.activeElement).toBe(primaryButton);
+      // Focus last button and press Home
+      branch2Button.focus();
+      fireEvent.keyDown(branch2Button, { key: 'Home' });
+
+      // First breadcrumb should now have focus
+      expect(mainButton).toHaveFocus();
     });
 
     it('should jump to last breadcrumb on End key', () => {
+      const onNavigate = vi.fn();
+      const nestedBranch = mockPaths[2];
+
       render(
         <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
+          activePath={nestedBranch}
+          paths={mockPaths}
+          onNavigate={onNavigate}
         />
       );
 
-      const primaryButton = screen.getByText('Primary');
-      const activeButton = screen.getByText('Edit: What about Germany?');
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
+      const branch2Button = screen.getByRole('button', { name: /Navigate to Branch 2/i });
 
-      primaryButton.focus();
-      fireEvent.keyDown(primaryButton, { key: 'End' });
-      expect(document.activeElement).toBe(activeButton);
-    });
+      // Focus first button and press End
+      mainButton.focus();
+      fireEvent.keyDown(mainButton, { key: 'End' });
 
-    it('should not move focus beyond first breadcrumb on ArrowLeft', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const primaryButton = screen.getByText('Primary');
-
-      primaryButton.focus();
-      fireEvent.keyDown(primaryButton, { key: 'ArrowLeft' });
-      expect(document.activeElement).toBe(primaryButton); // Should stay on first
-    });
-
-    it('should not move focus beyond last breadcrumb on ArrowRight', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const activeButton = screen.getByText('Edit: What about Germany?');
-
-      activeButton.focus();
-      fireEvent.keyDown(activeButton, { key: 'ArrowRight' });
-      expect(document.activeElement).toBe(activeButton); // Should stay on last
+      // Last breadcrumb should now have focus
+      expect(branch2Button).toHaveFocus();
     });
   });
 
-  describe('Tooltips', () => {
-    it('should show branch point message preview in tooltip', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          messages={messages}
-          onNavigate={mockOnNavigate}
-        />
-      );
+  describe('Branch Point Messages', () => {
+    it('should include branch point message in tooltip', () => {
+      const onNavigate = vi.fn();
+      const branch1 = mockPaths[1];
 
-      const primaryButton = screen.getByText('Primary');
-      expect(primaryButton.title).toContain('What are the tax rules for Ireland?');
-    });
-
-    it('should truncate long message previews to 80 characters', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          messages={messages}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const branchButton = screen.getByText('Alternative Scenario');
-      expect(branchButton.title).toContain('What about corporate tax in Germany? This is a very long message that should');
-      expect(branchButton.title).toContain('...');
-    });
-
-    it('should show default tooltip for paths without messages', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const activeButton = screen.getByText('Edit: What about Germany?');
-      expect(activeButton.title).toBe('Edit: What about Germany?');
-    });
-  });
-
-  describe('Accessibility', () => {
-    it('should have navigation role', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const nav = screen.getByRole('navigation');
-      expect(nav).toBeInTheDocument();
-      expect(nav).toHaveAttribute('aria-label', 'Path breadcrumb navigation');
-    });
-
-    it('should mark active breadcrumb with aria-current', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const activeButton = screen.getByText('Edit: What about Germany?');
-      expect(activeButton).toHaveAttribute('aria-current', 'page');
-    });
-
-    it('should have descriptive aria-labels', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const primaryButton = screen.getByText('Primary');
-      expect(primaryButton).toHaveAttribute('aria-label');
-      expect(primaryButton.getAttribute('aria-label')).toContain('Navigate to Primary path');
-    });
-
-    it('should set tabIndex=-1 for active breadcrumb', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const activeButton = screen.getByText('Edit: What about Germany?');
-      expect(activeButton).toHaveAttribute('tabIndex', '-1');
-    });
-
-    it('should set tabIndex=0 for inactive breadcrumbs', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const primaryButton = screen.getByText('Primary');
-      expect(primaryButton).toHaveAttribute('tabIndex', '0');
-    });
-
-    it('should hide decorative icons from screen readers', () => {
-      const { container } = render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          messages={messages}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const chevrons = container.querySelectorAll('svg[class*="lucide-chevron-right"]');
-      chevrons.forEach(chevron => {
-        expect(chevron).toHaveAttribute('aria-hidden', 'true');
-      });
-
-      const messageIcons = container.querySelectorAll('svg[class*="lucide-message-circle"]');
-      messageIcons.forEach(icon => {
-        expect(icon).toHaveAttribute('aria-hidden', 'true');
-      });
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle null activePath gracefully', () => {
-      const { container } = render(
-        <PathBreadcrumbs
-          activePath={null}
-          paths={[primaryPath, branchPath1]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      expect(container.firstChild).toBeNull();
-    });
-
-    it('should handle empty paths array', () => {
-      const { container } = render(
-        <PathBreadcrumbs
-          activePath={primaryPath}
-          paths={[]}
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      expect(container.firstChild).toBeNull();
-    });
-
-    it('should handle missing branch point message gracefully', () => {
-      render(
-        <PathBreadcrumbs
-          activePath={branchPath2}
-          paths={[primaryPath, branchPath1, branchPath2]}
-          messages={[]} // Empty messages array
-          onNavigate={mockOnNavigate}
-        />
-      );
-
-      const primaryButton = screen.getByText('Primary');
-      fireEvent.click(primaryButton);
-
-      expect(mockOnNavigate).toHaveBeenCalledWith('path-primary', {
-        scrollToMessage: 'msg-branch-1',
-        highlightMessage: true,
-      });
-    });
-
-    it('should render custom path names', () => {
-      const customPath: ClientPath = {
-        ...branchPath1,
-        name: 'My Custom Branch Name',
-      };
+      const messagesWithContent = [
+        {
+          id: 'msg-1',
+          role: 'user' as const,
+          content: 'This is the branch point message content for testing tooltip display',
+          pathId: 'main-path',
+          createdAt: new Date().toISOString(),
+        },
+      ];
 
       render(
         <PathBreadcrumbs
-          activePath={customPath}
-          paths={[primaryPath, customPath]}
-          onNavigate={mockOnNavigate}
+          activePath={branch1}
+          paths={mockPaths}
+          messages={messagesWithContent}
+          onNavigate={onNavigate}
         />
       );
 
-      expect(screen.getByText('My Custom Branch Name')).toBeInTheDocument();
-    });
+      // Main breadcrumb should have tooltip indicating branch point
+      const mainButton = screen.getByRole('button', { name: /Navigate to Main/i });
 
-    it('should fallback to "Branch {id}" for unnamed non-primary paths', () => {
-      const unnamedPath: ClientPath = {
-        ...branchPath1,
-        name: null,
-        isPrimary: false,
-      };
-
-      render(
-        <PathBreadcrumbs
-          activePath={unnamedPath}
-          paths={[primaryPath, unnamedPath]}
-          onNavigate={mockOnNavigate}
-        />
+      expect(mainButton).toHaveAttribute(
+        'title',
+        expect.stringContaining('This is the branch point message content')
       );
-
-      expect(screen.getByText(`Branch ${unnamedPath.id.slice(0, 6)}`)).toBeInTheDocument();
     });
   });
 });

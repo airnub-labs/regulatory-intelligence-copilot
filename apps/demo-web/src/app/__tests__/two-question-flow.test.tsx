@@ -44,8 +44,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 // Mock client telemetry
-vi.mock('@/lib/clientTelemetry', () => ({
-  createClientTelemetry: () => ({
+vi.mock('@/lib/clientTelemetry', () => {
+  const mockTelemetry = {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
@@ -55,8 +55,12 @@ vi.mock('@/lib/clientTelemetry', () => ({
       error: vi.fn(),
     })),
     newRequestId: vi.fn(() => 'test-request-id'),
-  }),
-}));
+  };
+  return {
+    createClientTelemetry: () => mockTelemetry,
+    useClientTelemetry: () => mockTelemetry,
+  };
+});
 
 // Mock path API client
 vi.mock('@/lib/pathApiClient', () => ({

@@ -956,6 +956,9 @@ export default function Home() {
         body: JSON.stringify({ pathId: newPath.id }),
       })
 
+      // Update URL to reflect new path
+      updateUrl(conversationId, newPath.id)
+
       // Set loading state for editing
       setStreamingStage('analyzing')
       setChatMetadata(null)
@@ -974,6 +977,9 @@ export default function Home() {
       // Clear editing state now that conversation is reloaded
       setEditingMessageId(null)
       setEditingContent('')
+
+      // Update activePathId state to match the new branch
+      setActivePathId(newPath.id)
 
       // Force path provider to reload with new branch
       setPathReloadKey(prev => prev + 1)
@@ -1109,10 +1115,12 @@ export default function Home() {
   }
 
   const handleViewBranch = (pathId: string) => {
-    // Open the branch in a new window/tab with the pathId parameter
+    // Navigate to the branch in the current window
     if (conversationId) {
-      const url = `/?conversationId=${conversationId}&pathId=${pathId}`
-      window.open(url, '_blank')
+      updateUrl(conversationId, pathId)
+      setActivePathId(pathId)
+      // Force provider to reload with new path
+      setPathReloadKey(prev => prev + 1)
     }
   }
 
@@ -1344,10 +1352,12 @@ export default function Home() {
                     compact
                     className="mr-2"
                     onPathSwitch={(path) => {
-                      // Update URL with new path and reload conversation
+                      // Update URL with new path ID
+                      // Note: ConversationPathProvider already handles switching paths and loading messages
+                      // We just need to update the URL and local state to keep them in sync
                       if (conversationId) {
                         updateUrl(conversationId, path.id)
-                        loadConversation(conversationId)
+                        setActivePathId(path.id)
                       }
                     }}
                   />
@@ -1409,10 +1419,12 @@ export default function Home() {
             {conversationId && (
               <PathBreadcrumbNav
                 onPathSwitch={(pathId) => {
-                  // Update URL with new path and reload conversation
+                  // Update URL with new path ID
+                  // Note: ConversationPathProvider already handles switching paths and loading messages
+                  // We just need to update the URL and local state to keep them in sync
                   if (conversationId) {
                     updateUrl(conversationId, pathId);
-                    loadConversation(conversationId);
+                    setActivePathId(pathId);
                   }
                 }}
                 className="px-6 pt-2 pb-1 border-b bg-muted/10"
