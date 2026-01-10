@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl"
 import {
   IconArrowLeft,
   IconSettings,
+  IconShield,
   IconUser,
   IconUserCog,
-  IconUsers,
 } from "@tabler/icons-react"
 
 import { cn } from "@/lib/utils"
@@ -30,11 +30,17 @@ const settingsNavItems: SettingsNavItem[] = [
     descriptionKey: "profileDescription",
   },
   {
+    titleKey: "sessions",
+    href: "/settings/sessions",
+    icon: IconShield,
+    descriptionKey: "sessionsDescription",
+  },
+  {
     titleKey: "preferences",
     href: "/settings/preferences",
     icon: IconUserCog,
     descriptionKey: "preferencesDescription",
-  }
+  },
 ]
 
 export default function SettingsLayout({

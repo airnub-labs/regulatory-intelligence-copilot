@@ -347,7 +347,7 @@ function resolveConversationStores(options?: ChatRouteHandlerOptions): Conversat
   });
   const internalClient = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-    db: { schema: 'copilot_internal' },
+    db: { schema: 'copilot_core' },
     global: { fetch: tracingFetch },
   });
 

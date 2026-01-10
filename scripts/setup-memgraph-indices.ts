@@ -4,15 +4,19 @@
  * Programmatically creates all required indices in Memgraph for optimal query performance.
  *
  * Usage:
- *   MEMGRAPH_URI=bolt://localhost:7687 tsx scripts/setup-memgraph-indices.ts
+ *   pnpm setup:indices
  *
- * Environment Variables:
+ * Environment Variables (from .env.local or .env):
  *   MEMGRAPH_URI - Memgraph connection URI (default: bolt://localhost:7687)
  *   MEMGRAPH_USERNAME - Username for authentication (optional)
  *   MEMGRAPH_PASSWORD - Password for authentication (optional)
  */
 
+import { loadEnv } from './load-env.js';
 import neo4j, { Driver, Session } from 'neo4j-driver';
+
+// Load environment variables from .env.local or .env
+loadEnv();
 
 // Index definitions organized by category
 const INDICES = {

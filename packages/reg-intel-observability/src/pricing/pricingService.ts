@@ -162,7 +162,7 @@ export class SupabasePricingService implements PricingService {
     }
   ) {
     this.client = client;
-    this.tableName = options?.tableName ?? 'copilot_internal.model_pricing';
+    this.tableName = options?.tableName ?? 'copilot_billing.model_pricing';
     this.cacheTtl = options?.cacheTtlSeconds ?? 3600; // Default 1 hour
     this.cache = options?.cache ?? createPassThroughCache<ModelPricing>();
 
@@ -232,7 +232,7 @@ export class SupabasePricingService implements PricingService {
     if (!pricing) {
       throw new Error(
         `Pricing not found for ${request.provider}/${request.model}. ` +
-        `Ensure pricing data is loaded in Supabase (copilot_internal.model_pricing table).`
+        `Ensure pricing data is loaded in Supabase (copilot_billing.model_pricing table).`
       );
     }
 

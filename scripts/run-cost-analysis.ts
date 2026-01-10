@@ -39,7 +39,7 @@ function getSupabaseClient() {
 
   return createClient(supabaseUrl, supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-    db: { schema: 'copilot_internal' },
+    db: { schema: 'copilot_billing' },
   });
 }
 

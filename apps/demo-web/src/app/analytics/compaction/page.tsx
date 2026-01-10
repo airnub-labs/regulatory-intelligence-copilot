@@ -9,7 +9,7 @@
  * - Recent operations history
  *
  * Data is fetched from /api/compaction/metrics which queries the
- * copilot_internal.compaction_operations table in Supabase.
+ * copilot_audit.compaction_operations table in Supabase.
  */
 
 'use client';

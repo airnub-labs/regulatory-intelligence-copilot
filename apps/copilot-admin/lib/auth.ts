@@ -35,14 +35,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           password,
         });
 
-        if (error || !data.user) {
+        if (error || !data.user || !data.session) {
           return null;
+        }
+
+        // Extract session ID from JWT access token
+        let sessionId: string | undefined;
+        try {
+          // JWT is base64url encoded: header.payload.signature
+          const payloadBase64 = data.session.access_token.split('.')[1];
+          const payload = JSON.parse(Buffer.from(payloadBase64, 'base64url').toString());
+          sessionId = payload.session_id;
+        } catch {
+          console.warn("Could not extract session_id from Supabase JWT");
         }
 
         return {
           id: data.user.id,
           email: data.user.email,
           name: data.user.user_metadata?.full_name || data.user.email,
+          // Store session ID for session management protection
+          sessionId,
         };
       },
     }),
@@ -68,12 +81,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        // Store session ID in the JWT token
+        token.sessionId = (user as { sessionId?: string }).sessionId;
       }
       return token;
     },
     session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
+        // Expose session ID in the session
+        (session as { sessionId?: string }).sessionId = token.sessionId as string | undefined;
       }
       return session;
     },

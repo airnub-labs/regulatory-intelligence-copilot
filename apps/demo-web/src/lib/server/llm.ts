@@ -26,7 +26,7 @@ const ENABLE_LLM_POLICY_CACHE = process.env.ENABLE_LLM_POLICY_CACHE !== 'false';
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
 
 const supabaseInternalClient = createInfrastructureServiceClient('LlmPolicyStore', {
-  db: { schema: 'copilot_internal' },
+  db: { schema: 'copilot_core' },
 });
 
 // ============================================================================
@@ -53,7 +53,7 @@ function getPolicyStore(): LlmPolicyStore {
 
   try {
     // Type assertion to work around "Type instantiation is excessively deep" error
-    // NOTE: Do NOT pass schema parameter - supabaseInternalClient is already configured with schema: 'copilot_internal'
+    // NOTE: Do NOT pass schema parameter - supabaseInternalClient is already configured with schema: 'copilot_core'
     policyStoreInstance = createPolicyStore({
       supabase: supabaseInternalClient as unknown as Parameters<typeof createPolicyStore>[0]['supabase'],
       redis: redisClient ?? undefined,

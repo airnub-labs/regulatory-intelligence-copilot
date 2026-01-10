@@ -17,7 +17,6 @@ import {
   calculateEffectivePermissions,
   type UserPermissionConfig,
   type EffectivePermissions,
-  allPermissions,
 } from "../types/permissions"
 
 // Re-export types and constants for convenience

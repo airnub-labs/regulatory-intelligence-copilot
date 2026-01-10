@@ -72,7 +72,7 @@ SELECT
         ELSE '✗ FAIL'
     END AS result,
     'Tenant record created' AS description
-FROM copilot_internal.tenants
+FROM copilot_core.tenants
 WHERE id = :'test1_tenant_id';
 
 -- Verify tenant properties
@@ -83,7 +83,7 @@ SELECT
         ELSE '✗ FAIL'
     END AS result,
     'Tenant has correct type (personal) and plan (free)' AS description
-FROM copilot_internal.tenants
+FROM copilot_core.tenants
 WHERE id = :'test1_tenant_id';
 
 -- Verify membership was created
@@ -94,7 +94,7 @@ SELECT
         ELSE '✗ FAIL'
     END AS result,
     'Owner membership created with active status' AS description
-FROM copilot_internal.tenant_memberships
+FROM copilot_core.tenant_memberships
 WHERE tenant_id = :'test1_tenant_id'
   AND user_id = '11111111-1111-1111-1111-111111111111';
 
@@ -106,7 +106,7 @@ SELECT
         ELSE '✗ FAIL'
     END AS result,
     'Active tenant preference set correctly' AS description
-FROM copilot_internal.user_preferences
+FROM copilot_core.user_preferences
 WHERE user_id = '11111111-1111-1111-1111-111111111111';
 
 \echo ''
@@ -186,7 +186,7 @@ FROM public.get_user_tenants('11111111-1111-1111-1111-111111111111');
 \echo ''
 
 -- Create team tenant
-INSERT INTO copilot_internal.tenants (
+INSERT INTO copilot_core.tenants (
     id,
     name,
     slug,
@@ -205,7 +205,7 @@ ON CONFLICT (id) DO UPDATE SET
     name = EXCLUDED.name;
 
 -- Add membership
-INSERT INTO copilot_internal.tenant_memberships (
+INSERT INTO copilot_core.tenant_memberships (
     tenant_id,
     user_id,
     role,
@@ -246,7 +246,7 @@ FROM public.get_user_tenants('11111111-1111-1111-1111-111111111111');
 
 -- Note: switch_tenant() requires auth.uid(), so we test the underlying update
 
-UPDATE copilot_internal.user_preferences
+UPDATE copilot_core.user_preferences
 SET current_tenant_id = '22222222-2222-2222-2222-222222222222'
 WHERE user_id = '11111111-1111-1111-1111-111111111111';
 
@@ -405,21 +405,21 @@ FROM public.verify_tenant_access(
 \echo ''
 
 -- Delete tenants first (ON DELETE RESTRICT prevents deleting users who own tenants)
-DELETE FROM copilot_internal.tenants
+DELETE FROM copilot_core.tenants
 WHERE owner_id IN (
     '11111111-1111-1111-1111-111111111111',
     '33333333-3333-3333-3333-333333333333'
 );
 
 -- Delete user preferences
-DELETE FROM copilot_internal.user_preferences
+DELETE FROM copilot_core.user_preferences
 WHERE user_id IN (
     '11111111-1111-1111-1111-111111111111',
     '33333333-3333-3333-3333-333333333333'
 );
 
 -- Delete memberships (should already be cascaded, but explicit is clearer)
-DELETE FROM copilot_internal.tenant_memberships
+DELETE FROM copilot_core.tenant_memberships
 WHERE user_id IN (
     '11111111-1111-1111-1111-111111111111',
     '33333333-3333-3333-3333-333333333333'

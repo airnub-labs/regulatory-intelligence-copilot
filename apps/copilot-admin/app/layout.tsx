@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Providers } from "@/components/providers";
@@ -81,6 +82,7 @@ export default async function RootLayout({
           <Providers locale={locale} messages={messages} timeZone={timeZone}>
             {children}
           </Providers>
+          <Toaster richColors position="top-right" toastOptions={{ style: { zIndex: 9999 } }} />
         </ThemeProvider>
       </body>
     </html>

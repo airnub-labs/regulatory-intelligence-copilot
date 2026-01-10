@@ -2,7 +2,7 @@
  * Server-Side Query Performance Monitoring Utilities
  *
  * SECURITY: These functions require service role access
- * and call copilot_internal schema functions.
+ * and call copilot_admin schema functions.
  *
  * DO NOT import this file client-side - it will fail.
  * Use this only in server components, API routes, and server actions.
@@ -14,9 +14,9 @@ import { createLogger } from '@reg-copilot/reg-intel-observability';
 
 const logger = createLogger('ServerQueryPerformance');
 
-// Create a service client with copilot_internal schema access
+// Create a service client with copilot_admin schema access for monitoring functions
 const supabaseInternal = createInfrastructureServiceClient('QueryPerformanceMonitoring', {
-  db: { schema: 'copilot_internal' },
+  db: { schema: 'copilot_admin' },
 });
 
 export interface QueryPerformanceStats {
@@ -47,10 +47,10 @@ export async function getQueryPerformanceStats(
   minExecutionTimeMs: number = 100
 ): Promise<QueryPerformanceStats[]> {
   try {
-    const { data, error } = await (supabaseInternal.rpc as any)('get_query_performance_stats', {
+    const { data, error } = await supabaseInternal.rpc('get_query_performance_stats', {
       p_hours_back: hoursBack,
       p_min_execution_time_ms: minExecutionTimeMs,
-    });
+    }) as { data: unknown; error: unknown };
 
     if (error) {
       logger.error({ error }, 'Failed to get query performance stats');
@@ -75,9 +75,9 @@ export async function getQueryPerformanceStats(
  */
 export async function getUserTenantCount(userId: string): Promise<number> {
   try {
-    const { data, error } = await (supabaseInternal.rpc as any)('get_user_tenant_count', {
+    const { data, error } = await supabaseInternal.rpc('get_user_tenant_count', {
       p_user_id: userId,
-    });
+    }) as { data: unknown; error: unknown };
 
     if (error) {
       logger.error({ error, userId }, 'Failed to get user tenant count');
@@ -110,7 +110,7 @@ export async function getRLSIndexUsage(): Promise<
   }>
 > {
   try {
-    const { data, error } = await (supabaseInternal.rpc as any)('get_rls_index_usage');
+    const { data, error } = await supabaseInternal.rpc('get_rls_index_usage') as { data: unknown; error: unknown };
 
     if (error) {
       logger.error({ error }, 'Failed to get RLS index usage');
@@ -145,9 +145,9 @@ export async function analyzeQueryPlan(query: string): Promise<unknown> {
   }
 
   try {
-    const { data, error } = await (supabaseInternal.rpc as any)('analyze_query_performance', {
+    const { data, error } = await supabaseInternal.rpc('analyze_query_performance', {
       p_query: query,
-    });
+    }) as { data: unknown; error: unknown };
 
     if (error) {
       logger.error({ error, query }, 'Failed to analyze query');
@@ -174,7 +174,7 @@ export async function conversationStoreHealthcheck(): Promise<
   }>
 > {
   try {
-    const { data, error } = await (supabaseInternal.rpc as any)('conversation_store_healthcheck');
+    const { data, error } = await supabaseInternal.rpc('conversation_store_healthcheck') as { data: unknown; error: unknown };
 
     if (error) {
       logger.error({ error }, 'Failed to run conversation store healthcheck');

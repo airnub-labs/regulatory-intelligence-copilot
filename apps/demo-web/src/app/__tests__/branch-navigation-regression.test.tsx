@@ -138,7 +138,6 @@ describe('Branch Navigation Regression Tests', () => {
 
       // Handle path operations
       if (urlStr.includes('/paths')) {
-        const conversationId = urlStr.split('/conversations/')[1]?.split('/')[0];
         const paths = Array.from(conversationState.paths.values());
 
         return {

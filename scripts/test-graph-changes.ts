@@ -7,7 +7,7 @@
  * Direct queries are used only for reads and deletes (not yet in GraphWriteService API).
  *
  * Usage:
- *   tsx scripts/test-graph-changes.ts [action]
+ *   pnpm test:changes [action]
  *
  * Actions:
  *   add-node      - Add a new test node
@@ -17,12 +17,13 @@
  *   remove-edge   - Remove a test edge
  *   simulate      - Run a sequence of changes with delays
  *
- * Environment Variables:
+ * Environment Variables (from .env.local or .env):
  *   MEMGRAPH_URI - Bolt URI (default: bolt://localhost:7687)
  *   MEMGRAPH_USERNAME - Username (optional)
  *   MEMGRAPH_PASSWORD - Password (optional)
  */
 
+import { loadEnv } from './load-env.js';
 import neo4j, { Driver } from 'neo4j-driver';
 import {
   createGraphWriteService,
@@ -30,6 +31,9 @@ import {
 } from '@reg-copilot/reg-intel-graph';
 import { runWithScriptObservability } from './observability.js';
 import type { Logger } from 'pino';
+
+// Load environment variables from .env.local or .env
+loadEnv();
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;

@@ -70,14 +70,14 @@ export async function GET(request: NextRequest) {
     }
 
     // SECURITY: Get user's tenant context
-    const { userId, tenantId } = await getTenantContext(session);
+    const { tenantId } = await getTenantContext(session);
     if (!tenantId) {
       return NextResponse.json({ error: 'No active tenant' }, { status: 400 });
     }
 
-    // Use infrastructure client with copilot_internal schema for analytics functions
+    // Use infrastructure client with copilot_audit schema for compaction analytics functions
     const supabase = createInfrastructureServiceClient('CompactionMetrics', {
-      db: { schema: 'copilot_internal' }
+      db: { schema: 'copilot_audit' }
     });
 
     const { searchParams } = new URL(request.url);
@@ -87,14 +87,14 @@ export async function GET(request: NextRequest) {
     const endTime = new Date();
 
     // Fetch aggregated metrics for THIS tenant only
-    const { data: metricsData, error: metricsError } = await (supabase.rpc as any)(
+    const { data: metricsData, error: metricsError } = await supabase.rpc(
       'get_compaction_metrics',
       {
         p_start_time: startTime?.toISOString() || null,
         p_end_time: endTime.toISOString(),
         p_tenant_id: tenantId, // Always scope to user's tenant
       }
-    );
+    ) as { data: unknown; error: unknown };
 
     if (metricsError) {
       console.error('Error fetching compaction metrics:', metricsError);
@@ -109,27 +109,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch strategy breakdown for THIS tenant only
-    const { data: strategyData, error: strategyError } = await (supabase.rpc as any)(
+    const { data: strategyData, error: strategyError } = await supabase.rpc(
       'get_compaction_strategy_breakdown',
       {
         p_start_time: startTime?.toISOString() || null,
         p_end_time: endTime.toISOString(),
         p_tenant_id: tenantId, // Always scope to user's tenant
       }
-    );
+    ) as { data: unknown; error: unknown };
 
     if (strategyError) {
       console.error('Error fetching strategy breakdown:', strategyError);
     }
 
     // Fetch recent operations for THIS tenant only
-    const { data: recentData, error: recentError } = await (supabase.rpc as any)(
+    const { data: recentData, error: recentError } = await supabase.rpc(
       'get_recent_compaction_operations',
       {
         p_limit: 10,
         p_tenant_id: tenantId, // Always scope to user's tenant
       }
-    );
+    ) as { data: unknown; error: unknown };
 
     if (recentError) {
       console.error('Error fetching recent operations:', recentError);

@@ -121,7 +121,7 @@ describe('SupabasePolicyStore', () => {
     };
 
     // Set up mock data with schema-qualified table name
-    (supabase as any)._setMockData('copilot_internal.tenant_llm_policies:tenant-1', {
+    (supabase as any)._setMockData('copilot_core.tenant_llm_policies:tenant-1', {
       tenant_id: 'tenant-1',
       default_model: 'gpt-4',
       default_provider: 'openai',

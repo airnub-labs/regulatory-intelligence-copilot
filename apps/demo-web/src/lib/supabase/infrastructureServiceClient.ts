@@ -45,7 +45,7 @@ interface InfrastructureServiceClientOptions {
  * ```typescript
  * // In conversation store initialization
  * const supabase = createInfrastructureServiceClient('ConversationStore', {
- *   db: { schema: 'copilot_internal' }
+ *   db: { schema: 'copilot_core' }
  * });
  * ```
  */

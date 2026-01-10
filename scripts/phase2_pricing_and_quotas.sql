@@ -16,14 +16,14 @@
 -- =============================================================================
 
 -- Expire old pricing (keep for historical analysis)
-UPDATE copilot_internal.e2b_pricing
+UPDATE copilot_billing.e2b_pricing
 SET expires_at = '2026-01-04'::timestamptz
 WHERE expires_at IS NULL;
 
 -- Insert current 2026 E2B pricing
 -- NOTE: These are example rates - update with actual E2B vendor pricing!
 -- Check https://e2b.dev/pricing for current rates
-INSERT INTO copilot_internal.e2b_pricing (tier, region, price_per_second, price_per_gb_memory_hour, price_per_cpu_core_hour, effective_date, notes)
+INSERT INTO copilot_billing.e2b_pricing (tier, region, price_per_second, price_per_gb_memory_hour, price_per_cpu_core_hour, effective_date, notes)
 VALUES
   -- Standard tier: 2 vCPU, 2GB RAM
   ('standard', 'us-east-1', 0.00012, 0.02, 0.05, '2026-01-04', 'Updated Jan 2026 - Standard sandbox tier'),
@@ -50,7 +50,7 @@ SET
 -- =============================================================================
 
 -- Expire old pricing (keep for historical analysis)
-UPDATE copilot_internal.model_pricing
+UPDATE copilot_billing.model_pricing
 SET expires_at = '2026-01-04'::timestamptz
 WHERE expires_at IS NULL;
 
@@ -61,7 +61,7 @@ WHERE expires_at IS NULL;
 -- Google: https://ai.google.dev/pricing
 -- Groq: https://groq.com/pricing/
 
-INSERT INTO copilot_internal.model_pricing (provider, model, input_price_per_million, output_price_per_million, effective_date, notes)
+INSERT INTO copilot_billing.model_pricing (provider, model, input_price_per_million, output_price_per_million, effective_date, notes)
 VALUES
   -- OpenAI GPT-4o (Jan 2026 rates)
   ('openai', 'gpt-4o', 2.50, 10.00, '2026-01-04', '2026 Q1 pricing - GPT-4o multimodal'),
@@ -127,7 +127,7 @@ BEGIN
   RAISE NOTICE 'Configuring quotas for demo tenant: %', v_demo_tenant_id;
 
   -- Configure E2B quotas for demo tenant
-  INSERT INTO copilot_internal.cost_quotas (
+  INSERT INTO copilot_billing.cost_quotas (
     scope,
     scope_id,
     resource_type,
@@ -160,7 +160,7 @@ BEGIN
     updated_at = NOW();
 
   -- Configure LLM quotas for demo tenant
-  INSERT INTO copilot_internal.cost_quotas (
+  INSERT INTO copilot_billing.cost_quotas (
     scope,
     scope_id,
     resource_type,
@@ -198,7 +198,7 @@ BEGIN
 END $$;
 
 -- Platform-wide quotas (safety net for all tenants combined)
-INSERT INTO copilot_internal.cost_quotas (
+INSERT INTO copilot_billing.cost_quotas (
   scope,
   scope_id,
   resource_type,
@@ -255,24 +255,24 @@ DECLARE
 BEGIN
   -- Check E2B pricing updates
   SELECT COUNT(*) INTO e2b_pricing_count
-  FROM copilot_internal.e2b_pricing
+  FROM copilot_billing.e2b_pricing
   WHERE effective_date >= '2026-01-04'
     AND expires_at IS NULL;
 
   -- Check LLM pricing updates
   SELECT COUNT(*) INTO llm_pricing_count
-  FROM copilot_internal.model_pricing
+  FROM copilot_billing.model_pricing
   WHERE effective_date >= '2026-01-04'
     AND expires_at IS NULL;
 
   -- Check E2B quotas
   SELECT COUNT(*) INTO e2b_quota_count
-  FROM copilot_internal.cost_quotas
+  FROM copilot_billing.cost_quotas
   WHERE resource_type IN ('e2b', 'all');
 
   -- Check LLM quotas
   SELECT COUNT(*) INTO llm_quota_count
-  FROM copilot_internal.cost_quotas
+  FROM copilot_billing.cost_quotas
   WHERE resource_type IN ('llm', 'all');
 
   RAISE NOTICE '';

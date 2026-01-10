@@ -13,7 +13,10 @@ import {
   IconSun,
   IconDeviceDesktop,
   IconLock,
+  IconCheck,
 } from "@tabler/icons-react"
+import { toast } from "sonner"
+import { useSession } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -52,6 +55,7 @@ const themeOptions = [
 
 export default function PreferencesSettingsPage() {
   const router = useRouter()
+  const { data: session } = useSession()
   const t = useTranslations("settings")
   const tCommon = useTranslations("common")
   const tAdminView = useTranslations("adminView")
@@ -60,6 +64,9 @@ export default function PreferencesSettingsPage() {
 
   const { user: effectiveUser, isAdminView, canEdit } = useEffectiveUser()
   const { logAuditEvent } = useAdminView()
+
+  // Get the user ID to update (either effective user in admin view or current user)
+  const targetUserId = isAdminView ? effectiveUser?.id : session?.user?.id
 
   // Get initial preferences from effective user or defaults
   const initialPreferences = effectiveUser?.preferences || {
@@ -141,18 +148,37 @@ export default function PreferencesSettingsPage() {
   }
 
   const handleSave = async () => {
-    if (!canEdit) return
+    if (!canEdit || !targetUserId) return
 
     setIsSaving(true)
     try {
-      // For own settings, save locale to cookie
+      // Save preferences to backend
+      const response = await fetch(`/api/users/${targetUserId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          preferences: {
+            locale: selectedLocale,
+            theme: selectedTheme,
+            // Note: notification preferences would need to be added to the API schema
+            // For now, we save locale, timezone, and theme
+            timezone: localeTimezones[selectedLocale],
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to save preferences")
+      }
+
+      // For own settings, also save locale to cookie for immediate i18n effect
       if (!isAdminView && selectedLocale !== currentLocale) {
         document.cookie = `${LOCALE_COOKIE_NAME}=${selectedLocale}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
         router.refresh()
       }
-
-      // TODO: Save preferences to backend (for both own and admin view)
-      await new Promise((resolve) => setTimeout(resolve, 500))
 
       // Log audit event for preferences update
       if (isAdminView) {
@@ -195,8 +221,16 @@ export default function PreferencesSettingsPage() {
         await logAuditEvent("update_preferences", "user_preferences", "success", changes)
       }
 
+      toast.success(t("preferencesSaved"), {
+        description: t("preferencesSavedDescription"),
+        icon: <IconCheck className="h-4 w-4" />,
+      })
       setHasChanges(false)
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : tCommon("error")
+      toast.error(tCommon("error"), {
+        description: message,
+      })
       if (isAdminView) {
         await logAuditEvent("update_preferences", "user_preferences", "failure")
       }

@@ -34,7 +34,7 @@ describe('Atomic Quota Operations Integration', () => {
 
     supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: 'copilot_internal' },
+      db: { schema: 'copilot_billing' },
     });
 
     quotaProvider = new SupabaseQuotaProvider(supabase as any);

@@ -175,6 +175,12 @@ export const ALLOWED_RELATIONSHIP_TYPES = [
   'COORDINATED_UNDER',
   'AGGREGATES_WITH',
   'POSTED_TO',
+  // Cross-jurisdictional relationship types
+  'IMPLEMENTS', // Section implements EU Directive
+  'AMENDS', // MLI amends tax treaty
+  'MEMBER_OF', // Jurisdiction is member of supranational body
+  'HAS_TREATY_WITH', // Jurisdiction has tax treaty with another
+  'HARMONIZED_WITH', // Rule harmonized with EU law
 ] as readonly string[];
 
 /**

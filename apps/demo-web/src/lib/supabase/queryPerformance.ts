@@ -3,7 +3,7 @@
  *
  * ⚠️ DEPRECATION NOTICE:
  * The admin functions in this file (getQueryPerformanceStats, getUserTenantCount,
- * getRLSIndexUsage, analyzeQueryPlan) have been moved to copilot_internal schema
+ * getRLSIndexUsage, analyzeQueryPlan) have been moved to copilot_admin schema
  * for security reasons and are no longer accessible via client-side code.
  *
  * Use @/lib/server/queryPerformance instead for server-side monitoring.

@@ -27,6 +27,15 @@
       ],
       "@reg-copilot/reg-intel-cache": [
         "packages/reg-intel-cache/dist/index.d.ts"
+      ],
+      "@reg-copilot/reg-intel-eventhub": [
+        "packages/reg-intel-eventhub/dist/index.d.ts"
+      ],
+      "@reg-copilot/reg-intel-eventhub/redis": [
+        "packages/reg-intel-eventhub/dist/redis/index.d.ts"
+      ],
+      "@reg-copilot/reg-intel-eventhub/supabase": [
+        "packages/reg-intel-eventhub/dist/supabase/index.d.ts"
       ]
     }
   },

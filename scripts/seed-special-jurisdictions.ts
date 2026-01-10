@@ -10,14 +10,15 @@
  * Based on docs/architecture/graph/seed_ni_uk_ie_eu.txt
  *
  * Usage:
- *   tsx scripts/seed-special-jurisdictions.ts
+ *   pnpm seed:jurisdictions
  *
- * Environment Variables:
+ * Environment Variables (from .env.local or .env):
  *   MEMGRAPH_URI - Bolt URI (default: bolt://localhost:7687)
  *   MEMGRAPH_USERNAME - Username (optional)
  *   MEMGRAPH_PASSWORD - Password (optional)
  */
 
+import { loadEnv } from './load-env.js';
 import neo4j, { Driver } from 'neo4j-driver';
 import {
   createGraphWriteService,
@@ -25,6 +26,9 @@ import {
 } from '../packages/reg-intel-graph/src/index.js';
 import { runWithScriptObservability } from './observability.js';
 import type { Logger } from 'pino';
+
+// Load environment variables from .env.local or .env
+loadEnv();
 
 const MEMGRAPH_URI = process.env.MEMGRAPH_URI || 'bolt://localhost:7687';
 const MEMGRAPH_USERNAME = process.env.MEMGRAPH_USERNAME;

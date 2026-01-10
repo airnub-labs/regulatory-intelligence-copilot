@@ -60,7 +60,7 @@ export const initializeCostEstimation = (): void => {
         persistSession: false,
       },
       db: {
-        schema: 'copilot_internal',
+        schema: 'copilot_billing',
       },
     });
 

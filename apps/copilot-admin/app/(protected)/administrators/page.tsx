@@ -121,7 +121,7 @@ interface AdminUserWithTenants extends AdminUser {
 // Helper function to fetch admin users from the API
 async function fetchAdminUsers(): Promise<AdminUserWithTenants[]> {
   try {
-    const response = await fetch("/api/admin-users")
+    const response = await fetch("/api/users?type=admin")
     if (!response.ok) {
       throw new Error("Failed to fetch admin users")
     }
@@ -148,7 +148,8 @@ interface ActivityLog {
   details: string
 }
 
-function getMockActivityLog(userId: string): ActivityLog[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function getMockActivityLog(_userId: string): ActivityLog[] {
   return [
     {
       id: "1",

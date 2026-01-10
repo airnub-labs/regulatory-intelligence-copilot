@@ -72,7 +72,7 @@ async function getDemoTenantId(): Promise<string | null> {
 async function test1_VerifyQuotasConfigured(tenantId: string): Promise<TestResult> {
   try {
     const { data, error } = await supabase
-      .from('copilot_internal.cost_quotas')
+      .from('copilot_billing.cost_quotas')
       .select('*')
       .eq('scope', 'tenant')
       .eq('scope_id', tenantId);
@@ -191,7 +191,7 @@ async function test3_WarningThresholdDetection(tenantId: string): Promise<TestRe
   try {
     // Get quota details
     const { data: quotaData, error: quotaError } = await supabase
-      .from('copilot_internal.cost_quotas')
+      .from('copilot_billing.cost_quotas')
       .select('*')
       .eq('scope', 'tenant')
       .eq('scope_id', tenantId)
@@ -245,7 +245,7 @@ async function test4_SimulateQuotaBreach(tenantId: string): Promise<TestResult> 
   try {
     // Get current E2B quota
     const { data: quotaData, error: quotaError } = await supabase
-      .from('copilot_internal.cost_quotas')
+      .from('copilot_billing.cost_quotas')
       .select('*')
       .eq('scope', 'tenant')
       .eq('scope_id', tenantId)
@@ -328,7 +328,7 @@ async function test5_IncrementQuotaSpend(tenantId: string): Promise<TestResult> 
   try {
     // Get current spend
     const { data: beforeData, error: beforeError } = await supabase
-      .from('copilot_internal.cost_quotas')
+      .from('copilot_billing.cost_quotas')
       .select('current_spend_usd')
       .eq('scope', 'tenant')
       .eq('scope_id', tenantId)
@@ -363,7 +363,7 @@ async function test5_IncrementQuotaSpend(tenantId: string): Promise<TestResult> 
 
     // Get updated spend
     const { data: afterData, error: afterError } = await supabase
-      .from('copilot_internal.cost_quotas')
+      .from('copilot_billing.cost_quotas')
       .select('current_spend_usd')
       .eq('scope', 'tenant')
       .eq('scope_id', tenantId)

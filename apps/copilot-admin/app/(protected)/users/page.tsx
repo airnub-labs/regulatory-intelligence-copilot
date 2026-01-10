@@ -1,20 +1,25 @@
 "use client"
 
 import * as React from "react"
-import { useTranslations, useFormatter } from "next-intl"
+import { useTranslations, useFormatter, useNow } from "next-intl"
+import { toast } from "sonner"
 import {
   IconBuilding,
   IconChevronLeft,
   IconChevronRight,
   IconCreditCard,
   IconCrown,
+  IconDeviceDesktop,
+  IconDeviceMobile,
   IconDots,
   IconDownload,
   IconEdit,
   IconEye,
   IconFolder,
   IconGift,
+  IconHistory,
   IconLock,
+  IconLogout,
   IconPlus,
   IconRefresh,
   IconSearch,
@@ -26,6 +31,7 @@ import {
   IconUsers,
   IconArchive,
   IconX,
+  IconWorld,
 } from "@tabler/icons-react"
 
 import { cn } from "@/lib/utils"
@@ -102,7 +108,6 @@ import {
   type Subscription,
   type PaymentHistory,
   type AdminRoleType,
-  AdminRole,
   TenantStatus,
   WorkspaceStatus,
   SubscriptionStatus,
@@ -375,7 +380,8 @@ function getMockSubscriptions(userId: string): Subscription[] {
   ]
 }
 
-function getMockPaymentHistory(userId: string): PaymentHistory[] {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function getMockPaymentHistory(_userId: string): PaymentHistory[] {
   return [
     {
       id: "pay-1",
@@ -441,7 +447,65 @@ const statusColors: Record<string, string> = {
 
 const ITEMS_PER_PAGE = 10
 
-type DialogSection = "profile" | "tenants" | "workspaces" | "billing" | "preferences" | "permissions"
+type DialogSection = "profile" | "tenants" | "workspaces" | "sessions" | "billing" | "preferences" | "permissions"
+
+// Session interface for session management
+interface UserSession {
+  id: string
+  userId: string
+  createdAt: string
+  updatedAt: string
+  userAgent: string | null
+  ip: string | null
+  isActive: boolean
+  refreshedAt: string | null
+}
+
+// Tenant membership from API
+interface TenantMembershipAPI {
+  id: string
+  tenantId: string
+  tenantName: string
+  tenantSlug: string | null
+  tenantType: string
+  tenantPlan: string
+  isDeleted: boolean
+  role: string
+  status: string
+  isPrimary: boolean
+  invitedAt: string | null
+  joinedAt: string | null
+  createdAt: string
+  deletedAt: string | null
+}
+
+// Available tenant for adding user
+interface AvailableTenant {
+  id: string
+  name: string
+  slug: string | null
+  type: string
+  plan: string
+}
+
+// Workspace from API
+interface WorkspaceAPI {
+  id: string
+  name: string
+  slug: string | null
+  description: string | null
+  type: string
+  plan: string
+  ownerId: string
+  status: string
+  memberCount: number
+  role: string
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+  deletedBy: string | null
+  canRestore: boolean
+}
 
 // Platform user roles (distinct from admin roles)
 const platformRoles = ["Owner", "Admin", "Member", "Viewer"] as const
@@ -502,8 +566,9 @@ const availablePermissionGroups = [
 export default function UsersPage() {
   const t = useTranslations("userManagement")
   const tCommon = useTranslations("common")
-  const tPerm = useTranslations("permissions")
   const format = useFormatter()
+  // Update relative times every 30 seconds
+  const now = useNow({ updateInterval: 1000 * 30 })
 
   // Data state
   const [users, setUsers] = React.useState<PlatformUser[]>([])
@@ -515,7 +580,7 @@ export default function UsersPage() {
     async function loadUsers() {
       try {
         setIsLoading(true)
-        const response = await fetch("/api/platform-users")
+        const response = await fetch("/api/users")
         if (!response.ok) {
           throw new Error("Failed to fetch users")
         }
@@ -564,10 +629,22 @@ export default function UsersPage() {
   const [activeSection, setActiveSection] = React.useState<DialogSection>("profile")
 
   // Data for selected user
-  const [tenantMemberships, setTenantMemberships] = React.useState<TenantMembership[]>([])
+  const [, setTenantMemberships] = React.useState<TenantMembership[]>([])
   const [workspaceMemberships, setWorkspaceMemberships] = React.useState<WorkspaceMembership[]>([])
   const [subscriptions, setSubscriptions] = React.useState<Subscription[]>([])
   const [payments, setPayments] = React.useState<PaymentHistory[]>([])
+
+  // Live data from API
+  const [sessions, setSessions] = React.useState<UserSession[]>([])
+  const [historicalSessions, setHistoricalSessions] = React.useState<UserSession[]>([])
+  const [tenantsAPI, setTenantsAPI] = React.useState<TenantMembershipAPI[]>([])
+  const [removedTenants, setRemovedTenants] = React.useState<TenantMembershipAPI[]>([])
+  const [availableTenants, setAvailableTenants] = React.useState<AvailableTenant[]>([])
+  const [workspacesAPI, setWorkspacesAPI] = React.useState<WorkspaceAPI[]>([])
+  const [deletedWorkspaces, setDeletedWorkspaces] = React.useState<WorkspaceAPI[]>([])
+  const [isLoadingSection, setIsLoadingSection] = React.useState(false)
+  const [showAddTenantDialog, setShowAddTenantDialog] = React.useState(false)
+  const [showHistoricalSessions, setShowHistoricalSessions] = React.useState(false)
 
   // Statistics
   const stats = React.useMemo(() => ({
@@ -612,16 +689,263 @@ export default function UsersPage() {
       setWorkspaceMemberships(getMockWorkspaceMemberships(selectedUser.id))
       setSubscriptions(getMockSubscriptions(selectedUser.id))
       setPayments(getMockPaymentHistory(selectedUser.id))
+
+      // Load live data from APIs
+      loadSessions(selectedUser.id)
+      loadTenants(selectedUser.id)
+      loadWorkspaces(selectedUser.id)
     } else {
       setTenantMemberships([])
       setWorkspaceMemberships([])
       setSubscriptions([])
       setPayments([])
+      setSessions([])
+      setHistoricalSessions([])
+      setTenantsAPI([])
+      setRemovedTenants([])
+      setAvailableTenants([])
+      setWorkspacesAPI([])
+      setDeletedWorkspaces([])
     }
   }, [selectedUser])
 
+  // Load sessions from API
+  const loadSessions = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/sessions`)
+      if (response.ok) {
+        const data = await response.json()
+        setSessions(data.sessions || [])
+        setHistoricalSessions(data.historicalSessions || [])
+      }
+    } catch (error) {
+      console.error("Error loading sessions:", error)
+    }
+  }
+
+  // Load tenants from API
+  const loadTenants = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/tenants`)
+      if (response.ok) {
+        const data = await response.json()
+        setTenantsAPI(data.memberships || [])
+        setRemovedTenants(data.removedMemberships || [])
+        setAvailableTenants(data.availableTenants || [])
+      }
+    } catch (error) {
+      console.error("Error loading tenants:", error)
+    }
+  }
+
+  // Load workspaces from API
+  const loadWorkspaces = async (userId: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/workspaces`)
+      if (response.ok) {
+        const data = await response.json()
+        setWorkspacesAPI(data.workspaces || [])
+        setDeletedWorkspaces(data.deletedWorkspaces || [])
+      }
+    } catch (error) {
+      console.error("Error loading workspaces:", error)
+    }
+  }
+
+  // Revoke a single session
+  const handleRevokeSession = async (sessionId: string) => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/sessions/${sessionId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        toast.success(t("sessions.sessionRevoked"))
+        // Refresh sessions list
+        await loadSessions(selectedUser.id)
+      } else {
+        // Handle error responses
+        const data = await response.json().catch(() => ({}))
+        if (data.code === "SELF_REVOCATION_BLOCKED") {
+          toast.error(t("sessions.cannotRevokeCurrent"), {
+            description: t("sessions.cannotRevokeCurrentDescription"),
+          })
+        } else {
+          toast.error(t("sessions.revokeError"), {
+            description: data.message || data.error,
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Error revoking session:", error)
+      toast.error(t("sessions.revokeError"))
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Revoke all sessions
+  const handleRevokeAllSessions = async () => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/sessions`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        if (data.currentSessionPreserved) {
+          toast.success(t("sessions.otherSessionsRevoked"))
+        } else {
+          toast.success(t("sessions.allSessionsRevoked"))
+        }
+        // Refresh sessions list
+        await loadSessions(selectedUser.id)
+      } else {
+        // Handle error responses
+        const data = await response.json().catch(() => ({}))
+        toast.error(t("sessions.revokeAllError"), {
+          description: data.message || data.error,
+        })
+      }
+    } catch (error) {
+      console.error("Error revoking all sessions:", error)
+      toast.error(t("sessions.revokeAllError"))
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Add user to tenant
+  const handleAddToTenant = async (tenantId: string, role: string) => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/tenants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId, role }),
+      })
+
+      if (response.ok) {
+        await loadTenants(selectedUser.id)
+        setShowAddTenantDialog(false)
+      }
+    } catch (error) {
+      console.error("Error adding to tenant:", error)
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Remove user from tenant
+  const handleRemoveFromTenant = async (tenantId: string) => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/tenants/${tenantId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        await loadTenants(selectedUser.id)
+      }
+    } catch (error) {
+      console.error("Error removing from tenant:", error)
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Restore user's tenant membership
+  const handleRestoreTenant = async (tenantId: string) => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/tenants/${tenantId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore" }),
+      })
+
+      if (response.ok) {
+        await loadTenants(selectedUser.id)
+      }
+    } catch (error) {
+      console.error("Error restoring tenant membership:", error)
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Soft delete workspace
+  const handleDeleteWorkspace = async (workspaceId: string) => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/workspaces/${workspaceId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        await loadWorkspaces(selectedUser.id)
+      }
+    } catch (error) {
+      console.error("Error deleting workspace:", error)
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Restore workspace
+  const handleRestoreWorkspace = async (workspaceId: string) => {
+    if (!selectedUser) return
+
+    try {
+      setIsLoadingSection(true)
+      const response = await fetch(`/api/users/${selectedUser.id}/workspaces/${workspaceId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restore" }),
+      })
+
+      if (response.ok) {
+        await loadWorkspaces(selectedUser.id)
+      }
+    } catch (error) {
+      console.error("Error restoring workspace:", error)
+    } finally {
+      setIsLoadingSection(false)
+    }
+  }
+
+  // Parse user agent to get device info
+  const parseUserAgent = (ua: string | null): { device: string; browser: string } => {
+    if (!ua) return { device: "Unknown", browser: "Unknown" }
+
+    const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua)
+    const device = isMobile ? "Mobile" : "Desktop"
+
+    let browser = "Unknown"
+    if (ua.includes("Chrome")) browser = "Chrome"
+    else if (ua.includes("Firefox")) browser = "Firefox"
+    else if (ua.includes("Safari")) browser = "Safari"
+    else if (ua.includes("Edge")) browser = "Edge"
+
+    return { device, browser }
+  }
+
   // Group workspaces by tenant
-  const workspacesByTenant = React.useMemo(() => {
+  React.useMemo(() => {
     const grouped = new Map<string, WorkspaceMembership[]>()
     workspaceMemberships.forEach((wm) => {
       const tenantName = wm.workspace.tenantName
@@ -645,7 +969,7 @@ export default function UsersPage() {
 
     try {
       setIsSaving(true)
-      const response = await fetch(`/api/platform-users/${selectedUser.id}`, {
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ profile: updates }),
@@ -679,7 +1003,7 @@ export default function UsersPage() {
 
     try {
       setIsSaving(true)
-      const response = await fetch(`/api/platform-users/${selectedUser.id}`, {
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ preferences: updates }),
@@ -712,7 +1036,7 @@ export default function UsersPage() {
 
     try {
       setIsSaving(true)
-      const response = await fetch(`/api/platform-users/${selectedUser.id}`, {
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ membership: { tenantId, role } }),
@@ -789,6 +1113,7 @@ export default function UsersPage() {
     { id: "profile" as const, name: t("tabs.profile"), icon: IconUser },
     { id: "tenants" as const, name: t("tabs.tenants"), icon: IconBuilding },
     { id: "workspaces" as const, name: t("tabs.workspaces"), icon: IconFolder },
+    { id: "sessions" as const, name: t("tabs.sessions"), icon: IconDeviceDesktop },
     { id: "billing" as const, name: t("tabs.billing"), icon: IconCreditCard },
     { id: "preferences" as const, name: t("tabs.preferences"), icon: IconSettings },
     { id: "permissions" as const, name: t("tabs.permissions"), icon: IconLock },
@@ -1183,7 +1508,7 @@ export default function UsersPage() {
 
       {/* User Details Dialog with Sidebar */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="overflow-hidden p-0 md:max-h-[600px] md:max-w-[800px] lg:max-w-[900px]">
+        <DialogContent className="overflow-hidden p-0 max-h-[90vh] w-[95vw] max-w-[95vw] md:max-h-[85vh] md:max-w-[900px] lg:max-w-[1000px] xl:max-w-[1100px]">
           <DialogTitle className="sr-only">
             {selectedUser ? t("dialog.title", { name: selectedUser.displayName }) : t("dialog.titleDefault")}
           </DialogTitle>
@@ -1484,66 +1809,192 @@ export default function UsersPage() {
                   {/* Tenants Section */}
                   {activeSection === "tenants" && (
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
                           <h4 className="font-medium">{t("tenants.title")}</h4>
                           <p className="text-sm text-muted-foreground">{t("tenants.multiTenantNote")}</p>
                         </div>
-                        <Button size="sm">
-                          <IconPlus className="h-4 w-4 mr-1" />
-                          {t("tenants.addToTenant")}
-                        </Button>
-                      </div>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t("tenants.name")}</TableHead>
-                            <TableHead>{t("tenants.role")}</TableHead>
-                            <TableHead>{t("tenants.status")}</TableHead>
-                            <TableHead>{t("tenants.joinedAt")}</TableHead>
-                            <TableHead className="text-right">{tCommon("actions")}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {tenantMemberships.map((tm) => (
-                            <TableRow key={tm.id}>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">{tm.tenant.name}</span>
-                                  {tm.isPrimary && (
-                                    <Badge variant="secondary">{t("tenants.primary")}</Badge>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant="outline"
-                                  className={cn("text-xs", roleColors[tm.role as string] || "")}
+                        <DropdownMenu open={showAddTenantDialog} onOpenChange={setShowAddTenantDialog}>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" disabled={availableTenants.length === 0}>
+                              <IconPlus className="h-4 w-4 mr-1" />
+                              {t("tenants.addToTenant")}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            {availableTenants.length === 0 ? (
+                              <div className="p-2 text-sm text-muted-foreground">
+                                {t("tenants.noAvailableTenants")}
+                              </div>
+                            ) : (
+                              availableTenants.map((tenant) => (
+                                <DropdownMenuItem
+                                  key={tenant.id}
+                                  onClick={() => handleAddToTenant(tenant.id, "member")}
+                                  disabled={isLoadingSection}
                                 >
-                                  {tm.role}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className={cn(statusColors[tm.tenant.status], "text-white")}>
-                                  {tm.tenant.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                {format.dateTime(new Date(tm.joinedAt), {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button variant="ghost" size="sm" className="text-destructive">
-                                  <IconTrash className="h-4 w-4" />
-                                </Button>
-                              </TableCell>
+                                  <IconBuilding className="h-4 w-4 mr-2" />
+                                  <div>
+                                    <p className="font-medium">{tenant.name}</p>
+                                    <p className="text-xs text-muted-foreground">{tenant.type} • {tenant.plan}</p>
+                                  </div>
+                                </DropdownMenuItem>
+                              ))
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
+                      {/* Active Tenants Table */}
+                      <div className="overflow-x-auto rounded-md border">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="min-w-[200px]">{t("tenants.name")}</TableHead>
+                              <TableHead className="min-w-[120px]">{t("tenants.role")}</TableHead>
+                              <TableHead className="min-w-[100px]">{t("tenants.status")}</TableHead>
+                              <TableHead className="min-w-[120px]">{t("tenants.joinedAt")}</TableHead>
+                              <TableHead className="text-right min-w-[80px]">{tCommon("actions")}</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {tenantsAPI.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={5} className="h-24 text-center">
+                                  <p className="text-muted-foreground">{t("tenants.noTenants")}</p>
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              tenantsAPI.map((tm) => (
+                                <TableRow key={tm.id}>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium">{tm.tenantName}</span>
+                                      {tm.isPrimary && (
+                                        <Badge variant="secondary" className="text-xs">{t("tenants.primary")}</Badge>
+                                      )}
+                                      {tm.tenantType === "personal" && (
+                                        <Badge variant="outline" className="text-xs">{t("tenants.personal")}</Badge>
+                                      )}
+                                    </div>
+                                    {tm.tenantSlug && (
+                                      <p className="text-xs text-muted-foreground">{tm.tenantSlug}</p>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Select
+                                      defaultValue={tm.role}
+                                      onValueChange={(value) => handleSaveMembership(tm.tenantId, value)}
+                                      disabled={isLoadingSection || tm.tenantType === "personal"}
+                                    >
+                                      <SelectTrigger className="w-24 h-8">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="owner">{t("roles.owner")}</SelectItem>
+                                        <SelectItem value="admin">{t("roles.admin")}</SelectItem>
+                                        <SelectItem value="member">{t("roles.member")}</SelectItem>
+                                        <SelectItem value="viewer">{t("roles.viewer")}</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant="outline" className={cn(statusColors[tm.status] || "bg-gray-500", "text-white text-xs")}>
+                                      {tm.status}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="text-sm">
+                                    {tm.joinedAt ? format.dateTime(new Date(tm.joinedAt), {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    }) : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-destructive"
+                                            onClick={() => handleRemoveFromTenant(tm.tenantId)}
+                                            disabled={isLoadingSection || tm.tenantType === "personal"}
+                                          >
+                                            <IconTrash className="h-4 w-4" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {tm.tenantType === "personal"
+                                            ? t("tenants.cannotRemovePersonal")
+                                            : t("tenants.removeFromTenant")}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Removed Tenants */}
+                      {removedTenants.length > 0 && (
+                        <div className="mt-6 space-y-3">
+                          <h5 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <IconArchive className="h-4 w-4" />
+                            {t("tenants.removedMemberships")} ({removedTenants.length})
+                          </h5>
+                          <div className="overflow-x-auto rounded-md border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="min-w-[200px]">{t("tenants.name")}</TableHead>
+                                  <TableHead className="min-w-[100px]">{t("tenants.role")}</TableHead>
+                                  <TableHead className="min-w-[120px]">{t("tenants.removedAt")}</TableHead>
+                                  <TableHead className="text-right min-w-[80px]">{tCommon("actions")}</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {removedTenants.map((tm) => (
+                                  <TableRow key={tm.id} className="text-muted-foreground">
+                                    <TableCell>
+                                      <span className="font-medium">{tm.tenantName}</span>
+                                    </TableCell>
+                                    <TableCell className="text-sm">{tm.role}</TableCell>
+                                    <TableCell className="text-sm">
+                                      {tm.deletedAt && format.dateTime(new Date(tm.deletedAt), {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                      })}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="text-green-600"
+                                              onClick={() => handleRestoreTenant(tm.tenantId)}
+                                              disabled={isLoadingSection}
+                                            >
+                                              <IconRefresh className="h-4 w-4" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent>{t("tenants.restoreMembership")}</TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1551,62 +2002,315 @@ export default function UsersPage() {
                   {activeSection === "workspaces" && (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <h4 className="font-medium">{t("workspaces.title")}</h4>
-                        <Button size="sm">
-                          <IconPlus className="h-4 w-4 mr-1" />
-                          {t("workspaces.addToWorkspace")}
-                        </Button>
+                        <div>
+                          <h4 className="font-medium">{t("workspaces.title")}</h4>
+                          <p className="text-sm text-muted-foreground">{t("workspaces.description")}</p>
+                        </div>
                       </div>
 
-                      {Array.from(workspacesByTenant.entries()).map(([tenantName, workspaces]) => (
-                        <div key={tenantName} className="space-y-2">
+                      {/* Active Workspaces */}
+                      {workspacesAPI.length === 0 && deletedWorkspaces.length === 0 ? (
+                        <div className="rounded-lg border border-dashed p-8 text-center">
+                          <IconFolder className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+                          <p className="text-muted-foreground">{t("workspaces.noWorkspaces")}</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="overflow-x-auto rounded-md border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="min-w-[200px]">{t("workspaces.name")}</TableHead>
+                                  <TableHead className="min-w-[100px]">{t("workspaces.type")}</TableHead>
+                                  <TableHead className="min-w-[80px]">{t("workspaces.members")}</TableHead>
+                                  <TableHead className="min-w-[100px]">{t("workspaces.role")}</TableHead>
+                                  <TableHead className="text-right min-w-[80px]">{tCommon("actions")}</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {workspacesAPI.map((ws) => (
+                                  <TableRow key={ws.id}>
+                                    <TableCell>
+                                      <div>
+                                        <span className="font-medium">{ws.name}</span>
+                                        {ws.slug && (
+                                          <p className="text-xs text-muted-foreground">{ws.slug}</p>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant="outline" className="text-xs capitalize">
+                                        {ws.type}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                      <span className="text-sm">{ws.memberCount}</span>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn("text-xs capitalize", roleColors[ws.role] || "")}
+                                      >
+                                        {ws.role}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex items-center justify-end gap-1">
+                                        {ws.type !== "personal" && (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="text-orange-600"
+                                                  onClick={() => handleDeleteWorkspace(ws.id)}
+                                                  disabled={isLoadingSection || ws.role !== "owner"}
+                                                >
+                                                  <IconArchive className="h-4 w-4" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                {ws.role !== "owner"
+                                                  ? t("workspaces.onlyOwnerCanDelete")
+                                                  : t("workspaces.softDelete")}
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+
+                          {/* Deleted Workspaces */}
+                          {deletedWorkspaces.length > 0 && (
+                            <div className="mt-6 space-y-3">
+                              <h5 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                                <IconArchive className="h-4 w-4" />
+                                {t("workspaces.deletedWorkspaces")} ({deletedWorkspaces.length})
+                              </h5>
+                              <div className="overflow-x-auto rounded-md border">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="min-w-[200px]">{t("workspaces.name")}</TableHead>
+                                      <TableHead className="min-w-[120px]">{t("workspaces.deletedAt")}</TableHead>
+                                      <TableHead className="min-w-[120px]">{t("workspaces.restoreBefore")}</TableHead>
+                                      <TableHead className="text-right min-w-[80px]">{tCommon("actions")}</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {deletedWorkspaces.map((ws) => (
+                                      <TableRow key={ws.id} className="text-muted-foreground">
+                                        <TableCell>
+                                          <span className="font-medium">{ws.name}</span>
+                                        </TableCell>
+                                        <TableCell>
+                                          {ws.deletedAt && format.dateTime(new Date(ws.deletedAt), {
+                                            day: "numeric",
+                                            month: "short",
+                                            year: "numeric",
+                                          })}
+                                        </TableCell>
+                                        <TableCell>
+                                          {ws.deletedAt && format.dateTime(
+                                            new Date(new Date(ws.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000),
+                                            { day: "numeric", month: "short", year: "numeric" }
+                                          )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="text-green-600"
+                                                  onClick={() => handleRestoreWorkspace(ws.id)}
+                                                  disabled={isLoadingSection || !ws.canRestore}
+                                                >
+                                                  <IconRefresh className="h-4 w-4" />
+                                                </Button>
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                {ws.canRestore
+                                                  ? t("workspaces.restore")
+                                                  : t("workspaces.cannotRestore")}
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sessions Section */}
+                  {activeSection === "sessions" && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium">{t("sessions.title")}</h4>
+                          <p className="text-sm text-muted-foreground">{t("sessions.description")}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowHistoricalSessions(!showHistoricalSessions)}
+                          >
+                            <IconHistory className="h-4 w-4 mr-1" />
+                            {showHistoricalSessions ? t("sessions.hidePast") : t("sessions.showPast")}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={handleRevokeAllSessions}
+                            disabled={isLoadingSection || sessions.length === 0}
+                          >
+                            <IconLogout className="h-4 w-4 mr-1" />
+                            {t("sessions.logoutAll")}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Active Sessions */}
+                      <div className="space-y-3">
+                        <h5 className="text-sm font-medium flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                          {t("sessions.activeSessions")} ({sessions.length})
+                        </h5>
+
+                        {sessions.length === 0 ? (
+                          <div className="rounded-lg border border-dashed p-6 text-center">
+                            <IconDeviceDesktop className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-muted-foreground">{t("sessions.noActiveSessions")}</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {sessions.map((session) => {
+                              const { device, browser } = parseUserAgent(session.userAgent)
+                              const DeviceIcon = device === "Mobile" ? IconDeviceMobile : IconDeviceDesktop
+
+                              return (
+                                <div
+                                  key={session.id}
+                                  className="flex items-center justify-between rounded-lg border p-4"
+                                >
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                                      <DeviceIcon className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium">{browser} on {device}</p>
+                                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                        {session.ip && (
+                                          <>
+                                            <IconWorld className="h-3 w-3" />
+                                            <span>{session.ip}</span>
+                                          </>
+                                        )}
+                                        <span>•</span>
+                                        <span>
+                                          {t("sessions.lastActive")}:{" "}
+                                          {session.refreshedAt
+                                            ? format.relativeTime(new Date(session.refreshedAt), now)
+                                            : format.relativeTime(new Date(session.createdAt), now)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-destructive"
+                                          onClick={() => handleRevokeSession(session.id)}
+                                          disabled={isLoadingSection}
+                                        >
+                                          <IconLogout className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{t("sessions.revokeSession")}</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Historical Sessions */}
+                      {showHistoricalSessions && historicalSessions.length > 0 && (
+                        <div className="mt-6 space-y-3">
                           <h5 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <IconBuilding className="h-4 w-4" />
-                            {tenantName}
+                            <IconHistory className="h-4 w-4" />
+                            {t("sessions.pastSessions")} ({historicalSessions.length})
                           </h5>
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>{t("workspaces.name")}</TableHead>
-                                <TableHead>{t("workspaces.status")}</TableHead>
-                                <TableHead>{t("workspaces.role")}</TableHead>
-                                <TableHead className="text-right">{tCommon("actions")}</TableHead>
+                                <TableHead>{t("sessions.device")}</TableHead>
+                                <TableHead>{t("sessions.ipAddress")}</TableHead>
+                                <TableHead>{t("sessions.createdAt")}</TableHead>
+                                <TableHead>{t("sessions.expiredAt")}</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {workspaces.map((wm) => (
-                                <TableRow key={wm.id}>
-                                  <TableCell>
-                                    <span className="font-medium">{wm.workspace.name}</span>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant="outline" className={cn(statusColors[wm.workspace.status], "text-white")}>
-                                      {wm.workspace.status}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell>{wm.role}</TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex items-center justify-end gap-1">
-                                      {wm.workspace.status === WorkspaceStatus.ARCHIVED ? (
-                                        <Button variant="ghost" size="sm" className="text-green-600">
-                                          <IconRefresh className="h-4 w-4" />
-                                        </Button>
-                                      ) : (
-                                        <Button variant="ghost" size="sm" className="text-orange-600">
-                                          <IconArchive className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                      <Button variant="ghost" size="sm" className="text-destructive">
-                                        <IconTrash className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {historicalSessions.map((session) => {
+                                const { device, browser } = parseUserAgent(session.userAgent)
+                                return (
+                                  <TableRow key={session.id} className="text-muted-foreground">
+                                    <TableCell>
+                                      <span>{browser} on {device}</span>
+                                    </TableCell>
+                                    <TableCell>{session.ip || "—"}</TableCell>
+                                    <TableCell>
+                                      {format.dateTime(new Date(session.createdAt), {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </TableCell>
+                                    <TableCell>
+                                      {session.refreshedAt && format.dateTime(new Date(session.refreshedAt), {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              })}
                             </TableBody>
                           </Table>
                         </div>
-                      ))}
+                      )}
+
+                      {/* Security Notice */}
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950">
+                        <p className="text-sm text-blue-800 dark:text-blue-200">
+                          <strong>{t("sessions.securityNote")}:</strong> {t("sessions.securityNoteText")}
+                        </p>
+                      </div>
                     </div>
                   )}
 

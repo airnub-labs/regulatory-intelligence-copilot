@@ -20,6 +20,7 @@ import {
   IconCircleX,
   IconInfoCircle,
   IconX,
+  IconLoader2,
 } from "@tabler/icons-react"
 
 import { Button } from "@/components/ui/button"
@@ -34,81 +35,15 @@ import { Separator } from "@/components/ui/separator"
 import {
   type Notification,
   NotificationStatus,
-  NotificationType,
   NotificationPriority,
   getNotificationRoute,
   getPriorityVariant,
+  type NotificationPriorityValue,
 } from "@/lib/types/notification"
-
-// Mock notifications for demonstration
-const mockNotifications: Notification[] = [
-  {
-    id: "1",
-    type: NotificationType.USER_INVITED,
-    priority: NotificationPriority.MEDIUM,
-    status: NotificationStatus.UNREAD,
-    title: "New user invited",
-    message: "john.doe@example.com has been invited as a Viewer",
-    actorName: "Admin User",
-    relatedEntityType: "user",
-    relatedEntityId: "user-123",
-    contextLink: {
-      path: "/administrators",
-      params: { tab: "users" },
-    },
-    createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(), // 10 minutes ago
-  },
-  {
-    id: "2",
-    type: NotificationType.SECURITY_ALERT,
-    priority: NotificationPriority.HIGH,
-    status: NotificationStatus.UNREAD,
-    title: "New login from unknown device",
-    message: "A new login was detected from Dublin, Ireland using Chrome on macOS",
-    contextLink: {
-      path: "/settings",
-      section: "security",
-    },
-    createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
-  },
-  {
-    id: "3",
-    type: NotificationType.USER_ROLE_CHANGED,
-    priority: NotificationPriority.MEDIUM,
-    status: NotificationStatus.READ,
-    title: "User role updated",
-    message: "Jane Smith's role has been changed to Tenant Admin",
-    actorName: "System Admin",
-    relatedEntityType: "user",
-    relatedEntityId: "user-456",
-    contextLink: {
-      path: "/administrators",
-    },
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-  },
-  {
-    id: "4",
-    type: NotificationType.REPORT_READY,
-    priority: NotificationPriority.LOW,
-    status: NotificationStatus.READ,
-    title: "Monthly report ready",
-    message: "The December 2025 compliance report is now available for download",
-    contextLink: {
-      path: "/analytics",
-      section: "reports",
-    },
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-  },
-  {
-    id: "5",
-    type: NotificationType.SYSTEM_UPDATE,
-    priority: NotificationPriority.LOW,
-    status: NotificationStatus.READ,
-    title: "System maintenance completed",
-    message: "The scheduled maintenance has been completed successfully",
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
-  },
-]
+import {
+  useNotifications,
+  type NotificationItem,
+} from "@/components/notification-provider"
 
 // Icon mapping for notification types
 const notificationIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -125,31 +60,49 @@ const notificationIcons: Record<string, React.ComponentType<{ className?: string
 }
 
 function getIconForType(type: string): React.ComponentType<{ className?: string }> {
-  switch (type) {
-    case NotificationType.USER_INVITED:
-    case NotificationType.USER_ACTIVATED:
-    case NotificationType.USER_DEACTIVATED:
-    case NotificationType.USER_ROLE_CHANGED:
-      return notificationIcons.user
-    case NotificationType.SECURITY_ALERT:
-    case NotificationType.LOGIN_ALERT:
-      return notificationIcons.shield
-    case NotificationType.PERMISSION_CHANGE:
-      return notificationIcons.key
-    case NotificationType.SYSTEM_UPDATE:
-      return notificationIcons.settings
-    case NotificationType.MAINTENANCE_SCHEDULED:
-      return notificationIcons.clock
-    case NotificationType.COMPLIANCE_ALERT:
-      return notificationIcons["alert-triangle"]
-    case NotificationType.REPORT_READY:
-      return notificationIcons["file-text"]
-    case NotificationType.WARNING:
-      return notificationIcons["alert-circle"]
-    case NotificationType.ERROR:
-      return notificationIcons["x-circle"]
-    default:
-      return notificationIcons.info
+  const typeUpper = type.toUpperCase()
+  if (typeUpper.includes("USER") || typeUpper.includes("ROLE")) {
+    return notificationIcons.user
+  }
+  if (typeUpper.includes("SECURITY") || typeUpper.includes("LOGIN")) {
+    return notificationIcons.shield
+  }
+  if (typeUpper.includes("PERMISSION")) {
+    return notificationIcons.key
+  }
+  if (typeUpper.includes("SYSTEM")) {
+    return notificationIcons.settings
+  }
+  if (typeUpper.includes("MAINTENANCE")) {
+    return notificationIcons.clock
+  }
+  if (typeUpper.includes("COMPLIANCE")) {
+    return notificationIcons["alert-triangle"]
+  }
+  if (typeUpper.includes("REPORT")) {
+    return notificationIcons["file-text"]
+  }
+  if (typeUpper.includes("WARNING")) {
+    return notificationIcons["alert-circle"]
+  }
+  if (typeUpper.includes("ERROR")) {
+    return notificationIcons["x-circle"]
+  }
+  return notificationIcons.info
+}
+
+// Map NotificationItem from hook to UI Notification type
+function mapToUINotification(item: NotificationItem): Notification {
+  return {
+    id: item.id,
+    type: item.type as Notification["type"],
+    priority: item.priority.toLowerCase() as NotificationPriorityValue,
+    status: item.status.toLowerCase() as Notification["status"],
+    title: item.title,
+    message: item.message,
+    contextLink: item.actionUrl ? { path: item.actionUrl } : undefined,
+    createdAt: item.createdAt.toISOString(),
+    readAt: item.readAt?.toISOString(),
   }
 }
 
@@ -159,46 +112,76 @@ export function NotificationsButton() {
   const now = useNow({ updateInterval: 60000 }) // Update every minute
   const router = useRouter()
 
-  const [notifications, setNotifications] = React.useState<Notification[]>(mockNotifications)
-  const [isOpen, setIsOpen] = React.useState(false)
+  // Use shared notification context (single SSE connection for all components)
+  const {
+    notifications: rawNotifications,
+    unreadCount,
+    isConnected,
+    isLoading,
+    markAsRead,
+    markAllAsRead,
+    dismiss,
+  } = useNotifications()
 
-  const unreadCount = React.useMemo(
-    () => notifications.filter((n) => n.status === NotificationStatus.UNREAD).length,
-    [notifications]
+  // Map raw notifications to UI format
+  const notifications = React.useMemo(
+    () => rawNotifications.map(mapToUINotification),
+    [rawNotifications]
   )
 
-  const handleMarkAsRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === id
-          ? { ...n, status: NotificationStatus.READ, readAt: new Date().toISOString() }
-          : n
-      )
-    )
+  const [isOpen, setIsOpen] = React.useState(false)
+  const [processingIds, setProcessingIds] = React.useState<Set<string>>(new Set())
+  const [isMarkingAll, setIsMarkingAll] = React.useState(false)
+
+  const handleMarkAsRead = async (id: string) => {
+    setProcessingIds((prev) => new Set(prev).add(id))
+    try {
+      await markAsRead(id)
+    } catch (error) {
+      console.error("Error marking notification as read:", error)
+    } finally {
+      setProcessingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.status === NotificationStatus.UNREAD
-          ? { ...n, status: NotificationStatus.READ, readAt: new Date().toISOString() }
-          : n
-      )
-    )
+  const handleMarkAllAsRead = async () => {
+    setIsMarkingAll(true)
+    try {
+      await markAllAsRead()
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error)
+    } finally {
+      setIsMarkingAll(false)
+    }
   }
 
-  const handleDismiss = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) =>
-        n.id === id
-          ? { ...n, status: NotificationStatus.DISMISSED, dismissedAt: new Date().toISOString() }
-          : n
-      )
-    )
+  const handleDismiss = async (id: string) => {
+    setProcessingIds((prev) => new Set(prev).add(id))
+    try {
+      await dismiss(id)
+    } catch (error) {
+      console.error("Error dismissing notification:", error)
+    } finally {
+      setProcessingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }
 
-  const handleNotificationClick = (notification: Notification) => {
-    handleMarkAsRead(notification.id)
+  const handleNotificationClick = async (notification: Notification) => {
+    if (notification.status === NotificationStatus.UNREAD) {
+      try {
+        await markAsRead(notification.id)
+      } catch (error) {
+        console.error("Error marking notification as read:", error)
+      }
+    }
     setIsOpen(false)
     const route = getNotificationRoute(notification)
     router.push(route)
@@ -231,6 +214,9 @@ export function NotificationsButton() {
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
+          {!isConnected && !isLoading && (
+            <span className="absolute -bottom-1 -right-1 h-2 w-2 rounded-full bg-amber-500" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -255,9 +241,14 @@ export function NotificationsButton() {
               size="sm"
               className="h-8 text-xs"
               onClick={handleMarkAllAsRead}
+              disabled={isMarkingAll}
               aria-label={t("markAllRead")}
             >
-              <IconChecks className="mr-1 h-4 w-4" aria-hidden="true" />
+              {isMarkingAll ? (
+                <IconLoader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <IconChecks className="mr-1 h-4 w-4" aria-hidden="true" />
+              )}
               {t("markAllRead")}
             </Button>
           )}
@@ -265,7 +256,12 @@ export function NotificationsButton() {
 
         {/* Notifications List */}
         <ScrollArea className="h-80">
-          {visibleNotifications.length === 0 ? (
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <IconLoader2 className="h-8 w-8 animate-spin text-muted-foreground/50" aria-hidden="true" />
+              <p className="mt-2 text-sm text-muted-foreground">{t("loading")}</p>
+            </div>
+          ) : visibleNotifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
               <IconBellOff className="h-12 w-12 text-muted-foreground/50" aria-hidden="true" />
               <p className="mt-2 text-sm text-muted-foreground">{t("noNotifications")}</p>
@@ -276,13 +272,14 @@ export function NotificationsButton() {
                 const NotificationIcon = getIconForType(notification.type)
                 const isUnread = notification.status === NotificationStatus.UNREAD
                 const priorityVariant = getPriorityVariant(notification.priority)
+                const isProcessing = processingIds.has(notification.id)
 
                 return (
                   <div
                     key={notification.id}
                     className={`relative flex gap-3 p-4 transition-colors hover:bg-muted/50 ${
                       isUnread ? "bg-muted/30" : ""
-                    }`}
+                    } ${isProcessing ? "opacity-50" : ""}`}
                   >
                     {/* Unread indicator */}
                     {isUnread && (
@@ -299,7 +296,11 @@ export function NotificationsButton() {
                             : "bg-muted text-muted-foreground"
                       }`}
                     >
-                      <NotificationIcon className="h-4 w-4" aria-hidden="true" />
+                      {isProcessing ? (
+                        <IconLoader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <NotificationIcon className="h-4 w-4" aria-hidden="true" />
+                      )}
                     </div>
 
                     {/* Content */}
@@ -307,24 +308,24 @@ export function NotificationsButton() {
                       <button
                         className="w-full text-left"
                         onClick={() => handleNotificationClick(notification)}
+                        disabled={isProcessing}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className={`text-sm ${isUnread ? "font-medium" : ""}`}>
                             {notification.title}
                           </p>
-                          {notification.priority === NotificationPriority.CRITICAL ||
-                           notification.priority === NotificationPriority.HIGH ? (
+                          {(notification.priority === NotificationPriority.CRITICAL ||
+                           notification.priority === NotificationPriority.HIGH) && (
                             <Badge variant={priorityVariant} className="shrink-0 text-[10px]">
                               {t(`priority_${notification.priority}`)}
                             </Badge>
-                          ) : null}
+                          )}
                         </div>
                         <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
                           {notification.message}
                         </p>
                         <p className="mt-1 text-[10px] text-muted-foreground/70">
                           {formatRelativeTime(notification.createdAt)}
-                          {notification.actorName && ` • ${notification.actorName}`}
                         </p>
                       </button>
                     </div>
@@ -337,6 +338,7 @@ export function NotificationsButton() {
                           size="icon"
                           className="h-6 w-6"
                           onClick={() => handleMarkAsRead(notification.id)}
+                          disabled={isProcessing}
                           aria-label={t("markRead")}
                         >
                           <IconCheck className="h-3 w-3" aria-hidden="true" />
@@ -347,6 +349,7 @@ export function NotificationsButton() {
                         size="icon"
                         className="h-6 w-6 text-muted-foreground hover:text-foreground"
                         onClick={() => handleDismiss(notification.id)}
+                        disabled={isProcessing}
                         aria-label={t("dismiss")}
                       >
                         <IconX className="h-3 w-3" aria-hidden="true" />

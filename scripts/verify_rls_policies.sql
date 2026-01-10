@@ -33,7 +33,7 @@ SELECT
     ELSE '❌ DISABLED'
   END AS rls_status
 FROM pg_tables
-WHERE schemaname = 'copilot_internal'
+WHERE schemaname = 'copilot_core'
   AND tablename IN (
     'tenants',
     'tenant_memberships',
@@ -55,7 +55,7 @@ BEGIN
   SELECT COUNT(*)
   INTO disabled_count
   FROM pg_tables
-  WHERE schemaname = 'copilot_internal'
+  WHERE schemaname = 'copilot_core'
     AND tablename IN (
       'tenants',
       'tenant_memberships',
@@ -93,7 +93,7 @@ SELECT
     ELSE '⚠️  NO FILTER'
   END AS has_filter
 FROM pg_policies
-WHERE schemaname = 'copilot_internal'
+WHERE schemaname = 'copilot_core'
 ORDER BY tablename, cmd, policyname;
 
 \echo ''
@@ -108,7 +108,7 @@ SELECT
     ELSE '❌ MISSING'
   END AS status
 FROM pg_policies
-WHERE schemaname = 'copilot_internal'
+WHERE schemaname = 'copilot_core'
 GROUP BY tablename
 ORDER BY tablename;
 
@@ -133,7 +133,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_tenant_id::text, false);
 
   -- Call function
-  SELECT * INTO v_result FROM copilot_internal.get_tenant_context();
+  SELECT * INTO v_result FROM copilot_core.get_tenant_context();
 
   IF v_result.user_id = v_user_id AND v_result.tenant_id = v_tenant_id THEN
     RAISE NOTICE '✅ PASSED: get_tenant_context() returns correct values';
@@ -162,7 +162,7 @@ BEGIN
   PERFORM set_config('app.current_user_id', v_user_id::text, false);
 
   SELECT COUNT(*) INTO v_tenant_count
-  FROM copilot_internal.get_user_tenants();
+  FROM copilot_core.get_user_tenants();
 
   IF v_tenant_count = 3 THEN
     RAISE NOTICE '✅ PASSED: Alice has access to 3 workspaces';
@@ -180,7 +180,7 @@ BEGIN
   PERFORM set_config('app.current_user_id', v_user_id::text, false);
 
   SELECT COUNT(*) INTO v_tenant_count
-  FROM copilot_internal.get_user_tenants();
+  FROM copilot_core.get_user_tenants();
 
   IF v_tenant_count = 2 THEN
     RAISE NOTICE '✅ PASSED: Bob has access to 2 workspaces';
@@ -198,7 +198,7 @@ BEGIN
   PERFORM set_config('app.current_user_id', v_user_id::text, false);
 
   SELECT COUNT(*) INTO v_tenant_count
-  FROM copilot_internal.get_user_tenants();
+  FROM copilot_core.get_user_tenants();
 
   IF v_tenant_count = 2 THEN
     RAISE NOTICE '✅ PASSED: Charlie has access to 2 workspaces';
@@ -223,7 +223,7 @@ DECLARE
   v_tenant_id UUID := 'aaaacccc-1111-2222-3333-444444444444'; -- Acme Corp
   v_has_access BOOLEAN;
 BEGIN
-  SELECT copilot_internal.verify_tenant_access(v_user_id, v_tenant_id)
+  SELECT copilot_core.verify_tenant_access(v_user_id, v_tenant_id)
   INTO v_has_access;
 
   IF v_has_access THEN
@@ -240,7 +240,7 @@ DECLARE
   v_tenant_id UUID := 'bbbbeee0-5555-6666-7777-888888888888'; -- Startup XYZ
   v_has_access BOOLEAN;
 BEGIN
-  SELECT copilot_internal.verify_tenant_access(v_user_id, v_tenant_id)
+  SELECT copilot_core.verify_tenant_access(v_user_id, v_tenant_id)
   INTO v_has_access;
 
   IF NOT v_has_access THEN
@@ -257,7 +257,7 @@ DECLARE
   v_tenant_id UUID := 'aaaacccc-1111-2222-3333-444444444444'; -- Acme Corp
   v_has_access BOOLEAN;
 BEGIN
-  SELECT copilot_internal.verify_tenant_access(v_user_id, v_tenant_id)
+  SELECT copilot_core.verify_tenant_access(v_user_id, v_tenant_id)
   INTO v_has_access;
 
   IF NOT v_has_access THEN
@@ -287,7 +287,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_tenant_id::text, false);
 
   SELECT COUNT(*) INTO v_conv_count
-  FROM copilot_internal.conversations;
+  FROM copilot_core.conversations;
 
   IF v_conv_count = 2 THEN
     RAISE NOTICE '✅ PASSED: Alice sees 2 conversations in personal workspace';
@@ -307,7 +307,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_tenant_id::text, false);
 
   SELECT COUNT(*) INTO v_conv_count
-  FROM copilot_internal.conversations;
+  FROM copilot_core.conversations;
 
   IF v_conv_count = 3 THEN
     RAISE NOTICE '✅ PASSED: Alice sees 3 conversations in Acme Corp';
@@ -327,7 +327,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_tenant_id::text, false);
 
   SELECT COUNT(*) INTO v_conv_count
-  FROM copilot_internal.conversations;
+  FROM copilot_core.conversations;
 
   -- Bob should see all 3 Acme Corp conversations (created by Alice and Bob)
   IF v_conv_count = 3 THEN
@@ -348,7 +348,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_tenant_id::text, false);
 
   SELECT COUNT(*) INTO v_conv_count
-  FROM copilot_internal.conversations;
+  FROM copilot_core.conversations;
 
   IF v_conv_count = 2 THEN
     RAISE NOTICE '✅ PASSED: Charlie sees 2 conversations in Startup XYZ';
@@ -377,7 +377,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_alice_personal_id::text, false);
 
   SELECT COUNT(*) INTO v_conv_count
-  FROM copilot_internal.conversations;
+  FROM copilot_core.conversations;
 
   IF v_conv_count = 0 THEN
     RAISE NOTICE '✅ PASSED: Bob cannot see Alice''s personal conversations';
@@ -397,7 +397,7 @@ BEGIN
   PERFORM set_config('app.current_tenant_id', v_acme_id::text, false);
 
   SELECT COUNT(*) INTO v_conv_count
-  FROM copilot_internal.conversations;
+  FROM copilot_core.conversations;
 
   IF v_conv_count = 0 THEN
     RAISE NOTICE '✅ PASSED: Charlie cannot see Acme Corp conversations';
@@ -426,7 +426,7 @@ BEGIN
   -- Note: RLS on tenant_memberships might be different
   -- This test verifies logical access, not RLS enforcement
   SELECT COUNT(*) INTO v_membership_count
-  FROM copilot_internal.tenant_memberships
+  FROM copilot_core.tenant_memberships
   WHERE user_id = v_user_id;
 
   IF v_membership_count = 3 THEN
@@ -455,11 +455,11 @@ BEGIN
   PERFORM set_config('app.current_user_id', v_user_id::text, false);
 
   -- Switch tenant
-  PERFORM copilot_internal.switch_tenant(v_new_tenant);
+  PERFORM copilot_core.switch_tenant(v_new_tenant);
 
   -- Verify switch
   SELECT current_tenant_id INTO v_current_tenant
-  FROM copilot_internal.user_preferences
+  FROM copilot_core.user_preferences
   WHERE user_id = v_user_id;
 
   IF v_current_tenant = v_new_tenant THEN
@@ -469,7 +469,7 @@ BEGIN
   END IF;
 
   -- Switch back to personal
-  PERFORM copilot_internal.switch_tenant('11111111-1111-1111-1111-111111111111');
+  PERFORM copilot_core.switch_tenant('11111111-1111-1111-1111-111111111111');
 END $$;
 
 -- Test switching to unauthorized tenant (should fail)
@@ -482,7 +482,7 @@ BEGIN
 
   -- This should raise an exception
   BEGIN
-    PERFORM copilot_internal.switch_tenant(v_startup_xyz);
+    PERFORM copilot_core.switch_tenant(v_startup_xyz);
     RAISE EXCEPTION '❌ FAILED: Bob should not be able to switch to Startup XYZ';
   EXCEPTION
     WHEN OTHERS THEN
@@ -505,9 +505,9 @@ DECLARE
   v_orphan_count INTEGER;
 BEGIN
   SELECT COUNT(*) INTO v_orphan_count
-  FROM copilot_internal.conversations c
+  FROM copilot_core.conversations c
   WHERE NOT EXISTS (
-    SELECT 1 FROM copilot_internal.tenants t
+    SELECT 1 FROM copilot_core.tenants t
     WHERE t.id = c.tenant_id
   );
 
@@ -524,11 +524,11 @@ DECLARE
   v_orphan_count INTEGER;
 BEGIN
   SELECT COUNT(*) INTO v_orphan_count
-  FROM copilot_internal.tenant_memberships tm
+  FROM copilot_core.tenant_memberships tm
   WHERE NOT EXISTS (
     SELECT 1 FROM auth.users u WHERE u.id = tm.user_id
   ) OR NOT EXISTS (
-    SELECT 1 FROM copilot_internal.tenants t WHERE t.id = tm.tenant_id
+    SELECT 1 FROM copilot_core.tenants t WHERE t.id = tm.tenant_id
   );
 
   IF v_orphan_count = 0 THEN
@@ -547,7 +547,7 @@ BEGIN
   FROM auth.users u
   WHERE u.email IN ('alice@example.com', 'bob@example.com', 'charlie@example.com')
     AND NOT EXISTS (
-      SELECT 1 FROM copilot_internal.tenant_memberships tm
+      SELECT 1 FROM copilot_core.tenant_memberships tm
       WHERE tm.user_id = u.id
     );
 
@@ -572,24 +572,24 @@ END $$;
 SELECT
   'Total Tenants' AS metric,
   COUNT(*)::text AS value
-FROM copilot_internal.tenants
+FROM copilot_core.tenants
 WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz');
 
 SELECT
   'Total Memberships' AS metric,
   COUNT(*)::text AS value
-FROM copilot_internal.tenant_memberships
+FROM copilot_core.tenant_memberships
 WHERE tenant_id IN (
-  SELECT id FROM copilot_internal.tenants
+  SELECT id FROM copilot_core.tenants
   WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz')
 );
 
 SELECT
   'Total Conversations' AS metric,
   COUNT(*)::text AS value
-FROM copilot_internal.conversations
+FROM copilot_core.conversations
 WHERE tenant_id IN (
-  SELECT id FROM copilot_internal.tenants
+  SELECT id FROM copilot_core.tenants
   WHERE slug IN ('alice-personal', 'bob-personal', 'charlie-personal', 'acme-corp', 'startup-xyz')
 );
 

@@ -8,6 +8,8 @@ import {
   getMockCurrentAdmin,
 } from "@/lib/contexts/admin-view-context";
 import { useAdminView } from "@/lib/contexts/admin-view-context";
+import { SessionStreamProvider } from "@/components/session-stream-provider";
+import { NotificationProvider } from "@/components/notification-provider";
 
 interface ProvidersProps {
   children: React.ReactNode;
@@ -42,7 +44,11 @@ export function Providers({ children, locale, messages, timeZone }: ProvidersPro
       >
         <AdminViewProvider>
           <AdminInitializer>
-            {children}
+            <SessionStreamProvider>
+              <NotificationProvider>
+                {children}
+              </NotificationProvider>
+            </SessionStreamProvider>
           </AdminInitializer>
         </AdminViewProvider>
       </NextIntlClientProvider>

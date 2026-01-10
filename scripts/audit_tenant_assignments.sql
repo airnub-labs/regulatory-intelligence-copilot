@@ -60,9 +60,9 @@ SELECT
   MIN(c.created_at) as first_activity,
   MAX(c.updated_at) as last_activity
 FROM users_without_tenant u
-LEFT JOIN copilot_internal.conversations c
+LEFT JOIN copilot_core.conversations c
   ON c.user_id = u.id
-LEFT JOIN copilot_internal.conversation_messages m
+LEFT JOIN copilot_core.conversation_messages m
   ON m.user_id = u.id
 GROUP BY u.id, u.email
 ORDER BY conversation_count DESC, message_count DESC;
@@ -90,8 +90,8 @@ SELECT
   c.created_at,
   c.updated_at,
   c.last_message_at,
-  (SELECT COUNT(*) FROM copilot_internal.conversation_messages WHERE conversation_id = c.id) as message_count
-FROM copilot_internal.conversations c
+  (SELECT COUNT(*) FROM copilot_core.conversation_messages WHERE conversation_id = c.id) as message_count
+FROM copilot_core.conversations c
 JOIN users_without_tenant uwt ON c.user_id = uwt.id
 LEFT JOIN auth.users u ON u.id = uwt.id
 CROSS JOIN demo_tenant dt
@@ -119,7 +119,7 @@ SELECT
   MAX(cost.created_at) as last_usage
 FROM users_without_tenant uwt
 LEFT JOIN auth.users u ON u.id = uwt.id
-LEFT JOIN copilot_internal.llm_cost_records cost
+LEFT JOIN copilot_billing.llm_cost_records cost
   ON cost.user_id = uwt.id
 GROUP BY uwt.id, u.email
 HAVING COUNT(*) > 0
@@ -145,9 +145,9 @@ SELECT
   SUM(e2b.compute_cost_usd) as total_e2b_cost_usd
 FROM users_without_tenant uwt
 LEFT JOIN auth.users u ON u.id = uwt.id
-LEFT JOIN copilot_internal.execution_contexts ec
+LEFT JOIN copilot_core.execution_contexts ec
   ON ec.user_id = uwt.id
-LEFT JOIN copilot_internal.e2b_cost_records e2b
+LEFT JOIN copilot_billing.e2b_cost_records e2b
   ON e2b.user_id = uwt.id
 GROUP BY uwt.id, u.email
 HAVING COUNT(DISTINCT ec.id) > 0 OR COUNT(DISTINCT e2b.id) > 0
@@ -181,7 +181,7 @@ UNION ALL
 SELECT
   'Users with conversations' as metric,
   COUNT(DISTINCT user_id)::text as value
-FROM copilot_internal.conversations c
+FROM copilot_core.conversations c
 WHERE user_id IN (
   SELECT id FROM auth.users
   WHERE (raw_user_meta_data->>'tenant_id' IS NULL
@@ -194,7 +194,7 @@ UNION ALL
 SELECT
   'Total conversations by unassigned users' as metric,
   COUNT(*)::text as value
-FROM copilot_internal.conversations c
+FROM copilot_core.conversations c
 WHERE user_id IN (
   SELECT id FROM auth.users
   WHERE (raw_user_meta_data->>'tenant_id' IS NULL
@@ -207,7 +207,7 @@ UNION ALL
 SELECT
   'Conversations in demo tenant' as metric,
   COUNT(*)::text as value
-FROM copilot_internal.conversations c
+FROM copilot_core.conversations c
 WHERE tenant_id = 'b385a126-a82d-459a-a502-59c1bebb9eeb'::uuid
   AND user_id IN (
     SELECT id FROM auth.users

@@ -82,7 +82,7 @@ export const initializePricingService = (): void => {
     // Create Supabase client
     const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
       auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: 'copilot_internal' },
+      db: { schema: 'copilot_billing' },
     }) as unknown as SupabaseClient;
 
     // Set up Redis/Upstash caching for pricing data
@@ -121,7 +121,7 @@ export const initializePricingService = (): void => {
       {
         supabaseUrl: credentials.supabaseUrl,
         backend: 'supabase',
-        table: 'copilot_internal.model_pricing',
+        table: 'copilot_billing.model_pricing',
         caching: cache ? 'enabled' : 'disabled',
       },
       'Dynamic pricing service initialized successfully with Supabase'

@@ -128,7 +128,7 @@ export class CostAnomalyDetectionService {
           FROM (
             -- LLM costs
             SELECT recorded_at, total_cost_usd
-            FROM copilot_internal.llm_cost_records
+            FROM copilot_billing.llm_cost_records
             WHERE tenant_id = $1
               AND recorded_at >= NOW() - INTERVAL '${lookbackDays} days'
               AND ($2 = 'all' OR $2 = 'llm')
@@ -137,7 +137,7 @@ export class CostAnomalyDetectionService {
 
             -- E2B costs
             SELECT recorded_at, total_cost_usd
-            FROM copilot_internal.e2b_cost_records
+            FROM copilot_billing.e2b_cost_records
             WHERE tenant_id = $1
               AND recorded_at >= NOW() - INTERVAL '${lookbackDays} days'
               AND ($2 = 'all' OR $2 = 'e2b')
@@ -243,13 +243,13 @@ export class CostAnomalyDetectionService {
         SELECT
           COALESCE(SUM(total_cost_usd), 0) as today_cost
         FROM (
-          SELECT total_cost_usd FROM copilot_internal.llm_cost_records
+          SELECT total_cost_usd FROM copilot_billing.llm_cost_records
           WHERE tenant_id = $1 AND recorded_at >= CURRENT_DATE
             AND ($2 = 'all' OR $2 = 'llm')
 
           UNION ALL
 
-          SELECT total_cost_usd FROM copilot_internal.e2b_cost_records
+          SELECT total_cost_usd FROM copilot_billing.e2b_cost_records
           WHERE tenant_id = $1 AND recorded_at >= CURRENT_DATE
             AND ($2 = 'all' OR $2 = 'e2b')
         ) combined;

@@ -3,8 +3,9 @@
 import * as React from "react"
 import { useSession } from "next-auth/react"
 import { useTranslations, useFormatter } from "next-intl"
-import { IconUser, IconMail, IconCalendar, IconShield } from "@tabler/icons-react"
+import { IconUser, IconMail, IconCalendar, IconShield, IconCheck } from "@tabler/icons-react"
 import { z } from "zod"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -91,14 +92,42 @@ export default function ProfileSettingsPage() {
       return
     }
 
+    if (!session?.user?.id) {
+      setErrors({ submit: tCommon("error") })
+      return
+    }
+
     setIsSaving(true)
     try {
-      // TODO: Implement API call to update profile
-      // For now, simulate a delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const response = await fetch(`/api/users/${session.user.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          profile: {
+            displayName: formData.displayName,
+          },
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to update profile")
+      }
+
+      toast.success(t("profileSaved"), {
+        description: t("profileSavedDescription"),
+        icon: <IconCheck className="h-4 w-4" />,
+      })
       setIsEditing(false)
-    } catch {
-      setErrors({ submit: tCommon("error") })
+      setErrors({})
+    } catch (error) {
+      const message = error instanceof Error ? error.message : tCommon("error")
+      toast.error(tCommon("error"), {
+        description: message,
+      })
+      setErrors({ submit: message })
     } finally {
       setIsSaving(false)
     }

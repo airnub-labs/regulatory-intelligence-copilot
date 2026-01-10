@@ -24,6 +24,10 @@ export const NotificationType = {
   COMPLIANCE_ALERT: "compliance_alert",
   REPORT_READY: "report_ready",
 
+  // Announcements
+  ANNOUNCEMENT: "announcement",
+  BROADCAST: "broadcast",
+
   // General
   INFO: "info",
   WARNING: "warning",
@@ -195,6 +199,12 @@ export function getNotificationIconName(type: NotificationTypeValue): string {
 
     case NotificationType.REPORT_READY:
       return "file-text"
+
+    case NotificationType.ANNOUNCEMENT:
+      return "speakerphone"
+
+    case NotificationType.BROADCAST:
+      return "broadcast"
 
     case NotificationType.WARNING:
       return "alert-circle"

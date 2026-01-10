@@ -12,6 +12,55 @@ export interface TenantScopedClientOptions {
 }
 
 /**
+ * Mapping of table names to their schema after the SOC2/GDPR schema reorganization.
+ * Tables are now distributed across copilot_core, copilot_billing, and copilot_audit schemas.
+ */
+const TABLE_SCHEMA_MAP: Record<string, string> = {
+  // copilot_core - Core application tables
+  conversations: 'copilot_core',
+  conversation_messages: 'copilot_core',
+  conversation_paths: 'copilot_core',
+  conversation_contexts: 'copilot_core',
+  conversation_configs: 'copilot_core',
+  pinned_messages: 'copilot_core',
+  execution_contexts: 'copilot_core',
+  tenants: 'copilot_core',
+  tenant_memberships: 'copilot_core',
+  user_preferences: 'copilot_core',
+  workspace_invitations: 'copilot_core',
+  user_tenant_contexts: 'copilot_core',
+  tenant_llm_policies: 'copilot_core',
+  personas: 'copilot_core',
+  quick_prompts: 'copilot_core',
+  notifications: 'copilot_core',
+  membership_change_events: 'copilot_core',
+  // copilot_billing - Cost tracking and quotas
+  llm_cost_records: 'copilot_billing',
+  e2b_cost_records: 'copilot_billing',
+  llm_cost_estimates: 'copilot_billing',
+  e2b_cost_estimates: 'copilot_billing',
+  cost_quotas: 'copilot_billing',
+  model_pricing: 'copilot_billing',
+  e2b_pricing: 'copilot_billing',
+  // copilot_audit - Audit tables
+  compaction_operations: 'copilot_audit',
+  permission_audit_log: 'copilot_audit',
+  session_sync_logs: 'copilot_audit',  // Moved from copilot_admin
+  // copilot_core - Platform admin tables (service_role only)
+  platform_admins: 'copilot_core',  // Renamed from admin_users
+  platform_admin_permissions: 'copilot_core',  // Renamed from admin_permission_configs
+  // copilot_analytics - Performance monitoring and analytics
+  slow_query_log: 'copilot_analytics',  // Moved from copilot_admin
+};
+
+/**
+ * Get the schema for a table name. Returns undefined if table is not in the map.
+ */
+function getSchemaForTable(tableName: string): string | undefined {
+  return TABLE_SCHEMA_MAP[tableName];
+}
+
+/**
  * List of tables that are tenant-scoped (have tenant_id column).
  * Queries on these tables will automatically have tenant_id filter injected.
  */
@@ -74,7 +123,7 @@ export function createTenantScopedServiceClient(
 
   const client = createServerClient(supabaseUrl, supabaseServiceKey, {
     // NOTE: Don't set db.schema here - RPC functions are in public schema
-    // Tables will be referenced as copilot_internal.table_name in queries
+    // Tables will be referenced with their schema prefix (copilot_core, copilot_billing, etc.)
     cookies: {
       getAll() {
         return cookies.getAll();
@@ -92,8 +141,9 @@ export function createTenantScopedServiceClient(
     get(target, prop) {
       if (prop === 'from') {
         return (tableName: string) => {
-          // Qualify table names with copilot_internal schema since we don't set default schema
-          const qualifiedTableName = `copilot_internal.${tableName}`;
+          // Qualify table names with their correct schema (copilot_core, copilot_billing, etc.)
+          const schema = getSchemaForTable(tableName);
+          const qualifiedTableName = schema ? `${schema}.${tableName}` : tableName;
           const queryBuilder = target.from(qualifiedTableName);
 
           // Log service role access
@@ -216,7 +266,7 @@ export function createUnrestrictedServiceClient(
   // Service role bypasses RLS and doesn't need cookie-based session management
   // Type assertion needed because Supabase generics are complex with custom schemas
   // NOTE: Don't set db.schema here - RPC functions are in public schema
-  // Tables will be referenced as copilot_internal.table_name in queries
+  // Tables should be referenced with their schema prefix (copilot_core, copilot_billing, etc.)
   return createClient(supabaseUrl, supabaseServiceKey, {
     auth: {
       persistSession: false,

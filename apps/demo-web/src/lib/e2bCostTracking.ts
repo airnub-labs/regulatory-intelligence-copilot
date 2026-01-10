@@ -89,7 +89,7 @@ export const initializeE2BCostTracking = (): void => {
     // Create Supabase client
     const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
       auth: { autoRefreshToken: false, persistSession: false },
-      db: { schema: 'copilot_internal' },
+      db: { schema: 'copilot_billing' },
     }) as unknown as SupabaseClient;
 
     logger.info(

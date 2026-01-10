@@ -10,9 +10,9 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-schemas = ["public", "graphql_public", "copilot_internal"]
+schemas = ["public", "graphql_public", "copilot_core", "copilot_billing", "copilot_audit", "copilot_analytics"]
 # Extra schemas to add to the search_path of every request.
-extra_search_path = ["public", "copilot_internal", "extensions"]
+extra_search_path = ["public", "copilot_core", "copilot_billing", "copilot_audit", "copilot_analytics", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
 max_rows = 1000
@@ -59,8 +59,33 @@ schema_paths = ["./migrations/*.sql"]
 # If enabled, seeds the database after migrations during a db reset.
 enabled = true
 # Specifies an ordered list of seed files to load during db reset.
-# Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed/*.sql"]
+# Supports glob patterns relative to supabase directory.
+#
+# REALISTIC SEED DATA (Replaces demo_seed.sql with authentic multi-tenant scenarios)
+# Load order: Core data → Reference data → Conversations → Costs
+sql_paths = [
+  # Core tenant and user data
+  "./seed/realistic_seed/01_enterprise_datatech.sql",
+  "./seed/realistic_seed/02_pro_emerald_tax.sql",
+  "./seed/realistic_seed/03_personal_sean.sql",
+  "./seed/realistic_seed/04_platform_admins.sql",
+  "./seed/realistic_seed/05_reference_data.sql",
+
+  # Realistic conversations with branching paths (11 conversations, 62 messages)
+  # TEMPORARILY COMMENTED OUT - Need to fix invalid UUIDs
+  "./seed/realistic_seed/06_conversations/datatech_finance.sql",
+  "./seed/realistic_seed/06_conversations/datatech_hr.sql",
+  "./seed/realistic_seed/06_conversations/datatech_tax.sql",
+  "./seed/realistic_seed/06_conversations/sean_personal.sql",
+
+  # Cost tracking and quota management
+  # TEMPORARILY COMMENTED OUT - Fix after conversation files are corrected
+  "./seed/realistic_seed/07_costs_and_usage/llm_costs.sql",
+  "./seed/realistic_seed/07_costs_and_usage/e2b_costs.sql",
+  "./seed/realistic_seed/07_costs_and_usage/quota_tracking.sql"
+
+  # Note: Additional conversation file (emerald_clients) planned for professional services
+]
 
 [db.network_restrictions]
 # Enable management of network restrictions.

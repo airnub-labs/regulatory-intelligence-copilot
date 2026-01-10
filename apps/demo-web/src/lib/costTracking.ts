@@ -82,7 +82,7 @@ function createCostTrackingProviders(): {
 
   const client = createClient(credentials.supabaseUrl, credentials.supabaseKey, {
     auth: { autoRefreshToken: false, persistSession: false },
-    db: { schema: 'copilot_internal' },
+    db: { schema: 'copilot_billing' },
   }) as unknown as SupabaseClient;
 
   logger.info(
@@ -143,7 +143,7 @@ export const initializeCostTracking = (): void => {
 
       // Quota enforcement - ENABLED for Phase 2
       // Blocks LLM requests that would exceed configured quotas
-      // Configure quotas in Supabase: copilot_internal.cost_quotas table
+      // Configure quotas in Supabase: copilot_billing.cost_quotas table
       enforceQuotas: process.env.ENFORCE_COST_QUOTAS !== 'false', // Default: true (disable with ENFORCE_COST_QUOTAS=false)
 
       // Callback when quota warning threshold is exceeded

@@ -151,7 +151,7 @@ export class SupabaseE2BPricingService implements E2BPricingService {
     }
   ) {
     this.client = client;
-    this.tableName = options?.tableName ?? 'copilot_internal.e2b_pricing';
+    this.tableName = options?.tableName ?? 'copilot_billing.e2b_pricing';
     this.cacheTtl = options?.cacheTtlSeconds ?? 3600; // Default 1 hour
     this.cache = options?.cache ?? createPassThroughCache<E2BPricing>();
 

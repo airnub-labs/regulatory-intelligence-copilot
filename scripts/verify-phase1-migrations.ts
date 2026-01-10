@@ -69,7 +69,7 @@ async function verify1_TablesExist(): Promise<VerificationResult> {
       sql: `
         SELECT table_name
         FROM information_schema.tables
-        WHERE table_schema = 'copilot_internal'
+        WHERE table_schema = 'copilot_billing'
           AND table_name IN ('e2b_pricing', 'e2b_cost_records', 'model_pricing')
         ORDER BY table_name;
       `,
@@ -78,12 +78,12 @@ async function verify1_TablesExist(): Promise<VerificationResult> {
     if (error) {
       // Table might not exist, try direct query
       const tables = await Promise.all([
-        supabase.from('copilot_internal.e2b_pricing').select('id').limit(0),
+        supabase.from('copilot_billing.e2b_pricing').select('id').limit(0),
         supabase
-          .from('copilot_internal.e2b_cost_records')
+          .from('copilot_billing.e2b_cost_records')
           .select('id')
           .limit(0),
-        supabase.from('copilot_internal.model_pricing').select('id').limit(0),
+        supabase.from('copilot_billing.model_pricing').select('id').limit(0),
       ]);
 
       const tableNames = [];
@@ -137,7 +137,7 @@ async function verify1_TablesExist(): Promise<VerificationResult> {
 async function verify2_E2BPricingSeeded(): Promise<VerificationResult> {
   try {
     const { data, error } = await supabase
-      .from('copilot_internal.e2b_pricing')
+      .from('copilot_billing.e2b_pricing')
       .select('tier, region, price_per_second')
       .order('price_per_second');
 
@@ -178,7 +178,7 @@ async function verify2_E2BPricingSeeded(): Promise<VerificationResult> {
 async function verify3_LLMPricingSeeded(): Promise<VerificationResult> {
   try {
     const { data, error } = await supabase
-      .from('copilot_internal.model_pricing')
+      .from('copilot_billing.model_pricing')
       .select('provider, model')
       .order('provider');
 
@@ -227,7 +227,7 @@ async function verify4_ResourceTypeColumn(): Promise<VerificationResult> {
       sql: `
         SELECT column_name, data_type, column_default
         FROM information_schema.columns
-        WHERE table_schema = 'copilot_internal'
+        WHERE table_schema = 'copilot_billing'
           AND table_name = 'cost_quotas'
           AND column_name = 'resource_type';
       `,
@@ -236,7 +236,7 @@ async function verify4_ResourceTypeColumn(): Promise<VerificationResult> {
     if (error) {
       // Try direct query to cost_quotas
       const { error: tableError } = await supabase
-        .from('copilot_internal.cost_quotas')
+        .from('copilot_billing.cost_quotas')
         .select('resource_type')
         .limit(1);
 
@@ -284,7 +284,7 @@ async function verify5_HelperFunctions(): Promise<VerificationResult> {
       sql: `
         SELECT routine_name
         FROM information_schema.routines
-        WHERE routine_schema = 'copilot_internal'
+        WHERE routine_schema = 'copilot_billing'
           AND routine_name IN (
             'check_e2b_quota',
             'calculate_e2b_cost',
@@ -432,7 +432,7 @@ async function verify8_AggregationViews(): Promise<VerificationResult> {
       sql: `
         SELECT table_name
         FROM information_schema.views
-        WHERE table_schema = 'copilot_internal'
+        WHERE table_schema = 'copilot_billing'
           AND table_name LIKE '%cost%summary%'
         ORDER BY table_name;
       `,
@@ -478,7 +478,7 @@ async function verify9_RLSPolicies(): Promise<VerificationResult> {
       sql: `
         SELECT tablename, rowsecurity
         FROM pg_tables
-        WHERE schemaname = 'copilot_internal'
+        WHERE schemaname = 'copilot_billing'
           AND tablename IN ('e2b_pricing', 'e2b_cost_records', 'model_pricing');
       `,
     });

@@ -135,7 +135,7 @@ function rowToQuota(row: CostQuotaRow): CostQuota {
  */
 export class SupabaseCostStorage implements CostStorageProvider {
   private client: SupabaseClient;
-  private tableName = 'copilot_internal.llm_cost_records';
+  private tableName = 'copilot_billing.llm_cost_records';
 
   constructor(client: SupabaseClient) {
     this.client = client;

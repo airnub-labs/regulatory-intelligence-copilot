@@ -44,6 +44,162 @@ supabase stop       # Stop Supabase
 
 This ensures the local database matches the expected schema and has test data available.
 
+### Migration Squashing (Local Development Only)
+
+> **⚠️ WARNING: NEVER use `supabase migration squash` in production or on shared environments. This command is strictly for local development inspection and experimentation.**
+
+Use `supabase migration squash` to consolidate multiple migration files into a single file. This is useful for:
+
+1. **Inspecting the current schema** - Generate a clean, single migration that represents the complete schema
+2. **Simplifying migration history** - Remove repeated modifications of the same schema objects
+3. **Creating a baseline** - Start fresh with a consolidated schema for new environments
+
+```bash
+# From monorepo root
+# Squash all local migrations into a single file
+supabase migration squash
+
+# The squashed migration is equivalent to a schema-only dump of the local database
+# after applying all existing migration files
+```
+
+**When to Use (Local Inspection Only):**
+
+- To understand "what is the final schema?" without reading through dozens of migrations
+- Before writing new migrations, to see the current state of tables/functions/policies
+- When debugging schema issues - easier to read one consolidated file
+- For generating schema documentation or diagrams from a single source file
+
+**Important Notes:**
+
+- **LOCAL DEVELOPMENT ONLY** - Never run on production or staging databases
+- **Never commit squashed migrations** - Use only for temporary inspection, then discard
+- The squashed migration replaces all previous migrations - this breaks migration tracking for any database that has already applied the original migrations
+- Squashing destroys audit history required for SOC2 compliance
+- If you accidentally commit a squashed migration, revert immediately with `git checkout supabase/migrations/`
+
+**Example Workflow - Inspecting Current Schema (Local Only):**
+
+```bash
+# 1. Ensure you're on a clean git state (no uncommitted changes to migrations)
+git status
+
+# 2. Apply all migrations to local database
+supabase db reset
+
+# 3. Squash to see the consolidated schema (LOCAL INSPECTION ONLY)
+supabase migration squash
+
+# 4. The new squashed migration file shows the complete schema
+# Review it to understand all tables, functions, RLS policies, etc.
+# You can open the file in your editor to inspect the full schema
+
+# 5. ALWAYS discard the squashed migration - NEVER commit it
+git checkout supabase/migrations/
+
+# 6. Verify original migrations are restored
+git status
+```
+
+### Schema Migration Validation (MANDATORY)
+
+**Before making ANY changes to migration scripts, you MUST validate the schema changes using pg_dump comparison.**
+
+This process ensures that migration changes only affect what was intended - no accidental column changes, function signature modifications, or unintended object additions/removals.
+
+#### Step 1: Capture the "Before" State
+
+With the **current/previous migrations** in `supabase/migrations/`, run:
+
+```bash
+# From monorepo root
+cd /path/to/regulatory-intelligence-copilot
+
+# Ensure Supabase is running
+supabase start --ignore-health-check
+
+# Apply the current migrations
+supabase db reset
+
+# Dump the schema (adjust schemas as needed for your changes)
+supabase db dump --local -s copilot_analytics,copilot_archive,copilot_audit,copilot_billing,copilot_core,copilot_events,public --keep-comments -f before.schema.sql
+```
+
+**Note:** Adjust the `-s` (schemas) parameter to include all schemas affected by your migration:
+- For schema reorganization: `-s copilot_analytics,copilot_archive,copilot_audit,copilot_billing,copilot_core,copilot_events,public`
+- For specific schema changes: `-s <affected_schema_names>`
+
+#### Step 2: Apply New Migrations and Capture "After" State
+
+Replace migrations with your new versions, then:
+
+```bash
+# Apply new migrations
+supabase db reset
+
+# Dump the new schema state
+supabase db dump --local -s copilot_analytics,copilot_archive,copilot_audit,copilot_billing,copilot_core,copilot_events,public --keep-comments -f after.schema.sql
+```
+
+#### Step 3: Generate and Review the Diff
+
+```bash
+# Generate diff (|| true prevents exit on differences)
+diff -u before.schema.sql after.schema.sql > schema.diff || true
+
+# Review the diff
+cat schema.diff
+```
+
+#### Step 4: Validate Expected vs Actual Changes
+
+**CRITICAL:** Review `schema.diff` and verify:
+
+| Change Type | Expected? | Action |
+|-------------|-----------|--------|
+| Schema relocations (`SET SCHEMA`) | ✅ If intended | Verify correct target schema |
+| Function body updates (schema refs) | ✅ If relocating | Necessary for runtime correctness |
+| New tables | ⚠️ Only if planned | Remove if unintended |
+| New functions | ⚠️ Only if planned | Remove if unintended |
+| New triggers | ⚠️ Only if planned | Remove if unintended |
+| Column additions/changes | ❌ Usually unintended | Investigate and fix |
+| Function signature changes | ❌ Usually unintended | Investigate and fix |
+| View column changes | ❌ Usually unintended | Restore original columns |
+| Missing objects | ❌ Data loss risk | Restore immediately |
+
+#### Validation Checklist
+
+Before proceeding with migration changes:
+
+- [ ] `before.schema.sql` captured successfully
+- [ ] `after.schema.sql` captured successfully
+- [ ] `schema.diff` reviewed line-by-line
+- [ ] All changes in diff are **intentional and documented**
+- [ ] No unintended column changes
+- [ ] No unintended function signature changes
+- [ ] No missing tables, functions, or views
+- [ ] No extra/unplanned objects added
+
+#### Example: Schema Reorganization Validation
+
+For migrations that relocate objects between schemas:
+
+```bash
+# Before: Dump old schema locations
+supabase db dump --local -s copilot_internal,metrics --keep-comments -f before.schema.sql
+
+# After: Dump new schema locations
+supabase db dump --local -s copilot_core,copilot_admin,copilot_audit,copilot_billing,copilot_analytics --keep-comments -f after.schema.sql
+
+# Compare - expect ONLY:
+# 1. Schema name changes in object definitions
+# 2. Schema references updated in function bodies
+# 3. Explicitly planned new views/functions
+diff -u before.schema.sql after.schema.sql > schema.diff || true
+```
+
+**NEVER proceed with migration changes if the diff contains unexpected modifications.**
+
 ---
 
 ## Application Overview
@@ -57,6 +213,30 @@ This ensures the local database matches the expected schema and has test data av
 - **Database:** Supabase/Postgres with Row Level Security
 - **Internationalization:** next-intl
 - **UI Components:** Radix UI primitives, Tabler Icons, Recharts
+
+### Database Schema
+
+This application queries data from multiple Postgres schemas:
+
+**Active Schemas (In Use):**
+- `copilot_core` - Platform admin tables (platform_admins, platform_admin_permissions), tenants, users
+- `copilot_billing` - Cost tracking, quotas, pricing configurations
+- `copilot_audit` - Permission audit logs, compliance records
+- `copilot_analytics` - Business intelligence views, usage statistics, slow query logs
+
+**Future-Use Schemas (Reserved, Not Active):**
+- `copilot_events` - Event sourcing infrastructure (target: 1M+ users) - **Status: Empty**
+- `copilot_archive` - Cold data storage (target: 500K+ users or 1TB+ DB) - **Status: Empty**
+
+**Table Access:**
+- Most queries use service role client with schema qualification: `supabase.schema("copilot_core").from("platform_admins")`
+- See `apps/demo-web/src/lib/supabase/tenantScopedServiceClient.ts` for TABLE_SCHEMA_MAP
+
+**Migration Schema References:**
+When validating migrations, include all active schemas in pg_dump:
+```bash
+supabase db dump --local -s copilot_core,copilot_audit,copilot_billing,copilot_analytics --keep-comments -f schema.sql
+```
 
 ---
 
@@ -651,6 +831,76 @@ Before merging any PR, verify:
 - [ ] CSRF protection on state-changing routes
 - [ ] Session management follows patterns above
 - [ ] Dependencies are up to date
+
+---
+
+## Real-Time Event Hub (SSE) Patterns
+
+This application uses Server-Sent Events (SSE) for real-time notifications and session management via the `reg-intel-eventhub` and `reg-intel-admin` packages.
+
+### SSE Stream Stability
+
+**Critical:** SSE connections are sensitive to React hook dependency changes. Unstable dependencies cause rapid reconnection loops (every 30-50ms).
+
+**Root Cause:** When callbacks passed to SSE hooks are recreated on every render, the dependency chain triggers useEffect re-runs, closing and reopening the EventSource connection.
+
+**Required Pattern:**
+
+```typescript
+// In provider component (e.g., SessionStreamProvider):
+// ALWAYS memoize callbacks to prevent re-renders from causing reconnects
+const onForcedLogout = useCallback((reason?: string) => {
+  toast.error("Session Ended", {
+    description: reason || "Your session was revoked.",
+    duration: 10000,
+  });
+}, []); // Empty deps - stable reference
+
+// ALWAYS memoize options objects
+const options = useMemo(
+  () => status === "authenticated"
+    ? { currentSessionId, onForcedLogout }
+    : {},
+  [status, currentSessionId, onForcedLogout]
+);
+
+// In SSE hook (e.g., useSessionStream):
+// Use refs for callbacks to avoid dependency changes
+const onForcedLogoutRef = useRef(onForcedLogout);
+
+// Update refs when values change (without causing reconnects)
+useEffect(() => {
+  onForcedLogoutRef.current = onForcedLogout;
+}, [onForcedLogout]);
+
+// Connect on mount only (empty dependency array)
+useEffect(() => {
+  connect();
+  return () => { /* cleanup */ };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // Empty deps - only connect on mount
+```
+
+**Checklist for SSE Hooks:**
+- [ ] All callbacks passed to SSE hooks are memoized with `useCallback`
+- [ ] Options objects are memoized with `useMemo`
+- [ ] SSE hooks use refs for callback storage
+- [ ] Connect effect uses empty dependency array `[]`
+- [ ] Refs are updated in separate useEffect when callback values change
+
+### Toast Notifications
+
+The `Toaster` component from `sonner` must be mounted in the app for toast notifications to display:
+
+```typescript
+// In app/layout.tsx - REQUIRED
+import { Toaster } from "sonner";
+
+// In JSX - Use high z-index to display above dialogs (z-50)
+<Toaster richColors position="top-right" toastOptions={{ style: { zIndex: 9999 } }} />
+```
+
+**Z-Index Issue:** By default, sonner toasts use a lower z-index than Radix dialogs (z-50). To ensure toasts appear above dialogs, set `toastOptions.style.zIndex` to a value higher than the dialog (e.g., 9999).
 
 ---
 

@@ -2,17 +2,15 @@ import type {
   RedisPubSubClient,
   RedisKeyValueClient,
 } from '@reg-copilot/reg-intel-cache';
+import {
+  GenericRedisEventHub,
+  type RedisEventHubConfig as GenericRedisEventHubConfig,
+  type SseSubscriber,
+} from '@reg-copilot/reg-intel-eventhub';
 import type {
   ConversationEventType,
   ConversationListEventType,
-  SseSubscriber,
 } from './eventHub.js';
-import {
-  ChannelLifecycleManager,
-  LocalSubscriptionManager,
-  generateInstanceId,
-  type DistributedEventMessage,
-} from './sharedEventHub.js';
 import {
   SupabaseRealtimeConversationEventHub,
   SupabaseRealtimeConversationListEventHub,
@@ -68,18 +66,6 @@ export type EventHubFactoryConfig =
  * 4. **Graceful Cleanup**: Unsubscribe from Redis when last local subscriber disconnects
  * 5. **Error Resilience**: Redis errors log warnings but don't crash the service
  *
- * ## Environment Variables
- *
- * ```bash
- * # Standard Redis (default)
- * REDIS_URL=redis://localhost:6379
- * REDIS_PASSWORD=your_password
- *
- * # Or Upstash-compatible credentials using the shared REDIS_URL/REDIS_PASSWORD names
- * REDIS_URL=https://your-endpoint.upstash.io
- * REDIS_PASSWORD=your_upstash_token
- * ```
- *
  * ## Usage
  *
  * ```typescript
@@ -93,23 +79,16 @@ export type EventHubFactoryConfig =
  * // Broadcast to all instances
  * eventHub.broadcast(tenantId, conversationId, 'message', { text: 'Hello' });
  * ```
-  */
-export class RedisConversationEventHub {
-  private publisher: RedisPubSubClient;
-  private subscriber: RedisPubSubClient;
-  private subscribers = new LocalSubscriptionManager<ConversationEventType>();
-  private activeChannels = new ChannelLifecycleManager<void>();
-  private prefix: string;
-  private instanceId: string;
-  private isShuttingDown = false;
-  private healthClient?: RedisKeyValueClient;
+ */
+export class RedisConversationEventHub extends GenericRedisEventHub<ConversationEventType> {
+  protected override readonly loggerName = 'RedisConversationEventHub';
 
   constructor(config: RedisEventHubConfig) {
-    this.prefix = config.prefix ?? 'copilot:events';
-    this.instanceId = generateInstanceId();
-    this.publisher = config.clients.pub;
-    this.subscriber = config.clients.sub;
-    this.healthClient = config.healthCheckClient;
+    super({
+      clients: config.clients as GenericRedisEventHubConfig['clients'],
+      prefix: config.prefix,
+      healthCheckClient: config.healthCheckClient as GenericRedisEventHubConfig['healthCheckClient'],
+    });
   }
 
   private channelName(tenantId: string, conversationId: string): string {
@@ -121,57 +100,6 @@ export class RedisConversationEventHub {
   }
 
   /**
-   * Subscribe to Redis channel for a conversation
-   * Only called when first local subscriber connects
-   *
-   * Uses Redis pub/sub so there is no backlog when no clients are listening.
-   * For production with high volume, consider using Redis Streams or native Redis protocol.
-   */
-  private async subscribeToChannel(channel: string, key: string): Promise<void> {
-    await this.activeChannels.getOrCreate(channel, async () => {
-      try {
-        await this.subscriber.subscribe(channel, (message: string) => {
-          if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(message) as DistributedEventMessage<ConversationEventType>;
-
-            if (parsed.instanceId === this.instanceId) {
-              return;
-            }
-
-            this.subscribers.localBroadcast(key, parsed.event, parsed.data);
-          } catch (error) {
-            console.error(`[RedisEventHub] Error parsing message from ${channel}:`, error);
-          }
-        });
-      } catch (error) {
-        console.error(`[RedisEventHub] Error setting up subscription for ${channel}:`, error);
-        throw error;
-      }
-    });
-  }
-
-  /**
-   * Unsubscribe from Redis channel
-   * Only called when last local subscriber disconnects
-   */
-  private async unsubscribeFromChannel(channel: string): Promise<void> {
-    try {
-      const subscription = this.activeChannels.take(channel);
-
-      if (subscription) {
-        await subscription;
-        await this.subscriber.unsubscribe(channel);
-      }
-    } catch (error) {
-      console.error(`[RedisEventHub] Error unsubscribing from ${channel}:`, error);
-    }
-  }
-
-  /**
    * Subscribe a local SSE connection to conversation events
    */
   subscribe(
@@ -179,20 +107,11 @@ export class RedisConversationEventHub {
     conversationId: string,
     subscriber: SseSubscriber<ConversationEventType>,
   ): () => void {
-    const key = this.key(tenantId, conversationId);
-    const channel = this.channelName(tenantId, conversationId);
-
-    // Add to local subscribers
-    const firstSubscriber = this.subscribers.add(key, subscriber);
-
-    if (firstSubscriber) {
-      void this.subscribeToChannel(channel, key).catch(error => {
-        console.error(`[RedisEventHub] Failed to subscribe to Redis channel ${channel}:`, error);
-      });
-    }
-
-    // Return unsubscribe function
-    return () => this.unsubscribe(tenantId, conversationId, subscriber);
+    return this.subscribeInternal(
+      this.key(tenantId, conversationId),
+      this.channelName(tenantId, conversationId),
+      subscriber,
+    );
   }
 
   /**
@@ -203,16 +122,11 @@ export class RedisConversationEventHub {
     conversationId: string,
     subscriber: SseSubscriber<ConversationEventType>,
   ): void {
-    const key = this.key(tenantId, conversationId);
-    const channel = this.channelName(tenantId, conversationId);
-
-    const removedLast = this.subscribers.remove(key, subscriber);
-
-    if (removedLast) {
-      void this.unsubscribeFromChannel(channel).catch(error => {
-        console.error(`[RedisEventHub] Failed to unsubscribe from Redis channel ${channel}:`, error);
-      });
-    }
+    this.unsubscribeInternal(
+      this.key(tenantId, conversationId),
+      this.channelName(tenantId, conversationId),
+      subscriber,
+    );
   }
 
   /**
@@ -224,57 +138,12 @@ export class RedisConversationEventHub {
     event: ConversationEventType,
     data: unknown,
   ): void {
-    const channel = this.channelName(tenantId, conversationId);
-    const message: DistributedEventMessage<ConversationEventType> = {
+    this.broadcastInternal(
+      this.key(tenantId, conversationId),
+      this.channelName(tenantId, conversationId),
       event,
       data,
-      timestamp: Date.now(),
-      instanceId: this.instanceId,
-    };
-
-    // Broadcast to local subscribers immediately
-    const key = this.key(tenantId, conversationId);
-    this.subscribers.localBroadcast(key, event, data);
-
-    // Publish to Redis pub/sub for other instances (fire and forget)
-    void this.publisher.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
-      console.error(`[RedisEventHub] Error publishing to ${channel}:`, error);
-    });
-  }
-
-  /**
-   * Graceful shutdown - unsubscribe from all Redis channels
-   */
-  async shutdown(): Promise<void> {
-    this.isShuttingDown = true;
-
-    await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
-      try {
-        await subscriptionPromise;
-        await this.subscriber.unsubscribe(channelName);
-      } catch (error) {
-        console.error(`[RedisEventHub] Error shutting down channel ${channelName}:`, error);
-      }
-    });
-
-    this.subscribers.shutdown();
-  }
-
-  /**
-   * Health check - verify Redis connectivity
-   */
-  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      if (this.healthClient?.ping) {
-        await this.healthClient.ping();
-      }
-      return { healthy: true };
-    } catch (error) {
-      return {
-        healthy: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+    );
   }
 }
 
@@ -284,22 +153,15 @@ export class RedisConversationEventHub {
  * Similar to RedisConversationEventHub but for conversation list events
  * (create, update, delete, archive, etc.)
  */
-export class RedisConversationListEventHub {
-  private publisher: RedisPubSubClient;
-  private subscriber: RedisPubSubClient;
-  private subscribers = new LocalSubscriptionManager<ConversationListEventType>();
-  private activeChannels = new ChannelLifecycleManager<void>();
-  private prefix: string;
-  private instanceId: string;
-  private isShuttingDown = false;
-  private healthClient?: RedisKeyValueClient;
+export class RedisConversationListEventHub extends GenericRedisEventHub<ConversationListEventType> {
+  protected override readonly loggerName = 'RedisConversationListEventHub';
 
   constructor(config: RedisEventHubConfig) {
-    this.prefix = config.prefix ?? 'copilot:events';
-    this.instanceId = generateInstanceId();
-    this.publisher = config.clients.pub;
-    this.subscriber = config.clients.sub;
-    this.healthClient = config.healthCheckClient;
+    super({
+      clients: config.clients as GenericRedisEventHubConfig['clients'],
+      prefix: config.prefix,
+      healthCheckClient: config.healthCheckClient as GenericRedisEventHubConfig['healthCheckClient'],
+    });
   }
 
   private channelName(tenantId: string): string {
@@ -310,121 +172,29 @@ export class RedisConversationListEventHub {
     return tenantId;
   }
 
-  private async subscribeToChannel(channel: string, key: string): Promise<void> {
-    await this.activeChannels.getOrCreate(channel, async () => {
-      try {
-        await this.subscriber.subscribe(channel, (message: string) => {
-          if (this.isShuttingDown || !this.subscribers.hasSubscribers(key)) {
-            return;
-          }
-
-          try {
-            const parsed = JSON.parse(message) as DistributedEventMessage<ConversationListEventType>;
-
-            if (parsed.instanceId === this.instanceId) {
-              return;
-            }
-
-            this.subscribers.localBroadcast(key, parsed.event, parsed.data);
-          } catch (error) {
-            console.error(`[RedisListEventHub] Error parsing message from ${channel}:`, error);
-          }
-        });
-      } catch (error) {
-        console.error(`[RedisListEventHub] Error setting up subscription for ${channel}:`, error);
-        throw error;
-      }
-    });
-  }
-
-  private async unsubscribeFromChannel(channel: string): Promise<void> {
-    try {
-      const subscription = this.activeChannels.take(channel);
-
-      if (subscription) {
-        await subscription;
-        await this.subscriber.unsubscribe(channel);
-      }
-    } catch (error) {
-      console.error(`[RedisListEventHub] Error unsubscribing from ${channel}:`, error);
-    }
-  }
-
   subscribe(tenantId: string, subscriber: SseSubscriber<ConversationListEventType>): () => void {
-    const key = this.key(tenantId);
-    const channel = this.channelName(tenantId);
-
-    const firstSubscriber = this.subscribers.add(key, subscriber);
-
-    // Subscribe to Redis channel if first subscriber
-    if (firstSubscriber) {
-      void this.subscribeToChannel(channel, key).catch(error => {
-        console.error(`[RedisListEventHub] Failed to subscribe to Redis channel ${channel}:`, error);
-      });
-    }
-
-    return () => this.unsubscribe(tenantId, subscriber);
+    return this.subscribeInternal(
+      this.key(tenantId),
+      this.channelName(tenantId),
+      subscriber,
+    );
   }
 
   unsubscribe(tenantId: string, subscriber: SseSubscriber<ConversationListEventType>): void {
-    const key = this.key(tenantId);
-    const channel = this.channelName(tenantId);
-
-    const removedLast = this.subscribers.remove(key, subscriber);
-
-    if (removedLast) {
-      void this.unsubscribeFromChannel(channel).catch(error => {
-        console.error(`[RedisListEventHub] Failed to unsubscribe from Redis channel ${channel}:`, error);
-      });
-    }
+    this.unsubscribeInternal(
+      this.key(tenantId),
+      this.channelName(tenantId),
+      subscriber,
+    );
   }
 
   broadcast(tenantId: string, event: ConversationListEventType, data: unknown): void {
-    const channel = this.channelName(tenantId);
-    const message: DistributedEventMessage<ConversationListEventType> = {
+    this.broadcastInternal(
+      this.key(tenantId),
+      this.channelName(tenantId),
       event,
       data,
-      timestamp: Date.now(),
-      instanceId: this.instanceId,
-    };
-
-    // Broadcast to local subscribers immediately
-    const key = this.key(tenantId);
-    this.subscribers.localBroadcast(key, event, data);
-
-    // Publish to Redis pub/sub for other instances
-    void this.publisher.publish(channel, JSON.stringify(message)).catch((error: unknown) => {
-      console.error(`[RedisListEventHub] Error publishing to ${channel}:`, error);
-    });
-  }
-
-  async shutdown(): Promise<void> {
-    this.isShuttingDown = true;
-
-    await this.activeChannels.shutdown(async (channelName, subscriptionPromise) => {
-      try {
-        await subscriptionPromise;
-        await this.subscriber.unsubscribe(channelName);
-      } catch (error) {
-        console.error(`[RedisListEventHub] Error shutting down channel ${channelName}:`, error);
-      }
-    });
-
-    this.subscribers.shutdown();
-  }
-
-  async healthCheck(): Promise<{ healthy: boolean; error?: string }> {
-    try {
-      if (this.healthClient?.ping) {
-        await this.healthClient.ping();
-      }
-      return { healthy: true };
-    } catch (error) {
-      return {
-        healthy: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+    );
   }
 }
 

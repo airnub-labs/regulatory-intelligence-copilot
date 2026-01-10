@@ -6,11 +6,61 @@
   "scripts": {
     "predev": "pnpm --filter @reg-copilot/reg-intel-core build",
     "dev": "next dev",
+    "dev:test": "E2E_TEST_MODE=true next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+
+    "test:e2e": "E2E_TEST_MODE=true playwright test",
+    "test:e2e:all": "E2E_TEST_MODE=true playwright test --reporter=list",
+    "test:e2e:ui": "E2E_TEST_MODE=true playwright test --ui",
+    "test:e2e:headed": "E2E_TEST_MODE=true playwright test --headed",
+    "test:e2e:debug": "E2E_TEST_MODE=true playwright test --debug",
+    "test:e2e:trace": "E2E_TEST_MODE=true playwright test --trace on",
+    "test:e2e:verbose": "E2E_TEST_MODE=true playwright test --reporter=line,html",
+
+    "test:e2e:chromium": "E2E_TEST_MODE=true playwright test --project=chromium",
+    "test:e2e:firefox": "E2E_TEST_MODE=true playwright test --project=firefox",
+    "test:e2e:webkit": "E2E_TEST_MODE=true playwright test --project=webkit",
+    "test:e2e:mobile": "E2E_TEST_MODE=true playwright test --project=mobile-chrome --project=mobile-safari",
+
+    "test:e2e:auth": "E2E_TEST_MODE=true playwright test e2e/01-auth-login.spec.ts",
+    "test:e2e:chat": "E2E_TEST_MODE=true playwright test e2e/02-chat-graphrag.spec.ts",
+    "test:e2e:branch": "E2E_TEST_MODE=true playwright test e2e/03-conversation-branching.spec.ts",
+    "test:e2e:graph": "E2E_TEST_MODE=true playwright test e2e/04-graph-visualization.spec.ts",
+    "test:e2e:costs": "E2E_TEST_MODE=true playwright test e2e/05-cost-analytics.spec.ts",
+    "test:e2e:team": "E2E_TEST_MODE=true playwright test e2e/06-workspaces-team.spec.ts",
+    "test:e2e:flow": "E2E_TEST_MODE=true playwright test e2e/07-end-to-end-flow.spec.ts",
+    "test:e2e:tenant": "E2E_TEST_MODE=true playwright test e2e/08-multi-tenant-scenarios.spec.ts",
+    "test:e2e:crossjurisdiction": "E2E_TEST_MODE=true playwright test e2e/09-cross-jurisdictional-graphrag.spec.ts",
+
+    "test:e2e:enterprise": "E2E_TEST_MODE=true playwright test --grep '@enterprise'",
+    "test:e2e:pro": "E2E_TEST_MODE=true playwright test --grep '@pro'",
+    "test:e2e:personal": "E2E_TEST_MODE=true playwright test --grep '@personal'",
+    "test:e2e:admin": "E2E_TEST_MODE=true playwright test --grep '@admin'",
+
+    "test:e2e:graphrag": "E2E_TEST_MODE=true playwright test --grep 'GraphRAG'",
+    "test:e2e:branching": "E2E_TEST_MODE=true playwright test --grep 'branch|Branch'",
+    "test:e2e:tax": "E2E_TEST_MODE=true playwright test --grep 'tax|Tax|VAT|PAYE|PRSI|USC'",
+    "test:e2e:crossborder": "E2E_TEST_MODE=true playwright test --grep 'EU|UK|cross-border|treaty'",
+
+    "test:e2e:smoke": "E2E_TEST_MODE=true playwright test --grep '@smoke'",
+    "test:e2e:regression": "E2E_TEST_MODE=true playwright test --grep '@regression'",
+    "test:e2e:critical": "E2E_TEST_MODE=true playwright test --grep '@critical'",
+
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:results": "cat playwright-results/results.json | jq .",
+    "test:e2e:install": "playwright install --with-deps",
+    "test:e2e:clean": "rm -rf playwright-results playwright-report test-results",
+    "test:e2e:runner": "npx tsx scripts/run-e2e-tests.ts",
+    "test:e2e:runner:verbose": "npx tsx scripts/run-e2e-tests.ts --verbose",
+    "test:e2e:runner:headed": "npx tsx scripts/run-e2e-tests.ts --headed --verbose",
+
+    "test:all": "pnpm test && pnpm test:e2e"
   },
   "dependencies": {
     "@ai-sdk/react": "^2.0.104",
@@ -70,6 +120,7 @@
     "@eslint/compat": "^2.0.0",
     "@eslint/eslintrc": "^3.3.1",
     "@next/eslint-plugin-next": ">=16.0.7",
+    "@playwright/test": "^1.49.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.1.0",

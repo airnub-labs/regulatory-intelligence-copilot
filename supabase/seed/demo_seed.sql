@@ -1,3 +1,28 @@
+-- =====================================================================================
+-- ⚠️  DEPRECATED: This seed file has been replaced with realistic multi-tenant seed data
+-- =====================================================================================
+--
+-- This file is no longer loaded by `supabase db reset`. The seed data has been
+-- replaced with more realistic scenarios representing real-world usage patterns.
+--
+-- **New seed data location:** supabase/seed/realistic_seed/
+--
+-- The new seed data includes:
+--   - DataTech Solutions Ltd (Enterprise tenant with 12 users)
+--   - Emerald Tax Consulting (Pro tenant with 6 users)
+--   - Seán O'Brien (Personal tenant - freelance consultant)
+--   - 10 platform admin users with global distribution
+--   - Realistic personas, quick prompts, and reference data
+--
+-- For more information, see:
+--   - supabase/seed/realistic_seed/README.md
+--   - supabase/config.toml (sql_paths configuration)
+--
+-- **Migration path:** If you need the old demo user, manually run this file:
+--   psql -h localhost -p 54322 -U postgres -d postgres -f supabase/seed/demo_seed.sql
+--
+-- =====================================================================================
+
 do $$
 declare
   demo_email text := 'demo.user@example.com';
@@ -120,12 +145,12 @@ begin
   ---------------------------------------------------------------------------
   -- Check if tenant exists
   perform 1
-    from copilot_internal.tenants
+    from copilot_core.tenants
    where id = demo_tenant_id;
 
   if not found then
     -- Create personal tenant
-    insert into copilot_internal.tenants (
+    insert into copilot_core.tenants (
       id,
       name,
       slug,
@@ -150,7 +175,7 @@ begin
   end if;
 
   -- Ensure membership exists
-  insert into copilot_internal.tenant_memberships (
+  insert into copilot_core.tenant_memberships (
     tenant_id,
     user_id,
     role,
@@ -174,7 +199,7 @@ begin
         updated_at = demo_now;
 
   -- Ensure user preference exists (set demo tenant as current)
-  insert into copilot_internal.user_preferences (
+  insert into copilot_core.user_preferences (
     user_id,
     current_tenant_id,
     preferences,
@@ -193,7 +218,7 @@ begin
         updated_at = demo_now;
 
   -- Also populate user_tenant_contexts (used by session sync monitoring)
-  insert into copilot_internal.user_tenant_contexts (
+  insert into copilot_core.user_tenant_contexts (
     user_id,
     current_tenant_id,
     updated_at
@@ -240,7 +265,7 @@ begin
   ---------------------------------------------------------------------------
   -- 4. Seed personas (idempotent)
   ---------------------------------------------------------------------------
-  insert into copilot_internal.personas (id, label, description, jurisdictions)
+  insert into copilot_core.personas (id, label, description, jurisdictions)
   values (
       'single-director-ie',
       'Single-director Irish company',
@@ -255,7 +280,7 @@ begin
   ---------------------------------------------------------------------------
   -- 5. Seed quick prompts (idempotent)
   ---------------------------------------------------------------------------
-  insert into copilot_internal.quick_prompts (
+  insert into copilot_core.quick_prompts (
     id,
     label,
     prompt,
@@ -283,7 +308,7 @@ begin
   ---------------------------------------------------------------------------
   select id
     into demo_conv_id
-    from copilot_internal.conversations c
+    from copilot_core.conversations c
    where c.tenant_id = demo_tenant_id
      and c.user_id = demo_user_id
      and c.title = demo_conversation_title
@@ -291,7 +316,7 @@ begin
    limit 1;
 
   if not found then
-    insert into copilot_internal.conversations (
+    insert into copilot_core.conversations (
       tenant_id,
       user_id,
       share_audience,
@@ -317,14 +342,14 @@ begin
   ---------------------------------------------------------------------------
   select id
     into demo_path_id
-    from copilot_internal.conversation_paths p
+    from copilot_core.conversation_paths p
    where p.conversation_id = demo_conv_id
      and p.is_primary = true
    order by p.created_at asc
    limit 1;
 
   if not found then
-    insert into copilot_internal.conversation_paths (
+    insert into copilot_core.conversation_paths (
       conversation_id,
       tenant_id,
       name,
@@ -346,10 +371,10 @@ begin
   ---------------------------------------------------------------------------
   -- 8. Seed demo messages with valid path_id
   ---------------------------------------------------------------------------
-  delete from copilot_internal.conversation_messages
+  delete from copilot_core.conversation_messages
    where conversation_id = demo_conv_id;
 
-  insert into copilot_internal.conversation_messages (
+  insert into copilot_core.conversation_messages (
     conversation_id,
     tenant_id,
     user_id,
@@ -381,7 +406,7 @@ begin
   ---------------------------------------------------------------------------
   -- 9. Seed / refresh conversation context
   ---------------------------------------------------------------------------
-  insert into copilot_internal.conversation_contexts (
+  insert into copilot_core.conversation_contexts (
     conversation_id,
     tenant_id,
     active_node_ids,
@@ -622,7 +647,7 @@ begin
   -- 2. Create Personal Workspaces
   ---------------------------------------------------------------------------
 
-  insert into copilot_internal.tenants (id, name, slug, type, owner_id, plan, created_at, updated_at)
+  insert into copilot_core.tenants (id, name, slug, type, owner_id, plan, created_at, updated_at)
   values
     (alice_personal_id, 'Alice''s Workspace', 'alice-personal', 'personal', alice_id, 'free', demo_now, demo_now),
     (bob_personal_id, 'Bob''s Workspace', 'bob-personal', 'personal', bob_id, 'free', demo_now, demo_now),
@@ -638,7 +663,7 @@ begin
   -- 3. Create Team Workspaces
   ---------------------------------------------------------------------------
 
-  insert into copilot_internal.tenants (id, name, slug, type, owner_id, plan, created_at, updated_at)
+  insert into copilot_core.tenants (id, name, slug, type, owner_id, plan, created_at, updated_at)
   values
     (acme_corp_id, 'Acme Corp', 'acme-corp', 'team', alice_id, 'pro', demo_now, demo_now),
     (startup_xyz_id, 'Startup XYZ', 'startup-xyz', 'team', charlie_id, 'pro', demo_now, demo_now)
@@ -654,7 +679,7 @@ begin
   ---------------------------------------------------------------------------
 
   -- Personal workspace memberships (owners)
-  insert into copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
+  insert into copilot_core.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
   values
     (alice_personal_id, alice_id, 'owner', 'active', demo_now, demo_now, demo_now),
     (bob_personal_id, bob_id, 'owner', 'active', demo_now, demo_now, demo_now),
@@ -665,7 +690,7 @@ begin
         updated_at = demo_now;
 
   -- Acme Corp memberships (Alice owner, Bob member)
-  insert into copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
+  insert into copilot_core.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
   values
     (acme_corp_id, alice_id, 'owner', 'active', demo_now, demo_now, demo_now),
     (acme_corp_id, bob_id, 'member', 'active', demo_now, demo_now, demo_now)
@@ -675,7 +700,7 @@ begin
         updated_at = demo_now;
 
   -- Startup XYZ memberships (Charlie owner, Alice admin)
-  insert into copilot_internal.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
+  insert into copilot_core.tenant_memberships (tenant_id, user_id, role, status, joined_at, created_at, updated_at)
   values
     (startup_xyz_id, charlie_id, 'owner', 'active', demo_now, demo_now, demo_now),
     (startup_xyz_id, alice_id, 'admin', 'active', demo_now, demo_now, demo_now)
@@ -690,7 +715,7 @@ begin
   -- 5. Set Active Tenants (User Preferences)
   ---------------------------------------------------------------------------
 
-  insert into copilot_internal.user_preferences (user_id, current_tenant_id, preferences, created_at, updated_at)
+  insert into copilot_core.user_preferences (user_id, current_tenant_id, preferences, created_at, updated_at)
   values
     (alice_id, alice_personal_id, '{}'::jsonb, demo_now, demo_now),
     (bob_id, bob_personal_id, '{}'::jsonb, demo_now, demo_now),
@@ -702,7 +727,7 @@ begin
   raise notice 'Set active tenants for test users';
 
   -- Also populate user_tenant_contexts (used by session sync monitoring)
-  insert into copilot_internal.user_tenant_contexts (user_id, current_tenant_id, updated_at)
+  insert into copilot_core.user_tenant_contexts (user_id, current_tenant_id, updated_at)
   values
     (alice_id, alice_personal_id, demo_now),
     (bob_id, bob_personal_id, demo_now),
@@ -718,26 +743,26 @@ begin
   ---------------------------------------------------------------------------
 
   -- Alice's personal workspace conversations
-  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  insert into copilot_core.conversations (tenant_id, user_id, title, created_at, updated_at)
   values
     (alice_personal_id, alice_id, 'Alice Personal Project 1', demo_now - interval '2 days', demo_now),
     (alice_personal_id, alice_id, 'Alice Personal Project 2', demo_now - interval '1 day', demo_now)
   on conflict do nothing;
 
   -- Bob's personal workspace conversations
-  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  insert into copilot_core.conversations (tenant_id, user_id, title, created_at, updated_at)
   values
     (bob_personal_id, bob_id, 'Bob Personal Notes', demo_now - interval '3 days', demo_now)
   on conflict do nothing;
 
   -- Charlie's personal workspace conversations
-  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  insert into copilot_core.conversations (tenant_id, user_id, title, created_at, updated_at)
   values
     (charlie_personal_id, charlie_id, 'Charlie Ideas', demo_now - interval '1 day', demo_now)
   on conflict do nothing;
 
   -- Acme Corp conversations (Alice and Bob)
-  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  insert into copilot_core.conversations (tenant_id, user_id, title, created_at, updated_at)
   values
     (acme_corp_id, alice_id, 'Acme Corp Q1 Strategy', demo_now - interval '5 days', demo_now),
     (acme_corp_id, bob_id, 'Acme Corp Product Roadmap', demo_now - interval '4 days', demo_now),
@@ -745,7 +770,7 @@ begin
   on conflict do nothing;
 
   -- Startup XYZ conversations (Charlie and Alice)
-  insert into copilot_internal.conversations (tenant_id, user_id, title, created_at, updated_at)
+  insert into copilot_core.conversations (tenant_id, user_id, title, created_at, updated_at)
   values
     (startup_xyz_id, charlie_id, 'Startup XYZ MVP Features', demo_now - interval '6 days', demo_now),
     (startup_xyz_id, alice_id, 'Startup XYZ Investor Pitch', demo_now - interval '2 days', demo_now)
@@ -802,24 +827,24 @@ begin
   limit 1;
 
   select id into demo_tenant_id
-  from copilot_internal.tenants
+  from copilot_core.tenants
   where owner_id = demo_user_id
   limit 1;
 
   -- Get a demo conversation
   select id into demo_conv_id
-  from copilot_internal.conversations
+  from copilot_core.conversations
   where tenant_id = demo_tenant_id
   limit 1;
 
   -- Get Alice and Bob conversations
   select id into alice_conv_id
-  from copilot_internal.conversations
+  from copilot_core.conversations
   where tenant_id = alice_personal_id
   limit 1;
 
   select id into bob_conv_id
-  from copilot_internal.conversations
+  from copilot_core.conversations
   where tenant_id = acme_corp_id
   limit 1;
 
@@ -829,7 +854,7 @@ begin
 
   -- Add compaction operations for demo conversation
   if demo_conv_id is not null then
-    insert into copilot_internal.compaction_operations (
+    insert into copilot_audit.compaction_operations (
       conversation_id,
       tenant_id,
       user_id,
@@ -858,7 +883,7 @@ begin
 
   -- Add compaction operations for Alice's conversations
   if alice_conv_id is not null then
-    insert into copilot_internal.compaction_operations (
+    insert into copilot_audit.compaction_operations (
       conversation_id,
       tenant_id,
       user_id,
@@ -884,7 +909,7 @@ begin
 
   -- Add compaction operations for Bob's conversations
   if bob_conv_id is not null then
-    insert into copilot_internal.compaction_operations (
+    insert into copilot_audit.compaction_operations (
       conversation_id,
       tenant_id,
       user_id,
@@ -914,7 +939,7 @@ begin
 
   -- Add LLM cost records for demo conversations
   if demo_conv_id is not null then
-    insert into copilot_internal.llm_cost_records (
+    insert into copilot_billing.llm_cost_records (
       conversation_id,
       tenant_id,
       user_id,
@@ -944,7 +969,7 @@ begin
 
   -- Add LLM cost records for Alice
   if alice_conv_id is not null then
-    insert into copilot_internal.llm_cost_records (
+    insert into copilot_billing.llm_cost_records (
       conversation_id,
       tenant_id,
       user_id,
@@ -969,7 +994,7 @@ begin
 
   -- Add LLM cost records for Bob
   if bob_conv_id is not null then
-    insert into copilot_internal.llm_cost_records (
+    insert into copilot_billing.llm_cost_records (
       conversation_id,
       tenant_id,
       user_id,
@@ -997,7 +1022,7 @@ begin
 
   -- Add E2B cost records for demo conversations
   if demo_conv_id is not null then
-    insert into copilot_internal.e2b_cost_records (
+    insert into copilot_billing.e2b_cost_records (
       conversation_id,
       tenant_id,
       user_id,
@@ -1022,7 +1047,7 @@ begin
 
   -- Add E2B cost records for Alice
   if alice_conv_id is not null then
-    insert into copilot_internal.e2b_cost_records (
+    insert into copilot_billing.e2b_cost_records (
       conversation_id,
       tenant_id,
       user_id,
@@ -1043,7 +1068,7 @@ begin
 
   -- Add E2B cost records for Bob
   if bob_conv_id is not null then
-    insert into copilot_internal.e2b_cost_records (
+    insert into copilot_billing.e2b_cost_records (
       conversation_id,
       tenant_id,
       user_id,
@@ -1348,7 +1373,7 @@ begin
   -- 2. Create Admin User Profiles
   ---------------------------------------------------------------------------
 
-  insert into copilot_internal.admin_users (
+  insert into copilot_core.platform_admins (
     id,
     email,
     display_name,
@@ -1394,7 +1419,7 @@ begin
   ---------------------------------------------------------------------------
 
   -- Support Tier 2 with additional data export group
-  insert into copilot_internal.admin_permission_configs (
+  insert into copilot_core.platform_admin_permissions (
     user_id,
     additional_groups,
     permission_grants,
@@ -1417,7 +1442,7 @@ begin
         updated_at = now();
 
   -- Support Tier 1 with specific permission grant
-  insert into copilot_internal.admin_permission_configs (
+  insert into copilot_core.platform_admin_permissions (
     user_id,
     additional_groups,
     permission_grants,

@@ -76,7 +76,7 @@ export async function register() {
       // eslint-disable-next-line tenant-security/no-unsafe-service-role -- System initialization at startup, no user/tenant context
       const supabase = createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
-        db: { schema: 'copilot_internal' },
+        db: { schema: 'copilot_audit' },
       });
 
       // Create snapshot storage provider

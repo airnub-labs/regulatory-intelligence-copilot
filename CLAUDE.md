@@ -25,11 +25,25 @@ pnpm type-check       # Type check all packages
 pnpm --filter demo-web test              # Run all tests in demo-web
 pnpm --filter demo-web test -- --run <filename>  # Run specific test file
 
+# GraphRAG Tests (Memgraph data validation)
+pnpm test:graph:all                      # Run GraphRAG validation + integration tests
+pnpm test:graph:validation               # Validate graph seed data alignment
+pnpm test:graph:integration              # Validate GraphRAG end-to-end flow
+
+# E2E Tests (Playwright - full-stack integration)
+pnpm test:e2e                            # Run all E2E tests (headless)
+pnpm test:e2e:ui                         # Run E2E tests with UI (interactive)
+pnpm test:e2e:headed                     # Run E2E tests with browser visible
+pnpm test:e2e:install                    # Install Playwright browsers
+pnpm test:all                            # Run both GraphRAG + E2E tests
+
 # Infrastructure Setup
-pnpm setup:indices    # Create Memgraph indices (run before seeding)
-pnpm seed:graph       # Seed Irish regulatory data
-pnpm seed:jurisdictions  # Seed special jurisdictions (IE/UK/NI/EU)
-pnpm seed:all         # Run all seeding scripts
+pnpm setup:indices          # Create Memgraph indices (run before seeding)
+pnpm seed:graph:realistic   # Seed realistic Irish tax regulatory data (aligned with Supabase)
+pnpm seed:jurisdictions     # Seed special jurisdictions (IE/UK/NI/EU)
+pnpm seed:all               # Run all seeding scripts (realistic + jurisdictions)
+pnpm seed:all:legacy        # Legacy seed (original unrealistic data)
+supabase db reset           # Reset Supabase DB, run migrations + seed realistic data
 
 # Utilities
 pnpm test:quotas      # Test quota enforcement
@@ -84,6 +98,55 @@ docs/                          # Architecture specs, ADRs, roadmap
 - **LLM:** Provider-agnostic via LlmRouter (OpenAI, Groq, Anthropic, Google)
 - **Logging:** Pino with OpenTelemetry
 
+### Database Schema Organization
+
+The Postgres database uses domain-driven schema organization for separation of concerns:
+
+#### Active Schemas (In Use)
+
+- **`copilot_core`** - Core application tables (conversations, tenants, users, personas)
+  - 16 tables with Row Level Security (RLS)
+  - Primary operational data
+  - Tenant-scoped access control
+
+- **`copilot_billing`** - Cost tracking and quotas (LLM costs, E2B costs, pricing, quotas)
+  - 7 tables for financial records
+  - Separated for SOC2 compliance
+  - Independent backup/retention policies
+
+- **`copilot_audit`** - Compliance and audit logs (permission changes, compaction ops, session sync)
+  - 3 tables with append-only pattern
+  - 7-year retention for compliance
+  - Immutable audit trail
+
+- **`copilot_analytics`** - Business intelligence and metrics
+  - 1 table (slow_query_log) + 26 analytical views
+  - Cost summaries, usage analytics, quota status
+  - Read-only views aggregate from billing/core schemas
+
+- **`public`** - PostgREST API surface (8 views)
+  - Exposes tenant-scoped views via Supabase client
+  - All queries respect RLS policies
+
+#### Future-Use Schemas (Reserved for Scaling)
+
+These schemas exist but are **not actively used yet**. They're part of the scaling roadmap:
+
+- **`copilot_events`** - Event sourcing infrastructure (**Target: 1M+ users**)
+  - For immutable event log of all state changes
+  - Enables temporal queries, CQRS pattern, event-driven architecture
+  - Will contain: events table (partitioned by month), event snapshots, subscriptions
+  - **Status:** Empty - staged for future event-driven migration
+
+- **`copilot_archive`** - Cold data storage (**Target: 500K+ users or 1TB+ DB**)
+  - For moving inactive data to cheaper storage
+  - Keeps hot database lean for performance
+  - Will contain: archived conversations, messages, cost records, audit logs
+  - Can be backed by S3/GCS via foreign data wrappers
+  - **Status:** Empty - staged for future data archival
+
+See `supabase/migrations/20260113000001_add_future_schemas.sql` for detailed documentation on when and how to activate these schemas.
+
 ### Data Flow
 
 1. User → `/api/chat` (SSE streaming)
@@ -91,6 +154,37 @@ docs/                          # Architecture specs, ADRs, roadmap
 3. → Agents query Memgraph via `GraphClient` (read-only)
 4. → LLM calls via `LlmRouter` with egress guard
 5. → Responses include `referencedNodes` for graph highlighting
+
+### Realistic Seed Data
+
+The repository includes comprehensive realistic seed data demonstrating the platform's multi-tenant architecture:
+
+**Supabase (Postgres):**
+- 3 tenants: DataTech (enterprise), Emerald Tax (pro), Seán (personal)
+- 19 users across 3 tiers (12 enterprise, 6 pro, 1 personal)
+- 10 platform admin users (global 24/7 support)
+- 11 conversations with 62 messages showing realistic Irish tax queries
+- Conversation branching (45% have alternate paths)
+- Full cost tracking (LLM + E2B costs, quota management)
+
+**Memgraph (Graph DB):**
+- 38 regulatory nodes (6 reliefs, 12 sections, 8 timelines, 6 profiles)
+- ~30 relationships connecting concepts
+- 100% alignment with Supabase conversations (every regulatory concept referenced in conversations has corresponding graph nodes)
+
+**Key Documentation:**
+- Seed data structure: `supabase/seed/realistic_seed/README.md`
+- Alignment mapping: `docs/seed-data-alignment.md`
+- Graph seed script: `scripts/seed-graph-realistic.ts`
+
+**Seeding both databases:**
+```bash
+# 1. Seed Supabase (Postgres)
+supabase db reset  # Runs migrations + realistic seed data
+
+# 2. Seed Memgraph (Graph DB)
+pnpm seed:all      # Realistic Irish tax data + special jurisdictions
+```
 
 ---
 
@@ -168,17 +262,42 @@ import { scrollToMessage } from '@/lib/utils';
 
 ## Environment Configuration
 
-Two separate `.env` files:
+### Two Separate Environment Configurations
 
-1. **Root `.env`** - For repository scripts (graph seeding)
-2. **`apps/demo-web/.env.local`** - For the web application
+**1. Repository Scripts (Root Level)**
+
+Files: `.env` and `.env.local` (repository root)
+
+All graph seeding and infrastructure scripts automatically load from:
+- `.env.local` (local overrides - NOT in git) - **HIGHEST PRIORITY**
+- `.env` (defaults - committed to git)
+
+Setup:
+```bash
+# One-time: Copy example to .env.local
+cp .env.example .env.local
+
+# Edit with your local settings
+# For local Memgraph: MEMGRAPH_URI=bolt://localhost:7687
+# For remote: MEMGRAPH_URI=bolt+ssc://host:7687 + credentials
+```
+
+Required variables for scripts:
+- `MEMGRAPH_URI` - Memgraph connection (default: bolt://localhost:7687)
+- `MEMGRAPH_USERNAME` - Optional auth username
+- `MEMGRAPH_PASSWORD` - Optional auth password
+
+**2. Web Application**
+
+File: `apps/demo-web/.env.local` (NOT in git)
 
 Required for web app:
-
 - At least one LLM provider API key (GROQ_API_KEY, OPENAI_API_KEY)
 - MEMGRAPH_URI (default: bolt://localhost:7687)
 - Supabase configuration
 - NEXTAUTH_SECRET
+
+See `docs/development/ENVIRONMENT_LOADING.md` for complete documentation.
 
 ---
 
