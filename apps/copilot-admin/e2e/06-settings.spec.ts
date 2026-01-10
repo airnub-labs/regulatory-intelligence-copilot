@@ -26,11 +26,12 @@ test.describe('Settings - Layout & Navigation', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
-    // Verify settings page elements
+    // Wait for page content instead of networkidle (SSE keeps network active)
     const heading = page.locator('h1, h2, [data-testid="page-title"]').filter({ hasText: /setting/i });
-    const hasHeading = await heading.first().isVisible({ timeout: 10000 }).catch(() => false);
+    await heading.first().waitFor({ state: 'visible', timeout: 15000 });
+    const hasHeading = await heading.first().isVisible();
     consoleCapture.log(`Settings heading visible: ${hasHeading}`);
 
     // Should not have critical errors
@@ -44,7 +45,7 @@ test.describe('Settings - Layout & Navigation', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for settings navigation
     const settingsNav = page.locator(
@@ -72,13 +73,13 @@ test.describe('Settings - Layout & Navigation', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Try navigating to profile
     const profileLink = page.locator('a:has-text("Profile"), a[href*="profile"], [data-testid="settings-profile"]').first();
     if (await profileLink.isVisible({ timeout: 5000 })) {
       await profileLink.click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       consoleCapture.log('Navigated to Profile section');
     }
 
@@ -86,7 +87,7 @@ test.describe('Settings - Layout & Navigation', () => {
     const preferencesLink = page.locator('a:has-text("Preferences"), a[href*="preferences"], [data-testid="settings-preferences"]').first();
     if (await preferencesLink.isVisible({ timeout: 5000 })) {
       await preferencesLink.click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       consoleCapture.log('Navigated to Preferences section');
     }
 
@@ -94,7 +95,7 @@ test.describe('Settings - Layout & Navigation', () => {
     const sessionsLink = page.locator('a:has-text("Sessions"), a[href*="sessions"], [data-testid="settings-sessions"]').first();
     if (await sessionsLink.isVisible({ timeout: 5000 })) {
       await sessionsLink.click();
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       consoleCapture.log('Navigated to Sessions section');
     }
 
@@ -113,7 +114,7 @@ test.describe('Settings - Profile', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Verify profile page loaded
     const profileContent = page.locator(
@@ -132,7 +133,7 @@ test.describe('Settings - Profile', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for user information fields
     const emailField = page.locator('input[type="email"], input[name="email"], [data-testid="profile-email"]');
@@ -157,7 +158,7 @@ test.describe('Settings - Profile', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for avatar/image elements
     const avatar = page.locator(
@@ -175,7 +176,7 @@ test.describe('Settings - Profile', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for save button
     const saveButton = page.locator(
@@ -200,7 +201,7 @@ test.describe('Settings - Preferences', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const preferencesContent = page.locator(
       '[data-testid="preferences-settings"], form, .preferences-form, text=preferences'
@@ -218,7 +219,7 @@ test.describe('Settings - Preferences', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for language selector
     const languageSelector = page.locator(
@@ -251,7 +252,7 @@ test.describe('Settings - Preferences', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for theme selector
     const themeSelector = page.locator(
@@ -279,7 +280,7 @@ test.describe('Settings - Preferences', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for notification preferences
     const notificationSettings = page.locator(
@@ -297,7 +298,7 @@ test.describe('Settings - Preferences', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find a toggle/checkbox
     const toggle = page.locator(
@@ -330,7 +331,7 @@ test.describe('Settings - Sessions', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/sessions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const sessionsContent = page.locator(
       '[data-testid="sessions-settings"], .sessions-list, text=sessions, text=devices'
@@ -348,7 +349,7 @@ test.describe('Settings - Sessions', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/sessions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for current session indicator
     const currentSession = page.locator(
@@ -366,7 +367,7 @@ test.describe('Settings - Sessions', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/sessions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for session list
     const sessionList = page.locator(
@@ -394,7 +395,7 @@ test.describe('Settings - Sessions', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/sessions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for revoke/terminate session buttons
     const revokeButton = page.locator(
@@ -412,7 +413,7 @@ test.describe('Settings - Sessions', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/sessions');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for "sign out all" button
     const signOutAllButton = page.locator(
@@ -449,7 +450,7 @@ test.describe('Settings - Role-Based Access', () => {
       await page.context().clearCookies();
       await login(page, user);
       await page.goto('/settings');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const url = page.url();
       const hasAccess = !url.includes('/login') && !url.includes('/unauthorized');
@@ -465,7 +466,7 @@ test.describe('Settings - Role-Based Access', () => {
 
     await login(page, ADMIN_USERS.supportTier1_1);
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Should see own profile, not ability to edit others
     const userEmail = ADMIN_USERS.supportTier1_1.email;
@@ -489,7 +490,7 @@ test.describe('Settings - Accessibility', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Check for input labels
     const inputs = page.locator('input:not([type="hidden"]):not([type="submit"])');
@@ -521,7 +522,7 @@ test.describe('Settings - Accessibility', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Tab through elements
     for (let i = 0; i < 10; i++) {
@@ -550,7 +551,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find the Edit button
     const editButton = page.locator('button:has-text("Edit")');
@@ -590,7 +591,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const editButton = page.locator('button:has-text("Edit")');
     if (await editButton.first().isVisible({ timeout: 10000 })) {
@@ -628,7 +629,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Intercept API calls
     let apiCalled = false;
@@ -682,7 +683,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const editButton = page.locator('button:has-text("Edit")');
     if (await editButton.first().isVisible({ timeout: 10000 })) {
@@ -724,7 +725,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Initially, save button should not be visible (no changes)
     const saveButton = page.locator('button:has-text("Save")');
@@ -754,7 +755,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Intercept API calls
     let apiCalled = false;
@@ -800,7 +801,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find theme selector
     const themeSelect = page.locator('button[role="combobox"]').filter({ hasText: /light|dark|system/i }).first();
@@ -837,7 +838,7 @@ test.describe('Settings - Field Editing & Save', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/settings/preferences');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Make a change
     const toggle = page.locator('button[role="checkbox"], input[type="checkbox"]').first();
@@ -882,7 +883,7 @@ test.describe('Settings - Responsive Design', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 
@@ -895,7 +896,7 @@ test.describe('Settings - Responsive Design', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/settings');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Settings nav might be collapsed on mobile - look for menu button
     const menuButton = page.locator(
@@ -914,7 +915,7 @@ test.describe('Settings - Responsive Design', () => {
 
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto('/settings/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 

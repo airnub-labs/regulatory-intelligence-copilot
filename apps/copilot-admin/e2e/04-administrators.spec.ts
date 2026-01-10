@@ -26,7 +26,7 @@ test.describe('Administrators - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Verify administrators page elements
     const heading = page.locator('h1, h2, [data-testid="page-title"]').filter({ hasText: /admin/i });
@@ -44,7 +44,7 @@ test.describe('Administrators - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for table or list of administrators
     const table = page.locator('table');
@@ -75,7 +75,7 @@ test.describe('Administrators - Role Display', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for role indicators
     const roleIndicators = page.locator(
@@ -93,7 +93,7 @@ test.describe('Administrators - Role Display', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for specific role types based on seed data
     const roleTypes = [
@@ -127,7 +127,7 @@ test.describe('Administrators - Geographic Distribution', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for location information based on seed data
     const locations = ['Dublin', 'Bangalore', 'Manila', 'Brussels'];
@@ -146,7 +146,7 @@ test.describe('Administrators - Geographic Distribution', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for department information based on seed data
     const departments = ['Engineering', 'Customer Success', 'Legal & Compliance', 'Technical Support', 'Customer Support'];
@@ -172,7 +172,7 @@ test.describe('Administrators - Admin Details', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click on first admin row/card
     const adminItem = page.locator(
@@ -200,7 +200,7 @@ test.describe('Administrators - Admin Details', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click on first admin
     const adminItem = page.locator(
@@ -321,7 +321,7 @@ test.describe('Administrators - Search & Filter', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find search input
     const searchInput = page.locator(
@@ -344,7 +344,7 @@ test.describe('Administrators - Search & Filter', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find role filter
     const roleFilter = page.locator(
@@ -366,7 +366,7 @@ test.describe('Administrators - Search & Filter', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find location filter
     const locationFilter = page.locator(
@@ -395,7 +395,7 @@ test.describe('Administrators - Audit Trail', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for last login or activity information
     const lastLoginIndicator = page.locator(
@@ -413,7 +413,7 @@ test.describe('Administrators - Audit Trail', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for status indicators
     const statusIndicator = page.locator(
@@ -439,7 +439,7 @@ test.describe('Administrators - Responsive Design', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 
@@ -452,7 +452,7 @@ test.describe('Administrators - Responsive Design', () => {
 
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto('/administrators');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 

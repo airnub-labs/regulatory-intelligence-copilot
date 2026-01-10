@@ -27,7 +27,7 @@ test.describe('Dashboard - Page Load', () => {
     await page.goto('/dashboard');
 
     // Wait for page to load
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Verify dashboard elements are present
     // Section cards should be visible
@@ -47,7 +47,7 @@ test.describe('Dashboard - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for stat cards or metric displays
     const cards = page.locator('[class*="card"], [data-testid*="stat"], [data-testid*="metric"]');
@@ -66,7 +66,7 @@ test.describe('Dashboard - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for chart containers
     const chartContainer = page.locator('[class*="chart"], [data-testid*="chart"], canvas, svg');
@@ -82,7 +82,7 @@ test.describe('Dashboard - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for table element
     const table = page.locator('table');
@@ -205,7 +205,7 @@ test.describe('Dashboard - Responsiveness', () => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Should not have layout breaking errors
     expect(consoleCapture.hasErrors()).toBe(false);
@@ -221,7 +221,7 @@ test.describe('Dashboard - Responsiveness', () => {
     await page.setViewportSize({ width: 768, height: 1024 });
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 

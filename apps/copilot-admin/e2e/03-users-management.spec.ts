@@ -26,7 +26,7 @@ test.describe('Users Management - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Verify users page elements
     const heading = page.locator('h1, h2, [data-testid="page-title"]').filter({ hasText: /user/i });
@@ -44,7 +44,7 @@ test.describe('Users Management - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for table or list of users
     const table = page.locator('table');
@@ -75,7 +75,7 @@ test.describe('Users Management - Search & Filter', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for search input
     const searchInput = page.locator(
@@ -93,7 +93,7 @@ test.describe('Users Management - Search & Filter', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find and use search input
     const searchInput = page.locator(
@@ -122,7 +122,7 @@ test.describe('Users Management - Search & Filter', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for filter controls (dropdown, select, combobox)
     const filterControl = page.locator(
@@ -147,7 +147,7 @@ test.describe('Users Management - User Details', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find a clickable user row/item
     const userItem = page.locator(
@@ -177,7 +177,7 @@ test.describe('Users Management - User Details', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click on first user
     const userItem = page.locator(
@@ -215,7 +215,7 @@ test.describe('Users Management - Tenant Filtering', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for tenant/organization selector
     const tenantSelector = page.locator(
@@ -233,7 +233,7 @@ test.describe('Users Management - Tenant Filtering', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find tenant selector
     const tenantSelector = page.locator(
@@ -253,7 +253,7 @@ test.describe('Users Management - Tenant Filtering', () => {
       // Click first option if available
       if (optionCount > 0) {
         await tenantOptions.first().click();
-        await page.waitForLoadState('networkidle');
+        await page.waitForLoadState('domcontentloaded');
         consoleCapture.log('Selected first tenant option');
       }
     }
@@ -363,7 +363,7 @@ test.describe('Users Management - Pagination', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for pagination controls
     const pagination = page.locator(
@@ -381,7 +381,7 @@ test.describe('Users Management - Pagination', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for page size selector
     const pageSizeSelector = page.locator(
@@ -407,7 +407,7 @@ test.describe('Users Management - Responsive Design', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Should not have layout breaking errors
     expect(consoleCapture.hasErrors()).toBe(false);
@@ -426,7 +426,7 @@ test.describe('Users Management - Responsive Design', () => {
 
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto('/users');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 

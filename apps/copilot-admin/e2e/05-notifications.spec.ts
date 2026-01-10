@@ -27,11 +27,12 @@ test.describe('Notifications - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
-    // Verify notifications page elements
+    // Wait for page content instead of networkidle (SSE keeps network active)
     const heading = page.locator('h1, h2, [data-testid="page-title"]').filter({ hasText: /notification/i });
-    const hasHeading = await heading.first().isVisible({ timeout: 10000 }).catch(() => false);
+    await heading.first().waitFor({ state: 'visible', timeout: 15000 });
+    const hasHeading = await heading.first().isVisible();
     consoleCapture.log(`Notifications heading visible: ${hasHeading}`);
 
     // Should not have critical errors
@@ -45,7 +46,8 @@ test.describe('Notifications - Page Load', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.locator('h1, h2').filter({ hasText: /notification/i }).first().waitFor({ state: 'visible', timeout: 15000 });
 
     // Look for notification list or empty state
     const notificationList = page.locator(
@@ -78,7 +80,7 @@ test.describe('Notifications - Header Bell/Icon', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for notification bell/icon in header
     const bellIcon = page.locator(
@@ -98,7 +100,7 @@ test.describe('Notifications - Header Bell/Icon', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click notification bell
     const bellIcon = page.locator(
@@ -126,7 +128,7 @@ test.describe('Notifications - Header Bell/Icon', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for notification badge with count
     const badge = page.locator(
@@ -156,7 +158,7 @@ test.describe('Notifications - Notification Types', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for different notification types
     const types = ['info', 'warning', 'error', 'success', 'alert', 'system'];
@@ -179,7 +181,7 @@ test.describe('Notifications - Notification Types', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for timestamps
     const timestamp = page.locator(
@@ -204,7 +206,7 @@ test.describe('Notifications - Mark as Read/Unread', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find an unread notification and mark as read
     const unreadNotification = page.locator(
@@ -239,7 +241,7 @@ test.describe('Notifications - Mark as Read/Unread', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for "mark all as read" button
     const markAllButton = page.locator(
@@ -264,7 +266,7 @@ test.describe('Notifications - Filtering', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for filter controls
     const typeFilter = page.locator(
@@ -288,7 +290,7 @@ test.describe('Notifications - Filtering', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for read/unread toggle or tabs
     const readFilter = page.locator(
@@ -313,7 +315,7 @@ test.describe('Notifications - Delete/Dismiss', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Find a notification with dismiss/delete option
     const notification = page.locator(
@@ -338,7 +340,7 @@ test.describe('Notifications - Delete/Dismiss', () => {
     consoleCapture.startCapture(page);
 
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Look for "clear all" button
     const clearAllButton = page.locator(
@@ -409,7 +411,7 @@ test.describe('Notifications - Role-Based Access', () => {
       await page.context().clearCookies();
       await login(page, user);
       await page.goto('/dashboard');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
 
       const bellIcon = page.locator(
         '[data-testid="notification-bell"], [data-testid="notifications-button"], button[aria-label*="notification" i]'
@@ -445,7 +447,7 @@ test.describe('Notifications - Real-time Updates', () => {
     });
 
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3000); // Wait for SSE to establish
 
     consoleCapture.log(`SSE connection detected: ${sseConnected}`);
@@ -466,7 +468,7 @@ test.describe('Notifications - Responsive Design', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/notifications');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     expect(consoleCapture.hasErrors()).toBe(false);
 
@@ -479,7 +481,7 @@ test.describe('Notifications - Responsive Design', () => {
 
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/dashboard');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Check bell is accessible on mobile
     const bellIcon = page.locator(
