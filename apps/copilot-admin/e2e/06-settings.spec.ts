@@ -300,19 +300,17 @@ test.describe('Settings - Preferences', () => {
     await page.goto('/settings/preferences');
     await page.waitForLoadState('domcontentloaded');
 
-    // Find a toggle/checkbox
-    const toggle = page.locator(
-      'input[type="checkbox"], [role="switch"], button[role="switch"]'
-    ).first();
+    // Find a visible switch/toggle button (not the hidden input)
+    const toggle = page.locator('button[role="switch"], [role="switch"]').first();
 
     if (await toggle.isVisible({ timeout: 5000 })) {
-      const initialState = await toggle.isChecked().catch(() => null);
+      const initialState = await toggle.getAttribute('data-state');
       consoleCapture.log(`Initial toggle state: ${initialState}`);
 
       await toggle.click();
       await page.waitForTimeout(500);
 
-      const newState = await toggle.isChecked().catch(() => null);
+      const newState = await toggle.getAttribute('data-state');
       consoleCapture.log(`Toggle state after click: ${newState}`);
     }
 
@@ -433,6 +431,9 @@ test.describe('Settings - Role-Based Access', () => {
   });
 
   test('All admin roles can access settings', async ({ page }) => {
+    // This test loops through 7 users - needs extended timeout (3x default)
+    test.slow();
+
     const consoleCapture = createConsoleCapture('settings-role-access');
     consoleCapture.startCapture(page);
 

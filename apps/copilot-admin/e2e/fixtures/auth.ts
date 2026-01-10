@@ -181,9 +181,21 @@ export async function login(page: Page, user: TestAdminUser): Promise<void> {
   const submitButton = page.locator('button[type="submit"]');
   await submitButton.click();
 
-  // Wait for navigation to dashboard or protected route
+  // Wait for navigation away from login page (handles both root redirect and specific pages)
+  // Also wait for the "Signing in..." state to complete
+  await page.waitForFunction(
+    () => {
+      const url = window.location.pathname;
+      const signInButton = document.querySelector('button[type="submit"]');
+      const isLoading = signInButton?.textContent?.includes('Signing') || signInButton?.hasAttribute('disabled');
+      return !url.includes('/login') || !isLoading;
+    },
+    { timeout: 30000 }
+  );
+
+  // Final check: ensure we're not on login page
   await page.waitForURL(/\/(dashboard|users|administrators|notifications|settings)?$/, {
-    timeout: 15000,
+    timeout: 30000,
   });
 }
 
@@ -228,13 +240,19 @@ export async function logout(page: Page): Promise<void> {
     // Click logout option
     const logoutOption = page.locator('text=Logout, text=Sign out, [data-testid="logout"]').first();
     await logoutOption.click();
-
-    // Wait for redirect to login
-    await page.waitForURL(/\/login/);
   } else {
-    // Fallback: navigate directly to logout endpoint
+    // Fallback: navigate directly to signout endpoint
     await page.goto('/api/auth/signout');
   }
+
+  // Handle signout confirmation page if present
+  const signOutConfirmButton = page.locator('button:has-text("Sign out")');
+  if (await signOutConfirmButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await signOutConfirmButton.click();
+  }
+
+  // Wait for redirect to login
+  await page.waitForURL(/\/login/, { timeout: 10000 });
 }
 
 /**

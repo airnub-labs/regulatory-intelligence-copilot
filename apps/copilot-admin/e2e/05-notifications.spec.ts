@@ -49,20 +49,36 @@ test.describe('Notifications - Page Load', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.locator('h1, h2').filter({ hasText: /notification/i }).first().waitFor({ state: 'visible', timeout: 15000 });
 
-    // Look for notification list or empty state
-    const notificationList = page.locator(
-      '[data-testid="notification-list"], [role="list"], .notification-list, .notifications'
-    );
-    const emptyState = page.locator(
-      'text=no notifications, text=all caught up, [data-testid="empty-state"]'
-    );
+    // Wait for loading state to disappear first
+    // The page shows "Loading..." while SSE connection initializes
+    const loadingIndicator = page.locator('text=/loading/i');
+    await loadingIndicator.first().waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {
+      // Loading might have already finished or never appeared
+      consoleCapture.log('Loading indicator not found or already hidden');
+    });
 
-    const hasList = await notificationList.first().isVisible({ timeout: 10000 }).catch(() => false);
-    const hasEmpty = await emptyState.first().isVisible({ timeout: 5000 }).catch(() => false);
+    // Look for notification list or empty state
+    // The actual UI renders:
+    // - List: A Card with divide-y containing checkboxes and notification items
+    // - Empty: IconBellOff with "No notifications" paragraph
+    const notificationList = page.locator(
+      '[data-testid="notification-list"], .divide-y, [data-testid="notification-item"], [role="checkbox"]'
+    );
+    // Use getByText for more reliable text matching - the page shows "No notifications" paragraph
+    const emptyState = page.getByText('No notifications');
+
+    // Wait for either list or empty state to appear
+    await Promise.race([
+      notificationList.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {}),
+      emptyState.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {}),
+    ]);
+
+    const hasList = await notificationList.first().isVisible().catch(() => false);
+    const hasEmpty = await emptyState.first().isVisible().catch(() => false);
 
     consoleCapture.log(`Notification list visible: ${hasList}, Empty state visible: ${hasEmpty}`);
 
-    // Should have either list or empty state
+    // Either list with items or empty state should be visible
     expect(hasList || hasEmpty).toBe(true);
 
     consoleCapture.saveToFile();
@@ -396,6 +412,9 @@ test.describe('Notifications - Role-Based Access', () => {
   });
 
   test('All admin roles see notification bell', async ({ page }) => {
+    // This test loops through 5 users - needs extended timeout (3x default)
+    test.slow();
+
     const consoleCapture = createConsoleCapture('notifications-bell-all-roles');
     consoleCapture.startCapture(page);
 

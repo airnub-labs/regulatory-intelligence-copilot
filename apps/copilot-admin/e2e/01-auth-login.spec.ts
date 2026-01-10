@@ -279,6 +279,9 @@ test.describe('Authentication - All Admin Roles Login Test', () => {
   });
 
   test('@regression All admin user types can login', async ({ page }) => {
+    // This test loops through 7 users - needs extended timeout (3x default)
+    test.slow();
+
     const consoleCapture = createConsoleCapture('auth-all-roles-login');
     consoleCapture.startCapture(page);
 
